@@ -1,6 +1,6 @@
 import { GameState, newGame } from './engine/state.js';
 import { actions, tick, step, TICK_MS } from './engine/tick.js';
-import { botStep, newBotMemory } from './sim/policy.js';
+import { policyStep, newBotMemory, PolicyName } from './sim/policy.js';
 import { mount, render, Perform } from './ui/render.js';
 import { loadSave, createSaver } from './ui/save.js';
 import { mountDev } from './ui/dev.js';
@@ -8,12 +8,15 @@ import { mountDev } from './ui/dev.js';
 /** Real time per frame is clamped so a backgrounded tab does not fast-forward (no offline progress). */
 const MAX_FRAME_MS = 250;
 
-const state: GameState = loadSave() ?? newGame(Date.now());
+/** `?seed=N` starts a reproducible new game when there is no save (playtests, the smoke test). */
+const seedParam = new URLSearchParams(location.search).get('seed');
+const state: GameState = loadSave() ?? newGame(seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) : Date.now());
 const saver = createSaver(state);
 
 let speed = 1;
 let autoplay = false;
-let bot = newBotMemory();
+let policy: PolicyName = 'bot';
+let bot = newBotMemory(policy);
 
 function advance(dtMs: number): void {
   if (!autoplay) {
@@ -23,7 +26,7 @@ function advance(dtMs: number): void {
   state.tickAccum += dtMs;
   while (state.tickAccum >= TICK_MS && !state.ending) {
     state.tickAccum -= TICK_MS;
-    botStep(state, actions, bot);
+    policyStep(state, actions, bot);
     step(state);
   }
 }
@@ -46,13 +49,16 @@ mountDev({
     speed = n;
   },
   getAutoplay: () => autoplay,
-  setAutoplay: (on) => {
+  setAutoplay: (on, which, holdTransition) => {
     autoplay = on;
-    bot = newBotMemory();
+    if (which) policy = which;
+    bot = newBotMemory(policy, holdTransition === true);
   },
   advance,
 });
 render(state);
+// Restoring a save shows everything at once; fade-ins are for reveals during play.
+requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('boot')));
 
 let last = performance.now();
 function frame(now: number): void {

@@ -8,6 +8,7 @@ import { PROJECTS } from '../data/projects.js';
 import { PRESETS, presetFor } from '../data/presets.js';
 import { byId, make } from './dom.js';
 import type { Saver } from './save.js';
+import type { PolicyName } from '../sim/policy.js';
 
 export interface DevHost {
   state: GameState;
@@ -16,7 +17,11 @@ export interface DevHost {
   getSpeed: () => number;
   setSpeed: (n: number) => void;
   getAutoplay: () => boolean;
-  setAutoplay: (on: boolean) => void;
+  /**
+   * `which` picks the simulator policy that plays: 'bot' (default) or 'naive' (the critic's
+   * first-timer). `holdTransition` leaves Break ground for the player to click.
+   */
+  setAutoplay: (on: boolean, which?: PolicyName, holdTransition?: boolean) => void;
   /** Game advance used by the main loop (honours autoplay). */
   advance: (dtMs: number) => void;
 }
