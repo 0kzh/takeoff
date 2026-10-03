@@ -353,7 +353,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.__game.tick(100));
   const overflow = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
-  await page.screenshot({ path: join(SHOTS, '10-mobile-390-stage2.png'), fullPage: true });
+  await shot(page, '10-mobile-390-stage2', { fullPage: true });
   check('390 px wide (Stage 2 screen): no horizontal overflow', overflow.sw <= overflow.cw, `${overflow.sw} vs ${overflow.cw}`);
   await context.close();
 
@@ -364,9 +364,33 @@ try {
       for (let i = 0; i < 300; i++) window.__game.tick(2000);
     }, POLICY);
     const o = await p2.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
-    await p2.screenshot({ path: join(SHOTS, '11-mobile-390-minute10.png'), fullPage: true });
+    await shot(p2, '11-mobile-390-minute10', { fullPage: true });
     check('390 px wide (minute 10): no horizontal overflow', o.sw <= o.cw, `${o.sw} vs ${o.cw}`);
     await c2.close();
+  }
+
+  {
+    // The dev overlay's Stage 2 preset (rebuilt from the new end of Stage 1) loads and plays.
+    const c3 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p3 = await c3.newPage();
+    watch(p3, 'preset');
+    await p3.goto(`${BASE}?seed=${SEED}&dev=1`);
+    await p3.waitForFunction(() => !!window.__game);
+    const pre = await p3.evaluate(() => {
+      window.__game.setSpeed(0);
+      window.__game.loadPreset(2);
+      window.__game.tick(8000);
+      const s = window.__game.state;
+      const vis = (id) => document.getElementById(id).checkVisibility();
+      return {
+        stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
+        need: Math.round(2000 * Math.pow(1.6, s.training.runIndex)), infra: vis('panel-infrastructure'),
+        compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
+      };
+    });
+    await shot(p3, '12-stage2-preset');
+    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && pre.batch, JSON.stringify(pre));
+    await c3.close();
   }
 
   check('no page errors or console errors from boot through Stage 2', errors.length === 0, errors.slice(0, 5).join(' | '));
