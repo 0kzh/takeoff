@@ -10,14 +10,15 @@
 | # | Step | Owner | State |
 |---|---|---|---|
 | 1 | Stage 1 critic round-1 fixes (`docs/critic-stage1-round1.md`) | Opus | **Done** — commits `66d0fa0`…`02be228` |
-| 2 | Stage 1 polish pass (capability-based training costs, modal pacing, project drip, fewer numbers) | Opus | In flight |
-| 3 | Rebuild the critic harness (the old one was lost with the previous VM) | Opus | In flight → `tools/critic/` |
-| 4 | Stage 1 critic round 2 on a frozen snapshot; fix → re-run until Takeoff wins the rubric | Fable critic, Opus fixes | Pending 2 + 3 |
+| 2 | Stage 1 polish pass (capability-based training costs, modal pacing, project drip, rental quota, fewer numbers) | Opus | **Done** — commits `ce41926`…`75874a7` |
+| 3 | Rebuild the critic harness (the old one was lost with the previous VM) | Opus | **Done** — `tools/critic/`; extension for Paperclips Stage 2/3 play in flight |
+| 4 | Stage 1 critic round 2 on a frozen snapshot | Fable critic | **Done** — `docs/critic-stage1-round2.md`: **Takeoff 8.1 vs Paperclips 7.7**. Takeoff wins narrowly |
+| 4b | Stage 1 round-2 fix pass: make decisions matter (contract income tied to the market, incident and modal stakes, Focus trade), slow the minute 3–10 firehose, rental quota in steps, price step, wall and console bugs (report §4–§6) | Opus | Queued — runs after the Stage 2 build, alongside the Stage 2 critic |
 | 5 | Arc contract + Stage 2 spec | Fable | **Done** — `docs/specs/arc.md`, `docs/specs/stage2.md` |
-| 6 | Stage 2 build from the spec, then its critic loop vs Paperclips Stage 2 | Opus / Fable | Pending 2 |
-| 7 | Stage 3 spec → build → critic loop | Fable / Opus / Fable | Spec in flight |
-| 8 | Stage 4 spec → build → critic loop | | Not started |
-| 9 | Stage 5 + endings + end-of-run stats → build → critic loop | | Not started |
+| 6 | Stage 2 build from the spec, then its critic loop vs Paperclips Stage 2 | Opus / Fable | Build in flight (engine, content and UI committed; tuning) |
+| 7 | Stage 3 spec → build → critic loop | Fable / Opus / Fable | Spec **done** — `docs/specs/stage3.md`; build pending 6 |
+| 8 | Stage 4 spec → build → critic loop | | Spec in flight |
+| 9 | Stage 5 + endings + end-of-run stats → spec → build → critic loop | | Spec in flight |
 | 10 | Full-run critic pass (new game → an ending, ~3–4 h of game time), final polish, docs | | Not started |
 
 Each stage follows the same pipeline: **spec (Fable) → build (Opus) → frozen snapshot → critic (Fable, fresh context) → fixes (Opus) → critic again until the stage beats the matching Paperclips stage on the rubric.** The planner works one stage ahead of the builder; the critic plays a snapshot so the builder can keep going.
@@ -48,6 +49,7 @@ Gitignored working folders under `agent-tools/`: `refs/` (clones of Universal Pa
 
 - Rubric (unchanged since round 1): time to first meaningful choice; seconds with nothing to do; cognitive load & progressive disclosure; cadence of reveals; greyed-out goal always on screen; clarity of the stage transition; soft-locks. The critic names the single biggest gap, specific enough to act on.
 - Round 1 (Stage 1): **Takeoff 5.6 vs Paperclips 7.9** — `docs/critic-stage1-round1.md`. Biggest gap: a 10–14 minute dead tail before the datacenter. All of its findings are addressed in step 1 above.
+- Round 2 (Stage 1): **Takeoff 8.1 vs Paperclips 7.7** — `docs/critic-stage1-round2.md`. The dead tail is fixed (longest reveal gap 150–162 s vs Paperclips' 876 s). Biggest remaining gap: "Nothing Stage 1 asks the player to decide changes Stage 1" — ten play styles all finish in 31–35 min in the same state. Its lessons (stakes printed on the buttons and sized to the economy, no conveyor-belt projects, a words budget, non-blocking modals) are being applied to every later stage and are being written into `docs/specs/arc.md` as guardrails.
 - Harness: `tools/critic/` (see its README). It serves a `--game-dir` snapshot on its own port, plays both games with the same scripted "curious first-time player", and can also drive Takeoff's own bot (`--autoplay`). Reports go in `docs/critic-stageN-roundM.md`.
 - To freeze a build for the critic: `git archive HEAD | tar -x -C agent-tools/snapshots/<label>`, build it with `./node_modules/.bin/tsc -p agent-tools/snapshots/<label>/tsconfig.json`, then delete its `docs/` and `tools/` so the critic cannot read the design notes.
 
