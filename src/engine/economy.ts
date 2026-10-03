@@ -28,6 +28,19 @@ export const INTERCONNECT_SECONDS = 210;
 
 // ---------- costs ----------
 
+/** The cloud provider rents OpenMind only so many Nimbus G4s: 80, or 100 with the Bulk GPU lease. */
+export const RENT_QUOTA = 80;
+export const RENT_QUOTA_LEASED = 100;
+
+export function rentQuota(s: GameState): number {
+  return s.projects['p_compute_deal']?.bought ? RENT_QUOTA_LEASED : RENT_QUOTA;
+}
+
+/** Every G4 the provider will rent is rented: owning compute (Abilene) is the way past it. */
+export function atRentQuota(s: GameState): boolean {
+  return s.stage < 2 && s.gpus >= rentQuota(s);
+}
+
 /** UP AutoClipper curve: `5 + 1.1^n`, so the first GPU is $6 (→ `1.08^n` after Bulk GPU lease). */
 export function gpuCost(s: GameState): number {
   return Math.round((5 + Math.pow(s.gpuCostGrowth, s.gpus)) * 100) / 100;
@@ -225,13 +238,32 @@ function completeTasks(s: GameState, n: number): void {
   s.unbilled += n;
 }
 
+/**
+ * The first tasks bill at the expected rate, carried as a fraction, so the opening minute (and the
+ * first GPU) does not depend on the luck of the roll; after that, UP's lumpy sale roll.
+ */
+export const SMOOTH_SALES = 200;
+
 /** Every 100 ms: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by unbilled. */
 export function sell(s: GameState): void {
   const d = demand(s);
+  if (s.tasksSold < SMOOTH_SALES) {
+    s.saleFrac += Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
+    const due = Math.min(s.unbilled, Math.floor(s.saleFrac));
+    if (s.unbilled <= 0) s.saleFrac = Math.min(s.saleFrac, 1);
+    if (due <= 0) return;
+    s.saleFrac -= due;
+    bill(s, due);
+    return;
+  }
   if (rng(s) >= d / 100) return;
   if (s.unbilled <= 0) return;
   const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
   if (n <= 0) return;
+  bill(s, n);
+}
+
+function bill(s: GameState, n: number): void {
   const revenue = Math.floor(n * s.price * 1000) / 1000;
   s.unbilled -= n;
   s.tasksSold += n;
@@ -248,7 +280,8 @@ export function contractRate(s: GameState): number {
   const n = s.projects['p_contract']?.bought ?? 0;
   let r = 0;
   for (let k = 0; k < n; k++) r += CONTRACT_BASE * Math.pow(CONTRACT_GROWTH, k);
-  return r;
+  const mult = s.flags['contractMult'];
+  return r * (typeof mult === 'number' ? mult : 1);
 }
 
 export function contractIncome(s: GameState, dt: number): void {
@@ -262,11 +295,14 @@ export function contractIncome(s: GameState, dt: number): void {
 
 // ---------- power (Stage 1, UP wire) ----------
 
+/** The Grid Contract tops power up whenever it falls below 60 % of the fleet's block. */
+export const GRID_TOP_UP = 0.6;
+
 export function autoBuyPower(s: GameState): void {
   if (!s.gridAuto || s.stage >= 2) return;
-  const need = Math.max(1, potentialTasksPerSec(s) * TICK_SECONDS * 2);
+  const floor = Math.max(1, GRID_TOP_UP * fleetPowerBlock(s), potentialTasksPerSec(s) * TICK_SECONDS * 2);
   let guard = 0;
-  while (s.power < need && s.funds >= powerBlockCost(s) && guard++ < 20) purchasePower(s);
+  while (s.power < floor && s.funds >= powerBlockCost(s) && guard++ < 20) purchasePower(s);
 }
 
 /** Random walk every second, drifting 2% toward a base that rises 0.1% per purchase; clamp [0.7, 1.6] × base ($14–32 at the start). */
@@ -358,13 +394,17 @@ export function buyPower(s: GameState): boolean {
 }
 
 export function rentGpu(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['compute']) return false;
+  if (s.stage >= 2 || !s.revealed['compute'] || atRentQuota(s)) return false;
   const cost = gpuCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.gpus += 1;
-  if (s.gpus === 1) say(s, 'GPU rented. A copy of Sage-1 is running.');
+  if (s.gpus === 1) say(s, 'GPU rented. A copy of the model is running.');
   if (s.gpus === 20) say(s, 'Power can now be bought 10,000 kWh at a time.');
+  if (atRentQuota(s) && !s.flags[`quotaSaid${s.gpus}`]) {
+    s.flags[`quotaSaid${s.gpus}`] = true;
+    say(s, 'The provider has no more GPUs to rent. Owning compute is the way past this.');
+  }
   return true;
 }
 

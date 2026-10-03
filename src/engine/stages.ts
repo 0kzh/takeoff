@@ -1,7 +1,8 @@
 import { GameState, say, narrate, logNews, addFunds } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, researchCap, potentialTasksPerSec, gpuBatchCost } from './economy.js';
+import { GRID_MW, researchCap, potentialTasksPerSec } from './economy.js';
+import { withdrawProject } from './reveal.js';
 import { trainCost } from './training.js';
 import { PROJECTS } from '../data/projects.js';
 
@@ -23,7 +24,7 @@ export interface StageDef {
 
 export const STAGE2_MIN_SECONDS = 25 * 60;
 /** Stage 1 projects that make no sense once ground is broken, retired without a line. */
-const QUIET_RETIRE = ['p_contractor'];
+const QUIET_RETIRE = ['p_contractor', 'p_cooling', 'p_expedite', 'p_soundwall', 'p_desks'];
 /** The rented fleet's deposit comes back at the transition: $400 a GPU, at least $25,000. */
 export const DEPOSIT_PER_GPU = 400;
 export const MIN_DEPOSIT = 25000;
@@ -37,46 +38,62 @@ function hide(s: GameState, ids: string[]): void {
 }
 
 /**
- * Stage 1 → 2. Destructive, so it is narrated: the console keeps its last lines and prints what
- * was lost, what replaced it, and why the task rate jumps. Projects that only make sense with a
- * rented fleet are retired by name; the rest carry over. The research and Trust walls are cleared
- * so the training loop is alive on arrival, and the returned deposit buys the first GPU batch.
+ * Stage 1 → 2 (stage2.md §1.1–1.3; the narration contract is arc.md §7). Destructive, so it is
+ * narrated: the console keeps its last lines and prints, two seconds apart, what was lost, what
+ * replaced it and why the task rate jumps. Pre-flight leaves no wall behind: Trust at least 2, and
+ * room in the lab for 1.25 × the next run. Projects that only make sense with a rented fleet are
+ * retired by name; the rest carry over.
  */
 function enterScale(s: GameState): void {
-  const rentedGpus = s.gpus;
-  const tpsBefore = Math.max(1, s.stats.tasksPerSec);
-
   const leftBehind = PROJECTS.filter(
     (p) => s.projects[p.id]?.shown && (s.projects[p.id]?.bought ?? 0) < p.uses && !p.stages.includes(2),
   );
-  for (const p of leftBehind) s.projects[p.id]!.shown = false;
+  for (const p of leftBehind) withdrawProject(s, p.id);
   // Rescues and the ladder's own extras go quietly; anything else is named.
   const retired = leftBehind.filter((p) => !p.rescue && !QUIET_RETIRE.includes(p.id));
 
+  // Power, its price and the grid toggle stay frozen as they were; the engine stops using them.
   hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'site']);
   show(s, ['infrastructure']);
-  s.gridAuto = false;
   s.datacenters = Math.max(1, s.datacenters);
-  // The rented fleet goes back to the cloud; Abilene opens with 1,000 owned GPUs.
-  s.gpus = Math.max(1000, s.gpus - rentedGpus + 1000);
   s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);
 
-  const deposit = Math.max(MIN_DEPOSIT, DEPOSIT_PER_GPU * rentedGpus);
-  addFunds(s, deposit);
-  s.trust = Math.max(2, s.trust + 2);
-  // The new building has room for the next run: the cap never starts below its research cost.
-  const need = trainCost(s).research ?? 0;
-  while (researchCap(s) < need) s.labSpace += 1;
+  s.trust = Math.max(s.trust, 2);
+  let roomAdded = false;
+  while (researchCap(s) < 1.25 * (trainCost(s).research ?? 0)) {
+    s.labSpace += 1;
+    roomAdded = true;
+  }
 
-  const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / tpsBefore));
+  const shipment = rackFirstShipment(s);
   narrate(s, [
-    [1.6, `The ${fmtInt(rentedGpus)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
-    [2.2, `1,000 Nimbus G4s on 5 MW at Abilene. Power is bought in megawatts now.`],
-    [2.2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
+    [0.1, 'Ground broken outside Abilene. 2026 begins.'],
+    [2, shipment.returned],
+    [2, 'Power is capacity now, not a bill: 5 MW on site, 1 MW per 1,000 GPUs.'],
+    [2, shipment.racked],
   ]);
-  if (retired.length) say(s, `Retired with the rented fleet: ${retired.map((p) => p.title).join(', ')}.`);
-  logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
-  if (gpuBatchCost(s) > s.funds) addFunds(s, gpuBatchCost(s) - s.funds);
+  if (roomAdded) say(s, 'The new site has room for a bigger lab.');
+  if (retired.length) say(s, `Left in the cloud: ${retired.map((p) => p.title).join(', ')}.`);
+  logNews(s, 'OpenMind owns a datacenter outside Abilene. It is mostly empty.');
+}
+
+/**
+ * The first shipment: the rented fleet goes back (its deposit returned) and 1,000 owned Nimbus G4s
+ * are racked, so the arrival has an affordable action and the task rate jumps at once. The Stage 2
+ * build moves exactly this step into the free `Unpack the first shipment` project (stage2.md §1.3)
+ * and calls it from there, so the rented GPUs keep running until the player unpacks.
+ */
+export function rackFirstShipment(s: GameState): { returned: string; racked: string } {
+  const rented = s.gpus;
+  const before = Math.max(1, potentialTasksPerSec(s));
+  const deposit = Math.max(MIN_DEPOSIT, DEPOSIT_PER_GPU * rented);
+  addFunds(s, deposit);
+  s.gpus = 1000;
+  const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / before));
+  return {
+    returned: `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`,
+    racked: `1,000 Nimbus G4s racked. Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`,
+  };
 }
 
 export const STAGES: StageDef[] = [
@@ -156,6 +173,7 @@ export function enterStage(s: GameState, next: number): boolean {
   s.stats.timeInStage = 0;
   s.stats.stageEnteredAt.push(s.stats.timePlayed);
   s.flags['releasesThisStage'] = 0;
+  s.flags['gamblesThisStage'] = 0;
   stageDef(next).enter(s);
   return true;
 }
@@ -191,10 +209,11 @@ const REVEAL_RULES: RevealRule[] = [
     id: 'compute',
     stages: [1],
     when: (s) => s.funds >= 3 || s.tasks >= 20,
-    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of Sage-1.'),
+    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of the model.'),
   },
-  { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 1 },
-  { id: 'marketing', stages: [1, 2], when: (s) => s.funds >= 40 || s.gpus >= 12 },
+  { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 300 },
+  // Greyed at $100 from the first sale (Paperclips shows it from second 0): always a goal in sight.
+  { id: 'marketing', stages: [1, 2], when: (s) => s.tasksSold >= 1 },
   {
     id: 'research',
     stages: [1, 2],

@@ -2,12 +2,6 @@ import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
 import { fmtInt, fmtMoneyShort } from './format.js';
 
-/**
- * Visible projects at once; extra triggers wait in line (UP keeps 3–6 on screen). Rescue
- * projects and the pinned stage goal do not count against it and never wait.
- */
-export const MAX_VISIBLE = 4;
-
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
 }
@@ -37,27 +31,6 @@ export function isVisible(s: GameState, def: ProjectDef): boolean {
 
 export function visibleProjects(s: GameState): ProjectDef[] {
   return PROJECTS.filter((p) => isVisible(s, p));
-}
-
-/**
- * Evaluated every tick: a project becomes visible when its trigger fires, regardless of
- * affordability, and stays visible until bought out (UP). Rescue projects skip the queue.
- */
-export function updateProjects(s: GameState): void {
-  if (!s.revealed['projects']) return;
-  const exempt = (def: ProjectDef) => def.rescue === true || def.pinned === true;
-  let visible = visibleProjects(s).filter((p) => !exempt(p)).length;
-  for (const def of PROJECTS) {
-    const st = s.projects[def.id];
-    if (st?.shown || remainingUses(s, def) <= 0 || !def.stages.includes(s.stage)) continue;
-    if (visible >= MAX_VISIBLE && !exempt(def)) continue;
-    // Before the Research panel, only rescues can appear (their prices are not in research).
-    if (!def.rescue && !s.revealed['research']) continue;
-    if (def.trigger(s)) {
-      projectState(s, def.id).shown = true;
-      if (!exempt(def)) visible++;
-    }
-  }
 }
 
 export function buyProject(s: GameState, id: string): boolean {

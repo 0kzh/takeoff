@@ -66,6 +66,16 @@ export const CRISES: CrisisDef[] = [
     effect: () => undefined,
   },
   {
+    id: 'cr_outage',
+    stage: 1,
+    title: 'API outage',
+    console: 'The API is down for an hour. Demand down 20% for a minute.',
+    log: 'An AI agent books every restaurant table in Austin in one night. Every agent API is rate-limited by morning.',
+    duration: 60,
+    demandMult: 0.8,
+    effect: () => undefined,
+  },
+  {
     id: 'cr_weights_theft',
     stage: 2,
     title: 'Weights theft',

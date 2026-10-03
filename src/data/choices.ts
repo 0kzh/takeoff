@@ -1,7 +1,7 @@
 import { GameState, Cost, TrainingRun, say, addFunds } from '../engine/state.js';
 import { BENCHMARKS, doRelease, releaseChecked } from '../engine/training.js';
 import { chance, randInt } from '../engine/rng.js';
-import { fmtMoney, fmtClock } from '../engine/format.js';
+import { fmtMoney } from '../engine/format.js';
 
 type Ctx = Record<string, number | string>;
 
@@ -24,6 +24,8 @@ export interface ChoiceDef {
   text: (s: GameState, ctx: Ctx) => string[];
   /** Seconds before `defaultOption` is chosen automatically. */
   timer?: number;
+  /** A queued modal that no longer applies when its turn comes is dropped. */
+  valid?: (s: GameState, ctx: Ctx) => boolean;
   defaultOption?: number;
   options: ChoiceOption[];
 }
@@ -47,6 +49,7 @@ export const CHOICES: ChoiceDef[] = [
     ],
     timer: 20,
     defaultOption: 1,
+    valid: (s, ctx) => runFor(s, ctx)?.phase === 'training',
     options: [
       {
         label: 'let her try',
@@ -146,35 +149,6 @@ export const CHOICES: ChoiceDef[] = [
     ],
   },
   {
-    id: 'c_water',
-    title: 'The County Asks About Water',
-    text: () => [
-      'Abilene is dry most of the year.',
-      'Closed-loop cooling costs more. Evaporative cooling uses the town\'s water.',
-    ],
-    options: [
-      {
-        label: 'closed-loop cooling',
-        record: 'closed loop',
-        tooltip: '+1 Trust',
-        cost: { funds: 10000 },
-        effect: (s) => {
-          s.trust += 1;
-        },
-        log: 'OpenMind will cool Abilene with a closed loop. The county commissioner shakes every hand.',
-      },
-      {
-        label: 'evaporative cooling',
-        record: 'evaporative',
-        tooltip: 'free',
-        effect: (s) => {
-          s.approval = Math.max(-100, s.approval - 2);
-        },
-        log: 'OpenMind will cool Abilene with the town\'s water. Locals ask about the aquifer.',
-      },
-    ],
-  },
-  {
     id: 'c_bridge',
     title: 'A Bridge Round',
     text: () => [
@@ -200,48 +174,6 @@ export const CHOICES: ChoiceDef[] = [
         record: 'no bridge',
         effect: () => undefined,
         log: 'OpenMind turns down a bridge round. The fund calls twice more.',
-      },
-    ],
-  },
-  {
-    id: 'c_outage',
-    title: 'The API Goes Down',
-    text: () => [
-      'Traffic tripled overnight. The API has been down for an hour.',
-      'The status page says "investigating". It has said that for an hour.',
-    ],
-    timer: 45,
-    defaultOption: 2,
-    options: [
-      {
-        label: 'rent emergency capacity',
-        record: 'emergency capacity',
-        tooltip: 'customers barely notice',
-        cost: { funds: 8000 },
-        effect: (s) => {
-          say(s, 'Emergency capacity online. The status page turns green.');
-        },
-        log: 'OpenMind rents emergency capacity at triple the price. The outage lasts seventy minutes.',
-      },
-      {
-        label: 'rate-limit free users',
-        record: 'rate limits',
-        tooltip: 'marketing level −1',
-        effect: (s) => {
-          s.hypeLevel = Math.max(1, s.hypeLevel - 1);
-          say(s, 'Free users rate-limited. They say so, loudly.');
-        },
-        log: 'OpenMind rate-limits free users. A thread about it reaches the front page.',
-      },
-      {
-        label: 'post an apology',
-        record: 'apology',
-        tooltip: 'demand −20% for a minute',
-        effect: (s) => {
-          s.effects.push({ id: 'outage', remaining: 60, demandMult: 0.8 });
-          say(s, 'Apology posted. Customers wait. Some of them leave.');
-        },
-        log: 'OpenMind apologises for a four-hour outage. The apology is well written.',
       },
     ],
   },
@@ -285,98 +217,6 @@ export const CHOICES: ChoiceDef[] = [
     ],
   },
   {
-    id: 'c_neighbour',
-    title: 'A Neighbour Objects',
-    text: () => [
-      'The rancher next to the Abilene site says the substation hums all night.',
-      'His cattle have stopped sleeping. So has he.',
-    ],
-    timer: 60,
-    defaultOption: 2,
-    options: [
-      {
-        label: 'buy his land',
-        record: 'bought the ranch',
-        tooltip: '+1 Trust',
-        cost: { funds: 15000 },
-        effect: (s) => {
-          s.trust += 1;
-        },
-        log: 'OpenMind buys the ranch next to its Abilene site. The cattle are part of the deal.',
-      },
-      {
-        label: 'build a sound wall',
-        record: 'sound wall',
-        cost: { funds: 5000 },
-        effect: () => undefined,
-        log: 'A sound wall goes up beside the Abilene substation. It is painted the colour of the sky.',
-      },
-      {
-        label: 'ignore it',
-        record: 'ignored',
-        tooltip: '−1 Trust',
-        effect: (s) => {
-          s.trust -= 1;
-        },
-        log: 'A rancher outside Abilene tells a reporter about the hum. The clip is shared widely.',
-      },
-    ],
-  },
-  {
-    id: 'c_abatement',
-    title: 'Taylor County Offers a Deal',
-    text: () => [
-      'The county will take $20,000 off the substation.',
-      'In return, OpenMind promises two hundred local jobs at Abilene.',
-    ],
-    options: [
-      {
-        label: 'promise the jobs',
-        record: 'abatement',
-        tooltip: 'the substation costs $20,000 less',
-        effect: (s) => {
-          s.flags['abatement'] = true;
-        },
-        log: 'OpenMind promises Abilene two hundred jobs. The building will need about thirty people.',
-      },
-      {
-        label: 'pay full price',
-        record: 'full price',
-        effect: () => undefined,
-        log: 'OpenMind declines the Taylor County abatement. The commissioner is confused.',
-      },
-    ],
-  },
-  {
-    id: 'c_utility',
-    title: 'The Utility Calls',
-    text: (s) => [
-      `The interconnect study has ${fmtClock(s.interconnectLeft)} left to run.`,
-      '"For a fee, it could run faster."',
-    ],
-    timer: 45,
-    defaultOption: 1,
-    options: [
-      {
-        label: 'pay to expedite',
-        record: 'expedited',
-        tooltip: 'one minute off the queue',
-        cost: { funds: 15000 },
-        enabled: (s) => s.interconnectLeft > 5,
-        effect: (s) => {
-          s.interconnectLeft = Math.max(1, s.interconnectLeft - 60);
-          say(s, 'Fee paid. The interconnect study moves up a page.');
-        },
-        log: 'OpenMind pays to expedite the Abilene interconnect study. The fee is called a deposit.',
-      },
-      {
-        label: 'wait your turn',
-        record: 'waited',
-        effect: () => undefined,
-      },
-    ],
-  },
-  {
     id: 'c_poach',
     title: 'A Better Offer',
     text: () => [
@@ -411,6 +251,43 @@ export const CHOICES: ChoiceDef[] = [
           say(s, 'Two researchers leave for a larger lab.');
         },
         log: 'Two OpenMind researchers leave for a larger lab. They take a whiteboard.',
+      },
+    ],
+  },
+  {
+    id: 'c_leaderboard',
+    title: 'The Leaderboard Wants Sage',
+    text: (s) => [
+      `The year-end leaderboard wants ${s.training.deployedName} on its hardware, on its tests.`,
+      'Anthrosoft has already said yes.',
+    ],
+    timer: 60,
+    defaultOption: 1,
+    options: [
+      {
+        label: 'submit Sage',
+        record: 'submitted',
+        tooltip: 'ahead of Anthrosoft: marketing level +1. Behind: −1 Trust',
+        effect: (s) => {
+          const won = s.capability >= s.rivalCapability;
+          s.flags['leaderboardWon'] = won;
+          if (won) {
+            s.hypeLevel += 1;
+            say(s, `${s.training.deployedName} tops the year-end board. Marketing level +1.`);
+          } else {
+            s.trust -= 1;
+            say(s, `${s.training.deployedName} places second, behind Cadence. Trust −1.`);
+          }
+        },
+        log: (s) => (s.flags['leaderboardWon']
+          ? `${s.training.deployedName} tops the year-end leaderboard. Two labs dispute the methodology.`
+          : `${s.training.deployedName} places second on the year-end leaderboard. OpenMind disputes the methodology.`),
+      },
+      {
+        label: 'decline',
+        record: 'declined',
+        effect: () => undefined,
+        log: 'OpenMind declines the year-end leaderboard. Its row reads "declined to participate".',
       },
     ],
   },
@@ -471,7 +348,7 @@ export const CHOICES: ChoiceDef[] = [
           s.alignmentApparent = Math.min(100, s.alignmentApparent + 2);
           s.govRelations = Math.min(100, s.govRelations + 2);
         },
-        log: 'OpenMind publishes a 60-page system card. The piece runs anyway, shorter.',
+        log: 'OpenMind publishes a long system card. The piece runs anyway, shorter.',
       },
       {
         label: 'no comment',
@@ -481,7 +358,7 @@ export const CHOICES: ChoiceDef[] = [
           s.hypeLevel += 1;
           s.govRelations = Math.max(0, s.govRelations - 2);
         },
-        log: '"OpenMind declined to comment." The piece is shared 200,000 times.',
+        log: '"OpenMind declined to comment." The piece is shared widely.',
       },
     ],
   },

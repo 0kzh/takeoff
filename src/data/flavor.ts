@@ -88,8 +88,8 @@ export const RELEASE_HEADLINES: string[] = [
 
 /** Rival lab releases (Anthrosoft). `{name}` is the model. */
 export const RIVAL_LINES: string[] = [
-  'Anthrosoft ships {name}. Its benchmark table has one more column than ours.',
-  'Anthrosoft ships {name}. Customers ask for a comparison.',
-  'Anthrosoft ships {name}. Their launch video is better than ours.',
-  'Anthrosoft ships {name}. Two of our customers switch for a week.',
+  'Anthrosoft ships a new Cadence. Its benchmark table has one more column than ours.',
+  'Anthrosoft ships a new Cadence. Customers ask for a comparison.',
+  'Anthrosoft ships a new Cadence. Their launch video is better than ours.',
+  'Anthrosoft ships a new Cadence. Two of our customers switch for a week.',
 ];

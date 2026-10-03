@@ -5,10 +5,11 @@ import {
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
   toggleGrid, buildDatacenter, buyGpuBatch, buyTurbines,
 } from './economy.js';
-import { updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainCost } from './training.js';
-import { updateProjects, buyProject, visibleProjects } from './projects.js';
+import { updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainCost, atPlateau } from './training.js';
+import { buyProject, visibleProjects } from './projects.js';
+import { updateProjects, noteReveals } from './reveal.js';
 import {
-  updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, fireEvent,
+  updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, fireEvent, drainChoiceQueue,
 } from './events.js';
 import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
@@ -75,7 +76,9 @@ export function step(s: GameState): void {
   updateChoice(s, dt);
   updateDevelopments(s);
   if (slow) updateRival(s);
+  drainChoiceQueue(s);
   idleGuard(s, dt);
+  noteReveals(s);
   drainConsoleQueue(s, dt);
 
   advanceClock(s, dt);
@@ -99,10 +102,20 @@ function drainConsoleQueue(s: GameState, dt: number): void {
 }
 
 function slowStats(s: GameState): void {
+  trackPlateau(s);
   averages(s);
   taskMilestones(s);
   bottleneckMessages(s);
   researchWall(s);
+}
+
+/** When the plateau began (the desks offer waits 45 s for Trust or another fix first). */
+function trackPlateau(s: GameState): void {
+  if (atPlateau(s)) {
+    if (typeof s.flags['plateauSince'] !== 'number') s.flags['plateauSince'] = s.stats.timePlayed;
+  } else if (s.flags['plateauSince'] !== undefined) {
+    delete s.flags['plateauSince'];
+  }
 }
 
 /** UP-style report: `10,000 tasks completed in 7 minutes 12 seconds`. */
@@ -126,6 +139,16 @@ export function researchWanted(s: GameState): { amount: number; what: string } {
   return best;
 }
 
+/** The fix for a full lab that is on screen right now, named in the wall's console line. */
+function capFix(s: GameState): string {
+  const shown = (id: string) => visibleProjects(s).some((p) => p.id === id);
+  if (s.revealed['expandLab'] && s.trust >= 1) return 'Expand Lab to hold more.';
+  if (shown('p_lab_cluster')) return 'The Experiment tracker doubles it.';
+  if (shown('p_floor')) return 'Lease the floor upstairs.';
+  if (shown('p_desks')) return 'Rent desks across the street.';
+  return s.revealed['expandLab'] ? 'Expand Lab with the next Trust.' : 'More room comes with Trust.';
+}
+
 /**
  * Research at its cap, once per cap value: name the wall and the fix when something on screen
  * needs more than the lab holds (the Research Plateau when it is the next training run).
@@ -138,9 +161,7 @@ function researchWall(s: GameState): void {
   if (s.flags[key]) return;
   s.flags[key] = true;
   const want = researchWanted(s);
-  const fix = s.revealed['expandLab']
-    ? s.trust >= 1 ? 'Expand Lab to hold more.' : 'Expand Lab with the next Trust.'
-    : 'More room comes with Trust.';
+  const fix = capFix(s);
   if (want.amount > cap) {
     if (want.what === 'the next run') {
       say(s, `The Research Plateau — the next run needs ${fmtInt(want.amount)} research. The lab holds ${fmtInt(cap)}. ${fix}`);

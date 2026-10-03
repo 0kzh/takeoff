@@ -1,6 +1,5 @@
 import type { GameState } from '../engine/state.js';
 import { monthOf } from '../engine/format.js';
-import { INTERCONNECT_SECONDS } from '../engine/economy.js';
 
 /**
  * World timeline for the Developments log. Each entry fires on `month` (months since Jul 2025)
@@ -36,7 +35,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_agents',
     stage: 1,
     text: 'Agents can order food and fill spreadsheets. Sometimes.',
-    trigger: (s) => s.gpus >= 2 || s.stats.timePlayed >= 90,
+    // The Developments column is the reveal between the first GPUs and the first Trust.
+    trigger: (s) => s.stats.timePlayed >= 100 || s.tasks >= 600,
   },
   {
     id: 'd_contract',
@@ -68,7 +68,7 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_bridge',
     stage: 1,
     choice: 'c_bridge',
-    month: monthOf(2025, 9),
+    month: monthOf(2025, 9) + 0.2,
   },
   {
     id: 'd_lead_times',
@@ -76,20 +76,19 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
+  // ---- The modal calendar: six choices about 3¼ minutes apart (MODAL_SPACING is 2½). ----
   {
     id: 'd_rival',
     stage: 1,
     crisis: 'cr_rival_open_weights',
     choice: 'c_rival',
-    month: monthOf(2025, 10),
-    trigger: (s) => s.stats.publicReleases >= 1 && s.stats.timePlayed >= 840,
+    month: monthOf(2025, 9) + 0.85,
   },
   {
     id: 'd_outage',
     stage: 1,
-    choice: 'c_outage',
-    text: 'An AI agent books 4,000 restaurant tables in one night. Every agent API is rate-limited by morning.',
-    month: monthOf(2025, 10) + 0.3,
+    crisis: 'cr_outage',
+    month: monthOf(2025, 10) + 0.2,
   },
   {
     id: 'd_benchmark',
@@ -111,12 +110,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.projects['p_site']?.shown === true,
   },
   {
-    id: 'd_water',
-    stage: 1,
-    choice: 'c_water',
-    trigger: (s) => sinceFlag(s, 'siteAt') >= 30,
-  },
-  {
     id: 'd_hyperscaler',
     stage: 1,
     text: 'A hyperscaler announces a campus the size of a small city. The press release has no date in it.',
@@ -124,16 +117,9 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.projects['p_site']?.bought === 1,
   },
   {
-    id: 'd_utility_call',
-    stage: 1,
-    choice: 'c_utility',
-    trigger: (s) => s.interconnectLeft > 0 && s.interconnectLeft <= INTERCONNECT_SECONDS - 25,
-  },
-  {
     id: 'd_interconnect_done',
     stage: 1,
     text: 'The utility signs off on the Abilene interconnect. Two other applicants withdraw.',
-    choice: 'c_abatement',
     trigger: (s) => s.flags['interconnectDone'] === true,
   },
   {
@@ -141,15 +127,14 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_journalist',
     text: 'A reporter is writing about how frontier models are tested. Nobody is sure who tests them.',
-    month: monthOf(2025, 11),
-    trigger: (s) => s.stats.publicReleases >= 2 && s.stats.timePlayed >= 1080,
+    month: monthOf(2025, 10) + 0.5,
   },
   {
     id: 'd_letter',
     stage: 1,
     choice: 'c_letter',
     text: 'Two hundred researchers sign a letter asking frontier labs to slow down. Eleven work at OpenMind.',
-    month: monthOf(2025, 11) + 0.3,
+    month: monthOf(2025, 11) + 0.15,
   },
   {
     id: 'd_nimbus',
@@ -176,14 +161,19 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_poach',
     text: 'Pay for AI researchers passes that of professional athletes. Nobody checks the comparison.',
-    month: monthOf(2025, 12),
-    trigger: (s) => s.researchers >= 26,
+    month: monthOf(2025, 11) + 0.8,
+  },
+  {
+    id: 'd_leaderboard',
+    stage: 1,
+    choice: 'c_leaderboard',
+    month: monthOf(2025, 12) + 0.45,
   },
   {
     id: 'd_neighbour',
     stage: 1,
-    choice: 'c_neighbour',
-    trigger: (s) => sinceFlag(s, 'substationAt') >= 140,
+    text: 'The rancher next to the Abilene site says the substation hums all night. His cattle have stopped sleeping.',
+    trigger: (s) => sinceFlag(s, 'substationAt') >= 100,
   },
   {
     id: 'd_senate',

@@ -1,7 +1,7 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
-import { activeGpus } from './economy.js';
-import { openChoice } from './events.js';
+import { activeGpus, researchCap } from './economy.js';
+import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
 
@@ -22,48 +22,81 @@ export function majorFor(capability: number): number {
   return major;
 }
 
-/** Research `2,000 × 1.6^n` and funds `100 × 2^n` for the n-th run. */
-export function trainCost(s: GameState): Cost {
-  const n = s.training.runIndex;
-  return {
-    research: Math.round(2000 * Math.pow(1.6, n)),
-    funds: Math.round(100 * Math.pow(2, n)),
-  };
+/**
+ * Training costs depend on the capability the run starts from, not on how many runs came before,
+ * so every mix of focuses pays the same to reach a capability and nothing jumps at a stage
+ * boundary (stage2.md §2.5). One continuous function of `c` per cost, for the whole game: the
+ * Stage 2 spec's constants hold from `COST_KNEE` (1.6×) up; below it the compute and funds curves
+ * are steeper, so a first run at 1.0× trains fully on the fleet a player has at minute six.
+ */
+export const COST_KNEE = 1.6;
+/** Every run keeps at least this share of its nominal gain, however little compute it had. */
+export const MIN_YIELD = 0.3;
+
+/** The capability the next run starts from: the best model so far, deployed or internal. */
+export function startCapability(s: GameState): number {
+  return Math.max(s.capability, s.training.internalCapability);
+}
+
+/** Research `21,000 × (c/1.6)^5`: ≈ 2,000 at 1.0×, 15,200 at 1.5×, 24,500 at 1.65×. */
+export function researchFor(c: number): number {
+  return Math.round(21000 * Math.pow(c / COST_KNEE, 5));
+}
+
+/** Funds `$25,000 × (c/1.6)^8` from the knee up; exponent 9.5 below it: ≈ $290 at 1.0×, $13,500 at 1.5×. */
+export function fundsFor(c: number): number {
+  return Math.round(25000 * Math.pow(c / COST_KNEE, c >= COST_KNEE ? 8 : 9.5));
 }
 
 /**
- * GPUs a run wants on it to train at full speed: `12 × 2.8^n`. Rented GPUs stop keeping up
- * around the third run, so late Stage 1 runs are undertrained — the case for owning a datacenter.
+ * GPUs of training compute a run wants: `1,000 × (c/1.6)^7.5` from the knee up (≈ 1,260 at
+ * 1.65×); exponent 10 below it (≈ 9 at 1.0×, 125 at 1.3×, 520 at 1.5×). Rented fleets top out
+ * near a hundred GPUs, so late Stage 1 runs are undertrained — the case for owning compute.
  */
-export function requiredCompute(s: GameState): number {
-  return Math.round(12 * Math.pow(2.8, s.training.runIndex));
+export function computeFor(c: number): number {
+  return 1000 * Math.pow(c / COST_KNEE, c >= COST_KNEE ? 7.5 : 10);
 }
 
+export function trainCost(s: GameState): Cost {
+  const c = startCapability(s);
+  return { research: researchFor(c), funds: fundsFor(c) };
+}
+
+/** GPUs of training compute the next run wants. */
+export function requiredCompute(s: GameState): number {
+  return computeFor(startCapability(s));
+}
+
+/** GPUs the next run would get: the training share of the active fleet, × Distributed training. */
 export function trainingCompute(s: GameState): number {
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
   return Math.max(1, activeGpus(s) * s.training.computeShare * mult);
 }
 
-export function computeFactor(s: GameState): number {
-  return Math.sqrt(trainingCompute(s) / requiredCompute(s));
-}
-
-/** Seconds the next run would take uncapped: `60 × (1 + 0.15 n) / computeFactor`. */
-export function rawTrainingTime(s: GameState): number {
-  return (60 * (1 + 0.15 * s.training.runIndex)) / computeFactor(s);
-}
-
-/** `T = clamp(45, 120, rawTime)`. */
-export function trainingDuration(s: GameState): number {
-  return Math.min(120, Math.max(45, rawTrainingTime(s)));
-}
-
-/**
- * A run that would need more than 120 s is cut off at 120 s and keeps only part of its gain:
- * `(120 / rawTime)²`, so a run with a third of the compute it wants learns about a tenth.
- */
+/** Share of the nominal gain the run keeps: `clamp(√(have / wanted), 0.3, 1)`. */
 export function computeYield(s: GameState): number {
-  return Math.pow(Math.min(1, 120 / rawTrainingTime(s)), 2);
+  return Math.min(1, Math.max(MIN_YIELD, Math.sqrt(trainingCompute(s) / requiredCompute(s))));
+}
+
+/** `clamp(120 × √(wanted / have), 45, 120)` seconds: a run with four times the compute it wants takes a minute. */
+export function trainingDuration(s: GameState): number {
+  return Math.min(120, Math.max(45, 120 * Math.sqrt(requiredCompute(s) / trainingCompute(s))));
+}
+
+/** The Research Plateau: the next run costs more research than the lab can hold. */
+export function atPlateau(s: GameState): boolean {
+  return s.revealed['training'] === true && !s.training.run && (trainCost(s).research ?? 0) > researchCap(s);
+}
+
+/** Seconds the plateau has lasted (0 when there is none). */
+export function plateauSeconds(s: GameState): number {
+  const at = s.flags['plateauSince'];
+  return typeof at === 'number' ? s.stats.timePlayed - at : 0;
+}
+
+/** "Far beyond anything rentable": the run wants three times the compute it can get. */
+export function needsOwnedCompute(s: GameState): boolean {
+  return requiredCompute(s) >= 3 * trainingCompute(s);
 }
 
 /** Training steals a share of compute while a run is in its training phase. */
@@ -106,7 +139,7 @@ export function startTraining(s: GameState): boolean {
     flavorShown: 0,
     eventAt: chance(s, 0.3) ? rand(s, 0.35, 0.7) : -1,
     eventId: '',
-    gambleAt: chance(s, 0.4) ? 0.25 : -1,
+    gambleAt: 0.25,
     gamble: 'none',
     capBefore: Math.max(s.capability, t.internalCapability),
     capAfter: 0,
@@ -125,7 +158,7 @@ export function startTraining(s: GameState): boolean {
   // Copies now differ from GPUs: the Copies line appears with the first run that diverts compute.
   s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  say(s, `Training ${run.name}. ${Math.round(t.computeShare * 100)}% of compute diverted.`);
+  say(s, `Training ${run.name}. Half the compute is diverted.`);
   if (yieldNow < 0.999) say(s, `Not enough compute. ${run.name} trains to ${Math.round(yieldNow * 100)}%.`);
   return true;
 }
@@ -168,10 +201,7 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number): void {
     run.flavorShown += 1;
     if (pool.length) say(s, pick(s, pool));
   }
-  if (run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) {
-    run.gamble = 'offered';
-    openChoice(s, 'c_gamble', { runId: run.id });
-  }
+  if (run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
   if (run.eventAt >= 0 && !run.eventId && progress >= run.eventAt) applyTrainingEvent(s, run);
   if (run.elapsed >= run.duration) {
     run.elapsed = run.duration;
@@ -179,6 +209,24 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number): void {
     run.evalElapsed = 0;
     computeResults(s, run);
     say(s, `Training complete. Evaluating ${run.name}.`);
+  }
+}
+
+/** "Can I try something?" — at most every other run, three times a stage, and only when a modal may open. */
+export const GAMBLES_PER_STAGE = 3;
+
+function offerGamble(s: GameState, run: TrainingRun): void {
+  const last = s.flags['lastGambleRun'];
+  const count = (s.flags['gamblesThisStage'] as number) || 0;
+  const rested = typeof last !== 'number' || run.id - last >= 2;
+  // A passing offer: it never delays a modal on the calendar.
+  const clear = secondsToNextCalendarModal(s) >= MODAL_SPACING;
+  if (count < GAMBLES_PER_STAGE && rested && clear && openChoice(s, 'c_gamble', { runId: run.id }, { onlyIfFree: true })) {
+    run.gamble = 'offered';
+    s.flags['gamblesThisStage'] = count + 1;
+    s.flags['lastGambleRun'] = run.id;
+  } else {
+    run.gamble = 'declined';
   }
 }
 
@@ -272,11 +320,19 @@ function finishEvaluation(s: GameState, run: TrainingRun): void {
     say(s, `${old} is good enough to be called ${run.name}.`);
   }
   const frontier = total >= FRONTIER_SCORE ? ' Frontier model.' : '';
-  say(s, `Evaluation: ${total}/40.${frontier} Issues found: ${run.issuesFound}.`);
+  say(s, `Evaluation done.${frontier} ${issueWords(run.issuesFound)}`);
   s.training.frontierBonus = total >= FRONTIER_SCORE ? 0.01 : 0;
   if (total >= LEADERBOARD_SCORE) s.flags['leaderboardEligible'] = true;
   const maxBench = Math.max(...run.benchmarks);
   if (maxBench > ((s.flags['maxBenchmark'] as number) || 0)) s.flags['maxBenchmark'] = maxBench;
+}
+
+const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
+/** `No issues for the red team.` / `Three issues for the red team.` */
+function issueWords(n: number): string {
+  const count = n < WORDS.length ? WORDS[n]! : String(n);
+  return n === 0 ? 'No issues for the red team.' : `${count} issue${n === 1 ? '' : 's'} for the red team.`;
 }
 
 export function canRedTeam(s: GameState): boolean {

@@ -1,7 +1,7 @@
 import { GameState, Cost, canPay, isBought, addFunds } from '../engine/state.js';
 import { enterStage, STUCK } from '../engine/stages.js';
-import { researchCap, gpuCost, fleetPowerBlock, INTERCONNECT_SECONDS, CONTRACT_BASE, CONTRACT_GROWTH } from '../engine/economy.js';
-import { trainCost } from '../engine/training.js';
+import { researchCap, gpuCost, fleetPowerBlock, atRentQuota, INTERCONNECT_SECONDS, CONTRACT_BASE, CONTRACT_GROWTH } from '../engine/economy.js';
+import { atPlateau, plateauSeconds } from '../engine/training.js';
 import { monthOf } from '../engine/format.js';
 
 /**
@@ -29,6 +29,14 @@ export interface ProjectDef {
   rescue?: boolean;
   /** The stage goal (the Abilene site ladder): ignores the visible-project cap. */
   pinned?: boolean;
+  /** While this holds, the project skips the drip queue and the cap (the named fix for a wall). */
+  urgent?: (s: GameState) => boolean;
+  /** The direct consequence of a purchase (the next step of a ladder): appears at once when there is room. */
+  chain?: boolean;
+  /** When this holds the offer has lapsed: it leaves the screen unbought. */
+  expires?: (s: GameState) => boolean;
+  /** A side-offer of the stage goal (the Abilene extras): drips in, but never fills the cap. */
+  sideline?: boolean;
   consoleMsg?: string;
   logMsg?: string;
 }
@@ -61,7 +69,12 @@ const sinceFlag = (s: GameState, key: string): number => {
 
 /** The Substation: $120,000 and 8,000 research, less a county tax abatement if one was taken. */
 export function substationCost(s: GameState): Cost {
-  return { funds: s.flags['abatement'] === true ? 100000 : 120000, research: 8000 };
+  return { funds: isBought(s, 'p_abatement') || s.flags['abatement'] === true ? 100000 : 120000, research: 8000 };
+}
+
+/** Each desk lease costs twice the last: $1,000, $2,000, $4,000 … */
+export function deskCost(s: GameState): number {
+  return 1000 * Math.pow(2, bought(s, 'p_desks'));
 }
 
 /** Research cost of the next Custom model contract. */
@@ -113,6 +126,22 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Press release out. Three outlets run it verbatim.',
   }),
   project({
+    id: 'p_desks',
+    title: 'Rent desks across the street',
+    priceTag: (s) => `($${deskCost(s).toLocaleString('en-US')})`,
+    cost: (s) => ({ funds: deskCost(s) }),
+    description: 'Two more lab spaces, a short walk away. Each lease costs twice the last.',
+    // The plateau's last-resort fix: no Trust for Expand Lab and nothing else on screen raises the cap.
+    trigger: (s) => s.stage === 1 && plateauSeconds(s) >= 45 && s.trust < 1,
+    buy: (s) => {
+      s.labSpace += 2;
+    },
+    uses: Infinity,
+    rehide: true,
+    rescue: true,
+    consoleMsg: 'Desks rented across the street. The lab holds more.',
+  }),
+  project({
     id: 'p_prompting',
     title: 'Better Prompting',
     cost: { research: 750 },
@@ -151,6 +180,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_prompting2',
+    chain: true,
     title: 'Chain-of-thought',
     cost: { research: 2500 },
     description: 'Let the copies think before they answer. 50% faster.',
@@ -194,7 +224,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.trust += 1;
     },
-    consoleMsg: '40,000 people read the post. Trust +1.',
+    consoleMsg: 'Forty thousand people read the post. Trust +1.',
     stages: [1, 2],
   }),
   project({
@@ -202,7 +232,8 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Experiment tracker',
     cost: { research: 3000 },
     description: 'Every result logged once. Lab space holds twice as much research.',
-    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300),
+    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || atPlateau(s),
+    urgent: atPlateau,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -211,6 +242,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_prompting3',
+    chain: true,
     title: 'Tool use',
     cost: { research: 5000 },
     description: 'Give the copies a terminal and a browser. 75% faster.',
@@ -245,6 +277,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_demo',
+    chain: true,
     title: 'Launch demo video',
     cost: { insight: 25 },
     description: 'Three minutes, no cuts. Marketing level +2.',
@@ -259,7 +292,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_compute_deal',
     title: 'Bulk GPU lease',
     cost: { research: 5000 },
-    description: 'A three-year commitment. GPU prices rise more slowly.',
+    description: 'A three-year commitment: twenty more GPUs on the quota, and prices rise more slowly.',
     trigger: (s) => s.gpus >= 45 || gpuCost(s) >= 1000,
     buy: (s) => {
       s.gpuCostGrowth = 1.08;
@@ -298,15 +331,16 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_site',
     title: 'Reserve the Abilene site',
     cost: { funds: 40000 },
-    description: '900 acres of scrub near a substation. Somewhere to own compute.',
-    trigger: (s) => isBought(s, 'p_series_a'),
+    description: 'Nine hundred acres of scrub near a substation. Somewhere to own compute.',
+    // After the Series A, or as soon as the provider runs out of G4s to rent (the named fix).
+    trigger: (s) => isBought(s, 'p_series_a') || atRentQuota(s),
     buy: (s) => {
       s.revealed['site'] = true;
       s.flags['siteAt'] = s.stats.timePlayed;
     },
     pinned: true,
-    consoleMsg: 'Abilene site reserved. 900 acres, one road.',
-    logMsg: 'OpenMind reserves 900 acres outside Abilene. The county approves it in eleven minutes.',
+    consoleMsg: 'Abilene site reserved. Nine hundred acres, one road.',
+    logMsg: 'OpenMind reserves nine hundred acres outside Abilene. The county approves it in eleven minutes.',
   }),
   project({
     id: 'p_interconnect',
@@ -346,17 +380,68 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_datacenter',
     title: 'Break ground',
-    cost: (s) => ({ funds: isBought(s, 'p_contractor') ? 140000 : 180000 }),
+    cost: (s) => ({ funds: isBought(s, 'p_contractor') ? 125000 : 165000 }),
     description: 'Pour the slab, rack the first thousand GPUs. Stop renting.',
     trigger: (s) => isBought(s, 'p_substation'),
     buy: (s) => {
       enterStage(s, 2);
     },
     pinned: true,
-    consoleMsg: 'Ground broken outside Abilene.',
+  }),
+  project({
+    id: 'p_cooling',
+    sideline: true,
+    title: 'Closed-loop cooling',
+    cost: { funds: 10000 },
+    description: 'Abilene is dry most of the year. Cool the halls without the town\'s water. +1 Trust.',
+    trigger: (s) => sinceFlag(s, 'siteAt') >= 30,
+    buy: (s) => {
+      s.trust += 1;
+    },
+    consoleMsg: 'Closed-loop cooling it is. The county commissioner shakes every hand. Trust +1.',
+    logMsg: 'OpenMind will cool its Abilene site with a closed loop. The aquifer is spared.',
+  }),
+  project({
+    id: 'p_expedite',
+    sideline: true,
+    title: 'Pay to expedite the interconnect',
+    cost: { funds: 15000 },
+    description: 'The utility has a fast lane. It is called a deposit. One minute off the queue.',
+    trigger: (s) => s.interconnectLeft > 5 && sinceFlag(s, 'interconnectAt') >= 25,
+    canAfford: (s) => s.interconnectLeft > 5 && canPay(s, { funds: 15000 }),
+    expires: (s) => s.interconnectLeft <= 5,
+    buy: (s) => {
+      s.interconnectLeft = Math.max(1, s.interconnectLeft - 60);
+    },
+    consoleMsg: 'Fee paid. The interconnect study moves up a page.',
+  }),
+  project({
+    id: 'p_soundwall',
+    sideline: true,
+    title: 'Build a sound wall',
+    cost: { funds: 5000 },
+    description: 'Painted the colour of the sky, so the rancher next door can sleep. +1 Trust.',
+    trigger: (s) => sinceFlag(s, 'substationAt') >= 100,
+    buy: (s) => {
+      s.trust += 1;
+    },
+    consoleMsg: 'Sound wall up. The cattle sleep again. Trust +1.',
+  }),
+  project({
+    id: 'p_abatement',
+    sideline: true,
+    title: 'Take the county\'s tax abatement',
+    cost: {},
+    description: 'Promise Abilene two hundred jobs. The substation costs $20,000 less.',
+    trigger: (s) => s.flags['interconnectDone'] === true && !isBought(s, 'p_substation'),
+    expires: (s) => isBought(s, 'p_substation'),
+    buy: () => undefined,
+    consoleMsg: 'Abatement signed. Two hundred jobs promised; the building needs about thirty.',
+    logMsg: 'OpenMind promises Abilene two hundred jobs. The datacenter will employ about thirty.',
   }),
   project({
     id: 'p_contractor',
+    sideline: true,
     title: 'Hire a general contractor',
     cost: { funds: 25000 },
     description: 'Ex-military, on schedule, not cheap. Break ground costs $40,000 less.',
@@ -367,6 +452,7 @@ export const PROJECTS: ProjectDef[] = [
   // ---- Late Stage 1: each one changes a number on screen. ----
   project({
     id: 'p_contract',
+    chain: true,
     title: 'Custom model contract',
     priceTag: (s) => `(${contractCost(s).toLocaleString('en-US')} research)`,
     cost: (s) => ({ research: contractCost(s) }),
@@ -374,7 +460,8 @@ export const PROJECTS: ProjectDef[] = [
     // The sales team brings the custom deals in.
     trigger: (s) => isBought(s, 'p_enterprise'),
     uses: Infinity,
-    stages: [1, 2],
+    // A standing offer once it exists: it never takes a slot from something new.
+    sideline: true,
     buy: (s) => {
       s.revealed['contracts'] = true;
     },
@@ -402,7 +489,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.flags['trainingCompute'] = 1.5;
     },
-    stages: [1, 2],
     consoleMsg: 'Distributed training online. Runs train on half again as many GPUs.',
   }),
   project({
@@ -427,12 +513,12 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchMult *= 1.25;
     },
-    stages: [1, 2],
     consoleMsg: 'Sage now writes a third of OpenMind\'s code. Research runs faster.',
     logMsg: 'OpenMind says its own model now writes much of its code. Nobody outside can check.',
   }),
   project({
     id: 'p_ppa',
+    sideline: true,
     title: 'Power purchase agreement',
     cost: { research: 7000 },
     description: 'Ten years of wind from a farm near Abilene, at a fixed price. Power costs 30% less.',
@@ -446,6 +532,17 @@ export const PROJECTS: ProjectDef[] = [
     logMsg: 'OpenMind signs for a West Texas wind farm\'s output. The turbines are not built yet.',
   }),
   project({
+    id: 'p_renewals',
+    title: 'Renewal season',
+    cost: { research: 6000 },
+    description: 'Every contract comes up for renewal in December, at a higher price. Contracts pay 25% more.',
+    trigger: (s) => s.revealed['contracts'] === true && (dateAtLeast(s, 2025, 12.1) || bought(s, 'p_contract') >= 6),
+    buy: (s) => {
+      s.flags['contractMult'] = 1.25;
+    },
+    consoleMsg: 'Renewals signed. Every contract pays a quarter more.',
+  }),
+  project({
     id: 'p_batch',
     title: 'Batch inference',
     cost: { research: 8000 },
@@ -454,7 +551,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.copiesPerGPU *= 1.25;
     },
-    stages: [1, 2],
     consoleMsg: 'Batch inference live. More copies fit on each GPU.',
   }),
   project({
@@ -462,14 +558,12 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Lease the floor upstairs',
     cost: { funds: 15000 },
     description: 'More desks, more whiteboards. Research capacity ×2.',
-    // The Research Plateau: the next run needs more research than the lab can hold.
-    trigger: (s) =>
-      s.training.runIndex >= 4 ||
-      (s.training.runIndex >= 3 && s.research >= researchCap(s) && (trainCost(s).research ?? 0) > researchCap(s)),
+    // The Research Plateau's named fix (or, late in the stage, room for the runs to come).
+    trigger: (s) => s.training.runIndex >= 4 || atPlateau(s),
+    urgent: atPlateau,
     buy: (s) => {
       s.labMult *= 2;
     },
-    stages: [1, 2],
     consoleMsg: 'The floor upstairs is ours. Research capacity doubled.',
     logMsg: 'OpenMind takes a second floor. The landlord asks what the company does.',
   }),
@@ -482,7 +576,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchers += 3;
     },
-    stages: [1, 2],
     consoleMsg: 'Three researchers start Monday. One brings a cat.',
   }),
   project({
@@ -494,7 +587,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.copyBoost *= 1.2;
     },
-    stages: [1, 2],
     consoleMsg: 'Agent mode ships. It books a flight nobody asked for, then cancels it.',
     logMsg: 'OpenMind ships agents that browse and buy. Travel sites notice the traffic.',
   }),
@@ -509,12 +601,12 @@ export const PROJECTS: ProjectDef[] = [
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 3);
       s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
     },
-    stages: [1, 2],
     consoleMsg: 'Safety framework published. Trust +1.',
     logMsg: 'OpenMind publishes a safety framework. Critics count the word "may".',
   }),
   project({
     id: 'p_workshop',
+    chain: true,
     title: 'Workshop paper',
     cost: { insight: 50 },
     description: 'Eight pages, one good idea. +1 Trust.',
@@ -527,6 +619,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_keynote',
+    chain: true,
     title: 'Conference keynote',
     cost: { insight: 100 },
     description: 'The big room. Marketing level +3, +1 Trust.',

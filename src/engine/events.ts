@@ -9,6 +9,7 @@ import {
 } from './economy.js';
 import { canStartTraining, canRedTeam, trainCost } from './training.js';
 import { dateLabel } from './format.js';
+import { stageDef } from './stages.js';
 import { rand, pick, chance } from './rng.js';
 
 export function developmentById(id: string): DevelopmentDef | undefined {
@@ -41,6 +42,16 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   d.effect?.(s);
   if (d.choice) openChoice(s, d.choice, {});
   return true;
+}
+
+/** Seconds until the next dated development that opens a modal (Infinity when none is left). */
+export function secondsToNextCalendarModal(s: GameState): number {
+  let next = Infinity;
+  for (const d of DEVELOPMENTS) {
+    if (!d.choice || d.month === undefined || d.stage !== s.stage || s.developments[d.id]) continue;
+    next = Math.min(next, Math.max(0, d.month - s.date) * stageDef(s.stage).secondsPerMonth);
+  }
+  return next;
 }
 
 /** Upcoming developments for the dev overlay's "Show hidden". */
@@ -99,19 +110,68 @@ export function rivalRelease(s: GameState): void {
   const name = `Cadence-${s.rivalVersion}`;
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
   const q = qualityMult(s);
-  if (q < 0.995) say(s, `Anthrosoft ${name} beats ${s.training.deployedName}. Demand down ${Math.max(1, Math.round((1 - q) * 100))}%.`);
+  if (q < 0.995) say(s, `Anthrosoft's ${name} beats ${s.training.deployedName}. Demand ${q < 0.9 ? 'falls' : 'dips'}.`);
   else say(s, `Anthrosoft ships ${name}. ${s.training.deployedName} is still ahead.`);
 }
 
 // ---------- choices ----------
 
-export function openChoice(s: GameState, id: string, context: Record<string, number | string>): boolean {
+/** Seconds between two modals opening on their own; a modal the player's click caused is exempt. */
+export const MODAL_SPACING = 150;
+/** Modals that answer the player's own click (a confirm), so they open at once. */
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2'];
+
+export interface OpenOptions {
+  /** Open only if it can open right now; otherwise do nothing (a passing offer, like the gamble). */
+  onlyIfFree?: boolean;
+  /** Ignore the spacing (the dev overlay's "Fire event"). */
+  force?: boolean;
+}
+
+function modalFree(s: GameState): boolean {
+  return !s.activeChoice && s.stats.timePlayed - s.cadence.lastModalAt >= MODAL_SPACING;
+}
+
+function present(s: GameState, entry: ActiveChoice): void {
+  s.activeChoice = entry;
+  s.cadence.lastModalAt = s.stats.timePlayed;
+}
+
+/**
+ * Modals open one at a time and, unless the player's click caused them, at least MODAL_SPACING
+ * apart: the rest wait in `choiceQueue` (in order) and `drainChoiceQueue` opens them when allowed.
+ */
+export function openChoice(s: GameState, id: string, context: Record<string, number | string>, opts: OpenOptions = {}): boolean {
   const def = choiceById(id);
   if (!def) return false;
   const entry: ActiveChoice = { id, remaining: def.timer ?? 0, context };
-  if (s.activeChoice) s.choiceQueue.push(entry);
-  else s.activeChoice = entry;
+  if (PLAYER_MODALS.includes(id) || opts.force) {
+    if (s.activeChoice) s.choiceQueue.unshift(s.activeChoice);
+    present(s, entry);
+    return true;
+  }
+  if (modalFree(s) && s.choiceQueue.length === 0) {
+    present(s, entry);
+    return true;
+  }
+  if (opts.onlyIfFree) return false;
+  s.choiceQueue.push(entry);
   return true;
+}
+
+/** Every tick: open the next queued modal when the spacing allows; drop ones that no longer apply. */
+export function drainChoiceQueue(s: GameState): void {
+  while (s.choiceQueue.length && !s.activeChoice) {
+    const next = s.choiceQueue[0]!;
+    const def = choiceById(next.id);
+    if (!def || (def.valid && !def.valid(s, next.context))) {
+      s.choiceQueue.shift();
+      continue;
+    }
+    if (!PLAYER_MODALS.includes(next.id) && s.stats.timePlayed - s.cadence.lastModalAt < MODAL_SPACING) return;
+    s.choiceQueue.shift();
+    present(s, next);
+  }
 }
 
 export function choiceOptionEnabled(s: GameState, def: ChoiceDef, index: number): boolean {
@@ -126,7 +186,7 @@ export function resolveChoice(s: GameState, index: number): boolean {
   if (!active) return false;
   const def = choiceById(active.id);
   if (!def) {
-    s.activeChoice = s.choiceQueue.shift() ?? null;
+    s.activeChoice = null;
     return false;
   }
   if (!choiceOptionEnabled(s, def, index)) return false;
@@ -137,7 +197,6 @@ export function resolveChoice(s: GameState, index: number): boolean {
   s.choicesMade.push({ id: def.id, option: opt.record, date: dateLabel(s.date) });
   s.stats.choices += 1;
   if (opt.log) logNews(s, typeof opt.log === 'function' ? opt.log(s, active.context) : opt.log, 'choice');
-  if (!s.activeChoice) s.activeChoice = s.choiceQueue.shift() ?? null;
   return true;
 }
 
@@ -147,14 +206,14 @@ export function updateChoice(s: GameState, dt: number): void {
   if (!active) return;
   const def = choiceById(active.id);
   if (!def) {
-    s.activeChoice = s.choiceQueue.shift() ?? null;
+    s.activeChoice = null;
     return;
   }
   if (!def.timer) return;
   active.remaining -= dt;
   if (active.remaining <= 0) {
     const fallback = def.defaultOption ?? def.options.length - 1;
-    if (!resolveChoice(s, fallback)) s.activeChoice = s.choiceQueue.shift() ?? null;
+    if (!resolveChoice(s, fallback)) s.activeChoice = null;
   }
 }
 
@@ -222,12 +281,14 @@ export function idleGuard(s: GameState, dt: number): void {
   s.idle.quiet += dt;
   if (s.idle.quiet < 60) return;
   s.idle.quiet = 0;
-  s.stats.idleRescues += 1;
   if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress']) {
     s.flags['idlePress'] = true;
-  } else {
+  } else if (!s.choiceQueue.some((c) => c.id === 'c_customer_email')) {
     openChoice(s, 'c_customer_email', { amount: customerEmailAmount(s) });
+  } else {
+    return;
   }
+  s.stats.idleRescues += 1;
 }
 
 /** Funds prices of things on screen the player cannot afford yet. */
@@ -286,7 +347,7 @@ export function fireEvent(s: GameState, id: string): boolean {
   const choice = choiceById(id);
   if (choice) {
     const run = s.training.run;
-    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s) });
+    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s), issues: run?.issues ?? 1 }, { force: true });
   }
   return false;
 }

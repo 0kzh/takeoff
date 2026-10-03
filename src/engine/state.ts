@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -122,6 +122,23 @@ export interface QueuedLine {
   hold?: boolean;
 }
 
+/**
+ * The reveal scheduler's bookkeeping (engine/reveal.ts; stage2.md §4.1 extends it with late items
+ * and a governor). Times are game seconds.
+ */
+export interface Cadence {
+  /** Projects whose trigger has fired, waiting for their turn, in table order. */
+  queue: string[];
+  /** When the drip last released a project. */
+  lastDripAt: number;
+  /** When something was revealed for the first time: a flag, a project, a modal. */
+  lastRevealAt: number;
+  /** When the last modal opened; automatic modals keep MODAL_SPACING apart. */
+  lastModalAt: number;
+  /** Everything seen at least once: `f:<flag>`, `p:<project>`, `c:<choice>`. */
+  seen: string[];
+}
+
 /** Bookkeeping for the idle guard (design.md §8). */
 export interface IdleState {
   /** Seconds since something became newly affordable or newly revealed. */
@@ -176,6 +193,8 @@ export interface GameState {
   tasks: number;
   unbilled: number;
   taskFrac: number;
+  /** Fractional sales carried between ticks while the opening sales are smoothed. */
+  saleFrac: number;
   tasksSold: number;
   funds: number;
   totalRevenue: number;
@@ -257,6 +276,7 @@ export interface GameState {
   choiceQueue: ActiveChoice[];
   choicesMade: ChoiceRecord[];
   idle: IdleState;
+  cadence: Cadence;
   stats: Stats;
 
   tickAccum: number;
@@ -324,6 +344,7 @@ export function newGame(seed: number = Date.now()): GameState {
     tasks: 0,
     unbilled: 0,
     taskFrac: 0,
+    saleFrac: 0,
     tasksSold: 0,
     funds: 0,
     totalRevenue: 0,
@@ -403,6 +424,7 @@ export function newGame(seed: number = Date.now()): GameState {
     choiceQueue: [],
     choicesMade: [],
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
+    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [] },
     stats: newStats(),
 
     tickAccum: 0,
@@ -468,12 +490,13 @@ export function isBought(s: GameState, id: string): boolean {
   return (s.projects[id]?.bought ?? 0) > 0;
 }
 
+/** Only the currencies a cost names are checked: Trust may be negative (cloud credit) without blocking money purchases. */
 export function canPay(s: GameState, c: Cost): boolean {
   return (
-    s.research >= (c.research ?? 0) &&
-    s.insight >= (c.insight ?? 0) &&
-    s.funds >= (c.funds ?? 0) &&
-    s.trust >= (c.trust ?? 0)
+    (!c.research || s.research >= c.research) &&
+    (!c.insight || s.insight >= c.insight) &&
+    (!c.funds || s.funds >= c.funds) &&
+    (!c.trust || s.trust >= c.trust)
   );
 }
 
@@ -518,7 +541,26 @@ function migrateV1(raw: Record<string, unknown>): Record<string, unknown> {
 }
 
 /** Index i upgrades a save from version i to i + 1. Version 0 = pre-release saves. */
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1];
+/**
+ * v2 → v3 (Stage 1 polish): training costs follow capability, projects drip through a queue and
+ * modals keep their distance. Everything already visible counts as seen, so a loaded game does
+ * not re-announce it.
+ */
+function migrateV2(raw: Record<string, unknown>): Record<string, unknown> {
+  const revealed = (raw['revealed'] as Record<string, boolean>) ?? {};
+  const projects = (raw['projects'] as Record<string, ProjectState>) ?? {};
+  const made = (raw['choicesMade'] as ChoiceRecord[]) ?? [];
+  const stats = (raw['stats'] as Partial<Stats>) ?? {};
+  const seen = [
+    ...Object.keys(revealed).filter((k) => revealed[k]).map((k) => `f:${k}`),
+    ...Object.keys(projects).filter((k) => projects[k]!.shown || projects[k]!.bought > 0).map((k) => `p:${k}`),
+    ...made.map((c) => `c:${c.id}`),
+  ];
+  const now = typeof stats.timePlayed === 'number' ? stats.timePlayed : 0;
+  return { ...raw, cadence: { queue: [], lastDripAt: now, lastRevealAt: now, lastModalAt: now, seen: [...new Set(seen)] } };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {
@@ -532,7 +574,7 @@ export function migrate(raw: Record<string, unknown>): GameState {
   }
   const base = newGame(typeof data['seed'] === 'number' ? (data['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged: Record<string, unknown> = { ...base, ...data };
-  for (const key of ['training', 'stats', 'idle'] as const) {
+  for (const key of ['training', 'stats', 'idle', 'cadence'] as const) {
     merged[key] = { ...(base[key] as object), ...((data[key] as object) ?? {}) };
   }
   return merged as unknown as GameState;
