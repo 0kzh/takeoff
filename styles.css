@@ -21,6 +21,8 @@ hr {
 [data-reveal] { display: none; }
 span[data-reveal].shown { display: inline; }
 div[data-reveal].shown, .panel.shown { display: block; }
+/* `data-hide="flag"`: hidden while the flag is on (a line whose value moved into Stores). */
+.hideFlag { display: none !important; }
 
 .note { color: #555; font-size: 13px; }
 .warn { font-size: 13px; font-style: italic; }
@@ -255,7 +257,91 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .cardLine { font-style: italic; }
 #evalTotal { font-size: 14px; margin-bottom: 4px; }
 
-#graphCanvas { border: 1px solid #000; background: #fff; }
+/* ---------- Stage 2: Stores (A Dark Room), inline reasons, toggles ---------- */
+
+/* ADR's stores: a 1 px box with its legend punched through the top border. */
+.stores {
+  position: relative;
+  border: 1px solid #000;
+  padding: 10px 8px 6px;
+  margin-top: 8px;
+  font-size: 15px;
+}
+.stores::before {
+  content: attr(data-legend);
+  position: absolute;
+  top: -0.7em;
+  left: 8px;
+  padding: 0 4px;
+  background: #fff;
+  font-size: 14px;
+}
+.storeRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.35;
+  cursor: default;
+}
+div.storeRow[data-reveal] { display: none; }
+div.storeRow[data-reveal].shown { display: flex; }
+.storeRow:hover .storeKey, .storeRow.tipOpen .storeKey { text-decoration: underline; }
+.storeVal { text-align: right; white-space: nowrap; }
+#storeTip {
+  display: none;
+  position: absolute;
+  z-index: 15;
+  min-width: 190px;
+  max-width: 260px;
+  background: #fff;
+  border: 1px solid #000;
+  padding: 4px 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+#storeTip.open { display: block; }
+.tipRow { display: flex; justify-content: space-between; gap: 10px; }
+.tipRow.total { font-weight: bold; border-top: 1px solid #888; margin-top: 2px; padding-top: 1px; }
+.tipRow.note { color: #555; }
+
+.infraRow { margin-bottom: 3px; }
+.reason { color: #555; font-size: 13px; font-style: italic; }
+#interconnectLine { display: none; margin: 2px 0 3px; }
+#interconnectLine.shown { display: block; }
+#unbilledLine { display: inline; }
+#unbilledLine.off { display: none; }
+.toggle.on { background: linear-gradient(#bbb, #fff); border: 1px solid #000; font-weight: bold; }
+.hasTip { cursor: help; }
+#allocSlider { width: 110px; vertical-align: middle; margin: 0 2px; }
+#billPrice, #btn-autoPrice { white-space: nowrap; }
+#releaseNote { margin-left: 4px; }
+#evalLine { display: none; font-size: 14px; }
+#train-eval.condensed #evalHeader,
+#train-eval.condensed #benchmarks,
+#train-eval.condensed #cards,
+#train-eval.condensed #evalTotal { display: none; }
+#train-eval.condensed #evalLine { display: block; }
+
+/* ---------- Stage 2: the capability graph (stage2.md §3) ---------- */
+
+#graphWrap { position: relative; width: 310px; max-width: 100%; }
+#graphCanvas { display: block; width: 310px; height: 190px; max-width: 100%; border: 1px solid #000; background: #fff; box-sizing: border-box; }
+#graphTip {
+  display: none;
+  position: absolute;
+  z-index: 5;
+  background: #fff;
+  border: 1px solid #000;
+  padding: 1px 5px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#graphTip.open { display: block; }
+#nextTier { font-size: 14px; }
+#leadLine { font-size: 14px; }
 
 /* ---------- modal (ADR event panel) ---------- */
 
@@ -360,11 +446,40 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 }
 
 @media (max-width: 700px) {
-  #columns { flex-direction: column; }
-  #leftColumn, #middleColumn, #rightColumn { width: 100%; }
-  .projectButton { width: 100%; max-width: 275px; }
+  /*
+   * One column (stage2.md §6.4): the columns dissolve and the panels take their own order —
+   * Tasks, Stores, Training, Projects, Business, Infrastructure, Research, the graph, then the
+   * world panels; the Developments log is a strip at the bottom.
+   */
+  #columns { flex-direction: column; align-items: stretch; }
+  .column { display: contents; }
+  #columns > .column > .panel { width: 100%; box-sizing: border-box; }
+  #panel-task { order: 1; }
+  #panel-stores { order: 2; }
+  #panel-power { order: 3; }
+  #panel-training { order: 4; }
+  #panel-projects { order: 5; }
+  #panel-business { order: 6; }
+  #panel-compute { order: 7; }
+  #panel-infrastructure { order: 8; }
+  #panel-research { order: 9; }
+  #panel-site { order: 10; }
+  #panel-graph { order: 11; }
+  #panel-security { order: 12; }
+  #panel-government { order: 13; }
+  #panel-public { order: 14; }
+  #panel-stats { order: 15; }
+  #panel-alignment, #panel-geopolitics, #panel-oversight, #panel-monitors { order: 16; }
+  #panel-robots, #panel-society, #panel-treaty, #panel-space { order: 17; }
+  #panel-log { order: 30; }
+  /* Stores rows in two columns; a row with two numbers (x / y) takes the whole width. */
+  #panel-stores.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+  #row-research, #row-gpus, #row-power, #row-chips { grid-column: 1 / -1; }
+  .projectButton { width: 100%; max-width: 100%; box-sizing: border-box; }
   .progress { width: 100%; max-width: 300px; box-sizing: border-box; }
   .benchBar { width: auto; flex: 1 1 auto; min-width: 60px; }
+  #graphWrap { width: 100%; }
+  #graphCanvas { width: 100%; height: auto; aspect-ratio: 310 / 190; }
   #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
   #dev { width: auto; left: 8px; }
 }

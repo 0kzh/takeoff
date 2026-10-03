@@ -8,6 +8,8 @@ import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
 import { PRESETS, presetFor } from '../data/presets.js';
 import { byId, make } from './dom.js';
+import { resetGraph } from './graph.js';
+import { resetLogCache } from './log.js';
 import type { Saver } from './save.js';
 import type { PolicyName } from '../sim/policy.js';
 
@@ -32,6 +34,8 @@ const SPEEDS = [1, 5, 20];
 /** Replaces the live state in place, then saves. The reference held by window.__game stays valid. */
 function load(host: DevHost, next: GameState): void {
   replaceState(host.state, next);
+  resetGraph();
+  resetLogCache();
   host.saver.saveNow();
   host.render();
 }
@@ -40,7 +44,8 @@ export function loadPreset(host: DevHost, n: number): GameState {
   const preset = presetFor(n);
   load(host, preset.build(Date.now() % 100000));
   if (!preset.ready || preset.stage !== n) {
-    host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage 2 preset.` });
+    const latest = [...PRESETS].reverse().find((p) => p.ready && p.stage < n);
+    host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage ${latest?.stage ?? 2} preset.` });
   }
   host.render();
   return host.state;
@@ -82,7 +87,9 @@ function hiddenReadout(s: GameState): string {
     .map((d) => `${d.id}${d.month !== undefined ? ` @${dateLabel(d.month)}` : ''}`)
     .join(', ');
   return [
-    `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)}`,
+    `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)} · lead ${fmtNum(s.lead, 2)} · SL${s.securityLevel}`,
+    `data ${fmtNum(s.data, 1)} T (synthetic ${fmtNum(s.dataSynthetic, 1)}) · crawl left ${fmtNum(s.crawlLeft, 1)} · autonomy ${s.autonomy}`,
+    `late queue ${s.cadence.lateQueue.join(', ') || '—'} · governed ${s.cadence.governed.length}`,
     `alignment apparent ${fmtNum(s.alignmentApparent, 1)} · true ${fmtNum(s.alignmentTrue, 1)}`,
     `idle rescues ${s.stats.idleRescues} · quiet ${fmtNum(s.idle.quiet, 0)} s`,
     `time in stage ${fmtDuration(s.stats.timeInStage)} · played ${fmtDuration(s.stats.timePlayed)}`,
