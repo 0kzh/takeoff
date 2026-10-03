@@ -2,12 +2,12 @@ import type { GameState, Focus } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, datacenterCost, gpuBatchCost, turbineCost, researchCap, demandPercent,
-  copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate,
+  copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate, atRentQuota,
   billingPerSec, productionPerSec, marketState, priceAbsurd, GPU_BATCH, MIN_PRICE,
 } from '../engine/economy.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, nextRunName, trainingCompute, requiredCompute,
-  trainingDuration, computeYield, evaluatorLine, totalScore, EVAL_SECONDS, BENCHMARKS,
+  trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, EVAL_SECONDS, BENCHMARKS,
 } from '../engine/training.js';
 import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
 import { endingById, endStats } from '../engine/endings.js';
@@ -83,9 +83,12 @@ function renderPower(s: GameState): void {
   // The manual verb never needs power and is never disabled.
   setDisabled('btn-task', false);
   setDisabled('btn-buyPower', s.funds < powerBlockCost(s));
-  // While the Grid Contract buys power, the manual block is redundant; turning the grid off brings it back.
-  showId('buyPowerRow', !s.gridAuto);
-  setTitle('btn-buyPower', `${fmtInt(powerBlock(s))} kWh. Each task a copy completes uses 1 kWh; clicks use none.`);
+  // Kept beside the Grid Contract as the manual fallback (Paperclips keeps Wire beside WireBuyer).
+  showId('buyPowerRow', true);
+  setTitle(
+    'btn-buyPower',
+    `Buy ${fmtInt(powerBlock(s))} kWh. Each task a copy completes uses 1 kWh; clicks use none.${s.gridAuto ? ' The Grid Contract tops up on its own.' : ''}`,
+  );
   setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
   setText('gridStatus', s.gridAuto ? 'buys power when it runs low' : 'idle');
 }
@@ -121,7 +124,9 @@ function renderBusiness(s: GameState): void {
 
 function renderCompute(s: GameState): void {
   setText('gpuCost', fmtMoney(gpuCost(s)));
-  setDisabled('btn-gpu', s.funds < gpuCost(s));
+  const quota = atRentQuota(s);
+  setDisabled('btn-gpu', s.funds < gpuCost(s) || quota);
+  setText('gpuNote', quota ? 'quota reached — the provider has no more to rent' : '');
   setText('gpus', fmtInt(s.gpus));
   setText('copies', fmtInt(copies(s)));
   const note = copiesIdle(s) ? '(idle: no power)' : s.training.run?.phase === 'training' ? '(half the GPUs are training)' : '';
@@ -161,7 +166,8 @@ function renderResearch(s: GameState): void {
   const cap = researchCap(s);
   setText('research', fmtInt(Math.floor(s.research)));
   setText('researchCap', fmtInt(cap));
-  setText('insight', fmtInt(Math.floor(s.insight)));
+  // Lab Space is folded into the cap it produces; Insight reads "none yet" until there is some.
+  setText('insight', s.insight >= 1 ? fmtInt(Math.floor(s.insight)) : 'none yet');
   setText('insightNote', s.research >= cap ? '(accruing)' : '(accrues at capacity)');
 }
 
@@ -205,6 +211,10 @@ function renderTraining(s: GameState): void {
   setText('modelName', t.deployedName === t.modelName ? t.modelName : `${t.deployedName} (internal: ${t.modelName})`);
   setText('capability', fmtNum(s.capability, 2));
   setText('rivalCap', fmtNum(s.rivalCapability, 2));
+  // The rival's number waits for the Stage 2 graph; until then, words (its value is in the tooltip).
+  const lead = s.capability / s.rivalCapability;
+  setText('rivalStanding', lead > 1.02 ? 'Ahead of Anthrosoft' : lead < 0.98 ? 'Anthrosoft is ahead' : 'Level with Anthrosoft');
+  setTitle('rivalLine', `Anthrosoft's latest Cadence model: ${fmtNum(s.rivalCapability, 2)}×.`);
   for (const focus of ['capability', 'efficiency', 'safety'] as Focus[]) {
     const b = byId(`btn-focus-${focus}`);
     if (b.classList.contains('selected') !== (t.focus === focus)) b.classList.toggle('selected', t.focus === focus);
@@ -219,11 +229,26 @@ function renderTraining(s: GameState): void {
     setText('nextRunName', nextRunName(s));
     setText('trainCost', costLabel(trainCost(s)));
     setDisabled('btn-train', !canStartTraining(s));
-    setText('trainCompute', fmtInt(trainingCompute(s)));
-    setText('trainRequired', fmtInt(requiredCompute(s)));
+    const have = trainingCompute(s);
+    const want = requiredCompute(s);
+    setText('trainCompute', fmtInt(have));
+    setText('trainRequired', fmtInt(Math.max(1, Math.round(want))));
     const y = computeYield(s);
-    setText('trainEta', `${Math.round(trainingDuration(s))} s`);
-    showId('trainShort', y < 0.999);
+    const full = y >= 0.999;
+    // Fully trained: "Compute: enough · est. 64 s" (the counts are in the tooltip); short: the counts.
+    showId('trainComputeOf', !full);
+    showId('trainEnough', full);
+    setText('trainEta', full ? `est. ${Math.round(trainingDuration(s))} s` : `undertrained (${Math.round(y * 100)}%)`);
+    setTitle(
+      'trainComputeLine',
+      full
+        ? `${fmtInt(have)} GPUs of the ${fmtInt(Math.max(1, Math.round(want)))} it wants: the run keeps its whole gain and takes ${Math.round(trainingDuration(s))} s.`
+        : `More GPUs train a better model. This run would keep ${Math.round(y * 100)}% of its gain and take ${Math.round(trainingDuration(s))} s.`,
+    );
+    // Once the run wants far more than any rented fleet, say what fixes it: owning compute.
+    const owned = needsOwnedCompute(s);
+    showId('trainShort', owned);
+    if (owned) setText('trainShort', s.revealed['site'] ? 'Rented GPUs can\'t keep up. Abilene will.' : 'Rented GPUs can\'t keep up. A datacenter of your own would.');
     return;
   }
 
@@ -267,6 +292,7 @@ function renderTraining(s: GameState): void {
   }
   setText('evalScore', evalP >= 1 ? fmtInt(totalScore(run)) : '…');
   setText('evalCap', evalP >= 1 ? fmtNum(run.capAfter, 2) : '…');
+  setTitle('evalTotal', evalP >= 1 ? `Reviewers' score: ${totalScore(run)}/40.` : '');
 
   if (run.phase === 'redteam') {
     setText('issuesFound', fmtInt(run.issuesFound));

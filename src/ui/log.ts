@@ -1,8 +1,14 @@
 import type { GameState } from '../engine/state.js';
 import { byId, make } from './dom.js';
+import { dateLabel } from '../engine/format.js';
+
+const MONTH_NAMES: Record<string, string> = {
+  Jan: 'January', Feb: 'February', Mar: 'March', Apr: 'April', May: 'May', Jun: 'June',
+  Jul: 'July', Aug: 'August', Sep: 'September', Oct: 'October', Nov: 'November', Dec: 'December',
+};
 
 /** Entries drawn in the column; older ones have faded out of view anyway (ADR). */
-export const LOG_SHOWN = 8;
+export const LOG_SHOWN = 6;
 
 let lastKey = '';
 let lastLength = -1;
@@ -21,6 +27,7 @@ export function renderLog(s: GameState): void {
   lastLength = s.log.length;
   const list = byId('logList');
   list.replaceChildren();
+  const currentYear = dateLabel(s.date).slice(-4);
   let month = '';
   const first = Math.max(0, s.log.length - LOG_SHOWN);
   const oldMonths = new Set(s.log.slice(first, freshFrom).map((e) => e.date));
@@ -29,7 +36,9 @@ export function renderLog(s: GameState): void {
     const fresh = i >= freshFrom ? ' fresh' : '';
     if (entry.date !== month) {
       month = entry.date;
-      list.append(make('div', { class: `logMonth${oldMonths.has(month) ? '' : fresh}` }, month));
+      // The header shows the year; a heading in the same year needs only the month.
+      const heading = month.endsWith(currentYear) ? MONTH_NAMES[month.slice(0, 3)] ?? month : month;
+      list.append(make('div', { class: `logMonth${oldMonths.has(month) ? '' : fresh}` }, heading));
     }
     const div = make('div', { class: `logEntry ${entry.kind}${fresh}`, 'data-index': String(i), 'data-date': entry.date });
     div.textContent = entry.text;

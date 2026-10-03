@@ -44,7 +44,7 @@
       <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
         Power: <span id="power">1,000</span> kWh <span id="powerNote" class="warn"></span><br>
         <span data-reveal="buyPower"><span id="buyPowerRow">
-          <button class="button2" id="btn-buyPower">Buy Power (<span id="powerBlock">1,000</span> kWh)</button>
+          <button class="button2" id="btn-buyPower">Buy Power<span class="hiddenIds"> (<span id="powerBlock">1,000</span> kWh)</span></button>
           Cost: <span id="powerCost">$ 20.00</span><br>
         </span></span>
         <span data-reveal="gridContract">
@@ -80,7 +80,7 @@
         <b>Compute</b>
         <hr>
         <button class="button2" id="btn-gpu" title="Rent a GPU. It runs a copy of Sage that completes tasks on its own, using power.">Rent GPU</button>
-        Cost: <span id="gpuCost">$ 6.00</span><br>
+        Cost: <span id="gpuCost">$ 6.00</span> <span id="gpuNote" class="warn"></span><br>
         GPUs rented: <span id="gpus">0</span><br>
         <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
       </div>
@@ -143,7 +143,7 @@
         <span data-reveal="expandLab"><button class="button2" id="btn-expandLab" title="1 Trust: room for more research.">Expand Lab</button></span>
         <span class="note" id="trustCostNote">(costs Trust)</span><br>
         Researchers: <span id="researchers">1</span><br>
-        <span data-reveal="expandLab">Lab Space: <span id="labSpace">1</span><br></span>
+        <span class="hiddenIds">Lab Space: <span id="labSpace">1</span><br></span>
         <br>
         Research: <span id="research">0</span> / <span id="researchCap">1,000</span><br>
         <span data-reveal="insight">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span>
@@ -178,8 +178,8 @@
       <div id="panel-training" class="panel" data-panel="training" data-reveal="training">
         <b>Training</b>
         <hr>
-        Current model: <span id="modelName">Sage-1</span><br>
-        Capability: <span id="capability">1.00</span>× · Anthrosoft: <span id="rivalCap">1.00</span>×<br>
+        Current model: <span id="modelName">Sage-1</span> · <span id="capability">1.00</span>×<br>
+        <span id="rivalLine" title="Anthrosoft's latest Cadence model"><span id="rivalStanding">Level with Anthrosoft</span><span class="hiddenIds"> (<span id="rivalCap">1.00</span>×)</span></span><br>
         <div id="focusRow" data-reveal="focus">
           Focus:
           <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 12–18% more capable. Customers notice.">Capability</button>
@@ -189,14 +189,15 @@
 
         <div id="train-idle">
           <button class="button2" id="btn-train" title="Train the next model. Half the compute is diverted while it trains.">Train <span id="nextRunName">Sage-1.1</span></button>
-          Cost: <span id="trainCost">2,000 research, $250</span><br>
-          est. <span id="trainEta">60 s</span><span id="trainShort"> · undertrained: <span id="trainCompute">0</span> of <span id="trainRequired">12</span> GPUs</span>
+          Cost: <span id="trainCost">2,000 research, $290</span><br>
+          <span id="trainComputeLine" title="More GPUs train a better model.">Compute: <span id="trainComputeOf"><span id="trainCompute">0</span> of <span id="trainRequired">9</span> GPUs wanted</span><span id="trainEnough">enough</span> · <span id="trainEta">est. 60 s</span></span><br>
+          <span id="trainShort" class="note"></span>
         </div>
 
         <div id="train-running">
           Training <span id="runName">Sage-1.1</span> (<span id="runFocus">capability</span>): <span id="runPct">0</span>%
           <div class="progress"><div class="progressFill" id="runBar"></div></div>
-          <span id="runRemaining">60 s</span> remaining · <span id="runShare">50</span>% of compute diverted
+          <span id="runRemaining">60 s</span> remaining<span class="hiddenIds"> · <span id="runShare">50</span>% of compute diverted</span>
         </div>
 
         <div id="train-eval">
@@ -215,7 +216,7 @@
             <div class="card" id="card-2"><b class="cardName">Enterprise analyst</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
             <div class="card" id="card-3"><b class="cardName">Safety Institute</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
           </div>
-          <div id="evalTotal">Score: <span id="evalScore">0</span>/40 · Capability <span id="evalCap">1.00</span>×</div>
+          <div id="evalTotal">Capability <span id="evalCap">1.00</span>×<span class="hiddenIds"> · score <span id="evalScore">0</span>/40</span></div>
         </div>
 
         <div id="train-redteam">

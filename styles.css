@@ -28,9 +28,9 @@ div[data-reveal].shown, .panel.shown { display: block; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
 #trainShort { display: none; }
-#trainShort.shown { display: inline; }
-#buyPowerRow, #billingOfPart, #copiesRow { display: none; }
-#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown { display: inline; }
+#trainShort.shown { display: inline-block; margin-top: 2px; }
+#buyPowerRow, #billingOfPart, #copiesRow, #trainComputeOf, #trainEnough { display: none; }
+#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #trainComputeOf.shown, #trainEnough.shown { display: inline; }
 /* The first render after a load restores the screen; only later reveals fade in. */
 body.boot * { animation: none !important; }
 #marketState { white-space: nowrap; }
