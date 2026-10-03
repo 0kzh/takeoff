@@ -10,14 +10,15 @@ import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
 
-export type PolicyName = 'bot' | 'naive';
+export type PolicyName = 'bot' | 'naive' | 'greedy';
 
 /** Order in which the bot buys visible projects. The Abilene ladder sits after the revenue boosts. */
 export const PROJECT_PRIORITY = [
   'p_beg_power', 'p_seed', 'p_series_a', 'p_training', 'p_grid', 'p_prompting', 'p_insight', 'p_blogpost',
   'p_demo', 'p_workshop', 'p_keynote', 'p_press', 'p_api', 'p_lab_cluster', 'p_prompting2', 'p_prompting3',
   'p_eval_team', 'p_compute_deal', 'p_pricing', 'p_enterprise', 'p_distributed', 'p_batch', 'p_moe', 'p_agents', 'p_floor',
-  'p_dogfood', 'p_site', 'p_interconnect', 'p_substation', 'p_contractor', 'p_datacenter', 'p_ppa', 'p_recruiter',
+  'p_dogfood', 'p_site', 'p_abatement', 'p_interconnect', 'p_expedite', 'p_substation', 'p_contractor', 'p_datacenter',
+  'p_ppa', 'p_cooling', 'p_soundwall', 'p_renewals', 'p_recruiter',
   'p_alignment_team', 'p_safety_framework', 'p_contract',
 ];
 
@@ -76,7 +77,7 @@ function readModal(s: GameState, mem: BotMemory): boolean {
 
 /** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
-  if (mem.policy === 'naive') naiveStep(s, a, mem);
+  if (mem.policy === 'naive' || mem.policy === 'greedy') naiveStep(s, a, mem);
   else botStep(s, a, mem);
 }
 
@@ -88,14 +89,10 @@ const CHOICE_POLICY: Record<string, number[]> = {
   c_journalist: [0, 1],
   c_customer_email: [0],
   c_ship_issues: [1],
-  c_water: [1],
-  c_utility: [1],
   c_poach: [1, 0, 2],
-  c_abatement: [0],
   c_bridge: [1],
   c_letter: [2],
-  c_neighbour: [1, 2],
-  c_outage: [0, 1],
+  c_leaderboard: [0],
 };
 
 function isVisible(s: GameState, id: string): boolean {
@@ -251,6 +248,8 @@ function trainingLoop(s: GameState, a: Actions): void {
     a.setFocus(s, computeYield(s) >= 0.15 ? 'capability' : 'efficiency');
     if (revenueResearchWaiting(s)) return;
     const rung = currentRung(s);
+    // Saving for a rung: skip runs that would cost over 15% of it (late runs keep 30% of a small gain).
+    if (rung && !rung.canAfford(s) && (trainCost(s).funds ?? 0) > 0.15 * (rung.cost(s).funds ?? 0)) return;
     const rungResearch = rung?.cost(s).research ?? 0;
     if (rungResearch && s.research - (trainCost(s).research ?? 0) < rungResearch && rung!.canAfford(s)) return;
     a.startTraining(s);
@@ -295,7 +294,9 @@ const NAIVE_PRICE_EVERY = 20;
 const NAIVE_PRICE_COOLDOWN = 8;
 
 /**
- * Plays like the critic's scripted first-timer (critic report §1 "Policy"):
+ * `naive` plays like the critic's scripted first-timer (critic report §1 "Policy"); `greedy` is the
+ * same player without restraint — it rents a GPU whenever one is affordable, buys everything else
+ * the moment it can, and never saves (no power reserve, no big-ticket pause). The naive player:
  *   - mashes Complete Task at 4 clicks/s until the copies out-produce the hand (≥ 8 tasks/s);
  *   - buys any affordable upgrade, project or automation while keeping one power block in reserve;
  *   - prices only by watching the backlog: lower when it exceeds 30 s of production and is growing,
@@ -336,8 +337,16 @@ export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
   }
 
   if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
-  const reserve = Math.max(s.stage < 2 ? powerBlockCost(s) : 0, heldGoalPrice(s, mem));
+  // The greedy variant never saves: no reserve, and GPUs first whenever one is affordable.
+  const greedy = mem.policy === 'greedy';
+  const reserve = greedy ? heldGoalPrice(s, mem) : Math.max(s.stage < 2 ? powerBlockCost(s) : 0, heldGoalPrice(s, mem));
   const keepsReserve = (funds: number | undefined) => !funds || s.funds - funds >= reserve;
+  if (greedy && s.stage < 2 && s.revealed['compute']) {
+    let guard = 0;
+    while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {
+      /* rent whenever one is affordable */
+    }
+  }
 
   // Projects, top to bottom as they appear on screen.
   for (const p of visibleProjects(s)) {
@@ -359,7 +368,7 @@ export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
       if (!ok) break;
     }
   }
-  const bigTicket = !!currentRung(s);
+  const bigTicket = !greedy && !!currentRung(s);
   if (!bigTicket && s.stage < 2 && s.revealed['compute']) {
     let guard = 0;
     while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {

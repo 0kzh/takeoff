@@ -5,7 +5,7 @@
 import { newGame, GameState } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
-import { noveltyKeys, isRescueKey } from '../engine/events.js';
+import { noveltyKeys, isRescueKey, PLAYER_MODALS } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { researchCap, copies, copiesIdle } from '../engine/economy.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel } from '../engine/format.js';
@@ -30,7 +30,7 @@ function parseArgs(argv: string[]): Args {
     if (k === '--minutes' && v) args.minutes = Number(v);
     if (k === '--seed' && v) args.seed = Number(v);
     if (k === '--stop-at-stage' && v) args.stopAtStage = Number(v);
-    if (k === '--policy' && (v === 'bot' || v === 'naive')) args.policy = v;
+    if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy')) args.policy = v;
     if (k === '--quiet') args.quiet = true;
     if (k === '--json') args.json = true;
   }
@@ -65,6 +65,13 @@ export interface Summary {
   reveals: number;
   /** When each Abilene rung was bought (site, interconnect, substation, break ground). */
   ladder: (number | null)[];
+  /** Training runs started in Stage 1, and the smallest share of its gain any of them kept. */
+  runs: number;
+  minYield: number | null;
+  /** Modals opened in Stage 1 (every opening, gambles and rescues included). */
+  modals: number;
+  /** Smallest gap between two modals that opened on their own (player-caused confirms excluded). */
+  minModalSpacing: number | null;
   /** First-time reveals that matter for pacing: Research and Projects panels, Grid Contract bought. */
   research: number | null;
   projects: number | null;
@@ -117,6 +124,12 @@ export function simulate(args: Args): SimResult {
   const softLocks: [number, number][] = [];
   let rescuesAtZero = 0;
   let stage1Rescues = 0;
+  let prevChoice: unknown = null;
+  let modals = 0;
+  const autoModalTimes: number[] = [];
+  let runs = 0;
+  let minYield: number | null = null;
+  let prevRunId = 0;
   let transition: number | null = null;
   let capAtTransition: number | null = null;
 
@@ -176,6 +189,17 @@ export function simulate(args: Args): SimResult {
       }
     }
     prevShown = new Set(visible.map((p) => p.id));
+    if (s.stage === 1 && s.activeChoice && s.activeChoice !== prevChoice) {
+      modals++;
+      if (!PLAYER_MODALS.includes(s.activeChoice.id)) autoModalTimes.push(t);
+    }
+    prevChoice = s.activeChoice;
+    const r0 = s.training.run;
+    if (s.stage === 1 && r0 && r0.id !== prevRunId) {
+      prevRunId = r0.id;
+      runs++;
+      minYield = minYield === null ? r0.computeYield : Math.min(minYield, r0.computeYield);
+    }
     const choice = s.activeChoice?.id;
     if (choice && !seenChoices.has(choice)) {
       seenChoices.add(choice);
@@ -286,6 +310,11 @@ export function simulate(args: Args): SimResult {
     rescuesAtZeroTasks: rescuesAtZero,
     softLocks: softLocks.map(([a, b]) => [Math.round(a), Math.round(b)]),
     reveals: revealTimes.filter((t) => t <= horizon).length,
+    runs,
+    minYield: minYield === null ? null : Math.round(minYield * 1000) / 1000,
+    modals,
+    minModalSpacing: autoModalTimes.length < 2 ? null
+      : Math.round(Math.min(...autoModalTimes.slice(1).map((x, i) => x - autoModalTimes[i]!))),
     research: milestones['reveal:research'] ?? null,
     projects: milestones['reveal:projects'] ?? null,
     grid: milestones['buy:p_grid'] ?? null,
@@ -341,7 +370,7 @@ function main(): void {
   console.log(`Abilene site reserved    ${fmt('buy:p_site')}`);
   console.log(`Interconnect queue       ${fmt('buy:p_interconnect')}`);
   console.log(`Substation               ${fmt('buy:p_substation')}`);
-  console.log(`TRANSITION (Break ground) ${clock(sum.transition)}   (target bot 25:00–35:00, naive 26:00–40:00)`);
+  console.log(`TRANSITION (Break ground) ${clock(sum.transition)}   (target bot 25:00–35:00, naive 26:00–40:00, greedy ≤ 40:00)`);
   console.log(`capability at transition ${sum.capabilityAtTransition ?? '—'}   (target 1.5–1.8)`);
   console.log(`LONGEST REVEAL GAP       ${sum.longestRevealGap} s (${span(sum.longestRevealGapAt)})   (target ≤ 180 s)`);
   console.log(`reveal gaps > 120 s      ${sum.revealGapsOver120.length ? sum.revealGapsOver120.map(span).join(', ') : 'none'}`);
@@ -349,7 +378,9 @@ function main(): void {
   console.log(`Buy Power presses        ${sum.powerPresses} (worst 5-min window ${sum.worstPressWindow})   (target ≤ 60, ≤ 10)`);
   console.log(`idle rescues             ${sum.idleRescues} (at 0 tasks: ${sum.rescuesAtZeroTasks})   (target ≤ 2, none at 0)`);
   console.log(`soft-locks               ${sum.softLocks.length ? sum.softLocks.map(span).join(', ') : 'none'}`);
-  console.log(`Abilene ladder           ${sum.ladder.map(clock).join(' → ')}`);
+  console.log(`Abilene ladder           ${sum.ladder.map(clock).join(' → ')}   (Substation → Break ground target 2–4 min)`);
+  console.log(`training runs            ${sum.runs} (min yield ${sum.minYield ?? '—'})   (target: no run under 0.3)`);
+  console.log(`modals                   ${sum.modals} (min spacing ${sum.minModalSpacing ?? '—'} s)   (target 7–9, ≥ 150 s apart)`);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
 }
 
