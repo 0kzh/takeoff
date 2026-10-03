@@ -4,10 +4,12 @@ import { CHOICES, ChoiceDef } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects } from './projects.js';
-import { gpuCost, marketingCost, qualityMult, datacenterCost, gpuBatchCost, turbineCost, gpuCapacity, GPU_BATCH } from './economy.js';
-import { canStartTraining, canRedTeam } from './training.js';
+import {
+  gpuCost, marketingCost, qualityMult, datacenterCost, gpuBatchCost, turbineCost, gpuCapacity, powerBlockCost, GPU_BATCH,
+} from './economy.js';
+import { canStartTraining, canRedTeam, trainCost } from './training.js';
 import { dateLabel } from './format.js';
-import { rand, pick } from './rng.js';
+import { rand, pick, chance } from './rng.js';
 
 export function developmentById(id: string): DevelopmentDef | undefined {
   return DEVELOPMENTS.find((d) => d.id === id);
@@ -48,13 +50,15 @@ export function pendingDevelopments(s: GameState): DevelopmentDef[] {
 
 // ---------- crises & incidents ----------
 
-export function fireCrisis(s: GameState, id: string): boolean {
+/** `source` names the release an incident is traced to (a release that shipped open issues). */
+export function fireCrisis(s: GameState, id: string, source?: string): boolean {
   const c = crisisById(id);
   if (!c) return false;
   if (c.duration > 0) s.effects.push({ id: c.id, remaining: c.duration, demandMult: c.demandMult });
   c.effect(s);
   say(s, c.console);
-  logNews(s, c.log);
+  if (source) say(s, `Traced to an issue shipped in ${source}.`);
+  logNews(s, source ? `${c.log} It traces back to ${source}.` : c.log);
   if (INCIDENTS.includes(c)) s.stats.incidents += 1;
   else s.stats.crises += 1;
   return true;
@@ -62,13 +66,13 @@ export function fireCrisis(s: GameState, id: string): boolean {
 
 export function updateScheduled(s: GameState, dt: number): void {
   if (s.scheduled.length === 0) return;
-  const due: string[] = [];
+  const due: { id: string; source?: string }[] = [];
   for (const e of s.scheduled) {
     e.delay -= dt;
-    if (e.delay <= 0) due.push(e.id);
+    if (e.delay <= 0) due.push({ id: e.id, source: e.source });
   }
   s.scheduled = s.scheduled.filter((e) => e.delay > 0);
-  for (const id of due) fireCrisis(s, id);
+  for (const e of due) fireCrisis(s, e.id, e.source);
 }
 
 // ---------- rival releases ----------
@@ -81,14 +85,21 @@ export function updateRival(s: GameState): void {
   rivalRelease(s);
 }
 
+/** Anthrosoft stays within 0.85–1.15× of the deployed model: usually a step behind, sometimes ahead. */
+export const RIVAL_BAND: [number, number] = [0.85, 1.15];
+
 export function rivalRelease(s: GameState): void {
   s.rivalVersion += 1;
-  s.rivalCapability *= rand(s, 1.12, 1.28);
+  const ours = s.capability;
+  // A third of releases leapfrog the deployed model; the rest are an increment on the last one.
+  const target = chance(s, 0.35) ? ours * rand(s, 1.02, 1.12) : s.rivalCapability * rand(s, 1.03, 1.1);
+  const next = Math.min(RIVAL_BAND[1] * ours, Math.max(RIVAL_BAND[0] * ours, target));
+  s.rivalCapability = Math.max(s.rivalCapability, next);
   s.nextRivalIn = Math.round(rand(s, 240, 420));
   const name = `Cadence-${s.rivalVersion}`;
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
   const q = qualityMult(s);
-  if (q < 1) say(s, `Anthrosoft ${name} beats ${s.training.deployedName}. Demand down ${Math.round((1 - q) * 100)}%.`);
+  if (q < 0.995) say(s, `Anthrosoft ${name} beats ${s.training.deployedName}. Demand down ${Math.max(1, Math.round((1 - q) * 100))}%.`);
   else say(s, `Anthrosoft ships ${name}. ${s.training.deployedName} is still ahead.`);
 }
 
@@ -185,9 +196,17 @@ export function isRescueKey(key: string): boolean {
   return key.includes('p_press') || key.includes('p_beg_power') || key.includes('c_customer_email');
 }
 
+/** A visible timer is a named wait, not a stall: a run training or under evaluation, the interconnect queue. */
+function namedWait(s: GameState): boolean {
+  const phase = s.training.run?.phase;
+  return phase === 'training' || phase === 'evaluating' || s.interconnectLeft > 0;
+}
+
 /**
  * Anti-soft-lock valve (design.md §8). Every tick. After 60 s with nothing newly affordable or
- * newly revealed, surface `Press release (5 insight)` or a `Customer email` that pays funds.
+ * newly revealed, surface `Press release (5 insight)` or a `Customer email` that pays funds. It
+ * only watches a player who has started (a task done, the Business panel up), and the clock stops
+ * while a choice is open or a named wait is counting down.
  */
 export function idleGuard(s: GameState, dt: number): void {
   const keys = noveltyKeys(s);
@@ -199,8 +218,9 @@ export function idleGuard(s: GameState, dt: number): void {
     s.idle.lastNoveltyAt = s.stats.timePlayed;
     return;
   }
+  if (s.tasks <= 0 || !s.revealed['business'] || s.activeChoice || namedWait(s)) return;
   s.idle.quiet += dt;
-  if (s.idle.quiet < 60 || s.activeChoice) return;
+  if (s.idle.quiet < 60) return;
   s.idle.quiet = 0;
   s.stats.idleRescues += 1;
   if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress']) {
@@ -210,8 +230,33 @@ export function idleGuard(s: GameState, dt: number): void {
   }
 }
 
+/** Funds prices of things on screen the player cannot afford yet. */
+function unaffordableFundsCosts(s: GameState): number[] {
+  const out: number[] = [];
+  const add = (cost: number | undefined) => {
+    if (cost && cost > s.funds) out.push(cost);
+  };
+  if (s.stage < 2) {
+    if (s.revealed['buyPower']) add(powerBlockCost(s));
+    if (s.revealed['compute']) add(gpuCost(s));
+  }
+  if (s.revealed['marketing']) add(marketingCost(s));
+  if (s.revealed['training'] && !s.training.run) add(trainCost(s).funds);
+  if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
+  if (s.revealed['infrastructure']) {
+    add(datacenterCost(s));
+    add(gpuBatchCost(s));
+    add(turbineCost(s));
+  }
+  return out;
+}
+
+/** `min(max($25, 10 × revenue/s), 10 % of the cheapest thing on screen the player can't afford)`. */
 export function customerEmailAmount(s: GameState): number {
-  return Math.max(25, Math.round(45 * s.stats.revPerSec));
+  const base = Math.max(25, Math.round(10 * s.stats.revPerSec));
+  const costs = unaffordableFundsCosts(s);
+  if (costs.length === 0) return base;
+  return Math.max(1, Math.min(base, Math.round(0.1 * Math.min(...costs))));
 }
 
 // ---------- dev: fire anything by id ----------

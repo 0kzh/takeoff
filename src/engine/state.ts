@@ -1,9 +1,11 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
+/** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
+export const CONSOLE_KEEP_ON_TRANSITION = 4;
 export const LOG_LIMIT = 60;
 
 export type Focus = 'capability' | 'efficiency' | 'safety';
@@ -96,6 +98,8 @@ export interface TimedEffect {
 export interface ScheduledEvent {
   id: string;
   delay: number;
+  /** The release that shipped the issue, so the incident can be traced back to it. */
+  source?: string;
 }
 
 export interface ActiveChoice {
@@ -114,7 +118,7 @@ export interface ChoiceRecord {
 export interface QueuedLine {
   delay: number;
   text: string;
-  /** A stage-transition line: the console stays blank, and other lines are dropped, until it prints. */
+  /** Narration (stage transitions): other lines wait behind it instead of interleaving. */
   hold?: boolean;
 }
 
@@ -143,7 +147,13 @@ export interface Stats {
   lastTasks: number;
   secRevenue: number;
   secSold: number;
+  /** Manual clicks in the current second, and their 10 s history (the click share of production). */
+  secClicks: number;
+  clickHist: number[];
+  clicksPerSec: number;
   peakTasksPerSec: number;
+  /** Manual Buy Power presses (the Grid Contract's auto-buys are not counted). */
+  powerPresses: number;
   trainings: number;
   releases: number;
   publicReleases: number;
@@ -174,10 +184,16 @@ export interface GameState {
   apiCustomers: number;
 
   power: number;
+  /** Price of 1,000 kWh. A block costs this × block size / 1,000. */
   powerPrice: number;
   powerBase: number;
   powerBought: number;
   gridAuto: boolean;
+  /** Seconds the copies have been without power and the player without the money to buy it. */
+  stuckFor: number;
+
+  /** Seconds left in the Abilene interconnect queue (a named wait); 0 when not waiting. */
+  interconnectLeft: number;
 
   gpus: number;
   gpuCostGrowth: number;
@@ -280,7 +296,11 @@ export function newStats(): Stats {
     lastTasks: 0,
     secRevenue: 0,
     secSold: 0,
+    secClicks: 0,
+    clickHist: [],
+    clicksPerSec: 0,
     peakTasksPerSec: 0,
+    powerPresses: 0,
     trainings: 0,
     releases: 0,
     publicReleases: 0,
@@ -316,6 +336,9 @@ export function newGame(seed: number = Date.now()): GameState {
     powerBase: 20,
     powerBought: 0,
     gridAuto: false,
+    stuckFor: 0,
+
+    interconnectLeft: 0,
 
     gpus: 0,
     gpuCostGrowth: 1.1,
@@ -326,7 +349,7 @@ export function newGame(seed: number = Date.now()): GameState {
     datacenters: 0,
     powerCapacityMW: 0,
     turbines: 0,
-    chipPrice: 40,
+    chipPrice: 25,
     gpuBatches: 0,
 
     hypeLevel: 1,
@@ -370,7 +393,8 @@ export function newGame(seed: number = Date.now()): GameState {
     scheduled: [],
     projects: {},
     developments: {},
-    revealed: { console: true, task: true, power: true },
+    // Buy Power is on screen, greyed out, from the first second: a goal before the first click.
+    revealed: { console: true, task: true, power: true, buyPower: true },
     flags: {},
     log: [],
     console: ['Welcome to OpenMind.'],
@@ -386,16 +410,32 @@ export function newGame(seed: number = Date.now()): GameState {
   };
 }
 
+/** Most lines that may wait behind a narration; anything beyond is dropped. */
+const QUEUE_LIMIT = 10;
+
 export function say(s: GameState, text: string): void {
-  if (s.consoleQueue.some((q) => q.hold)) return;
+  if (s.consoleQueue.some((q) => q.hold)) {
+    // A narration is playing: wait behind it rather than interleave with it.
+    if (s.consoleQueue.length < QUEUE_LIMIT) s.consoleQueue.push({ delay: 0.6, text });
+    return;
+  }
+  printLine(s, text);
+}
+
+/** Writes straight to the console (the queue drain uses this). */
+export function printLine(s: GameState, text: string): void {
   s.console.push(text);
   if (s.console.length > CONSOLE_LINES) s.console.splice(0, s.console.length - CONSOLE_LINES);
 }
 
-/** Blank the console, then print `text` after `delay` seconds (stage transitions). */
-export function blackout(s: GameState, delay: number, text: string): void {
-  s.console = [];
-  s.consoleQueue = [{ delay, text, hold: true }];
+/**
+ * Stage transitions: keep the last lines on screen and print the narration one line at a time
+ * (`[seconds after the previous line, text]`). Other lines wait until the narration is done.
+ */
+export function narrate(s: GameState, lines: [number, string][]): void {
+  if (s.console.length > CONSOLE_KEEP_ON_TRANSITION) s.console.splice(0, s.console.length - CONSOLE_KEEP_ON_TRANSITION);
+  const waiting = s.consoleQueue.filter((q) => !q.hold);
+  s.consoleQueue = [...lines.map(([delay, text]) => ({ delay, text, hold: true })), ...waiting];
 }
 
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {
@@ -456,8 +496,27 @@ export function serialize(s: GameState): string {
 
 type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
 
+/**
+ * v1 → v2 (the Stage 1 rework): the First Datacenter became the last rung of the Abilene site
+ * ladder, and panels that used to arrive together now have their own flags.
+ */
+function migrateV1(raw: Record<string, unknown>): Record<string, unknown> {
+  const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
+  const projects = { ...((raw['projects'] as Record<string, ProjectState>) ?? {}) };
+  const training = (raw['training'] as Partial<TrainingState>) ?? {};
+  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
+  if (stage === 1) {
+    revealed['buyPower'] = true;
+    // `p_datacenter` is now "Break ground", which needs the site ladder under it.
+    if (!projects['p_datacenter']?.bought) delete projects['p_datacenter'];
+  }
+  if (revealed['training'] && (training.runIndex ?? 0) >= 1) revealed['focus'] = true;
+  if (revealed['training']) revealed['copies'] = true;
+  return { ...raw, revealed, projects };
+}
+
 /** Index i upgrades a save from version i to i + 1. Version 0 = pre-release saves. */
-const MIGRATIONS: Migration[] = [(raw) => raw];
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

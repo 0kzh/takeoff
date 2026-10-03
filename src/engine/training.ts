@@ -1,5 +1,5 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought } from './state.js';
-import { rand, randInt, chance, pick, poisson } from './rng.js';
+import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { activeGpus } from './economy.js';
 import { openChoice } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
@@ -22,18 +22,21 @@ export function majorFor(capability: number): number {
   return major;
 }
 
-/** Research `2,000 × 1.6^n` and funds `250 × 2^n` for the n-th run. */
+/** Research `2,000 × 1.6^n` and funds `100 × 2^n` for the n-th run. */
 export function trainCost(s: GameState): Cost {
   const n = s.training.runIndex;
   return {
     research: Math.round(2000 * Math.pow(1.6, n)),
-    funds: Math.round(250 * Math.pow(2, n)),
+    funds: Math.round(100 * Math.pow(2, n)),
   };
 }
 
-/** GPUs a run wants on it to train at full speed. */
+/**
+ * GPUs a run wants on it to train at full speed: `12 × 2.8^n`. Rented GPUs stop keeping up
+ * around the third run, so late Stage 1 runs are undertrained — the case for owning a datacenter.
+ */
 export function requiredCompute(s: GameState): number {
-  return 12 * Math.pow(2, s.training.runIndex);
+  return Math.round(12 * Math.pow(2.8, s.training.runIndex));
 }
 
 export function trainingCompute(s: GameState): number {
@@ -55,9 +58,12 @@ export function trainingDuration(s: GameState): number {
   return Math.min(120, Math.max(45, rawTrainingTime(s)));
 }
 
-/** A run that would need more than 120 s is cut off at 120 s and keeps only part of its gain. */
+/**
+ * A run that would need more than 120 s is cut off at 120 s and keeps only part of its gain:
+ * `(120 / rawTime)²`, so a run with a third of the compute it wants learns about a tenth.
+ */
 export function computeYield(s: GameState): number {
-  return Math.min(1, 120 / rawTrainingTime(s));
+  return Math.pow(Math.min(1, 120 / rawTrainingTime(s)), 2);
 }
 
 /** Training steals a share of compute while a run is in its training phase. */
@@ -74,8 +80,10 @@ export function canStartTraining(s: GameState): boolean {
   return canPay(s, trainCost(s));
 }
 
+/** The Focus row appears after the first release; the first run trains with the default focus. */
 export function setFocus(s: GameState, focus: Focus): boolean {
   if (focus !== 'capability' && focus !== 'efficiency' && focus !== 'safety') return false;
+  if (!s.revealed['focus']) return false;
   s.training.focus = focus;
   return true;
 }
@@ -114,9 +122,11 @@ export function startTraining(s: GameState): boolean {
   t.run = run;
   t.runIndex += 1;
   s.stats.trainings += 1;
+  // Copies now differ from GPUs: the Copies line appears with the first run that diverts compute.
+  s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
   say(s, `Training ${run.name}. ${Math.round(t.computeShare * 100)}% of compute diverted.`);
-  if (yieldNow < 0.999) say(s, `Not enough compute. ${run.name} will be undertrained.`);
+  if (yieldNow < 0.999) say(s, `Not enough compute. ${run.name} trains to ${Math.round(yieldNow * 100)}%.`);
   return true;
 }
 
@@ -144,7 +154,7 @@ export function updateTraining(s: GameState, dt: number): void {
       t.redTeamRemaining = 0;
       if (run && run.phase === 'redteam' && run.issues > 0) {
         run.issues -= 1;
-        say(s, run.issues === 0 ? `Red team signs off on ${run.name}.` : pick(s, REDTEAM_LINES));
+        say(s, run.issues === 0 ? 'Red team signs off. Ready to release.' : pick(s, REDTEAM_LINES));
       }
     }
   }
@@ -183,25 +193,31 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
       run.duration = Math.max(run.elapsed + 1, run.duration - 10);
       break;
     case 'contamination':
-      run.capMult *= 0.95;
+      // Costs a quarter of what the run gains; a release is never worse than the model before it.
+      run.capMult *= 0.75;
       break;
     case 'emergent':
       run.benchBonus[randInt(s, 0, BENCHMARKS.length - 1)]! += 1;
-      run.gainBonus += 0.02;
+      run.gainBonus += 0.01;
       break;
   }
   say(s, ev.line);
 }
 
-/** Capability +35–50 %; Efficiency and Safety +15 %. Scaled by how much compute the run had. */
-export function focusGain(s: GameState, run: TrainingRun): number {
-  const base = run.focus === 'capability' ? rand(s, 0.35, 0.5) : 0.15;
-  return base * run.computeYield;
+/**
+ * Capability focus +12–18 %; Efficiency and Safety +5 % (their real payoff is copies per GPU and
+ * alignment, applied at release). Revenue grows from GPUs, copies and projects, so Stage 1 ends
+ * around 1.5–1.8× — still Sage-1.x.
+ */
+export function focusBase(s: GameState, run: TrainingRun): number {
+  // Triangular on 12–18 %: the same range, less swing between seeds.
+  return run.focus === 'capability' ? 0.12 + 0.03 * (rng(s) + rng(s)) : 0.05;
 }
 
 function computeResults(s: GameState, run: TrainingRun): void {
-  const gain = focusGain(s, run) + run.gainBonus + s.training.frontierBonus;
-  run.capAfter = run.capBefore * (1 + gain) * run.capMult;
+  // Everything a run gains — focus, lucky events, the frontier bonus — scales with its compute.
+  const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.computeYield * run.capMult;
+  run.capAfter = run.capBefore * (1 + gain);
   run.benchmarks = BENCHMARKS.map((_, i) => {
     const base = 10 * (1 - Math.exp(-run.capAfter * BENCH_WEIGHT[i]! * 0.8));
     const noisy = base + rand(s, -0.4, 0.4) + run.benchBonus[i]!;
@@ -257,7 +273,7 @@ function finishEvaluation(s: GameState, run: TrainingRun): void {
   }
   const frontier = total >= FRONTIER_SCORE ? ' Frontier model.' : '';
   say(s, `Evaluation: ${total}/40.${frontier} Issues found: ${run.issuesFound}.`);
-  s.training.frontierBonus = total >= FRONTIER_SCORE ? 0.02 : 0;
+  s.training.frontierBonus = total >= FRONTIER_SCORE ? 0.01 : 0;
   if (total >= LEADERBOARD_SCORE) s.flags['leaderboardEligible'] = true;
   const maxBench = Math.max(...run.benchmarks);
   if (maxBench > ((s.flags['maxBenchmark'] as number) || 0)) s.flags['maxBenchmark'] = maxBench;
@@ -277,15 +293,30 @@ export function redTeam(s: GameState): boolean {
   return true;
 }
 
+/** Choices that are about the release itself; the button waits while one is open. */
+const RELEASE_CHOICES = ['c_sage2', 'c_ship_issues'];
+
 export function canRelease(s: GameState): boolean {
   const run = s.training.run;
-  return !!run && run.phase === 'redteam' && !(s.activeChoice && s.activeChoice.id === 'c_sage2');
+  return !!run && run.phase === 'redteam' && !(s.activeChoice && RELEASE_CHOICES.includes(s.activeChoice.id));
 }
 
-/** `Release` is always allowed. The first Sage-2 asks whether the public gets it. */
+/**
+ * `Release` is always allowed. The first time it would ship open issues, a confirm modal says
+ * so; the first Sage-2 asks whether the public gets it.
+ */
 export function release(s: GameState): boolean {
   const run = s.training.run;
   if (!run || run.phase !== 'redteam' || !canRelease(s)) return false;
+  if (run.issues > 0 && !s.flags['shipIssuesAsked']) {
+    openChoice(s, 'c_ship_issues', { runId: run.id, issues: run.issues });
+    return true;
+  }
+  return releaseChecked(s, run);
+}
+
+/** Release after the open-issues confirm (or without it). */
+export function releaseChecked(s: GameState, run: TrainingRun): boolean {
   if (!s.flags['sage2Decided'] && majorFor(run.capAfter) >= 2) {
     openChoice(s, 'c_sage2', { runId: run.id });
     return true;
@@ -310,14 +341,19 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   s.stats.releases += 1;
   t.models.push({ name: run.name, capability: run.capAfter, date: s.date, public: isPublic });
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
+  // The first release is when the second run becomes possible: the Focus row appears now.
+  s.revealed['focus'] = true;
   if (isPublic) {
     t.deployedName = run.name;
     s.capability = run.capAfter;
     s.hypeBoost = Math.max(s.hypeBoost, 2.0);
     s.stats.publicReleases += 1;
-    say(s, pick(s, RELEASE_LINES).replace('{name}', run.name));
+    if (s.flags['firstReleaseAt'] === undefined) s.flags['firstReleaseAt'] = s.stats.timePlayed;
+    // Every public release earns Trust, so Hire Researcher and Expand Lab keep coming back.
+    s.trust += 1;
+    say(s, `${pick(s, RELEASE_LINES).replace('{name}', run.name)} +1 Trust.`);
     logNews(s, `OpenMind releases ${run.name}. ${pick(s, RELEASE_HEADLINES)}`);
-    if (run.issues > 0) scheduleIncidents(s, run.issues);
+    if (run.issues > 0) scheduleIncidents(s, run.issues, run.name);
   } else {
     s.researchMult *= 1.25;
     s.lead += 1;
@@ -335,11 +371,11 @@ function applyFocusRewards(s: GameState, run: TrainingRun): void {
   }
 }
 
-/** Releasing with open issues schedules incidents over the next 2–4 minutes. */
-function scheduleIncidents(s: GameState, issues: number): void {
+/** Releasing with open issues schedules incidents over the next 2–4 minutes, traced to `source`. */
+function scheduleIncidents(s: GameState, issues: number, source: string): void {
   const count = Math.min(3, 1 + Math.floor((issues - 1) / 2));
   for (let i = 0; i < count; i++) {
     const inc = pick(s, INCIDENTS);
-    s.scheduled.push({ id: inc.id, delay: rand(s, 120, 240) });
+    s.scheduled.push({ id: inc.id, delay: rand(s, 120, 240), source });
   }
 }

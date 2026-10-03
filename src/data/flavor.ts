@@ -29,7 +29,7 @@ export interface TrainingEventDef {
 export const TRAINING_EVENTS: TrainingEventDef[] = [
   { id: 'loss_spike', line: 'Loss spike. Rolling back to the last checkpoint. +10 s.' },
   { id: 'lucky_seed', line: 'Lucky seed. The run converges early. −10 s.' },
-  { id: 'contamination', line: 'Data contamination found in the eval set. Results will be lower.' },
+  { id: 'contamination', line: 'Data contamination found in the eval set. The gain is smaller than it looked.' },
   { id: 'emergent', line: 'Emergent ability. Nobody trained it to do that.' },
 ];
 

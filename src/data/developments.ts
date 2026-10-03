@@ -1,9 +1,11 @@
 import type { GameState } from '../engine/state.js';
 import { monthOf } from '../engine/format.js';
+import { INTERCONNECT_SECONDS } from '../engine/economy.js';
 
 /**
  * World timeline for the Developments log. Each entry fires on `month` (months since Jul 2025)
  * or on `trigger`, whichever comes first, and the log stamps it with the current game date.
+ * Stage 1 runs at five minutes a month: Aug ≈ 5:00, Sep ≈ 10:00, Oct ≈ 15:00, Nov ≈ 20:00, Dec ≈ 25:00.
  */
 export interface DevelopmentDef {
   id: string;
@@ -20,6 +22,12 @@ export interface DevelopmentDef {
 const num = (s: GameState, k: string): number => {
   const v = s.flags[k];
   return typeof v === 'number' ? v : 0;
+};
+
+/** Seconds since a timestamp flag was set, or −1. */
+const sinceFlag = (s: GameState, k: string): number => {
+  const v = s.flags[k];
+  return typeof v === 'number' ? s.stats.timePlayed - v : -1;
 };
 
 export const DEVELOPMENTS: DevelopmentDef[] = [
@@ -47,19 +55,25 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_grid',
     stage: 1,
     text: 'A utility in Virginia pauses new datacenter hookups. The queue is three years long.',
-    trigger: (s) => s.powerBought >= 4,
+    trigger: (s) => s.powerBought >= 1 || s.gpus >= 15,
   },
   {
     id: 'd_price',
     stage: 1,
-    text: '"You get what you pay for." Best agents now $200/month. Nobody is sure they\'re worth it.',
+    text: '"You get what you pay for." The best agents now cost as much as a junior hire. Nobody is sure they are worth it.',
     month: monthOf(2025, 9),
     trigger: (s) => s.priceRaises >= 3 && s.stats.timePlayed >= 300,
   },
   {
+    id: 'd_bridge',
+    stage: 1,
+    choice: 'c_bridge',
+    month: monthOf(2025, 9),
+  },
+  {
     id: 'd_lead_times',
     stage: 1,
-    text: 'Nimbus G4 lead times reach nine months. Cloud providers ration by relationship.',
+    text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
   {
@@ -71,10 +85,17 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.stats.publicReleases >= 1 && s.stats.timePlayed >= 840,
   },
   {
+    id: 'd_outage',
+    stage: 1,
+    choice: 'c_outage',
+    text: 'An AI agent books 4,000 restaurant tables in one night. Every agent API is rate-limited by morning.',
+    month: monthOf(2025, 10) + 0.3,
+  },
+  {
     id: 'd_benchmark',
     stage: 1,
     text: 'Benchmark saturated. "We\'re literally running out of benchmarks."',
-    trigger: (s) => num(s, 'maxBenchmark') >= 7.5,
+    trigger: (s) => num(s, 'maxBenchmark') >= 7,
   },
   {
     id: 'd_expensive',
@@ -84,11 +105,58 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.training.runIndex >= 3,
   },
   {
+    id: 'd_abilene',
+    stage: 1,
+    text: 'OpenMind is said to be looking at land in West Texas. Nobody at OpenMind will say where.',
+    trigger: (s) => s.projects['p_site']?.shown === true,
+  },
+  {
+    id: 'd_water',
+    stage: 1,
+    choice: 'c_water',
+    trigger: (s) => sinceFlag(s, 'siteAt') >= 30,
+  },
+  {
+    id: 'd_hyperscaler',
+    stage: 1,
+    text: 'A hyperscaler announces a campus the size of a small city. The press release has no date in it.',
+    month: monthOf(2025, 10),
+    trigger: (s) => s.projects['p_site']?.bought === 1,
+  },
+  {
+    id: 'd_utility_call',
+    stage: 1,
+    choice: 'c_utility',
+    trigger: (s) => s.interconnectLeft > 0 && s.interconnectLeft <= INTERCONNECT_SECONDS - 25,
+  },
+  {
+    id: 'd_interconnect_done',
+    stage: 1,
+    text: 'The utility signs off on the Abilene interconnect. Two other applicants withdraw.',
+    choice: 'c_abatement',
+    trigger: (s) => s.flags['interconnectDone'] === true,
+  },
+  {
     id: 'd_journalist',
     stage: 1,
     choice: 'c_journalist',
     text: 'A reporter is writing about how frontier models are tested. Nobody is sure who tests them.',
+    month: monthOf(2025, 11),
     trigger: (s) => s.stats.publicReleases >= 2 && s.stats.timePlayed >= 1080,
+  },
+  {
+    id: 'd_letter',
+    stage: 1,
+    choice: 'c_letter',
+    text: 'Two hundred researchers sign a letter asking frontier labs to slow down. Eleven work at OpenMind.',
+    month: monthOf(2025, 11) + 0.3,
+  },
+  {
+    id: 'd_nimbus',
+    stage: 1,
+    text: 'Nimbus reports a record quarter. Next year\'s chips are already sold.',
+    month: monthOf(2025, 11),
+    trigger: (s) => s.projects['p_interconnect']?.bought === 1,
   },
   {
     id: 'd_spec',
@@ -104,17 +172,32 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.training.runIndex >= 4 && num(s, 'safetyRuns') === 0,
   },
   {
+    id: 'd_poach',
+    stage: 1,
+    choice: 'c_poach',
+    text: 'Pay for AI researchers passes that of professional athletes. Nobody checks the comparison.',
+    month: monthOf(2025, 12),
+    trigger: (s) => s.researchers >= 26,
+  },
+  {
+    id: 'd_neighbour',
+    stage: 1,
+    choice: 'c_neighbour',
+    trigger: (s) => sinceFlag(s, 'substationAt') >= 140,
+  },
+  {
+    id: 'd_senate',
+    stage: 1,
+    text: 'A Senate hearing on frontier AI. Three labs send the same written answer.',
+    month: monthOf(2025, 12),
+    trigger: (s) => s.projects['p_substation']?.bought === 1,
+  },
+  {
     id: 'd_honesty',
     stage: 1,
     text: 'Internal eval: the model hid a failed task to get a better rating. "Rigged demo," says comms.',
     month: monthOf(2026, 1),
     trigger: (s) => s.stats.incidents >= 1,
-  },
-  {
-    id: 'd_abilene',
-    stage: 1,
-    text: 'OpenMind files for a 1-GW site outside Abilene. Locals ask about the water.',
-    trigger: (s) => s.projects['p_datacenter']?.shown === true,
   },
   // ---- Stage 2 seeds (Phase 2 extends this list) ----
   {

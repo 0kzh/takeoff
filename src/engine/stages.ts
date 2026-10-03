@@ -1,7 +1,9 @@
-import { GameState, say, blackout, logNews } from './state.js';
-import { monthOf } from './format.js';
+import { GameState, say, narrate, logNews, addFunds } from './state.js';
+import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, gpuCost } from './economy.js';
+import { GRID_MW, researchCap, potentialTasksPerSec, gpuBatchCost } from './economy.js';
+import { trainCost } from './training.js';
+import { PROJECTS } from '../data/projects.js';
 
 /**
  * Stages own the UI layout: `enter(state)` flips `state.revealed[...]` flags, and the renderer
@@ -20,6 +22,11 @@ export interface StageDef {
 }
 
 export const STAGE2_MIN_SECONDS = 25 * 60;
+/** Stage 1 projects that make no sense once ground is broken, retired without a line. */
+const QUIET_RETIRE = ['p_contractor'];
+/** The rented fleet's deposit comes back at the transition: $400 a GPU, at least $25,000. */
+export const DEPOSIT_PER_GPU = 400;
+export const MIN_DEPOSIT = 25000;
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;
@@ -29,15 +36,58 @@ function hide(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = false;
 }
 
+/**
+ * Stage 1 → 2. Destructive, so it is narrated: the console keeps its last lines and prints what
+ * was lost, what replaced it, and why the task rate jumps. Projects that only make sense with a
+ * rented fleet are retired by name; the rest carry over. The research and Trust walls are cleared
+ * so the training loop is alive on arrival, and the returned deposit buys the first GPU batch.
+ */
+function enterScale(s: GameState): void {
+  const rentedGpus = s.gpus;
+  const tpsBefore = Math.max(1, s.stats.tasksPerSec);
+
+  const leftBehind = PROJECTS.filter(
+    (p) => s.projects[p.id]?.shown && (s.projects[p.id]?.bought ?? 0) < p.uses && !p.stages.includes(2),
+  );
+  for (const p of leftBehind) s.projects[p.id]!.shown = false;
+  // Rescues and the ladder's own extras go quietly; anything else is named.
+  const retired = leftBehind.filter((p) => !p.rescue && !QUIET_RETIRE.includes(p.id));
+
+  hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'site']);
+  show(s, ['infrastructure']);
+  s.gridAuto = false;
+  s.datacenters = Math.max(1, s.datacenters);
+  // The rented fleet goes back to the cloud; Abilene opens with 1,000 owned GPUs.
+  s.gpus = Math.max(1000, s.gpus - rentedGpus + 1000);
+  s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);
+
+  const deposit = Math.max(MIN_DEPOSIT, DEPOSIT_PER_GPU * rentedGpus);
+  addFunds(s, deposit);
+  s.trust = Math.max(2, s.trust + 2);
+  // The new building has room for the next run: the cap never starts below its research cost.
+  const need = trainCost(s).research ?? 0;
+  while (researchCap(s) < need) s.labSpace += 1;
+
+  const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / tpsBefore));
+  narrate(s, [
+    [1.6, `The ${fmtInt(rentedGpus)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
+    [2.2, `1,000 Nimbus G4s on 5 MW at Abilene. Power is bought in megawatts now.`],
+    [2.2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
+  ]);
+  if (retired.length) say(s, `Retired with the rented fleet: ${retired.map((p) => p.title).join(', ')}.`);
+  logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
+  if (gpuBatchCost(s) > s.funds) addFunds(s, gpuBatchCost(s) - s.funds);
+}
+
 export const STAGES: StageDef[] = [
   {
     id: 1,
     name: 'The Startup',
     startMonth: monthOf(2025, 7),
     endMonth: monthOf(2025, 12),
-    secondsPerMonth: 270,
+    secondsPerMonth: 300,
     enter: (s) => {
-      show(s, ['console', 'task', 'power']);
+      show(s, ['console', 'task', 'power', 'buyPower']);
       say(s, 'Welcome to OpenMind.');
     },
     exit: () => 0,
@@ -48,16 +98,7 @@ export const STAGES: StageDef[] = [
     startMonth: monthOf(2026, 1),
     endMonth: monthOf(2026, 12),
     secondsPerMonth: 210,
-    enter: (s) => {
-      blackout(s, 2, 'Ground broken outside Abilene.');
-      hide(s, ['power', 'buyPower', 'compute', 'gridContract']);
-      show(s, ['infrastructure']);
-      s.gridAuto = false;
-      s.datacenters = Math.max(1, s.datacenters);
-      s.gpus += 1000;
-      s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);
-      logNews(s, 'OpenMind owns its first datacenter. The rented GPUs move in with the new ones.');
-    },
+    enter: enterScale,
     // Phase 1 seed: the minimum stay keeps Stage 2 from collapsing until its systems exist.
     exit: (s) =>
       s.capability >= 4 && ((s.flags['releasesThisStage'] as number) || 0) > 0 && s.stats.timeInStage >= STAGE2_MIN_SECONDS ? 3 : 0,
@@ -69,7 +110,7 @@ export const STAGES: StageDef[] = [
     endMonth: monthOf(2027, 10),
     secondsPerMonth: 270,
     enter: (s) => {
-      blackout(s, 2, `${s.training.deployedName} writes better code than anyone at OpenMind.`);
+      narrate(s, [[2, `${s.training.deployedName} writes better code than anyone at OpenMind.`]]);
       hide(s, ['marketing', 'hireResearcher', 'expandLab']);
       show(s, ['alignment', 'security', 'geopolitics', 'oversight']);
       s.humanEff = Math.min(1, 3 / Math.max(1, s.capability));
@@ -83,7 +124,7 @@ export const STAGES: StageDef[] = [
     endMonth: monthOf(2028, 12),
     secondsPerMonth: 150,
     enter: (s) => {
-      blackout(s, 2, 'The model runs the business now. It is better at it.');
+      narrate(s, [[2, 'The model runs the business now. It is better at it.']]);
       hide(s, ['business', 'marketing', 'training']);
       show(s, ['robots', 'society', 'treaty', 'monitors']);
     },
@@ -96,7 +137,7 @@ export const STAGES: StageDef[] = [
     endMonth: monthOf(2030, 12),
     secondsPerMonth: 90,
     enter: (s) => {
-      blackout(s, 2, 'The first orbital datacenter reports in.');
+      narrate(s, [[2, 'The first orbital datacenter reports in.']]);
       hide(s, ['geopolitics', 'robots', 'society']);
       show(s, ['space']);
     },
@@ -131,31 +172,50 @@ interface RevealRule {
   then?: (s: GameState) => void;
 }
 
-/** UP's "stuck" condition: nothing to sell, no power, no money. */
-export const STUCK = (s: GameState): boolean => s.power < 1 && s.funds < s.powerPrice && s.unbilled < 1;
+/** UP's "stuck" condition, debounced ~3 s: no power, no money for a block (the credit rescue). */
+export const STUCK = (s: GameState): boolean => s.stuckFor >= 3;
 
-/** Stage 1 trigger-driven reveals (stages.md "Reveal order"). Once set, flags persist. */
+const sinceFlag = (s: GameState, key: string): number => {
+  const at = s.flags[key];
+  return typeof at === 'number' ? s.stats.timePlayed - at : -1;
+};
+
+/**
+ * Stage 1 trigger-driven reveals (stages.md "Reveal order"). Once set, flags persist. The Research
+ * panel arrives with Trust and Hire Researcher only; Expand Lab when research first nears its cap;
+ * Projects about 40 s later with the first project — one idea at a time.
+ */
 const REVEAL_RULES: RevealRule[] = [
   { id: 'business', stages: [1], when: (s) => s.tasks >= 1 },
-  { id: 'buyPower', stages: [1], when: (s) => s.power < 900 || s.funds >= 5 },
   {
     id: 'compute',
     stages: [1],
-    when: (s) => s.funds >= 5 || s.tasks >= 50,
-    then: (s) => say(s, `GPUs available to rent. $${gpuCost(s).toFixed(2)} each.`),
+    when: (s) => s.funds >= 3 || s.tasks >= 20,
+    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of Sage-1.'),
   },
   { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 1 },
-  { id: 'marketing', stages: [1, 2], when: (s) => s.funds >= 20 },
+  { id: 'marketing', stages: [1, 2], when: (s) => s.funds >= 40 || s.gpus >= 12 },
   {
     id: 'research',
     stages: [1, 2],
     when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1,
     then: (s) => {
-      show(s, ['hireResearcher', 'expandLab']);
-      say(s, 'Trust earned. Researchers can be hired.');
+      show(s, ['hireResearcher']);
+      s.flags['researchAt'] = s.stats.timePlayed;
+      say(s, `Trust earned: ${fmtInt(s.trust)}. Each one hires a researcher.`);
     },
   },
-  { id: 'projects', stages: [1, 2, 3, 4, 5], when: (s) => s.revealed['research'] === true || (STUCK(s) && s.gpus > 0) },
+  {
+    id: 'expandLab',
+    stages: [1, 2],
+    when: (s) => s.revealed['research'] === true && s.research >= 0.9 * researchCap(s),
+    then: (s) => say(s, 'The lab is nearly full. Expand Lab makes room for more research.'),
+  },
+  {
+    id: 'projects',
+    stages: [1, 2, 3, 4, 5],
+    when: (s) => (s.revealed['research'] === true && sinceFlag(s, 'researchAt') >= 40) || (STUCK(s) && s.gpus > 0),
+  },
 ];
 
 export function updateReveals(s: GameState): void {

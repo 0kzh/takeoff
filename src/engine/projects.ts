@@ -2,8 +2,11 @@ import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
 import { fmtInt, fmtMoneyShort } from './format.js';
 
-/** Visible projects at once; extra triggers wait in line (UP keeps 3–6 on screen). */
-export const MAX_VISIBLE = 6;
+/**
+ * Visible projects at once; extra triggers wait in line (UP keeps 3–6 on screen). Rescue
+ * projects and the pinned stage goal do not count against it and never wait.
+ */
+export const MAX_VISIBLE = 4;
 
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
@@ -42,14 +45,17 @@ export function visibleProjects(s: GameState): ProjectDef[] {
  */
 export function updateProjects(s: GameState): void {
   if (!s.revealed['projects']) return;
-  let visible = visibleProjects(s).length;
+  const exempt = (def: ProjectDef) => def.rescue === true || def.pinned === true;
+  let visible = visibleProjects(s).filter((p) => !exempt(p)).length;
   for (const def of PROJECTS) {
     const st = s.projects[def.id];
     if (st?.shown || remainingUses(s, def) <= 0 || !def.stages.includes(s.stage)) continue;
-    if (visible >= MAX_VISIBLE && !def.rescue) continue;
+    if (visible >= MAX_VISIBLE && !exempt(def)) continue;
+    // Before the Research panel, only rescues can appear (their prices are not in research).
+    if (!def.rescue && !s.revealed['research']) continue;
     if (def.trigger(s)) {
       projectState(s, def.id).shown = true;
-      visible++;
+      if (!exempt(def)) visible++;
     }
   }
 }

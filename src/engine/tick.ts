@@ -1,12 +1,12 @@
-import { GameState, say } from './state.js';
+import { GameState, say, printLine } from './state.js';
 import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
-  powerPriceWalk, averages, bottleneckMessages, researchCap, marketingMult,
+  powerPriceWalk, averages, bottleneckMessages, researchCap, contractIncome, trackStuck, updateInterconnect,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
   toggleGrid, buildDatacenter, buyGpuBatch, buyTurbines,
 } from './economy.js';
 import { updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainCost } from './training.js';
-import { updateProjects, buyProject } from './projects.js';
+import { updateProjects, buyProject, visibleProjects } from './projects.js';
 import {
   updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, fireEvent,
 } from './events.js';
@@ -36,10 +36,10 @@ export function tick(s: GameState, dtMs: number): void {
 /**
  * One 100 ms logic step. Order of operations:
  *   1. production   — copies complete tasks (Stage 1: each burns 1 kWh)
- *   2. power        — Grid Contract auto-buy; slow tick: power price random walk
- *   3. billing      — demand roll sells unbilled tasks; hype and timed effects decay
+ *   2. power        — Grid Contract auto-buy; the stuck timer; slow tick: power price random walk
+ *   3. billing      — demand roll sells unbilled tasks; contracts pay; hype and timed effects decay
  *   4. research     — research fills toward the cap; insight accrues only at the cap; trust milestones
- *   5. training     — the run state machine and the red-team cooldown
+ *   5. training     — the run state machine and the red-team cooldown; the interconnect queue
  *   6. projects     — panel reveals, then project triggers
  *   7. events       — scheduled incidents, choice timers, developments, rival releases, idle guard
  *   8. clock        — game date
@@ -54,9 +54,11 @@ export function step(s: GameState): void {
   produce(s, dt);
 
   autoBuyPower(s);
+  trackStuck(s, dt);
   if (slow) powerPriceWalk(s);
 
   sell(s);
+  contractIncome(s, dt);
   decayHype(s, dt);
   decayEffects(s, dt);
 
@@ -64,6 +66,7 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
+  updateInterconnect(s, dt);
 
   updateReveals(s);
   updateProjects(s);
@@ -91,7 +94,7 @@ function drainConsoleQueue(s: GameState, dt: number): void {
   head.delay -= dt;
   if (head.delay <= 0) {
     s.consoleQueue.shift();
-    say(s, head.text);
+    printLine(s, head.text);
   }
 }
 
@@ -99,10 +102,7 @@ function slowStats(s: GameState): void {
   averages(s);
   taskMilestones(s);
   bottleneckMessages(s);
-  plateauMessage(s);
-  if (s.revealed['apiCustomers']) {
-    s.apiCustomers = Math.max(s.apiCustomers, Math.floor(40 * Math.sqrt(s.capability) * marketingMult(s) * s.hypeBoost));
-  }
+  researchWall(s);
 }
 
 /** UP-style report: `10,000 tasks completed in 7 minutes 12 seconds`. */
@@ -113,15 +113,42 @@ function taskMilestones(s: GameState): void {
   }
 }
 
-/** Named plateau: the lab cannot hold enough research for the next run. */
-function plateauMessage(s: GameState): void {
-  if (!s.revealed['training'] || s.training.run) return;
-  const need = trainCost(s).research ?? 0;
+/** The most research anything on screen asks for: the next run, or a visible project. */
+export function researchWanted(s: GameState): { amount: number; what: string } {
+  let best = { amount: 0, what: '' };
+  if (s.revealed['training'] && !s.training.run) {
+    best = { amount: trainCost(s).research ?? 0, what: 'the next run' };
+  }
+  for (const p of visibleProjects(s)) {
+    const r = p.cost(s).research ?? 0;
+    if (r > best.amount) best = { amount: r, what: p.title };
+  }
+  return best;
+}
+
+/**
+ * Research at its cap, once per cap value: name the wall and the fix when something on screen
+ * needs more than the lab holds (the Research Plateau when it is the next training run).
+ */
+function researchWall(s: GameState): void {
+  if (!s.revealed['research']) return;
   const cap = researchCap(s);
-  const key = `plateau${s.training.runIndex}`;
-  if (s.research >= cap && cap < need && !s.flags[key]) {
-    s.flags[key] = true;
-    say(s, `The Research Plateau — the next run needs ${fmtInt(need)} research. The lab holds ${fmtInt(cap)}.`);
+  if (s.research < cap) return;
+  const key = `wall:${cap}`;
+  if (s.flags[key]) return;
+  s.flags[key] = true;
+  const want = researchWanted(s);
+  const fix = s.revealed['expandLab']
+    ? s.trust >= 1 ? 'Expand Lab to hold more.' : `Expand Lab at the next Trust (${fmtInt(s.nextTrust)} tasks).`
+    : 'More room comes with Trust.';
+  if (want.amount > cap) {
+    if (want.what === 'the next run') {
+      say(s, `The Research Plateau — the next run needs ${fmtInt(want.amount)} research. The lab holds ${fmtInt(cap)}. ${fix}`);
+    } else {
+      say(s, `Research at capacity. ${want.what} needs ${fmtInt(want.amount)}. ${fix}`);
+    }
+  } else if (s.insightUnlocked) {
+    say(s, 'Research at capacity — insight accrues.');
   }
 }
 
