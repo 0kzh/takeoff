@@ -1,0 +1,327 @@
+/* Takeoff — Universal Paperclips layout, A Dark Room log and modals. Black, white and greys only. */
+
+body {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 16px;
+  color: #000;
+  background: #fff;
+  margin: 8px;
+}
+
+hr {
+  display: block;
+  margin-top: 0.05em;
+  margin-bottom: 0.2em;
+  margin-left: auto;
+  margin-right: auto;
+  border-style: inset;
+  border-width: 1px;
+}
+
+[data-reveal] { display: none; }
+span[data-reveal].shown { display: inline; }
+div[data-reveal].shown, .panel.shown { display: block; }
+
+.note { color: #555; font-size: 13px; }
+#hypeLine { display: none; }
+#hypeLine.shown { display: inline; }
+
+/* ---------- console (UP) ---------- */
+
+#consoleDiv {
+  background: #000;
+  width: 100%;
+  padding: 2px 0 1px;
+  min-height: 92px;
+  box-sizing: border-box;
+}
+#consoleDiv.shown { display: block; }
+
+p.console, p.consoleOld {
+  font-family: "Lucida Sans Typewriter", "Lucida Console", Monaco, "Bitstream Vera Sans Mono", monospace;
+  font-size: 12px;
+  margin: 0;
+  line-height: 17px;
+}
+p.consoleOld { color: grey; }
+p.console { color: #fff; }
+
+.pulsate {
+  animation: pulsate 0.5s ease-out infinite;
+  opacity: 0;
+}
+@keyframes pulsate {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---------- header row ---------- */
+
+#topDiv {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 1110px;
+  max-width: 100%;
+}
+h2 { line-height: 70%; margin: 18px 0 14px; }
+#gameDate { font-size: 16px; padding-right: 4px; }
+
+/* ---------- columns ---------- */
+
+#columns { display: flex; align-items: flex-start; gap: 12px; }
+.column { flex: none; }
+#logColumn { width: 200px; }
+#leftColumn { width: 275px; }
+#middleColumn { width: 275px; }
+#rightColumn { width: 320px; }
+
+.panel { margin-bottom: 16px; line-height: 1.3; }
+#panel-task { margin-bottom: 10px; }
+
+/* ---------- Developments log (ADR) ---------- */
+
+#panel-log { position: relative; }
+#logList {
+  position: relative;
+  max-height: 640px;
+  overflow: hidden;
+  font-size: 14px;
+}
+#logList::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 120px;
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff);
+  pointer-events: none;
+}
+.logEntry { margin-bottom: 8px; }
+.logEntry.choice { font-style: italic; }
+.logDate { white-space: nowrap; }
+
+/* ---------- buttons (UP .button2) ---------- */
+
+.button2 {
+  border: 1px solid #1a1a1a;
+  background: #666;
+  background: linear-gradient(#fff, #888);
+  padding: 2px 4px;
+  border-radius: 2px;
+  box-shadow: rgba(255, 255, 255, 0.4) 0 0 0, inset rgba(255, 255, 255, 0.4) 0 1px 0;
+  text-shadow: #ccc 0 1px 0;
+  color: #000;
+  font-size: 11px;
+  font-family: helvetica, serif;
+  text-decoration: none;
+  vertical-align: middle;
+  outline: none;
+  cursor: pointer;
+}
+.button2:hover {
+  border: 1px solid #898989;
+  text-shadow: #d4d4d4 0 1px 0;
+  background: linear-gradient(#f7f7f7, #888);
+}
+.button2:active {
+  text-shadow: #bfbfbf 0 1px 0;
+  border: 1px solid #2e2e2e;
+  background: linear-gradient(#595959, #d9d9d9);
+}
+.button2:disabled {
+  opacity: 0.6;
+  border: 1px solid #fff;
+  cursor: default;
+}
+.button2:disabled:hover, .button2:disabled:active {
+  background: linear-gradient(#fff, #888);
+  text-shadow: #ccc 0 1px 0;
+}
+.focusButton.selected,
+.focusButton.selected:hover {
+  background: linear-gradient(#bbb, #fff);
+  border: 1px solid #000;
+  font-weight: bold;
+}
+
+/* ADR cooldown: a #DDDDDD bar drains behind the label. */
+.cooldown {
+  position: relative;
+  overflow: hidden;
+  min-width: 110px;
+}
+.cooldownBar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: #ddd;
+}
+.cooldownLabel { position: relative; }
+
+/* ---------- projects (UP .projectButton) ---------- */
+
+.projectButton {
+  display: block;
+  width: 275px;
+  height: 60px;
+  background: #c8c8c8;
+  border: 1px solid #000;
+  outline: none;
+  margin-bottom: 6px;
+  padding: 2px 4px;
+  text-align: left;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 13px;
+  line-height: 1.2;
+  color: #000;
+  overflow: hidden;
+  cursor: pointer;
+}
+.projectButton:hover { border: 1px solid rgba(0, 0, 0, 0.25); }
+.projectButton:active { background: #d1d1d1; border: 1px solid #000; }
+.projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
+.projectButton.rescue { border-style: dashed; }
+
+/* ---------- training ---------- */
+
+#train-idle, #train-running, #train-eval, #train-redteam { display: none; margin-top: 6px; }
+#train-idle.shown, #train-running.shown, #train-eval.shown, #train-redteam.shown { display: block; }
+
+.progress {
+  width: 300px;
+  height: 12px;
+  border: 1px solid #000;
+  margin: 3px 0;
+  background: #fff;
+}
+.progressFill { height: 100%; width: 0; background: #888; }
+
+#benchmarks { margin: 4px 0 6px; font-size: 13px; }
+.bench { display: flex; align-items: center; height: 16px; }
+.benchLabel { width: 72px; }
+.benchBar { width: 190px; height: 9px; border: 1px solid #000; margin-right: 6px; background: #fff; }
+.benchFill { display: block; height: 100%; width: 0; background: #555; transition: width 0.3s; }
+.benchValue { width: 30px; text-align: right; }
+
+#cards { font-size: 13px; }
+.card { border: 1px solid #888; padding: 2px 4px; margin-bottom: 4px; background: #f4f4f4; }
+.card.pending { color: #888; }
+.cardLine { font-style: italic; }
+#evalTotal { font-size: 14px; margin-bottom: 4px; }
+
+#graphCanvas { border: 1px solid #000; background: #fff; }
+
+/* ---------- modal (ADR event panel) ---------- */
+
+#modalOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+  z-index: 20;
+}
+#modalOverlay.shown { display: block; }
+#modal {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 335px;
+  background: #fff;
+  border: 2px solid #000;
+  padding: 16px 20px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+}
+#modalTitle { font-weight: bold; font-size: 20px; margin-bottom: 10px; }
+#modalText p { margin: 0 0 10px; }
+#modalTimer { font-size: 13px; color: #555; margin-bottom: 8px; }
+.modalButton {
+  display: inline-block;
+  border: 1px solid #000;
+  background: #fff;
+  padding: 5px 10px;
+  margin: 0 8px 8px 0;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 15px;
+  cursor: pointer;
+  text-align: center;
+}
+.modalButton:hover { text-decoration: underline; }
+.modalButton:disabled { color: #999; border-color: #999; text-decoration: none; cursor: default; }
+
+/* ---------- ending ---------- */
+
+#endingScreen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 30;
+  overflow: auto;
+}
+#endingScreen.shown { display: block; }
+#endingBox { max-width: 520px; margin: 80px auto; }
+#endingStats td { padding: 2px 16px 2px 0; }
+
+/* ---------- toast (ADR "saved.") ---------- */
+
+#toast {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  font-size: 14px;
+  color: #000;
+  opacity: 0;
+  transition: opacity 1s;
+  pointer-events: none;
+}
+#toast.visible { opacity: 1; transition: opacity 0.2s; }
+
+/* ---------- dev overlay ---------- */
+
+#dev {
+  display: none;
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  width: 360px;
+  max-height: 85vh;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #000;
+  padding: 6px 8px;
+  font-family: Menlo, Consolas, "Courier New", monospace;
+  font-size: 11px;
+  z-index: 40;
+}
+#dev.open { display: block; }
+#dev button, #dev select { font-family: inherit; font-size: 11px; margin: 1px; }
+#dev .devRow { margin-bottom: 4px; }
+#dev .devActive { font-weight: bold; text-decoration: underline; }
+#dev textarea { width: 100%; height: 50px; font-family: inherit; font-size: 10px; box-sizing: border-box; }
+#devHidden { white-space: pre-wrap; border-top: 1px solid #888; margin-top: 4px; padding-top: 4px; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1100px) {
+  #topDiv { width: 100%; }
+  #columns { flex-wrap: wrap; }
+  #logColumn { width: 100%; order: -1; }
+  #logList { max-height: 110px; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; }
+  #logList::after { display: none; }
+  .logEntry { flex: 0 0 220px; }
+}
+
+@media (max-width: 700px) {
+  #columns { flex-direction: column; }
+  #leftColumn, #middleColumn, #rightColumn { width: 100%; }
+  .projectButton { width: 100%; max-width: 275px; }
+  .progress { width: 100%; max-width: 300px; }
+  #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
+  #dev { width: auto; left: 8px; }
+}

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Takeoff</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!--
+    Every panel for every stage is present from the start and hidden. `data-reveal="flag"` shows an
+    element while state.revealed[flag] is true; render.ts is the only code that toggles visibility.
+  -->
+  <div id="consoleDiv" data-panel="console" data-reveal="console">
+    <p class="consoleOld" id="consoleOld">
+      <span class="consoleLine"><span>&nbsp;.&nbsp;</span><span id="readout5"></span></span><br>
+      <span class="consoleLine"><span>&nbsp;.&nbsp;</span><span id="readout4"></span></span><br>
+      <span class="consoleLine"><span>&nbsp;.&nbsp;</span><span id="readout3"></span></span><br>
+      <span class="consoleLine"><span>&nbsp;.&nbsp;</span><span id="readout2"></span></span>
+    </p>
+    <p class="console"><span>&nbsp;&gt;&nbsp;</span><span id="readout1"></span><span id="cursor" class="pulsate">|</span></p>
+  </div>
+
+  <div id="topDiv">
+    <h2 id="tasksHeader">Tasks Completed: <span id="tasks">0</span></h2>
+    <div id="gameDate">Jul 2025</div>
+  </div>
+
+  <div id="columns">
+    <div id="logColumn" class="column">
+      <div id="panel-log" class="panel" data-panel="log" data-reveal="log">
+        <b>Developments</b>
+        <hr>
+        <div id="logList"></div>
+      </div>
+    </div>
+
+    <div id="leftColumn" class="column">
+      <div id="panel-task" class="panel" data-panel="task" data-reveal="task">
+        <button class="button2" id="btn-task">Complete Task</button>
+      </div>
+
+      <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
+        Power: <span id="power">1,000</span> kWh<br>
+        <span data-reveal="buyPower">
+          <button class="button2" id="btn-buyPower">Buy Power (1,000 kWh)</button>
+          Cost: <span id="powerCost">$ 20.00</span><br>
+        </span>
+        <span data-reveal="gridContract">
+          Grid Contract: <button class="button2" id="btn-grid">ON</button>
+          <span id="gridStatus">buys power when it runs low</span>
+        </span>
+      </div>
+
+      <div id="panel-business" class="panel" data-panel="business" data-reveal="business">
+        <b>Business</b>
+        <hr>
+        Available Funds: <span id="funds">$ 0.00</span><br>
+        <span data-reveal="revPerSec">Avg. Rev. per sec: <span id="revPerSec">$ 0.00</span><br></span>
+        <span data-reveal="revPerSec">Avg. Tasks Sold per sec: <span id="soldPerSec">0</span><br></span>
+        Unbilled Tasks: <span id="unbilled">0</span><br>
+        <br>
+        <button class="button2" id="btn-lowerPrice">lower</button>
+        <button class="button2" id="btn-raisePrice">raise</button>
+        Price per Task: <span id="price">$ 0.25</span><br>
+        Public Demand: <span id="demand">0</span>%<br>
+        <span id="hypeLine">Release hype: ×<span id="hype">1.0</span><br></span>
+        <span data-reveal="apiCustomers">API customers: <span id="apiCustomers">0</span><br></span>
+        <div data-reveal="marketing" id="marketingBlock">
+          <br>
+          <button class="button2" id="btn-marketing">Marketing</button>
+          Level: <span id="hypeLevel">1</span><br>
+          Cost: <span id="marketingCost">$ 100.00</span>
+        </div>
+      </div>
+
+      <div id="panel-compute" class="panel" data-panel="compute" data-reveal="compute">
+        <b>Compute</b>
+        <hr>
+        <button class="button2" id="btn-gpu">Rent GPU</button>
+        Cost: <span id="gpuCost">$ 7.00</span><br>
+        GPUs rented: <span id="gpus">0</span><br>
+        Copies running: <span id="copies">0</span><br>
+        Tasks per sec: <span id="tasksPerSec">0</span>
+      </div>
+
+      <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="infrastructure">
+        <b>Infrastructure</b>
+        <hr>
+        Datacenters: <span id="datacenters">0</span><br>
+        <button class="button2" id="btn-datacenter">Build Datacenter</button>
+        Cost: <span id="datacenterCost">$ 250,000</span><br>
+        <br>
+        GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>
+        <button class="button2" id="btn-gpuBatch">Buy GPUs (1,000)</button>
+        Cost: <span id="gpuBatchCost">$ 40,000</span><br>
+        Nimbus chip price: <span id="chipPrice">$ 40.00</span><br>
+        <br>
+        Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>
+        <button class="button2" id="btn-turbines">Gas turbines (+100 MW)</button>
+        Cost: <span id="turbineCost">$ 300,000</span><br>
+        <br>
+        Powered GPUs: <span id="activeGpus">0</span><br>
+        Copies running: <span id="infraCopies">0</span><br>
+        Tasks per sec: <span id="infraTasksPerSec">0</span>
+      </div>
+
+      <div id="panel-government" class="panel" data-panel="government" data-reveal="government">
+        <b>Government</b>
+        <hr>
+        Relations: <span id="govRelations">50</span>
+      </div>
+
+      <div id="panel-public" class="panel" data-panel="public" data-reveal="public">
+        <b>Public</b>
+        <hr>
+        Approval: <span id="approval">0</span><br>
+        Jobs displaced: <span id="jobsDisplaced">0</span>
+      </div>
+
+      <div id="panel-robots" class="panel" data-panel="robots" data-reveal="robots">
+        <b>Robots</b>
+        <hr>
+        Robots deployed: <span id="robots">0</span>
+      </div>
+
+      <div id="panel-society" class="panel" data-panel="society" data-reveal="society">
+        <b>Society</b>
+        <hr>
+        Approval: <span id="societyApproval">0</span><br>
+        Jobs displaced: <span id="societyJobs">0</span>
+      </div>
+    </div>
+
+    <div id="middleColumn" class="column">
+      <div id="panel-research" class="panel" data-panel="research" data-reveal="research">
+        <b>Research</b>
+        <hr>
+        Trust: <span id="trust">2</span><br>
+        +1 Trust at: <span id="nextTrust">3,000</span> tasks<br>
+        <span data-reveal="hireResearcher"><button class="button2" id="btn-hireResearcher">Hire Researcher</button></span>
+        <span data-reveal="expandLab"><button class="button2" id="btn-expandLab">Expand Lab</button></span>
+        <span class="note">(1 Trust each)</span><br>
+        Researchers: <span id="researchers">1</span><br>
+        Lab Space: <span id="labSpace">1</span><br>
+        <br>
+        Research: <span id="research">0</span> / <span id="researchCap">1,000</span><br>
+        <span data-reveal="insight">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span>
+      </div>
+
+      <div id="panel-projects" class="panel" data-panel="projects" data-reveal="projects">
+        <b>Projects</b>
+        <hr>
+        <div id="projectList"></div>
+      </div>
+
+      <div id="panel-security" class="panel" data-panel="security" data-reveal="security">
+        <b>Security</b>
+        <hr>
+        Security level: SL<span id="securityLevel">1</span>
+      </div>
+
+      <div id="panel-oversight" class="panel" data-panel="oversight" data-reveal="oversight">
+        <b>Oversight</b>
+        <hr>
+        Committee decision: <span id="oversightStatus">not convened</span>
+      </div>
+
+      <div id="panel-treaty" class="panel" data-panel="treaty" data-reveal="treaty">
+        <b>Treaty</b>
+        <hr>
+        Status: <span id="treatyStatus">not negotiating</span>
+      </div>
+    </div>
+
+    <div id="rightColumn" class="column">
+      <div id="panel-training" class="panel" data-panel="training" data-reveal="training">
+        <b>Training</b>
+        <hr>
+        Current model: <span id="modelName">Sage-1</span><br>
+        Capability: <span id="capability">1.00</span>× · Anthrosoft: <span id="rivalCap">1.00</span>×<br>
+        Focus:
+        <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability">Capability</button>
+        <button class="button2 focusButton" id="btn-focus-efficiency" data-focus="efficiency">Efficiency</button>
+        <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety">Safety</button><br>
+
+        <div id="train-idle">
+          <button class="button2" id="btn-train">Train <span id="nextRunName">Sage-1.1</span></button>
+          Cost: <span id="trainCost">2,000 research, $250</span><br>
+          Compute: <span id="trainCompute">0</span> GPUs of <span id="trainRequired">12</span> wanted · est. <span id="trainEta">60 s</span>
+        </div>
+
+        <div id="train-running">
+          Training <span id="runName">Sage-1.1</span> (<span id="runFocus">capability</span>): <span id="runPct">0</span>%
+          <div class="progress"><div class="progressFill" id="runBar"></div></div>
+          <span id="runRemaining">60 s</span> remaining · <span id="runShare">50</span>% of compute diverted
+        </div>
+
+        <div id="train-eval">
+          <div id="evalHeader">Evaluating <span id="evalName">Sage-1.1</span></div>
+          <div id="benchmarks">
+            <div class="bench" id="bench-0"><span class="benchLabel">Coding</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+            <div class="bench" id="bench-1"><span class="benchLabel">Research</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+            <div class="bench" id="bench-2"><span class="benchLabel">Persuasion</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+            <div class="bench" id="bench-3"><span class="benchLabel">Agency</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+            <div class="bench" id="bench-4"><span class="benchLabel">Bio</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+            <div class="bench" id="bench-5"><span class="benchLabel">Cyber</span><span class="benchBar"><span class="benchFill"></span></span><span class="benchValue">0.0</span></div>
+          </div>
+          <div id="cards">
+            <div class="card" id="card-0"><b class="cardName">HumanBench</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
+            <div class="card" id="card-1"><b class="cardName">Tech press</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
+            <div class="card" id="card-2"><b class="cardName">Enterprise analyst</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
+            <div class="card" id="card-3"><b class="cardName">Safety Institute</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
+          </div>
+          <div id="evalTotal">Score: <span id="evalScore">0</span>/40 · Capability <span id="evalCap">1.00</span>×</div>
+        </div>
+
+        <div id="train-redteam">
+          Issues found: <span id="issuesFound">0</span> · open: <span id="issuesOpen">0</span><br>
+          <button class="button2 cooldown" id="btn-redteam"><span class="cooldownBar" id="redteamBar"></span><span class="cooldownLabel" id="redteamLabel">Red-team (12 s)</span></button>
+          <button class="button2" id="btn-release">Release</button>
+        </div>
+      </div>
+
+      <div id="panel-graph" class="panel" data-panel="graph" data-reveal="graph">
+        <b>Capability</b>
+        <hr>
+        <canvas id="graphCanvas" width="310" height="140"></canvas>
+      </div>
+
+      <div id="panel-stats" class="panel" data-panel="stats" data-reveal="stats">
+        <b>Stats</b>
+        <hr>
+        Tasks per sec: <span id="statTasksPerSec">0</span><br>
+        Revenue per sec: <span id="statRevPerSec">$ 0.00</span><br>
+        Capability: <span id="statCapability">1.00</span>×<br>
+        Lead: <span id="statLead">3</span> months<br>
+        Apparent alignment: <span id="statAlignment">50</span>
+      </div>
+
+      <div id="panel-alignment" class="panel" data-panel="alignment" data-reveal="alignment">
+        <b>Alignment</b>
+        <hr>
+        Apparent alignment: <span id="alignmentApparent">50</span><br>
+        Interpretability: <span id="interpretability">0</span>
+      </div>
+
+      <div id="panel-geopolitics" class="panel" data-panel="geopolitics" data-reveal="geopolitics">
+        <b>Geopolitics</b>
+        <hr>
+        Lead over Baiwen: <span id="lead">3</span> months<br>
+        Baiwen capability: <span id="baiwenCapability">0.70</span>×
+      </div>
+
+      <div id="panel-monitors" class="panel" data-panel="monitors" data-reveal="monitors">
+        <b>Monitors</b>
+        <hr>
+        Monitor coverage: <span id="monitorCoverage">0</span>%
+      </div>
+
+      <div id="panel-space" class="panel" data-panel="space" data-reveal="space">
+        <b>Space</b>
+        <hr>
+        Launch capacity: <span id="launchCapacity">0</span><br>
+        Orbital compute: <span id="orbitalCompute">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalOverlay" data-panel="modal">
+    <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div id="modalTitle"></div>
+      <div id="modalText"></div>
+      <div id="modalTimer"></div>
+      <div id="modalButtons"></div>
+    </div>
+  </div>
+
+  <div id="endingScreen" data-panel="ending">
+    <div id="endingBox">
+      <h2 id="endingTitle"></h2>
+      <div id="endingText"></div>
+      <table id="endingStats"></table>
+    </div>
+  </div>
+
+  <div id="toast">saved.</div>
+  <div id="dev" data-panel="dev"></div>
+
+  <script type="module" src="dist/main.js"></script>
+</body>
+</html>
