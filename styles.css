@@ -23,8 +23,42 @@ span[data-reveal].shown { display: inline; }
 div[data-reveal].shown, .panel.shown { display: block; }
 
 .note { color: #555; font-size: 13px; }
+.warn { font-size: 13px; font-style: italic; }
+.hiddenIds { display: none; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
+#trainShort { display: none; }
+#trainShort.shown { display: inline; }
+#buyPowerRow, #billingOfPart, #copiesRow { display: none; }
+#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown { display: inline; }
+/* The first render after a load restores the screen; only later reveals fade in. */
+body.boot * { animation: none !important; }
+#marketState { white-space: nowrap; }
+
+/* ---------- reveals read as reveals (ADR fades new elements in; UP blinks new projects) ---------- */
+
+@keyframes revealIn {
+  from { opacity: 0; }
+}
+[data-reveal].shown,
+.projectButton,
+.logEntry.fresh,
+.logMonth.fresh,
+#modalOverlay.shown {
+  animation: revealIn 0.8s ease-out;
+}
+#modalOverlay.shown { animation-duration: 0.3s; }
+/* The opening screen is not a reveal. */
+#consoleDiv.shown, #panel-task.shown, #panel-power.shown { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal].shown,
+  .projectButton,
+  .logEntry.fresh,
+  .logMonth.fresh,
+  #modalOverlay.shown {
+    animation: none;
+  }
+}
 
 /* ---------- console (UP) ---------- */
 
@@ -99,6 +133,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   background: linear-gradient(rgba(255, 255, 255, 0), #fff);
   pointer-events: none;
 }
+.logMonth { font-weight: bold; margin: 2px 0 4px; }
 .logEntry { margin-bottom: 8px; }
 .logEntry.choice { font-style: italic; }
 .logDate { white-space: nowrap; }
@@ -186,6 +221,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .projectButton:active { background: #d1d1d1; border: 1px solid #000; }
 .projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
 .projectButton.rescue { border-style: dashed; }
+.projectButton.pinned { border-width: 2px; }
 
 /* ---------- training ---------- */
 
@@ -208,6 +244,11 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .benchFill { display: block; height: 100%; width: 0; background: #555; transition: width 0.3s; }
 .benchValue { width: 30px; text-align: right; }
 
+/* The bars and the reviewers' lines carry the evaluation; the total below has the numbers. */
+.benchValue, .cardScore { display: none; }
+#train-eval.collapsed #evalHeader,
+#train-eval.collapsed #benchmarks,
+#train-eval.collapsed #cards { display: none; }
 #cards { font-size: 13px; }
 .card { border: 1px solid #888; padding: 2px 4px; margin-bottom: 4px; background: #f4f4f4; }
 .card.pending { color: #888; }
@@ -315,13 +356,15 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   #logList { max-height: 110px; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; }
   #logList::after { display: none; }
   .logEntry { flex: 0 0 220px; }
+  .logMonth { flex: 0 0 auto; }
 }
 
 @media (max-width: 700px) {
   #columns { flex-direction: column; }
   #leftColumn, #middleColumn, #rightColumn { width: 100%; }
   .projectButton { width: 100%; max-width: 275px; }
-  .progress { width: 100%; max-width: 300px; }
+  .progress { width: 100%; max-width: 300px; box-sizing: border-box; }
+  .benchBar { width: auto; flex: 1 1 auto; min-width: 60px; }
   #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
   #dev { width: auto; left: 8px; }
 }

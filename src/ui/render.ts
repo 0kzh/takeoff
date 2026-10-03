@@ -1,8 +1,9 @@
 import type { GameState, Focus } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
-  gpuCost, marketingCost, datacenterCost, gpuBatchCost, turbineCost, researchCap, insightRate, demandPercent,
-  copies, activeGpus, powerDrawMW, gpuCapacity, GPU_BATCH, MIN_PRICE,
+  gpuCost, marketingCost, datacenterCost, gpuBatchCost, turbineCost, researchCap, demandPercent,
+  copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate,
+  billingPerSec, productionPerSec, marketState, priceAbsurd, GPU_BATCH, MIN_PRICE,
 } from '../engine/economy.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, nextRunName, trainingCompute, requiredCompute,
@@ -10,8 +11,8 @@ import {
 } from '../engine/training.js';
 import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
 import { endingById, endStats } from '../engine/endings.js';
-import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, dateLabel } from '../engine/format.js';
-import { byId, setText, setShown, showId, setDisabled, setWidth, make } from './dom.js';
+import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
+import { byId, setText, setShown, showId, setDisabled, setWidth, setTitle, make } from './dom.js';
 import { renderConsole } from './console.js';
 import { renderLog } from './log.js';
 import { renderModal } from './modal.js';
@@ -62,17 +63,29 @@ export function render(s: GameState): void {
   renderResearch(s);
   renderProjects(s);
   renderTraining(s);
+  renderSite(s);
   renderLater(s);
   renderGraph(s);
   renderModal(s, (i) => perform('resolveChoice', i));
   renderEnding(s);
 }
 
+/** Rates under 10 keep one decimal so the opening backlog (1.9/s of 4.0/s) reads as a gap. */
+function fmtRate(n: number): string {
+  return n < 10 ? fmtNum(n, 1) : fmtInt(Math.round(n));
+}
+
 function renderPower(s: GameState): void {
   setText('power', fmtInt(s.power));
-  setText('powerCost', fmtMoney(s.powerPrice));
-  setDisabled('btn-task', s.stage < 2 && s.power < 1);
-  setDisabled('btn-buyPower', s.funds < s.powerPrice);
+  setText('powerNote', copiesIdle(s) ? 'no power — copies idle' : '');
+  setText('powerBlock', fmtInt(powerBlock(s)));
+  setText('powerCost', fmtMoney(powerBlockCost(s)));
+  // The manual verb never needs power and is never disabled.
+  setDisabled('btn-task', false);
+  setDisabled('btn-buyPower', s.funds < powerBlockCost(s));
+  // While the Grid Contract buys power, the manual block is redundant; turning the grid off brings it back.
+  showId('buyPowerRow', !s.gridAuto);
+  setTitle('btn-buyPower', `${fmtInt(powerBlock(s))} kWh. Each task a copy completes uses 1 kWh; clicks use none.`);
   setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
   setText('gridStatus', s.gridAuto ? 'buys power when it runs low' : 'idle');
 }
@@ -80,13 +93,26 @@ function renderPower(s: GameState): void {
 function renderBusiness(s: GameState): void {
   setText('funds', fmtMoney(s.funds));
   setText('revPerSec', fmtMoney(s.stats.revPerSec));
-  setText('soldPerSec', fmtInt(s.stats.soldPerSec));
+  setText('contractRate', fmtMoney(contractRate(s)));
   setText('unbilled', fmtInt(s.unbilled));
   setText('price', fmtMoney(s.price));
+  const billed = billingPerSec(s);
+  const made = productionPerSec(s);
+  setText('soldPerSec', fmtRate(billed));
+  setText('tasksPerSec', fmtRate(made));
+  // "Billing all 106/s produced" when nothing is left over: one number instead of two equal ones.
+  setText('billingOf', billed >= 0.99 * made && made > 0 ? 'Billing all ' : 'Billing ');
+  showId('billingOfPart', !(billed >= 0.99 * made && made > 0));
+  const state = marketState(s);
+  setText('marketState', state === 'nobody buys' ? `nobody buys at ${fmtMoney(s.price)}` : state);
   setText('demand', fmtInt(demandPercent(s)));
   setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
-  showId('hypeLine', s.hypeBoost > 1.01);
-  setText('hype', fmtNum(s.hypeBoost, 2));
+  setTitle(
+    'btn-raisePrice',
+    priceAbsurd(s) ? 'nobody pays this' : 'Raise the price by one cent. Fewer tasks bill; each earns more.',
+  );
+  showId('hypeLine', s.hypeBoost > 1.05);
+  setText('hype', s.hypeBoost > 1.5 ? 'strong' : 'fading');
   setText('apiCustomers', fmtInt(s.apiCustomers));
   setText('hypeLevel', fmtInt(s.hypeLevel));
   setText('marketingCost', fmtMoney(marketingCost(s)));
@@ -98,7 +124,10 @@ function renderCompute(s: GameState): void {
   setDisabled('btn-gpu', s.funds < gpuCost(s));
   setText('gpus', fmtInt(s.gpus));
   setText('copies', fmtInt(copies(s)));
-  setText('tasksPerSec', fmtInt(s.stats.tasksPerSec));
+  const note = copiesIdle(s) ? '(idle: no power)' : s.training.run?.phase === 'training' ? '(half the GPUs are training)' : '';
+  setText('copiesNote', note);
+  // Copies equal GPUs until training diverts some or efficiency adds more: show the line when it says something.
+  showId('copiesRow', copies(s) !== s.gpus);
 }
 
 function renderInfrastructure(s: GameState): void {
@@ -126,13 +155,14 @@ function renderResearch(s: GameState): void {
   setText('nextTrust', fmtInt(s.nextTrust));
   setDisabled('btn-hireResearcher', s.trust < 1);
   setDisabled('btn-expandLab', s.trust < 1);
+  setTitle('btn-expandLab', `1 Trust: room for ${fmtInt(1000 * s.labMult)} more research.`);
   setText('researchers', fmtInt(s.researchers));
   setText('labSpace', fmtInt(s.labSpace));
   const cap = researchCap(s);
   setText('research', fmtInt(Math.floor(s.research)));
   setText('researchCap', fmtInt(cap));
   setText('insight', fmtInt(Math.floor(s.insight)));
-  setText('insightNote', s.research >= cap ? `(+${fmtNum(insightRate(s), 2)}/s)` : '(accrues at capacity)');
+  setText('insightNote', s.research >= cap ? '(accruing)' : '(accrues at capacity)');
 }
 
 const projectButtons = new Map<string, HTMLButtonElement>();
@@ -151,7 +181,8 @@ function renderProjects(s: GameState): void {
   visible.forEach((def, i) => {
     let b = projectButtons.get(def.id);
     if (!b) {
-      b = make('button', { class: `projectButton${def.rescue ? ' rescue' : ''}`, id: `proj-${def.id}`, 'data-project': def.id });
+      const cls = `projectButton${def.rescue ? ' rescue' : ''}${def.pinned ? ' pinned' : ''}`;
+      b = make('button', { class: cls, id: `proj-${def.id}`, 'data-project': def.id });
       const title = make('b', { class: 'projectTitle' });
       b.append(title, make('br'), make('span', { class: 'projectDesc' }, def.description));
       const id = def.id;
@@ -191,7 +222,8 @@ function renderTraining(s: GameState): void {
     setText('trainCompute', fmtInt(trainingCompute(s)));
     setText('trainRequired', fmtInt(requiredCompute(s)));
     const y = computeYield(s);
-    setText('trainEta', `${Math.round(trainingDuration(s))} s${y < 0.999 ? ` · undertrained (${Math.round(y * 100)}%)` : ''}`);
+    setText('trainEta', `${Math.round(trainingDuration(s))} s`);
+    showId('trainShort', y < 0.999);
     return;
   }
 
@@ -206,27 +238,33 @@ function renderTraining(s: GameState): void {
     return;
   }
 
+  // Evaluation: bars and evaluator cards fill in over five seconds, then fold into one line.
   const evalP = run.phase === 'evaluating' ? Math.min(1, run.evalElapsed / EVAL_SECONDS) : 1;
+  const evalEl = byId('train-eval');
+  const collapsed = run.phase === 'redteam';
+  if (evalEl.classList.contains('collapsed') !== collapsed) evalEl.classList.toggle('collapsed', collapsed);
   setText('evalName', run.name);
-  BENCHMARKS.forEach((_, i) => {
-    const row = byId(`bench-${i}`);
-    const v = (run.benchmarks[i] ?? 0) * evalP;
-    setWidth(row.querySelector<HTMLElement>('.benchFill')!, v / 10);
-    const val = row.querySelector<HTMLElement>('.benchValue')!;
-    const txt = fmtNum(v, 1);
-    if (val.textContent !== txt) val.textContent = txt;
-  });
-  run.scores.forEach((score, i) => {
-    const card = byId(`card-${i}`);
-    const revealed = evalP >= (i + 1) / (run.scores.length + 1);
-    if (card.classList.contains('pending') === revealed) card.classList.toggle('pending', !revealed);
-    const sc = card.querySelector<HTMLElement>('.cardScore')!;
-    const line = card.querySelector<HTMLElement>('.cardLine')!;
-    const scTxt = revealed ? `${score}/10` : '…';
-    const lineTxt = revealed ? evaluatorLine(run.id, i, score) : '';
-    if (sc.textContent !== scTxt) sc.textContent = scTxt;
-    if (line.textContent !== lineTxt) line.textContent = lineTxt;
-  });
+  if (!collapsed) {
+    BENCHMARKS.forEach((_, i) => {
+      const row = byId(`bench-${i}`);
+      const v = (run.benchmarks[i] ?? 0) * evalP;
+      setWidth(row.querySelector<HTMLElement>('.benchFill')!, v / 10);
+      const val = row.querySelector<HTMLElement>('.benchValue')!;
+      const txt = fmtNum(v, 1);
+      if (val.textContent !== txt) val.textContent = txt;
+    });
+    run.scores.forEach((score, i) => {
+      const card = byId(`card-${i}`);
+      const revealed = evalP >= (i + 1) / (run.scores.length + 1);
+      if (card.classList.contains('pending') === revealed) card.classList.toggle('pending', !revealed);
+      const sc = card.querySelector<HTMLElement>('.cardScore')!;
+      const line = card.querySelector<HTMLElement>('.cardLine')!;
+      const scTxt = revealed ? `${score}/10` : '…';
+      const lineTxt = revealed ? evaluatorLine(run.id, i, score) : '';
+      if (sc.textContent !== scTxt) sc.textContent = scTxt;
+      if (line.textContent !== lineTxt) line.textContent = lineTxt;
+    });
+  }
   setText('evalScore', evalP >= 1 ? fmtInt(totalScore(run)) : '…');
   setText('evalCap', evalP >= 1 ? fmtNum(run.capAfter, 2) : '…');
 
@@ -236,10 +274,29 @@ function renderTraining(s: GameState): void {
     setDisabled('btn-redteam', !canRedTeam(s));
     const cooling = t.redTeamRemaining > 0 ? t.redTeamRemaining / t.redTeamDuration : 0;
     setWidth(byId('redteamBar'), cooling);
-    setText('redteamLabel', `Red-team (${t.redTeamDuration} s)`);
+    setTitle('btn-redteam', `Close one open issue every ${t.redTeamDuration} s.`);
     setDisabled('btn-release', !canRelease(s));
     setText('btn-release', run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
+    setTitle(
+      'btn-release',
+      run.issues > 0
+        ? `${run.issues} open issue${run.issues === 1 ? '' : 's'} will ship with ${run.name}. Expect incidents.`
+        : `Release ${run.name} to customers. Demand and hype go up; +1 Trust.`,
+    );
   }
+}
+
+/** The Abilene site ladder: status, the interconnect countdown (a named wait), the substation. */
+function renderSite(s: GameState): void {
+  if (!s.revealed['site']) return;
+  const status = s.revealed['powerMW']
+    ? 'ready to build'
+    : s.revealed['interconnect']
+      ? s.flags['interconnectDone'] ? 'connected' : 'waiting on the grid'
+      : 'reserved';
+  setText('siteStatus', status);
+  setText('interconnect', s.flags['interconnectDone'] ? 'approved' : fmtClock(Math.ceil(s.interconnectLeft)));
+  setText('siteMW', '5');
 }
 
 /** Later-stage panels are hidden in Phase 1 but kept current so revealing one shows real values. */
