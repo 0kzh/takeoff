@@ -1,13 +1,15 @@
-import { GameState, ActiveChoice, say, logNews, canPay, pay } from './state.js';
+import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay, bump } from './state.js';
 import { DEVELOPMENTS, DevelopmentDef } from '../data/developments.js';
-import { CHOICES, ChoiceDef } from '../data/choices.js';
+import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects } from './projects.js';
+import { gpuCost, marketingCost, qualityMult, powerBlockCost } from './economy.js';
 import {
-  gpuCost, marketingCost, qualityMult, datacenterCost, gpuBatchCost, turbineCost, gpuCapacity, powerBlockCost, GPU_BATCH,
-} from './economy.js';
-import { canStartTraining, canRedTeam, trainCost } from './training.js';
+  datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
+} from './infrastructure.js';
+import { canStartTraining, canRedTeam, trainCost, trainingRun } from './training.js';
+import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
 import { stageDef } from './stages.js';
 import { rand, pick, chance } from './rng.js';
@@ -22,10 +24,14 @@ export function choiceById(id: string): ChoiceDef | undefined {
 
 // ---------- developments (world timeline) ----------
 
-/** Developments fire on their date or on their condition, whichever comes first. */
+/**
+ * Developments fire on their date or on their condition, whichever comes first, and only in their
+ * own stage: an earlier stage's unfired entries are dropped at the transition (arc §7).
+ */
 export function updateDevelopments(s: GameState): void {
   for (const d of DEVELOPMENTS) {
-    if (s.developments[d.id] || d.stage > s.stage) continue;
+    if (s.developments[d.id] || d.stage !== s.stage) continue;
+    if (d.requires && !d.requires(s)) continue;
     const byDate = d.month !== undefined && s.date >= d.month;
     const byProgress = d.trigger ? d.trigger(s) : false;
     if (byDate || byProgress) fireDevelopment(s, d.id);
@@ -37,7 +43,8 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   if (!d) return false;
   s.developments[id] = true;
   if (d.crisis) fireCrisis(s, d.crisis);
-  if (d.text) logNews(s, d.text);
+  const text = typeof d.text === 'function' ? d.text(s) : d.text;
+  if (text) logNews(s, text);
   if (d.console) say(s, d.console);
   d.effect?.(s);
   if (d.choice) openChoice(s, d.choice, {});
@@ -56,7 +63,7 @@ export function secondsToNextCalendarModal(s: GameState): number {
 
 /** Upcoming developments for the dev overlay's "Show hidden". */
 export function pendingDevelopments(s: GameState): DevelopmentDef[] {
-  return DEVELOPMENTS.filter((d) => !s.developments[d.id] && d.stage <= s.stage + 1);
+  return DEVELOPMENTS.filter((d) => !s.developments[d.id] && d.stage >= s.stage && d.stage <= s.stage + 1);
 }
 
 // ---------- crises & incidents ----------
@@ -65,13 +72,33 @@ export function pendingDevelopments(s: GameState): DevelopmentDef[] {
 export function fireCrisis(s: GameState, id: string, source?: string): boolean {
   const c = crisisById(id);
   if (!c) return false;
-  if (c.duration > 0) s.effects.push({ id: c.id, remaining: c.duration, demandMult: c.demandMult });
+  if (c.duration > 0) {
+    s.effects.push({
+      id: c.id,
+      remaining: c.duration,
+      demandMult: c.demandMult,
+      ...(c.powerMult !== undefined ? { powerMult: c.powerMult } : {}),
+      ...(c.researchMult !== undefined ? { researchMult: c.researchMult } : {}),
+    });
+  }
   c.effect(s);
-  say(s, c.console);
-  if (source) say(s, `Traced to an issue shipped in ${source}.`);
-  logNews(s, source ? `${c.log} It traces back to ${source}.` : c.log);
-  if (INCIDENTS.includes(c)) s.stats.incidents += 1;
-  else s.stats.crises += 1;
+  const line = typeof c.console === 'function' ? c.console(s, source) : c.console;
+  if (line) say(s, line);
+  const incident = INCIDENTS.includes(c);
+  if (source && incident) say(s, `Traced to an issue shipped in ${source}.`);
+  const log = typeof c.log === 'function' ? c.log(s, source) : c.log;
+  if (log) logNews(s, source && incident ? `${log} It traces back to ${source}.` : log);
+  if (incident) {
+    s.stats.incidents += 1;
+    if (s.stage >= 2) {
+      // Each incident: measured alignment −2, and approval remembers it for five minutes.
+      s.alignmentApparent = Math.max(0, s.alignmentApparent - 2);
+      noteIncident(s);
+      bump(s, 'incidentsS2');
+    }
+  } else {
+    s.stats.crises += 1;
+  }
   return true;
 }
 
@@ -88,11 +115,16 @@ export function updateScheduled(s: GameState, dt: number): void {
 
 // ---------- rival releases ----------
 
-/** Every 4–7 minutes Anthrosoft ships; `qualityMult = (capability / rivalCapability)^0.5`. Slow tick. */
+/** Every 4–7 minutes Anthrosoft ships. Slow tick. */
 export function updateRival(s: GameState): void {
   if (s.stage > 2) return;
   s.nextRivalIn -= 1;
   if (s.nextRivalIn > 0) return;
+  if (s.stage === 2) {
+    rivalReleaseS2(s);
+    s.flags['rivalS2'] = true;
+    return;
+  }
   rivalRelease(s);
 }
 
@@ -100,6 +132,11 @@ export function updateRival(s: GameState): void {
 export const RIVAL_BAND: [number, number] = [0.85, 1.15];
 
 export function rivalRelease(s: GameState): void {
+  if (s.stage >= 2) {
+    rivalReleaseS2(s);
+    s.flags['rivalS2'] = true;
+    return;
+  }
   s.rivalVersion += 1;
   const ours = s.capability;
   // A third of releases leapfrog the deployed model; the rest are an increment on the last one.
@@ -108,6 +145,7 @@ export function rivalRelease(s: GameState): void {
   s.rivalCapability = Math.max(s.rivalCapability, next);
   s.nextRivalIn = Math.round(rand(s, 240, 420));
   const name = `Cadence-${s.rivalVersion}`;
+  recordRival(s, name);
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
   const q = qualityMult(s);
   if (q < 0.995) say(s, `Anthrosoft's ${name} beats ${s.training.deployedName}. Demand ${q < 0.9 ? 'falls' : 'dips'}.`);
@@ -130,6 +168,11 @@ export interface OpenOptions {
 
 function modalFree(s: GameState): boolean {
   return !s.activeChoice && s.stats.timePlayed - s.cadence.lastModalAt >= MODAL_SPACING;
+}
+
+/** An unprompted modal would open right now (nothing open, nothing waiting, the spacing respected). */
+export function modalCanOpen(s: GameState): boolean {
+  return modalFree(s) && s.choiceQueue.length === 0;
 }
 
 function present(s: GameState, entry: ActiveChoice): void {
@@ -174,10 +217,20 @@ export function drainChoiceQueue(s: GameState): void {
   }
 }
 
+/** An option's price now (some scale with the stage, or change after a delay). */
+export function optionCost(s: GameState, opt: ChoiceOption): Cost | undefined {
+  return typeof opt.cost === 'function' ? opt.cost(s) : opt.cost;
+}
+
+export function optionTooltip(s: GameState, opt: ChoiceOption): string {
+  return (typeof opt.tooltip === 'function' ? opt.tooltip(s) : opt.tooltip) ?? '';
+}
+
 export function choiceOptionEnabled(s: GameState, def: ChoiceDef, index: number): boolean {
   const opt = def.options[index];
   if (!opt || !s.activeChoice) return false;
-  if (opt.cost && !canPay(s, opt.cost)) return false;
+  const cost = optionCost(s, opt);
+  if (cost && !canPay(s, cost)) return false;
   return opt.enabled ? opt.enabled(s, s.activeChoice.context) : true;
 }
 
@@ -191,7 +244,8 @@ export function resolveChoice(s: GameState, index: number): boolean {
   }
   if (!choiceOptionEnabled(s, def, index)) return false;
   const opt = def.options[index]!;
-  if (opt.cost) pay(s, opt.cost);
+  const cost = optionCost(s, opt);
+  if (cost) pay(s, cost);
   s.activeChoice = null;
   opt.effect(s, active.context);
   s.choicesMade.push({ id: def.id, option: opt.record, date: dateLabel(s.date) });
@@ -241,10 +295,17 @@ export function noveltyKeys(s: GameState): string[] {
     keys.push(`phase:${run.id}:${run.phase}`);
     if (canRedTeam(s)) keys.push(`aff:redteam:${run.id}:${run.issues}`);
   }
-  if (s.revealed['infrastructure']) {
-    if (s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
-    if (s.funds >= gpuBatchCost(s) && s.gpus + GPU_BATCH <= gpuCapacity(s)) keys.push(`aff:gpubatch:${s.gpuBatches}`);
-    if (s.funds >= turbineCost(s)) keys.push(`aff:turbine:${s.turbines}`);
+  const second = s.training.pending;
+  if (second) keys.push(`phase:${second.id}:${second.elapsed >= second.duration ? 'trained' : 'training'}`);
+  if (s.stage >= 2 && s.revealed['infrastructure']) {
+    if (s.revealed['dcButton'] && s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
+    if (!standingOrderOn(s) && lotSize(s) >= 1000 && s.funds >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
+    if (s.revealed['gasButton'] && s.funds >= gasCost(s)) keys.push(`aff:gas:${s.gasPlants}`);
+    if (s.revealed['solarButton'] && !solarQueueFull(s) && s.funds >= solarCost(s)) keys.push(`aff:solar:${s.solarFarms + s.powerQueue.length}`);
+    if (s.revealed['nuclearButton'] && s.funds >= nuclearCost(s)) keys.push(`aff:nuclear:${s.reactors}`);
+    if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) keys.push('aff:sl3');
+    // Hardware arriving is news: the fleet and the power online are keys of their own.
+    keys.push(`fleet:${s.gpus}:${s.powerCapacityMW}`);
   }
   if (s.activeChoice) keys.push(`choice:${s.activeChoice.id}`);
   return keys;
@@ -252,13 +313,24 @@ export function noveltyKeys(s: GameState): string[] {
 
 /** Keys created by the guard itself; the sim ignores them when it measures idle gaps. */
 export function isRescueKey(key: string): boolean {
-  return key.includes('p_press') || key.includes('p_beg_power') || key.includes('c_customer_email');
+  return key.includes('p_press') || key.includes('p_beg_power') || key.includes('c_customer_email') || key.includes('p_beg_data');
 }
 
-/** A visible timer is a named wait, not a stall: a run training or under evaluation, the interconnect queue. */
+/**
+ * A visible timer is a named wait, not a stall: a run training or under evaluation, the
+ * interconnect queue (Stage 1's and Stage 2's), a reactor restart, an evaluation month.
+ */
 function namedWait(s: GameState): boolean {
   const phase = s.training.run?.phase;
-  return phase === 'training' || phase === 'evaluating' || s.interconnectLeft > 0;
+  return (
+    phase === 'training' ||
+    phase === 'evaluating' ||
+    !!trainingRun(s) ||
+    s.interconnectLeft > 0 ||
+    s.powerQueue.length > 0 ||
+    s.training.cooldown > 0 ||
+    s.training.releaseWait > 0
+  );
 }
 
 /**
@@ -268,6 +340,8 @@ function namedWait(s: GameState): boolean {
  * while a choice is open or a named wait is counting down.
  */
 export function idleGuard(s: GameState, dt: number): void {
+  // Stage 3's build brings its own content and valve; the shell does not send customers' emails.
+  if (s.stage >= 3) return;
   const keys = noveltyKeys(s);
   const prev = new Set(s.idle.affordable);
   const novel = keys.some((k) => !prev.has(k));
@@ -302,12 +376,13 @@ function unaffordableFundsCosts(s: GameState): number[] {
     if (s.revealed['compute']) add(gpuCost(s));
   }
   if (s.revealed['marketing']) add(marketingCost(s));
-  if (s.revealed['training'] && !s.training.run) add(trainCost(s).funds);
+  if (s.revealed['training'] && (s.stage < 2 ? !s.training.run : !trainingRun(s))) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
-  if (s.revealed['infrastructure']) {
-    add(datacenterCost(s));
-    add(gpuBatchCost(s));
-    add(turbineCost(s));
+  if (s.stage >= 2 && s.revealed['infrastructure']) {
+    if (s.revealed['dcButton']) add(datacenterCost(s));
+    if (lotSize(s) >= 1000) add(lotCost(s));
+    if (s.revealed['gasButton']) add(gasCost(s));
+    if (s.revealed['solarButton'] && !solarQueueFull(s)) add(solarCost(s));
   }
   return out;
 }

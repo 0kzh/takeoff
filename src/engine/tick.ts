@@ -1,17 +1,27 @@
 import { GameState, say, printLine } from './state.js';
 import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
-  powerPriceWalk, averages, bottleneckMessages, researchCap, contractIncome, trackStuck, updateInterconnect,
+  powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck, updateInterconnect,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, buildDatacenter, buyGpuBatch, buyTurbines,
+  toggleGrid, toggleAutoPrice, setResearchAlloc,
 } from './economy.js';
-import { updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainCost, atPlateau } from './training.js';
+import {
+  buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
+  runStandingOrder, infrastructureMessages,
+} from './infrastructure.js';
+import { updateAutoPrice, recordPrice, floodedCheck } from './market.js';
+import {
+  updateData, dataWallCheck, updateWorld, buySL3, toggleJobFund, toggleShareEvals, cycleAlignShare,
+} from './world.js';
+import {
+  updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau,
+} from './training.js';
 import { buyProject, visibleProjects } from './projects.js';
-import { updateProjects, noteReveals } from './reveal.js';
+import { updateProjects, updateStageContent, noteReveals } from './reveal.js';
 import {
   updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, fireEvent, drainChoiceQueue,
 } from './events.js';
-import { updateReveals, checkStageExit } from './stages.js';
+import { updateReveals, checkStageExit, updateStage2 } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
 import { fmtInt, fmtDuration } from './format.js';
@@ -37,15 +47,17 @@ export function tick(s: GameState, dtMs: number): void {
 /**
  * One 100 ms logic step. Order of operations:
  *   1. production   — copies complete tasks (Stage 1: each burns 1 kWh)
- *   2. power        — Grid Contract auto-buy; the stuck timer; slow tick: power price random walk
- *   3. billing      — demand roll sells unbilled tasks; contracts pay; hype and timed effects decay
- *   4. research     — research fills toward the cap; insight accrues only at the cap; trust milestones
- *   5. training     — the run state machine and the red-team cooldown; the interconnect queue
- *   6. projects     — panel reveals, then project triggers
- *   7. events       — scheduled incidents, choice timers, developments, rival releases, idle guard
+ *   2. power        — Stage 1: Grid Contract auto-buy, the stuck timer, the price walk (slow);
+ *                     Stage 2: plants in the queue come online
+ *   3. billing      — AUTO moves the price; the market bills; contracts pay; hype and effects decay
+ *   4. data and research — the crawl and the synthetic writers; research toward the cap; insight; Trust
+ *   5. training     — both pipeline slots and the red-team cooldown; the Abilene interconnect
+ *   6. projects     — panel reveals, project triggers and the drip, Stage 2 rows, the late drip, the governor
+ *   7. events       — scheduled crises, choice timers, developments, rival releases, idle guard
  *   8. clock        — game date
- *   9. stage checks — stage exit conditions, endings
- *  10. stats        — time played, slow tick: 10 s averages, milestones, bottleneck lines
+ *   9. stage checks — stage exits, endings
+ *  10. stats        — time played; slow tick: averages, milestones, bottleneck lines, the standing
+ *                     order, jobs/approval/relations, the data wall, Stage 2 rescues
  */
 export function step(s: GameState): void {
   const dt = TICK_SECONDS;
@@ -54,15 +66,18 @@ export function step(s: GameState): void {
 
   produce(s, dt);
 
+  updatePowerQueue(s, dt);
   autoBuyPower(s);
   trackStuck(s, dt);
   if (slow) powerPriceWalk(s);
 
-  sell(s);
-  contractIncome(s, dt);
+  updateAutoPrice(s, dt);
+  sell(s, dt);
+  payContracts(s, dt);
   decayHype(s, dt);
   decayEffects(s, dt);
 
+  updateData(s, dt);
   researchTick(s, dt);
   trustCheck(s);
 
@@ -71,6 +86,7 @@ export function step(s: GameState): void {
 
   updateReveals(s);
   updateProjects(s);
+  updateStageContent(s);
 
   updateScheduled(s, dt);
   updateChoice(s, dt);
@@ -107,6 +123,15 @@ function slowStats(s: GameState): void {
   taskMilestones(s);
   bottleneckMessages(s);
   researchWall(s);
+  if (s.stage === 2) {
+    runStandingOrder(s);
+    updateWorld(s);
+    dataWallCheck(s);
+    infrastructureMessages(s);
+    recordPrice(s);
+    floodedCheck(s);
+    updateStage2(s);
+  }
 }
 
 /** When the plateau began (the desks offer waits 45 s for Trust or another fix first). */
@@ -142,6 +167,11 @@ export function researchWanted(s: GameState): { amount: number; what: string } {
 /** The fix for a full lab that is on screen right now, named in the wall's console line. */
 function capFix(s: GameState): string {
   const shown = (id: string) => visibleProjects(s).some((p) => p.id === id);
+  if (s.stage >= 2) {
+    if (shown('p_research_cluster')) return 'The Research cluster holds four times as much.';
+    if (shown('p_exp_scheduler')) return 'The Experiment scheduler holds four times as much.';
+    if (shown('p_checkpoint_farm')) return 'The Checkpoint farm holds four times as much.';
+  }
   if (s.revealed['expandLab'] && s.trust >= 1) return 'Expand Lab to hold more.';
   if (shown('p_lab_cluster')) return 'The Experiment tracker doubles it.';
   if (shown('p_floor')) return 'Lease the floor upstairs.';
@@ -154,7 +184,7 @@ function capFix(s: GameState): string {
  * needs more than the lab holds (the Research Plateau when it is the next training run).
  */
 function researchWall(s: GameState): void {
-  if (!s.revealed['research']) return;
+  if (!s.revealed['research'] || s.stage >= 3) return;
   const cap = researchCap(s);
   if (s.research < cap) return;
   const key = `wall:${cap}`;
@@ -180,17 +210,27 @@ export const actions = {
   rentGpu,
   lowerPrice,
   raisePrice,
+  toggleAutoPrice,
   buyMarketing,
   hireResearcher,
   expandLab,
+  setResearchAlloc,
   toggleGrid,
   buildDatacenter,
   buyGpuBatch,
   buyTurbines,
+  buySolar,
+  buyNuclear,
+  toggleStanding,
+  buySL3,
+  toggleJobFund,
+  toggleShareEvals,
+  cycleAlignShare,
   startTraining,
   setFocus,
   redTeam,
   release,
+  releaseInternal,
   finishTraining,
   buyProject,
   resolveChoice,

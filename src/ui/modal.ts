@@ -1,5 +1,5 @@
 import type { GameState } from '../engine/state.js';
-import { choiceById, choiceOptionEnabled } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, optionCost, optionTooltip } from '../engine/events.js';
 import { costLabel } from '../engine/projects.js';
 import { byId, make, setShown, setText } from './dom.js';
 
@@ -24,7 +24,8 @@ export function renderModal(s: GameState, choose: (index: number) => void): void
     const buttons = byId('modalButtons');
     buttons.replaceChildren(
       ...def.options.map((opt, i) => {
-        const tip = [opt.tooltip, opt.cost ? `Costs ${costLabel(opt.cost)}.` : ''].filter(Boolean).join(' ');
+        const cost = optionCost(s, opt);
+        const tip = [optionTooltip(s, opt), cost && !optionTooltip(s, opt).startsWith('$') ? `Costs ${costLabel(cost)}.` : ''].filter(Boolean).join(' ');
         const b = make('button', { class: 'modalButton', id: `choice-${def.id}-${i}`, 'data-option': String(i) }, opt.label);
         if (tip) b.title = tip;
         b.addEventListener('click', () => choose(i));

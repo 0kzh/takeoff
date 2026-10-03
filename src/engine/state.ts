@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -18,6 +18,17 @@ export interface Cost {
   insight?: number;
   funds?: number;
   trust?: number;
+  /** Trillions of tokens (Stage 2 training runs). */
+  data?: number;
+}
+
+/** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
+export interface PowerOrder {
+  kind: 'solar' | 'nuclear' | 'gulf';
+  mw: number;
+  /** Seconds left; only the first solar order counts down. */
+  remaining: number;
+  label: string;
 }
 
 export interface LogEntry {
@@ -57,6 +68,13 @@ export interface TrainingRun {
   issues: number;
   issuesFound: number;
   extraIssues: number;
+  /** Version numbers of `name` (`Sage-2.3` → 2, 3), fixed when the run starts and when it crosses a tier. */
+  major: number;
+  minor: number;
+  /** Share of the run's data that was synthetic (stage2.md §2.6). */
+  syntheticShare: number;
+  /** Alignment compute (share of copies) while the run trained (stage2.md §2.11). */
+  alignShare: number;
 }
 
 export interface ModelRecord {
@@ -64,6 +82,13 @@ export interface ModelRecord {
   capability: number;
   date: number;
   public: boolean;
+}
+
+/** An Anthrosoft release, for the graph's dashed line. */
+export interface RivalRecord {
+  name: string;
+  capability: number;
+  date: number;
 }
 
 export interface TrainingState {
@@ -85,13 +110,26 @@ export interface TrainingState {
   internalCapability: number;
   frontierBonus: number;
   models: ModelRecord[];
+  /**
+   * Parallel pipelines (stage2.md §2.5): the second slot. While `run` waits in evaluation or
+   * red-team, the next run trains here; it moves into `run` when that one is released.
+   */
+  pending: TrainingRun | null;
+  /** Seconds before the next run may start (A Month of Evals). Never lengthens a run. */
+  cooldown: number;
+  /** Seconds before a model at 4× or more may ship publicly (the joint statement's outside evaluation). */
+  releaseWait: number;
 }
 
-/** A temporary multiplier on demand (incidents, rival releases). Remaining time in seconds. */
+/** A temporary multiplier (incidents, rival releases, crises). Remaining time in seconds. */
 export interface TimedEffect {
   id: string;
   remaining: number;
   demandMult: number;
+  /** Stage 2: share of power capacity left (curtailment, protest, riots). */
+  powerMult?: number;
+  /** Stage 2: research rate multiplier (lock-down, the Bureau, a subpoena). */
+  researchMult?: number;
 }
 
 /** A crisis that fires after `delay` seconds. */
@@ -137,6 +175,12 @@ export interface Cadence {
   lastModalAt: number;
   /** Everything seen at least once: `f:<flag>`, `p:<project>`, `c:<choice>`. */
   seen: string[];
+  /** Stage 2 late items whose trigger has fired, waiting for the approach and the late drip. */
+  lateQueue: string[];
+  /** When the late drip last released an item. */
+  lastLateAt: number;
+  /** Content-table rows the governor revealed, with the time (`<seconds>:<id>`). */
+  governed: string[];
 }
 
 /** Bookkeeping for the idle guard (design.md §8). */
@@ -179,6 +223,12 @@ export interface Stats {
   choices: number;
   idleRescues: number;
   nextTaskMilestone: number;
+  /** Player presses per verb (the sim's chore check, arc G4). */
+  pressCounts: Record<string, number>;
+  /** Stage 2: the price, once a second, for the last minute. */
+  priceHist: number[];
+  /** Game seconds of recent incidents (approval remembers five minutes of them). */
+  incidentTimes: number[];
 }
 
 export interface GameState {
@@ -201,6 +251,14 @@ export interface GameState {
   price: number;
   priceRaises: number;
   apiCustomers: number;
+  /** Stage 2: the price follows the market to clear supply (stage2.md §2.3). */
+  autoPrice: boolean;
+  /** Stage 2 market size at 1× everything, calibrated once on arrival. */
+  marketBase: number;
+  /** Stage 2: what the signed Custom model contracts pay, $/s, frozen on arrival. */
+  contractIncome: number;
+  /** Task revenue multiplier (the defense contract). */
+  revenueMult: number;
 
   power: number;
   /** Price of 1,000 kWh. A block costs this × block size / 1,000. */
@@ -220,11 +278,25 @@ export interface GameState {
   copyBoost: number;
   researchAlloc: number;
 
+  /** Stage 2 infrastructure (stage2.md §2.1). `gpus` is the whole fleet; G4s are `gpus − gpusG5`. */
   datacenters: number;
+  /** Power online, MW (substation, gas, solar, nuclear, Al-Marsa). */
   powerCapacityMW: number;
-  turbines: number;
-  chipPrice: number;
+  gasPlants: number;
+  solarFarms: number;
+  reactors: number;
+  gulfSites: number;
+  powerQueue: PowerOrder[];
+  /** Behind-the-meter: a 30 s queue, and every plant rides through curtailment. */
+  btm: boolean;
+  gpusG5: number;
+  /** New lots are Nimbus G5s. */
+  g5: boolean;
+  /** GPU lots bought by hand. */
   gpuBatches: number;
+  /** Standing order toggle (on once bought). */
+  standingOrder: boolean;
+  gulfExposure: number;
 
   hypeLevel: number;
   hypeBoost: number;
@@ -243,11 +315,14 @@ export interface GameState {
   researchMult: number;
   insightMult: number;
   humanEff: number;
+  /** Multiplier on the research the copies do (Retire human code review). */
+  aiResearchMult: number;
 
   capability: number;
   rivalCapability: number;
   rivalVersion: number;
   nextRivalIn: number;
+  rivalHistory: RivalRecord[];
   baiwenCapability: number;
   alignmentApparent: number;
   alignmentTrue: number;
@@ -257,7 +332,18 @@ export interface GameState {
   approval: number;
   jobsDisplaced: number;
   lead: number;
+  /** Training data in hand, trillions of tokens. */
   data: number;
+  /** Of which synthetic. */
+  dataSynthetic: number;
+  /** Public web left to crawl, T (the mine: finite). */
+  crawlLeft: number;
+  autonomy: number;
+  /** Stage 2 toggles: the job-transition fund, sharing evals with the Safety Institute. */
+  jobFund: boolean;
+  shareEvals: boolean;
+  /** Share of copies on alignment work: 0.01 baseline, 0.05 or 0.10 (stage2.md §2.11). */
+  alignShare: number;
   robots: number;
   launchCapacity: number;
   orbitalCompute: number;
@@ -299,6 +385,9 @@ export function newTraining(): TrainingState {
     internalCapability: 1,
     frontierBonus: 0,
     models: [{ name: 'Sage-1', capability: 1, date: 0, public: true }],
+    pending: null,
+    cooldown: 0,
+    releaseWait: 0,
   };
 }
 
@@ -329,6 +418,9 @@ export function newStats(): Stats {
     choices: 0,
     idleRescues: 0,
     nextTaskMilestone: 1000,
+    pressCounts: {},
+    priceHist: [],
+    incidentTimes: [],
   };
 }
 
@@ -351,6 +443,10 @@ export function newGame(seed: number = Date.now()): GameState {
     price: 0.25,
     priceRaises: 0,
     apiCustomers: 0,
+    autoPrice: false,
+    marketBase: 0,
+    contractIncome: 0,
+    revenueMult: 1,
 
     power: 1000,
     powerPrice: 20,
@@ -369,9 +465,17 @@ export function newGame(seed: number = Date.now()): GameState {
 
     datacenters: 0,
     powerCapacityMW: 0,
-    turbines: 0,
-    chipPrice: 25,
+    gasPlants: 0,
+    solarFarms: 0,
+    reactors: 0,
+    gulfSites: 0,
+    powerQueue: [],
+    btm: false,
+    gpusG5: 0,
+    g5: false,
     gpuBatches: 0,
+    standingOrder: false,
+    gulfExposure: 0,
 
     hypeLevel: 1,
     hypeBoost: 1,
@@ -390,11 +494,13 @@ export function newGame(seed: number = Date.now()): GameState {
     researchMult: 1,
     insightMult: 1,
     humanEff: 1,
+    aiResearchMult: 1,
 
     capability: 1,
     rivalCapability: 1,
     rivalVersion: 1,
     nextRivalIn: 330,
+    rivalHistory: [],
     baiwenCapability: 0.7,
     alignmentApparent: 50,
     alignmentTrue: 50,
@@ -405,6 +511,12 @@ export function newGame(seed: number = Date.now()): GameState {
     jobsDisplaced: 0,
     lead: 3,
     data: 0,
+    dataSynthetic: 0,
+    crawlLeft: 0,
+    autonomy: 0,
+    jobFund: false,
+    shareEvals: false,
+    alignShare: 0.01,
     robots: 0,
     launchCapacity: 0,
     orbitalCompute: 0,
@@ -424,7 +536,7 @@ export function newGame(seed: number = Date.now()): GameState {
     choiceQueue: [],
     choicesMade: [],
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
-    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [] },
+    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [] },
     stats: newStats(),
 
     tickAccum: 0,
@@ -496,7 +608,8 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.research || s.research >= c.research) &&
     (!c.insight || s.insight >= c.insight) &&
     (!c.funds || s.funds >= c.funds) &&
-    (!c.trust || s.trust >= c.trust)
+    (!c.trust || s.trust >= c.trust) &&
+    (!c.data || s.data >= c.data - 1e-9)
   );
 }
 
@@ -506,7 +619,22 @@ export function pay(s: GameState, c: Cost): boolean {
   s.insight -= c.insight ?? 0;
   s.funds = Math.round((s.funds - (c.funds ?? 0)) * 100) / 100;
   s.trust -= c.trust ?? 0;
+  if (c.data) spendData(s, c.data);
   return true;
+}
+
+/** Takes data from the stock, synthetic and other in proportion; returns the synthetic share spent. */
+export function spendData(s: GameState, amount: number): number {
+  const take = Math.min(s.data, amount);
+  const share = s.data > 0 ? Math.min(1, s.dataSynthetic / s.data) : 0;
+  s.data = Math.max(0, s.data - take);
+  s.dataSynthetic = Math.max(0, Math.min(s.data, s.dataSynthetic - take * share));
+  return share;
+}
+
+/** Counts a player press of a verb (the sim's chore check). */
+export function press(s: GameState, verb: string): void {
+  s.stats.pressCounts[verb] = (s.stats.pressCounts[verb] ?? 0) + 1;
 }
 
 export function addFunds(s: GameState, amount: number): void {
@@ -560,7 +688,40 @@ function migrateV2(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, cadence: { queue: [], lastDripAt: now, lastRevealAt: now, lastModalAt: now, seen: [...new Set(seen)] } };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2];
+/**
+ * v3 → v4 (Stage 2): the seed Infrastructure panel became owned infrastructure with power plants,
+ * a market priced on AUTO, and Stores. Runs in flight get their version numbers. A save already in
+ * Stage 2 keeps its fleet and turns the new systems on as the arrival would.
+ */
+function migrateV3(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw };
+  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}) };
+  const major = typeof training['major'] === 'number' ? (training['major'] as number) : 1;
+  const minor = typeof training['minor'] === 'number' ? (training['minor'] as number) : 0;
+  const run = training['run'] as Record<string, unknown> | null | undefined;
+  if (run) training['run'] = { major, minor: minor + 1, syntheticShare: 0, alignShare: 0.01, ...run };
+  out['training'] = training;
+  if (typeof raw['turbines'] === 'number') out['gasPlants'] = raw['turbines'];
+  delete out['turbines'];
+  delete out['chipPrice'];
+  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
+  if (stage >= 2) {
+    const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
+    revealed['stores'] = true;
+    revealed['autoPrice'] = true;
+    revealed['contracts'] = false;
+    out['revealed'] = revealed;
+    out['autoPrice'] = true;
+    // Calibrated on the next tick (marketBase 0 means "not yet").
+    out['marketBase'] = 0;
+    const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
+    flags['shipIssuesAsked'] = true;
+    out['flags'] = flags;
+  }
+  return out;
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

@@ -1,10 +1,11 @@
 import type { GameState, Focus } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
-  gpuCost, marketingCost, datacenterCost, gpuBatchCost, turbineCost, researchCap, demandPercent,
+  gpuCost, marketingCost, datacenterCost, researchCap, demandPercent,
   copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate, atRentQuota,
-  billingPerSec, productionPerSec, marketState, priceAbsurd, GPU_BATCH, MIN_PRICE,
+  billingPerSec, productionPerSec, marketState, priceAbsurd, MIN_PRICE,
 } from '../engine/economy.js';
+import { lotCost, lotSize, gasCost } from '../engine/infrastructure.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, nextRunName, trainingCompute, requiredCompute,
   trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, EVAL_SECONDS, BENCHMARKS,
@@ -142,13 +143,12 @@ function renderInfrastructure(s: GameState): void {
   setDisabled('btn-datacenter', s.funds < datacenterCost(s));
   setText('infraGpus', fmtInt(s.gpus));
   setText('gpuCapacity', fmtInt(gpuCapacity(s)));
-  setText('gpuBatchCost', fmtMoneyShort(gpuBatchCost(s)));
-  setText('chipPrice', fmtMoney(s.chipPrice));
-  setDisabled('btn-gpuBatch', s.funds < gpuBatchCost(s) || s.gpus + GPU_BATCH > gpuCapacity(s));
+  setText('gpuBatchCost', fmtMoneyShort(lotCost(s)));
+  setDisabled('btn-gpuBatch', s.funds < lotCost(s) || lotSize(s) < 1000);
   setText('powerMW', fmtNum(powerDrawMW(s), 1));
   setText('powerCapMW', fmtInt(s.powerCapacityMW));
-  setText('turbineCost', fmtMoneyShort(turbineCost(s)));
-  setDisabled('btn-turbines', s.funds < turbineCost(s));
+  setText('turbineCost', fmtMoneyShort(gasCost(s)));
+  setDisabled('btn-turbines', s.funds < gasCost(s));
   setText('activeGpus', fmtInt(activeGpus(s)));
   setText('infraCopies', fmtInt(copies(s)));
   setText('infraTasksPerSec', fmtInt(s.stats.tasksPerSec));

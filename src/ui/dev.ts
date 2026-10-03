@@ -1,6 +1,7 @@
 import { GameState, newGame, replaceState, SAVE_VERSION } from '../engine/state.js';
 import { actions, tick } from '../engine/tick.js';
-import { researchCap, TURBINE_MW } from '../engine/economy.js';
+import { researchCap } from '../engine/economy.js';
+import { GAS_MW } from '../engine/infrastructure.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
@@ -65,7 +66,7 @@ function grant(host: DevHost, what: string): void {
       break;
     case 'power':
       if (s.stage < 2) s.power += 10000;
-      else s.powerCapacityMW += TURBINE_MW;
+      else s.powerCapacityMW += GAS_MW * 5;
       break;
     case 'trust':
       s.trust += 5;
