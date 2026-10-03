@@ -139,7 +139,7 @@ function researchWall(s: GameState): void {
   s.flags[key] = true;
   const want = researchWanted(s);
   const fix = s.revealed['expandLab']
-    ? s.trust >= 1 ? 'Expand Lab to hold more.' : `Expand Lab at the next Trust (${fmtInt(s.nextTrust)} tasks).`
+    ? s.trust >= 1 ? 'Expand Lab to hold more.' : 'Expand Lab with the next Trust.'
     : 'More room comes with Trust.';
   if (want.amount > cap) {
     if (want.what === 'the next run') {
