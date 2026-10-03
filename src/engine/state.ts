@@ -512,6 +512,8 @@ function migrateV1(raw: Record<string, unknown>): Record<string, unknown> {
   }
   if (revealed['training'] && (training.runIndex ?? 0) >= 1) revealed['focus'] = true;
   if (revealed['training']) revealed['copies'] = true;
+  // The API-customers line is gone (its effect shows in the billing line).
+  delete revealed['apiCustomers'];
   return { ...raw, revealed, projects };
 }
 

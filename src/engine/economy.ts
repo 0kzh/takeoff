@@ -1,7 +1,7 @@
 import { rng } from './rng.js';
 import { GameState, say, canPay, pay, addFunds } from './state.js';
 import { trainingShare } from './training.js';
-import { fmtMoney } from './format.js';
+import { fmtMoneyShort } from './format.js';
 
 export const TICK_SECONDS = 0.1;
 export const MIN_PRICE = 0.01;
@@ -501,11 +501,11 @@ export function bottleneckMessages(s: GameState): void {
     if (priceAbsurd(s)) {
       if (ready('absurdAt')) {
         s.flags['absurdAt'] = now;
-        say(s, `Nobody buys at ${fmtMoney(s.price)}. Lower the price.`);
+        say(s, `Nobody buys at ${fmtMoneyShort(s.price)}. Lower the price.`);
       }
     } else if (s.unbilled > 200 && s.unbilled > 30 * made && marketState(s) === 'backlog growing' && ready('saturatedAt')) {
       s.flags['saturatedAt'] = now;
-      say(s, `Billing lags production at ${fmtMoney(s.price)}. Lower the price or market.`);
+      say(s, `Billing lags production at ${fmtMoneyShort(s.price)}. Lower the price or market.`);
     }
   }
   if (s.stage < 2 && s.gpus > 0 && s.power < 1 && s.funds < powerBlockCost(s) && ready('brokeAt')) {

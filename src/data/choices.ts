@@ -488,10 +488,12 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_customer_email',
     title: 'A Customer Writes',
-    text: (_s, ctx) => [
-      '"Your model saved our quarter."',
-      `"We would like to pay for a year up front. ${fmtMoney(Number(ctx['amount'] ?? 25))}, if that works."`,
-    ],
+    text: (_s, ctx) => {
+      const amount = Number(ctx['amount'] ?? 25);
+      return amount >= 25
+        ? ['"Your model saved our quarter."', `"We would like to pay for a year up front. ${fmtMoney(amount)}, if that works."`]
+        : ['"Your model did my homework."', `"I would like to tip. ${fmtMoney(amount)}, if that works."`];
+    },
     options: [
       {
         label: 'accept',

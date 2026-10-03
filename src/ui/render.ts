@@ -104,7 +104,7 @@ function renderBusiness(s: GameState): void {
   setText('billingOf', billed >= 0.99 * made && made > 0 ? 'Billing all ' : 'Billing ');
   showId('billingOfPart', !(billed >= 0.99 * made && made > 0));
   const state = marketState(s);
-  setText('marketState', state === 'nobody buys' ? `nobody buys at ${fmtMoney(s.price)}` : state);
+  setText('marketState', state === 'nobody buys' ? `nobody buys at ${fmtMoneyShort(s.price)}` : state);
   setText('demand', fmtInt(demandPercent(s)));
   setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
   setTitle(
