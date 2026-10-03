@@ -252,7 +252,7 @@ try {
         const vis = (id) => document.getElementById(id).checkVisibility();
         const infraEnabled = ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter((id) => vis(id) && !document.getElementById(id).disabled);
         const cap = s.labSpace * 1000 * s.labMult;
-        const need = Math.round(2000 * Math.pow(1.6, s.training.runIndex));
+        const need = Math.round(21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5));
         return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, trust: s.trust, cap, need };
       });
       transitionAt = arrival.t;
@@ -331,15 +331,15 @@ try {
     const f0 = narration.frames[0];
     const kept = narration.consoleBefore.filter((l) => f0.includes(l)).length;
     check('transition keeps earlier console lines (no wipe)', f0.length >= 4 && kept >= 3, `${kept} earlier lines kept; first frame ${f0.length} lines`);
-    check('"Ground broken outside Abilene." is on screen', narration.frames.some((f) => f.includes('Ground broken outside Abilene.')));
+    check('"Ground broken outside Abilene." is on screen', narration.frames.some((f) => f.some((l) => l.startsWith('Ground broken outside Abilene.'))));
     const all = narration.frames.flat();
     const lost = all.find((l) => /rented GPUs go back/.test(l));
-    const replaced = all.find((l) => /Nimbus G4s/.test(l));
-    const means = all.find((l) => /^Tasks per second ×/.test(l));
+    const replaced = all.find((l) => /Power is capacity now/.test(l));
+    const means = all.find((l) => /Tasks per second ×/.test(l));
     const firstIdx = (re) => narration.frames.findIndex((f) => f.some((l) => re.test(l)));
     const i1 = firstIdx(/rented GPUs go back/);
-    const i2 = firstIdx(/Nimbus G4s/);
-    const i3 = firstIdx(/^Tasks per second ×/);
+    const i2 = firstIdx(/Power is capacity now/);
+    const i3 = firstIdx(/Tasks per second ×/);
     check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
     check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
     check('Stage 2 arrival: an Infrastructure button is affordable', arrival.infraEnabled.length >= 1, arrival.infraEnabled.join(', '));
@@ -384,7 +384,7 @@ try {
       const vis = (id) => document.getElementById(id).checkVisibility();
       return {
         stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
-        need: Math.round(2000 * Math.pow(1.6, s.training.runIndex)), infra: vis('panel-infrastructure'),
+        need: Math.round(21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5)), infra: vis('panel-infrastructure'),
         compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
       };
     });

@@ -46,6 +46,7 @@ src/
     projects.ts   project runtime: triggers, visibility cap, purchase
     events.ts     developments, crises, rival releases, choices, the idle guard
     stages.ts     stage definitions, transitions and reveal rules
+    reveal.ts     the reveal scheduler: triggered projects drip in one every 15 s; first-time reveal bookkeeping
     clock.ts      game date (Stage 1: one month per 4.5 minutes; snaps on transitions)
     endings.ts    ending stubs and end-of-run stats
     rng.ts        mulberry32; the rolling seed lives in the state, so saves and sims replay exactly
@@ -106,10 +107,14 @@ project({
 
 Options: `stages` (default `[1]`; Stage-1-only projects still on screen at the transition are
 retired with a console line), `uses` (default 1; `Infinity` for repeatables, with `rehide: true`
-for rescues), `priceTag`, `canAfford`, `rescue` and `pinned` (both bypass the four-visible cap;
-`pinned` is the Abilene ladder). Stage 1 projects cost research or insight, as Paperclips' cost
-operations; money is for compute, marketing and the ladder. If the bot should buy it, add the id
-to `PROJECT_PRIORITY` in `src/sim/policy.ts`.
+for rescues), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the screen). A
+triggered project joins the reveal queue (`engine/reveal.ts`) and appears 15 s after the previous
+one, in table order, while fewer than four are on screen. These skip the wait: `rescue` (also
+uncapped, drawn dashed), `pinned` (the stage goal, uncapped), `urgent(s)` (a wall's named fix,
+uncapped while it holds), `chain` (the next step of a ladder, at once when there is room);
+`sideline` offers drip in but never fill the cap. Stage 1 projects mostly cost research or insight,
+as Paperclips' cost operations; money is for compute, marketing, training and the ladder. If the
+bot should buy it, add the id to `PROJECT_PRIORITY` in `src/sim/policy.ts`.
 
 **A development** (Developments log): add to `src/data/developments.ts`. It fires on `month`
 (months since Jul 2025; use `monthOf(2025, 11)`) or on `trigger(s)`, whichever comes first. It can
@@ -117,8 +122,12 @@ also print a `console` line, fire a `crisis` or open a `choice`.
 
 **A choice** (modal): add to `src/data/choices.ts` with `title`, `text(s, ctx)`, two or three
 `options` (`label`, `record`, `tooltip`, `cost`, `enabled`, `effect`, `log`) and an optional
-`timer` plus `defaultOption`. Open it with `openChoice(s, id, context)` or from a development. The
-game does not pause while it is open.
+`timer` plus `defaultOption`, and `valid(s, ctx)` (a queued modal that no longer applies is
+dropped). Open it with `openChoice(s, id, context)` or from a development. Modals open at least
+150 s apart (`MODAL_SPACING`); later ones wait in `choiceQueue`. A modal the player's own click
+causes (`PLAYER_MODALS`: the open-issues confirm, Sage-2) opens at once. Stage 1's modals are a
+calendar of dated developments about 3¼ minutes apart, plus the training gamble when it fits. The
+game does not pause while a modal is open.
 
 ## Dev overlay
 
@@ -142,7 +151,7 @@ __game.events           // { fireable, fire(id) }
 __game.presets          // preset table
 __game.loadPreset(n)    // 1–5
 __game.setSpeed(n)      // 1, 5, 20 … (0 freezes the real-time loop; drive it with tick)
-__game.setAutoplay(on, policy?, holdTransition?)  // policy 'bot' | 'naive'; hold leaves Break ground to you
+__game.setAutoplay(on, policy?, holdTransition?)  // policy 'bot' | 'naive' | 'greedy'; hold leaves Break ground to you
 __game.save()           // write localStorage now
 __game.version          // SAVE_VERSION
 ```
@@ -152,8 +161,8 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 2; a
-version-1 save is migrated on load). The game saves every 15 s,
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 3; version-1
+and version-2 saves are migrated on load). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -165,11 +174,12 @@ older save versions and fills fields that newer versions added.
 npm run sim -- --minutes 45 --seed 1                    # full timeline, bot policy
 npm run sim -- --minutes 45 --seed 3 --quiet            # minute lines and the summary
 npm run sim -- --minutes 45 --seed 2 --policy naive     # the critic's scripted first-timer
+npm run sim -- --minutes 45 --seed 2 --policy greedy    # the same, renting whenever it can and never saving
 npm run sim -- --minutes 45 --seed 1 --json             # one machine-readable summary line
 npm run sim -- --minutes 60 --stop-at-stage 2
 ```
 
-Two policies play through `actions` only:
+Three policies play through `actions` only:
 
 * **bot** (default) — a reasonable player: clicks until the first GPU, keeps a power reserve,
   prices to clear production, spends Trust on researchers or lab space by need, buys projects in
@@ -180,19 +190,25 @@ Two policies play through `actions` only:
   backlog exceeds 30 s of production and grows (raises after four near-zero checks, 8 s
   cool-down), answers every modal with its first enabled option, never touches Focus, red-teams
   to zero, and stops the GPU and marketing drip once an Abilene rung is on screen.
+* **greedy** — the naive player without restraint: rents a GPU whenever one is affordable, buys
+  everything else the moment it can, and never saves (the rental quota is what stops it).
 
 Both read a modal for 2.5 s before answering. The output contains one line per minute, one line
 per event (BUY, REVEAL, PROJECT shown, MODAL, TRAIN, RELEASE, STAGE, LOG, CHOICE, IDLE RESCUE),
 `IDLE GAP` lines, and a summary: Stage 1 milestones, the Abilene ladder timings, the transition
-time and capability, `LONGEST REVEAL GAP` (between first-time reveals: a `revealed` flag, a
-project first shown, a modal first opened; rescues excluded) with every gap over 120 s,
+time and capability, training runs and the smallest yield any of them kept, modals opened (and the
+smallest gap between two that opened on their own), `LONGEST REVEAL GAP` (between first-time
+reveals: a `revealed` flag, a project first shown, a modal first opened; rescues excluded) with
+every gap over 120 s,
 `LONGEST NOVELTY GAP` (reveals plus TRAIN phase changes and BUYs), Buy Power presses with the
 worst 5-minute window, Stage 1 idle rescues (and any at 0 tasks), and soft-lock stretches (60 s+
 without production in Stage 1). `--json` prints the summary only, as one line.
 
-Stage 1 targets (seeds 1–5, both policies): transition 25:00–35:00 (bot) / 26:00–40:00 (naive),
-longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes, capability
-1.5–1.8× at the transition, ≤ 2 idle rescues and none at 0 tasks, first GPU ≤ 0:20.
+Stage 1 targets (seeds 1–5): transition 25:00–35:00 (bot) / 26:00–40:00 (naive) / ≤ 40:00
+(greedy), longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes,
+capability 1.5–1.8× at the transition, no run below 0.3 yield, 7–9 modals and never two
+automatic ones within 150 s, Substation → Break ground in 2–4 min, ≤ 2 idle rescues and none at 0
+tasks, first GPU ≤ 0:20.
 
 ## Browser smoke test
 
