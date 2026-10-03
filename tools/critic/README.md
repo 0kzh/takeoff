@@ -119,6 +119,12 @@ cadence. Analysis windows end at the stage change. `compare.mjs A B […]` write
 The report's §1 definitions are applied verbatim (see the header of `lib/analysis.mjs`). Where §1
 left something open, the harness does this:
 
+* **Big-ticket goals** (Takeoff). §1 says the first-timer stops the GPU/marketing drip and saves once a
+  big-ticket goal is visible, and round 1 named that goal by id (First Datacenter). The adapter keeps the
+  id as the stage gate and adds a rule (`policy.goalRule`) so later builds need no edit: any visible
+  project priced in funds at ≥ $10,000 and ≥ 60 s of current revenue is a goal. Without it the policy
+  keeps renting GPUs at any price and never saves for a funds-priced ladder.
+
 * **Visible** = `checkVisibility({visibilityProperty})` (ADR also: opacity, and clipping by an
   `overflow:hidden` ancestor, because its locations slide off-screen inside a clipped frame).
 * **Panel** = a visible container whose *first* element child is a `<b>`/`<h2>` title and that

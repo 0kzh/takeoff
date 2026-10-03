@@ -9,6 +9,7 @@
 //   lower/raise price controls, moved only by watching the backlog
 //   drip        repeat purchases stopped (and funds saved) once a big-ticket goal is visible
 //   goal        big-ticket goal button keys
+//   goalRule(c) optional: further big-ticket goal keys derived from what is on screen right now
 //   skip        never clicked by the generic buy loop
 //   veto(c)     keys the generic loop must not click given the current controls
 //   special(ctx) game-specific steps (red-team/release, processors/memory, navigation)
@@ -131,7 +132,7 @@ export class Policy {
 
     // 6. Buy anything affordable, keeping one consumable purchase in reserve.
     const skip = new Set([...(p.skip || []), p.consumable, p.lower, p.raise, p.main].filter(Boolean));
-    const goals = new Set(p.goal || []);
+    const staticGoals = p.goal || [];
     const drip = new Set(p.drip || []);
     const autos = new Set(p.automation || []);
     // One sweep per check: every affordable button is clicked at most once (a GPU/clipper "drip").
@@ -139,6 +140,7 @@ export class Policy {
     for (let i = 0; i < 60; i++) {
       const c = ctx.controls;
       const m = c.m;
+      const goals = new Set([...staticGoals, ...(p.goalRule ? p.goalRule(c) : [])]);
       const goalVisible = c.buttons.some((b) => goals.has(b.k));
       // "Keeping one consumable purchase in reserve": while the consumable is on screen, a funds
       // purchase must leave enough for one more unit of it.

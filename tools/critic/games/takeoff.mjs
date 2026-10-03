@@ -88,6 +88,15 @@ export default {
     /** Repeat purchases stopped while saving for a big-ticket goal. */
     drip: ['btn-gpu', 'btn-marketing'],
     goal: ['proj-p_datacenter'],
+    /**
+     * Report §1: "once a big-ticket goal is visible stop the GPU/marketing drip and save". Round 1
+     * named its one such project by id (the stage gate above). Stated as a rule so later builds
+     * need no edit: any visible project priced in funds at ≥ $10,000 and ≥ one minute of revenue.
+     */
+    goalRule(c) {
+      const floor = Math.max(10000, 60 * (c.m.revPerSec || 0));
+      return c.buttons.filter((b) => b.kind === 'project' && ((b.costs && b.costs.funds) || 0) >= floor).map((b) => b.k);
+    },
     /** Never clicked by the generic buy loop (handled in special()). */
     skip: ['btn-redteam', 'btn-release'],
     /** Red-team until 0 open issues, then release. */
