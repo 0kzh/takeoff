@@ -1,14 +1,40 @@
 # Stage 2 — "Scale" (implementation spec)
 
 Jan 2026 → Dec 2026 · target 35–45 min · enter by buying `Break ground` · exit by buying `Let Sage-3 write the code`
-(needs a released model at ≥ 4.00×). Contract: `docs/specs/arc.md`. Written against the code as of the Stage 1 fix brief
-(`docs/handoff.md`); where that work renames an id, keep the Stage 1 name.
+(needs a released model at ≥ 4.00×). Contract: `docs/specs/arc.md`. Patched on 2026-10-03 for the Stage 1 that was
+actually built. Where this file and the code disagree about a Stage 1 id or number, the code wins.
+
+## As-built deltas (read first)
+
+What Stage 1 hands over at `Break ground` (`npm run sim`, seed 1, bot / naive): 30:54 / 28:24 · tasks 0.41–0.53 M ·
+91–95 rented GPUs · capability 1.65–1.77× (Sage-1.6) · price $0.75–0.90 · income $0.7–1.1k/s, of which Custom model
+contracts are $0.3–0.8k/s · research cap 36,000–44,000 · 20–27 researchers · marketing level 10 · `copiesPerGPU` 1.95 ·
+`copyBoost` 3 · `demandMult` 6. Nothing below depends any longer on the older estimates (≈ $270/s, 130 GPUs, 1.2 M tasks).
+
+| # | Change in this file | Where |
+|---|---|---|
+| 1 | **Arrival is the built `enterScale`.** The rented fleet goes back at once and 1,000 owned GPUs run from the first second; the deposit pays for the first lot; +2 Trust; lab room for the next run. `Unpack the first shipment` is cut: the first click is `Buy GPUs (1,000)` | §1, §4.2 row 1 |
+| 2 | **Funds scale.** `S2_FUNDS_SCALE = R0 / 650` (was `/ 540`); R0 is task revenue without contracts 30 s after arrival, ≈ $1.0–1.1k/s as built, so the scale is ≈ 1.6. The old $540 was measured before the carried Enterprise project was bought; as built it is already bought. The scale and the `marketBase` clamp absorb the whole revenue difference; grants and funds thresholds scale with the prices | "How to read the numbers", §1.1, §9.4 |
+| 3 | **Contracts.** Signed Custom model contracts keep paying as a fixed line in the `funds` hover. The repeatable project is retired by name on arrival; no new contracts | §1.1, §1.2, §2.13 |
+| 4 | **Carried projects** follow the built `stages` arrays: everything marked `[1, 2]` carries at its Stage 1 price, unscaled, except `p_contract` and `p_distributed`, which become `[1]` | §1.1 |
+| 5 | **Scheduler.** `engine/reveal.ts` already has the 15 s drip, `maxVisible` 6 from Stage 2, `pinned` / `urgent` / `chain` and `cadence`. §4.1 lists only what Stage 2 adds | §4.1 |
+| 6 | **Modals.** Budget 9 for the stage, unprompted modals ≥ 150 s apart (the built pacer). `c_recruiters` becomes the late project `p_retention`; `c_sage3` is cut (the `Release` / `Keep internal` buttons carry the choice); `c_gamble` fires at most once | §4.2 rows 52–53, §5.2 |
+| 7 | **Training.** The cost functions of §2.5 are already in `training.ts` for the whole game. Stage 2 adds the funds scale, the data cost, whole-fleet training compute and its own gains. Duration clamp is the built 45–120 s | §2.5 |
+| 8 | **`SAVE_VERSION`.** Stage 1's polish pass took 3. Stage 2 takes the next number (4 at the time of writing) | §8, Appendix |
+| 9 | **Presets.** The built Stage 2 preset stands; the figures formerly in §9.6 are void. The Stage 3 preset is specified in `docs/specs/stage3.md` §1.1, which supersedes the table in §7 | §7, §9.6 |
+| 10 | **Marketing** arrives at level 10, not 15: the next level is $51,200 and the built price `100 × 2^(level−1)` continues unscaled. Expect about eight purchases in the stage | §2.3 |
+
+The paper model was re-run from the as-built arrival with these changes (§9.4): reasonable exit 35:40–42:45, naive
+35:15–41:20, 11 and 8–9 runs, longest reveal hole ≤ 150 s. Minute marks elsewhere in this file are from the old arrival
+and hold to within about two minutes; §1.4 is rewritten.
 
 **How to read the numbers.** `ts` = seconds since entering Stage 2. Minute marks (`m:ss`) are for the reasonable bot
 starting from the Stage 2 preset, taken from a 1-second paper model of this spec (§9.4). They are targets to reproduce in
-`npm run sim`, not promises. Every funds price below is at `S2_FUNDS_SCALE = 1`, which assumes revenue of about **$540/s
-thirty seconds after the first shipment is unpacked** (called R0). Measure R0 in the real sim (median of seeds 1–5) and
-set `S2_FUNDS_SCALE = R0 / 540`; research, insight, data and Trust prices do not scale.
+`npm run sim`, not promises. Every funds figure below (prices, grants such as Series B, funds thresholds in triggers) is
+at `S2_FUNDS_SCALE = 1`. **R0** is revenue from billed tasks, contracts excluded, thirty seconds after arrival with
+nothing bought but the first lot. Measure R0 in the real sim from the Stage 2 preset (median of seeds 1–5) and set
+`S2_FUNDS_SCALE = R0 / 650`. Research, insight, data and Trust prices do not scale; neither do carried Stage 1 projects
+or Marketing.
 
 Stage 2 in one paragraph: OpenMind owns its compute. GPUs arrive in lots, need room (datacenters) and power (MW), and
 revenue is `0.25 × √(market × supply)`, so building always pays but pays less each time until a better model or a wider
@@ -20,60 +46,67 @@ zero.
 
 ## 1. Arrival
 
-### 1.1 State on entering (`STAGES[1].enter`)
+### 1.1 State on entering (`enterScale` in `stages.ts`, extended)
 
 | Field | Value |
 |---|---|
-| `date` | Snapped to Jan 2026; log `Months pass.` if it moved ≥ 1 month |
-| `gpus` | Unchanged. The rented fleet keeps running until the first shipment is unpacked (no dip in tasks/s) |
+| `date` | Snapped to Jan 2026 (built) |
+| `gpus` | Built: the rented fleet goes back at once and Abilene opens with 1,000 owned Nimbus G4s (`gpus = 1,000`, `gpusG5 = 0`). Tasks per second jump ×9–12 in the first second |
+| `funds` | Built, with one change: the deposit is `max(price of the first lot, $400 × rented GPUs)`, so the amount the console names is what makes the first lot affordable. Keep the built top-up only as a guard |
 | `datacenters` | 1 → 10,000 GPU slots |
 | `powerCapacityMW` | 5 (the Stage 1 substation). `power`, `powerPrice`, `gridAuto` are frozen and hidden |
 | `autoPrice` | `true` (new field). Lower/raise are disabled while it is on |
-| `marketBase` | Calibrated once: `clamp(S × (price/0.25)² / X, 30, 54)` where `S = max(stats.soldPerSec, stats.tasksPerSec)` and `X = capability² × 1.1^(hypeLevel−1) × demandMult × qualityMult × hypeBoost`. Makes the first second of Stage 2 bill what the last second of Stage 1 did. 40 is the design value |
-| Research cap | Pre-flight: while `researchCap < 1.25 × trainCost(s).research`, `labSpace += 1`. If any were added, console `The new site has room for a bigger lab.` |
-| `trust` | `max(trust, 2)` (Stage 1 fix already guarantees it) |
-| `flags.trainingCompute` | 2 for everyone (Distributed training is standard on owned hardware) |
+| `marketBase` | Calibrated once: `clamp(S × (price/0.25)² / X, 30, 54)` where `S = max(stats.soldPerSec, stats.tasksPerSec)` and `X = capability² × 1.1^(hypeLevel−1) × demandMult × qualityMult × hypeBoost`. From the built Stage 1 the unclamped value is 110–160, so every arrival gets 54; that is intended, and the clamp is what keeps R0 predictable. Acceptance instead: revenue 30 s after arrival ≥ revenue 10 s before `Break ground` (≈ ×1.5–2.4 as built) |
+| `contractIncome` | New field, $/s: the built `contractRate(s)` frozen at arrival (≈ $320–800). It is paid every tick and counts in `Avg. Rev. per sec`. The `Contracts` line in Business is hidden (`revealed.contracts = false`); the number lives in the `funds` hover as `custom contracts +$596/s` (§2.13) |
+| Research cap | Built: `labSpace` is raised until the cap covers the next run's research cost |
+| `trust` | Built: `max(2, trust + 2)` |
+| `flags.trainingCompute` | Ignored from Stage 2: a run trains on the whole active fleet (§2.5) |
 | `lead` | `clamp(lead + 2, 3, 7)` — Baiwen is "about five months behind" |
-| `rivalCapability` | `clamp(rivalCapability, 0.80 × capability, 1.08 × capability)`; `nextRivalIn = 270` |
+| `rivalCapability` | Unchanged and never lowered; `nextRivalIn = 270`. Stage 2's band (§2.7) applies from Anthrosoft's next release |
 | `flags.dataEra` | `false` — the first Stage 2 run needs no data |
-| `revealed` | on: `stores`, `infrastructure`, `autoPrice`. off: `power`, `buyPower`, `gridContract`, `compute`, `apiCustomers`, and the Stage 1 site-ladder status lines |
-| Projects retired | `p_beg_power`, `p_grid`, `p_compute_deal`, `p_contract`, `p_distributed`, the site ladder. Set `uses` exhausted so they never show |
-| Projects carried (visible if they were, buyable in Stage 2) | `p_enterprise`, `p_alignment_team`, `p_moe`, `p_eval_team`, `p_api`, `p_pricing`, `p_lab_cluster`, the prompting and insight ladders. Add `2` to their `stages` |
-| `cadence.lastRevealAt` | now (see §4.1) |
+| `revealed` | on: `stores`, `infrastructure`, `autoPrice`. off (built): `power`, `buyPower`, `gridContract`, `compute`, `site` (the Abilene panel with its `interconnect` and `powerMW` lines); off (new): `contracts` |
+| Projects retired | Built rule: a project on screen whose `stages` lacks 2 is withdrawn and named in `Retired with the rented fleet: …` (rescues and `p_contractor` go quietly). In practice that is `Power purchase agreement` at most. Stage 2 changes two `stages` arrays to `[1]`: `p_contract` (it gets its own line, §1.2) and `p_distributed` (standard on owned hardware) |
+| Projects carried | Every other project marked `[1, 2]`, at its Stage 1 price, unscaled; visible ones stay visible, untriggered ones can still trigger and join the drip: `p_prompting`, `p_prompting2`, `p_prompting3`, `p_insight`, `p_blogpost`, `p_demo`, `p_workshop`, `p_keynote`, `p_lab_cluster`, `p_floor`, `p_recruiter`, `p_eval_team`, `p_api`, `p_pricing`, `p_enterprise`, `p_alignment_team`, `p_safety_framework`, `p_dogfood`, `p_batch`, `p_agents`, `p_moe`, and the rescue `p_press`. Their effects are unchanged: the `demandMult` ones multiply the Stage 2 market, `hypeLevel` ones are ×1.1 each, `copiesPerGPU` and `copyBoost` ones multiply tasks. They are the catch-up for a player who skipped them: cheap next to Stage 2 income |
+| Stage 1 developments | Entries with `stage: 1` that have not fired stop being eligible at `stage ≥ 2`, so no Abilene-site modal follows the player into the datacenter |
+| `cadence.lastRevealAt` | now (§4.1) |
 | Removed | `STAGE2_MIN_SECONDS` and its use in `exit` |
 
 ### 1.2 Narration
 
-`enter` no longer calls `blackout`. The last four console lines stay; these are queued 2 s apart:
+Built: `enterScale` keeps the last four console lines and queues its lines with `narrate()`. Stage 2 keeps the built
+lines and adds two; about eleven seconds in all.
 
-1. `Ground broken outside Abilene. 2026 begins.`
-2. `The rented GPUs go back when the first shipment is racked. Nothing is rented after that.`
-3. `Power is capacity now, not a bill: 5 MW on site, 1 MW per 1,000 GPUs.`
-4. `Prices set themselves from here. 1,000 Nimbus G4s are on the loading dock.`
-5. (only if any were retired while visible) `Left in the cloud: {titles}.`
+1. `Ground broken outside Abilene.` (the project's own line, built)
+2. `The 95 rented GPUs go back. Deposit returned: $80,000.` (built; the amount is the new deposit)
+3. `1,000 Nimbus G4s on 5 MW at Abilene. Power is bought in megawatts now.` (built)
+4. `Tasks per second ×12: the copies run on hardware OpenMind owns.` (built)
+5. `Pricing is on AUTO. The price falls to meet supply; watch revenue, not price.` (new)
+6. `No new custom contracts. The 8 signed keep paying $596 a second.` (new; only with ≥ 1 contract)
+7. `Retired with the rented fleet: {titles}.` (built; only if any were on screen)
 
-Developments: `Jan 2026 — OpenMind owns a datacenter outside Abilene. It is mostly empty.`
+Developments (built): `OpenMind owns its first datacenter. The rented GPUs go back to the cloud.`
 
 ### 1.3 Affordable in the first 30 seconds
 
-* `Unpack the first shipment` — free, always. This is the guaranteed first click.
-* `Enterprise sales team` — if carried and the player holds $20k and 6,000 research.
-* `Train` — if banked research ≥ 24,493 (at 1.65×); otherwise about two minutes away.
-* `Buy GPUs (1,000)` at $50,000 is greyed and ~60–75 s away. `Research cluster` joins it greyed at 1:00.
+* `Buy GPUs (1,000)` — the deposit covers exactly one lot. This is the guaranteed first click, and it doubles the fleet.
+* Any carried Stage 1 project the player can pay for (typically `Research blog post`, `Conference keynote`,
+  `Mixture of experts`, `Hire a recruiter`).
+* `Train` — if banked research covers the run (24,500 at 1.65×, 34,800 at 1.77×); otherwise one to two minutes away.
+* The next lot is greyed and about a minute away. `Gas turbines` joins it greyed at 3,000 GPUs, `Research cluster` at 1:00.
 
-### 1.4 The first five minutes
+### 1.4 The first five minutes (as-built arrival, paper model)
 
 | ts | What happens | New on screen |
 |---|---|---|
-| 0:00 | Transition. Compute and Power (kWh) are gone; Stores and Infrastructure are in their place | `panel-stores`, `panel-infrastructure` with `Buy GPUs (1,000)`, `btn-autoPrice`, project `Unpack the first shipment` |
-| 0:05 | Player unpacks. Rented fleet returned, `gpus = 1,000`. Tasks/s ≈ 740 → 5,800. Price slides from ≈ $0.30 to ≈ $0.07 over ten seconds; revenue ≈ $270 → $540/s | console `1,000 Nimbus G4s racked. Tasks per second ×8. The price falls to meet them.` |
-| 1:00 | First lot bought (2,000 GPUs). First real choice: next lot ($50k) or Research cluster ($60k) | project `Research cluster` |
-| 2:00 | 3,000 GPUs = 60 % of 5 MW | `btn-turbines` greyed ($90k); console `Power draw is 60% of the substation. Gas turbines can be on site in a week.` |
-| 2:05–3:20 | First Stage 2 run starts when research allows (`Compute: 3,000 of 1,260 GPUs wanted · est. 78 s`) | project `Web crawl` at the run's start |
-| 2:45 | 5,000 GPUs. `Buy GPUs` greys with the inline reason `no power` | console `No power for more GPUs — 5.0 of 5 MW in use. Gas is fast; solar is cheap.` |
-| 4:30 | Anthrosoft ships Cadence-6 | `panel-graph` (or at the player's first Stage 2 release, whichever is first) |
-| 4:50 | Sage-1.6 released at ≈ 1.86× | project `AI research assistants`; +15 s `Series B`; +30 s `Agent platform` |
-| 5:05 | Gas turbines bought: 25 MW. GPU buying resumes | `btn-datacenter` at 6,000 GPUs (≈ 5:15); `btn-solar` 30 s after the turbines |
+| 0:00 | Transition. Compute, Power (kWh) and the Abilene panel are gone; Stores and Infrastructure are in their place. 1,000 owned GPUs are already running: tasks/s ≈ 600 → 8,700. The price slides from ≈ $0.85 to ≈ $0.12 over ten seconds; task revenue ≈ $450 → $1,000/s, plus the contracts | `panel-stores`, `panel-infrastructure` with `Buy GPUs (1,000)` affordable, `btn-autoPrice` |
+| 0:05 | First lot, paid by the deposit: 2,000 GPUs | — |
+| 0:45 | 3,000 GPUs = 60 % of 5 MW | `btn-turbines` greyed; console `Power draw is 60% of the substation. Gas turbines can be on site in a week.` |
+| 1:00 | First real choice: the next lot or Research cluster | project `Research cluster` |
+| 2:15 | 5,000 GPUs. `Buy GPUs` greys with the inline reason `no power` | console `No power for more GPUs — 5.0 of 5 MW in use. Gas is fast; solar is cheap.` |
+| 2:40–3:20 | Research cluster bought; the first Stage 2 run starts when research allows (`Compute: 5,000 of 1,260 GPUs wanted · est. 60 s`) | project `Web crawl` at the run's start, or at 3:00 |
+| 4:10 | Gas turbines bought: 25 MW. GPU buying resumes | `btn-solar` 30 s later; `btn-datacenter` at 6,000 GPUs |
+| 4:30 | Anthrosoft ships Cadence-7 | `panel-graph` (or at the player's first Stage 2 release, whichever is first) |
+| 4:45 | Sage-1.7 released at ≈ 1.8–1.9× | project `AI research assistants`; +15 s `Series B`; +30 s `Agent platform` |
 
 Bottleneck sequence in these minutes: funds → power → funds/research.
 
@@ -137,7 +170,8 @@ perCopyRate = capability^0.8 × copyBoost                      // deployed capab
 tasksPerSec = copies × (1 − researchAlloc − alignExtra) × perCopyRate   // alignExtra = alignShare − 0.01 (§2.11); no kWh
 ```
 
-Typical arrival: `copiesPerGPU` 1.56, `copyBoost` 2.5, capability 1.65 → 5.8 tasks/s per GPU.
+Typical as-built arrival: `copiesPerGPU` 1.95, `copyBoost` 3, capability 1.65 → 8.7 tasks/s per GPU (the tables below
+were modelled at 5.8; see the note under the targets table in §2.3).
 
 ### 2.3 Market and revenue (replaces the UP sale roll when `stage ≥ 2`)
 
@@ -155,9 +189,11 @@ gives +41 %, a Capability run gives about +17 %, an Efficiency run about +23 %. 
 half-life 180 s) is worth +41 % at release, fading. Stage 2's market multipliers go into the existing `demandMult`.
 Price shows three decimals below $0.10 (`$ 0.067`); manual steps are 5 % of the price, floor $0.001.
 
-Market multipliers in Stage 2: Enterprise ×1.5 (carried), Agent platform ×1.6, International launch ×1.6, Free tier ×1.2,
-Sage-mini ×1.5, marketing levels ×1.1 each (from level 15 the next one costs $1.6M, then doubles; a sink),
-capability² ≈ ×6 over the stage.
+Market multipliers in Stage 2: the carried Stage 1 ones at their built values (Public API ×2, Usage-based pricing ×1.5,
+Enterprise sales team ×2; usually all bought on arrival, `demandMult` 6), Agent platform ×1.6, International launch
+×1.6, Free tier ×1.2, Sage-mini ×1.5, marketing levels ×1.1 each (the built price `100 × 2^(level−1)` continues
+unscaled: level 10 on arrival, so the next is $51,200 and each one doubles; worth buying about eight times in the
+stage, then a sink), capability² ≈ ×6 over the stage.
 
 Console, at most once per 90 s: `Market flooded — price per task down to $0.031. A better model or a wider market lifts it.`
 (price fell > 35 % in 60 s with no release). On a market change: `Agent platform live. Market ×1.6.` /
@@ -177,7 +213,13 @@ Targets (model medians; the engineer's sim should land within ±40 %):
 | 35:00 | 335–435k | 405–475 | 7 | 24–37M | $260–365k | $0.011 | 3.6–3.8× | 24–48k | 0.4 % | 1.4M |
 | exit 38–42 | 500–800k | 555–1,105 | 7–8 | 30–58M | $340–480k | $0.007 | 4.1–4.3× | 50–90k | 0.2 % | 1.8–2.4M |
 
-Revenue doubles about every 4.3 min. Tasks Completed passes 10M ≈ 7:45, 100M ≈ 17:00, 1B ≈ 27:00, 10B ≈ 36:00, and the
+**Reading this table from the as-built arrival.** It is the paper model from the old arrival at scale 1. GPUs, MW,
+datacenters, capability, research and human share stand. Multiply `Revenue/s` by `S2_FUNDS_SCALE` and, from mid-stage,
+by a further ≈ 1.5 (the extra marketing levels); multiply `Tasks/s` by ≈ 1.5–2 and `Jobs` by ≈ 1.3; the first two rows
+arrive about a minute early. As-built model at the exit: 0.8–1.25 M GPUs, 1.0–1.6 GW, tasks/s ≈ 1 × 10⁸, revenue
+≈ $1.0–1.5M/s, 3–7 × 10¹⁰ tasks, jobs 2.6–4.2M.
+
+Revenue doubles about every 4 min. Tasks Completed passes 10M ≈ 5:00, 100M ≈ 13:30, 1B ≈ 24:30, 10B ≈ 32:15, and the
 `N tasks completed in …` line prints each time. Minutes 25–30 are deliberately the steepest (G5 lots, Sage-mini).
 
 ### 2.4 Research and the allocation slider
@@ -199,7 +241,9 @@ insight     += √researchRate / 10 per second at the cap; 10 % of that below it
 * `Hire Researcher` still costs 1 Trust and still adds 10/s. Nothing stops the player buying it.
 * Cap ladder, each ×4 on `labMult`, each appearing when the next run's research cost exceeds 60 % of the cap, each
   priced in funds: `Research cluster` $60k, `Experiment scheduler` $600k, `Checkpoint farm` $12M. `Expand Lab` (1 Trust)
-  keeps adding `1000 × labMult`; Stage 2 yields ≈ 35 Trust (20 milestones, ≈ 10 releases, Series B and C).
+  keeps adding `1000 × labMult`; Stage 2 yields ≈ 35 Trust (20 milestones, ≈ 10 releases, Series B and C). As built
+  the lab arrives holding 36,000–44,000 (`labMult` 4 from `Experiment tracker` and `Lease the floor upstairs`, which
+  stack with this ladder), so the first wall is `Research cluster` at about 1:00.
 
 ### 2.5 Training
 
@@ -212,10 +256,15 @@ funds    F(c) = $25,000 × (c/1.6)^8 × S2_FUNDS_SCALE
 data     D(c) = 2.0 T × (c/1.6)^3          (0 until flags.dataEra, i.e. from the second Stage 2 run)
 compute  N(c) = 1,000 × (c/1.6)^7.5        G4-equivalents wanted
 
-have     = effGpus (active)                 // 50 % share × Distributed training
+have     = effGpus (active)                 // the whole fleet; computeShare and flags.trainingCompute are not used
 yield    = clamp(√(have / N), 0.3, 1)
-duration = clamp(120 × √(N / have), 60, 120) seconds
+duration = clamp(120 × √(N / have), 45, 120) seconds
 ```
+
+**Built already.** `researchFor`, `fundsFor`, `computeFor`, `MIN_YIELD` and the 45–120 s clamp in `training.ts` are these
+functions for the whole game (steeper below the 1.6× knee, which Stage 2 never sees). Stage 2 adds only: `F(c) ×
+S2_FUNDS_SCALE` from `stage ≥ 2`; the data cost; `have` as above; the gains below. `Ship With Open Issues?` was asked
+once in Stage 1 and does not return.
 
 | c | Research | Funds | Data | GPUs wanted |
 |---|---|---|---|---|
@@ -277,7 +326,8 @@ Console: `The Data Wall — the next run needs 5.6 T. The lab holds 1.9 T.`
 * **Anthrosoft.** A release every `rand(240, 420)` s; the first at ts ≈ 270.
   `rivalCapability = clamp(rivalCapability × rand(1.10, 1.22), 0.80 × bestCap, 1.08 × capability)`. Developments line
   from the pool; console `Anthrosoft Cadence-7 beats Sage-2.1. Market down 7%.` or
-  `Anthrosoft ships Cadence-7. Sage-2.1 is still ahead.` A dashed dot on the graph.
+  `Anthrosoft ships Cadence-7. Sage-2.1 is still ahead.` A dashed dot on the graph. Keep the built `max` with the
+  previous value so the dashed line never falls (Stage 1's band is 0.85–1.15× of the deployed model).
 * **Baiwen.** `lead` in months is the state; Baiwen's capability for the graph is the player's own best capability
   `lead` months ago (interpolated on the model history, floor 0.7×). Movers: Lanzhou development −1; each public
   release −0.15; each internal release +0.5; SL2 +0.5; SL3 +1; Gulf −0.5; defense contract +0.5; candid testimony
@@ -354,7 +404,7 @@ Both values are bookkeeping in Stage 2; `alignmentApparent` shows only on the Sa
 | Sage-3 system card | +3 | 0 |
 | Each release while `Share evals` is on | +1 | 0 |
 | Each run trained with Alignment compute at 5 % / 10 % | +0.5 / +1 | +1 / +2 |
-| Offer letters: match / let go | 0 | +2 / −3 |
+| Counter-offer for the alignment lead: bought / unbought at the exit | 0 | +2 / −3 |
 
 **Alignment compute** (`btn-alignShare`, late): one button that cycles `Alignment compute: 1%` → `5%` → `10%`. That
 share of copies is taken from tasks (above the 1 % baseline) and each run trained while it is set earns the row above.
@@ -389,7 +439,7 @@ line it came from carries `data-hide="stores"` (new inverse of `data-reveal`).
 
 | Row | Value (existing id) | Line removed from | Hover |
 |---|---|---|---|
-| funds | `#funds` | Business `Available Funds` | `tasks billed +$2,148/s` · `defense contract +$258/s` · `job-transition fund −$43/s` · **total** |
+| funds | `#funds` | Business `Available Funds` | `tasks billed +$2,148/s` · `custom contracts +$596/s` · `defense contract +$258/s` · `job-transition fund −$43/s` · **total**. A line under 0.5 % of the total is folded into `other` |
 | research | `#research` / `#researchCap` | Research panel | `researchers (15) +150/s` · `copies on research (1,172) +789/s` · **total** · `full in 2:31` |
 | insight | `#insight` | Research panel | `at capacity +3.1/s` or `below capacity +0.3/s` |
 | trust | `#trust` | Research panel `Trust:` (the `+1 Trust at` line stays where it is) | `next at 4,181,000 tasks` · `each public release +1` |
@@ -427,18 +477,25 @@ arrival: the seed Infrastructure panel's 12 numbers become 2 (lot size, cost); n
 
 ## 4. Content and cadence
 
-### 4.1 The reveal scheduler (new, `engine/reveal.ts`)
+### 4.1 The reveal scheduler (extends the built `engine/reveal.ts`)
 
-1. **Drip.** A project whose trigger fires joins a queue; the queue releases one project every 15 s, in table order,
-   while fewer than `MAX_VISIBLE = 6` are visible. Rescue projects skip the queue. Buttons and panels that are the
-   direct result of a click (a toggle after its project) appear at once.
+Built for Stage 1 and kept: the 15 s project drip in table order; `maxVisible` (4 in Stage 1, 6 from Stage 2);
+`rescue`, `urgent` and `pinned` projects, which skip the queue and the cap; `chain` projects, which follow a purchase
+at once when there is room; `cadence.lastRevealAt` and `cadence.seen`. Stage 2 adds:
+
+1. **Buttons, toggles, panels and Stores rows** are scheduled content too (the flags in §6.1). One that is the direct
+   result of a click (a toggle after its project) appears at once; the others appear when their trigger fires, without
+   the drip.
 2. **Late items.** Items marked *late* cannot appear before "the approach" (`bestCap ≥ 3.0`), and are released at most
-   one per 75 s.
+   one per 75 s (`cadence.lateQueue`, `cadence.lastLateAt`).
 3. **Governor.** If no first-time reveal has happened for 150 s (and no modal is open), reveal the first item in the
    table below that is not yet revealed and whose *prerequisite* holds, ignoring its trigger. Log it in the sim as
-   `GOVERNOR <id>`. Never governed: `c_sage2`, `c_sage3`, `c_publishers`, toggles, `panel-stats`.
-4. `cadence.lastRevealAt` updates on every `revealed` flag turning true, every project first shown, every choice id
-   first opened.
+   `GOVERNOR <id>`. Never governed: `c_sage2`, `c_publishers`, toggles, `panel-stats`.
+4. **Modal pacing.** The built pacer keeps unprompted modals ≥ 150 s apart (`cadence.lastModalAt`); one that comes due
+   inside the window waits. `c_sage2` opens on the player's own Release click, so it neither waits nor resets the
+   clock. Budget for the stage: seven unprompted modals, `c_sage2`, and at most one `c_gamble` (§5.2).
+5. `p_superhuman_coder` is `pinned`. A wall's named remedy is `urgent` (`Research cluster` and its successors at a cap
+   wall, `p_beg_data`).
 
 ### 4.2 Content table (order = queue order = expected order)
 
@@ -447,7 +504,7 @@ Kinds: `p_` project, `btn-` button or toggle, `panel-`, `c_` modal.
 
 | # | id | Title (cost) | Trigger | Prereq | Effect | Shown / bought |
 |---|---|---|---|---|---|---|
-| 1 | `p_first_shipment` | Unpack the first shipment (free) | arrival | — | Rented GPUs returned; `gpus = 1,000` G4 | 0:00 / 0:05 |
+| 1 | `btn-gpuBatch` | Buy GPUs (1,000); the deposit covers the first lot | arrival | — | §2.1 | 0:00 / 0:05 |
 | 2 | `p_research_cluster` | Research cluster ($60k) | next run's research > 60 % of cap, or ts ≥ 60 | — | `labMult × 4`; insight accrues at 10 % below the cap | 1:00 / 2–5 |
 | 3 | `btn-turbines` | Gas turbines (+20 MW) | GPUs ≥ 60 % of power, or ts ≥ 120 | — | §2.1 | 2:00 / 5:05 |
 | 4 | `p_web_crawl` | Web crawl (4,000 research) | first Stage 2 run starts, or ts ≥ 180 | — | 15 T at 0.1 T/s; `dataRow` | 3:00 / 3:00 |
@@ -498,17 +555,17 @@ Kinds: `p_` project, `btn-` button or toggle, `panel-`, `c_` modal.
 | 49 | `p_g6_preorder` *late* | Nimbus G6 pre-order ($40M) | bestCap ≥ 3.8 | — | Stores row `chips on order` (0 → 100,000 G6); `flags.g6Preorder` | 37:35 / — |
 | 50 | `p_site2` *late* | Second campus: New Carlisle ($60M) | slots ≥ 800,000, or bestCap ≥ 3.85 | — | `flags.site2` (Stage 3 power ceiling) | 38:50 / — |
 | 51 | `p_community` *late* | Community benefits agreement ($5M) | the Austin protest | — | approval +6 | protest / +1 min |
-| 52 | `c_recruiters` *late* | modal: The Offer Letters | bestCap ≥ 3.9 | — | §5.2 | 40:40 |
-| 53 | `c_sage3` *late* | modal: Release Sage-3 | Release pressed on a run ≥ 4.0× | — | §5.2 | 40:45 |
+| 52 | `p_retention` *late* | Counter-offer for the alignment lead ($20M) | bestCap ≥ 3.9 | — | true +2. Unbought at the exit: true −3, `whistleblowRisk + 1` | 40:40 / — |
+| 53 | (no modal) | The first run ≥ 4.0×: `Release` and `Keep internal` carry the Sage-3 choice in their tooltips | run ≥ 4.0× in red-team | — | §5.2 | 40:45 |
 
-Every trigger fires before affordability except the three free ones (first shipment, Series B, Series C), which are the
-reward beats, and `p_standing_order`, which is the reward for a chore done eight times.
+Every trigger fires before affordability except the first GPU lot (paid by the deposit) and the two free rounds
+(Series B, Series C), which are the reward beats, and `p_standing_order`, which is the reward for a chore done eight
+times.
 
 **Console and Developments lines** (project `consoleMsg` / `logMsg`):
 
 | id | Console | Developments |
 |---|---|---|
-| `p_first_shipment` | `1,000 Nimbus G4s racked. Tasks per second ×8. The price falls to meet them.` | — |
 | `p_research_cluster` | `Research cluster online. The lab holds four times as much.` | — |
 | `btn-turbines` (first) | `Gas turbines online. +20 MW. The county has questions.` | `Gas turbines arrive at Abilene on forty trucks. The county schedules a hearing.` |
 | `p_web_crawl` | `Crawlers released. 15 trillion tokens of public web, once.` | `OpenMind's crawler reads the public internet in an afternoon. Site owners notice the traffic.` |
@@ -550,6 +607,8 @@ reward beats, and `p_standing_order`, which is the reward for a chore done eight
 | `p_site2` | `Land optioned in New Carlisle. Abilene will not be enough.` | — |
 | `btn-shareEvals` (on) | `The Safety Institute gets the eval suite with every release.` | — |
 | `btn-alignShare` | `Alignment compute set to 5%. That many copies stop earning.` | — |
+| `p_retention` (shown) | `Anthrosoft has offered the alignment lead twice her salary. She has not said no.` | — |
+| `p_retention` (bought) | `Counter-offer signed. The alignment lead stays, with a team of her own.` | `OpenMind matches an offer for its alignment lead. The number is not disclosed.` |
 
 **Problems that trigger their own solutions** (all are rows above):
 power at 60 % → Gas turbines · turbines bought (the county complains) → Solar + storage · two farms queued →
@@ -561,9 +620,13 @@ Security level 3 · Abilene's slots near the last table row → Second campus.
 
 ### 4.3 Reveal timeline (paper model, reasonable bot, exit 40:49)
 
+This is the run from the old arrival. From the as-built arrival the same rows land within about two minutes of these
+marks, with these differences: the Gas turbines button at 0:45; A Senate Hearing at ≈ 10:00 (tasks/s reach 300k
+sooner); The Pentagon Calls ≈ 24:45 and A Month of Evals ≈ 27:15 (both moved by the 150 s modal spacing); exit 38:11.
+
 | ts | First-time reveal | Gap (s) |
 |---|---|---|
-| 0:00 | Stores · Infrastructure · pricing AUTO · Unpack the first shipment | — |
+| 0:00 | Stores · Infrastructure with `Buy GPUs` · pricing AUTO | — |
 | 1:00 | Research cluster | 60 |
 | 2:00 | Gas turbines button | 60 |
 | 3:00 | Web crawl (and the `data` row when bought) | 60 |
@@ -607,7 +670,7 @@ Security level 3 · Abilene's slots near the last table row → Second campus.
 | 36:20 | Sage-3 system card | 75 |
 | 37:35 | Nimbus G6 pre-order → `chips on order` row | 75 |
 | 38:50 | Second campus: New Carlisle | 75 |
-| 40:40 | modal The Offer Letters · modal Release Sage-3 | 110 |
+| 40:40 | Counter-offer for the alignment lead | 110 |
 | 40:49 | Exit | 9 |
 
 Checks on paper:
@@ -626,6 +689,8 @@ Checks on paper:
 * **Purchases:** gas 5:05 · Datacenter 2 9:00 · solar 13:10 (connected 16:10) · Datacenter 3 17:50 · 4 22:40 ·
   5 27:00 · 6 29:10 · 7 32:20 · 8 36:35 · SL3 35:40 · nuclear 37:55.
 * **Across seeds 1–5:** exit 37:35–41:50, 11–12 runs, longest reveal hole 119–150 s, 0–1 governor pulls.
+* **As-built arrival, scale `R0 / 650`, seeds 1–5:** exit 35:40–42:45, 11 runs, mean interval between training starts
+  ≈ 200 s (longest 336 s), longest reveal hole ≤ 150 s, 0–2 governor pulls; naive 35:15–41:20, 8–9 runs.
 * **Naive policy** (§9.2): exit 38:00–40:10, 8 runs, longest hole 150 s, 1–3 governor pulls, training starts up to
   8.5 min apart (it starves its runs of research by buying every project first; see §9.5).
 
@@ -664,7 +729,12 @@ Expected density: 45–55 log entries in the stage, never 2 min without one.
 
 The game does not pause. Option 1 is what a "first enabled option" policy takes. Tooltips are the `tooltip` strings.
 
-**`c_sage2` — Release Sage-2** (existing; no timer; fires in Stage 2 now that Stage 1 ends below 2×)
+**Modal budget (arc G15).** Nine in the stage: seven unprompted (`c_publishers`, `c_hearing`, `c_evals_month`,
+`c_gulf`, `c_defense`, `c_theft_warning`, `c_pact`), kept ≥ 150 s apart by the built pacer; `c_sage2`, which the player
+opens with Release; and `c_gamble` at most once (the first Capability run from ≥ 2.2×). `c_customer_email` stays the
+idle rescue and is outside the budget; the reasonable bot should never see it.
+
+**`c_sage2` — Release Sage-2** (built; no timer; fires in Stage 2 because Stage 1 ends below 2×; this text and these tooltips replace the built ones)
 > `{run} is twice the model Sage-1 was. It can hold a job for a day.`
 > `Public: customers get it, the market grows, the press reads every transcript.`
 > `Internal: the research copies get it. Nobody outside knows how far ahead OpenMind is.`
@@ -748,27 +818,19 @@ All three reveal `btn-sl3`.
 
 Either answer reveals the toggle `Share evals with the Safety Institute` (`btn-shareEvals`, off) in the Government panel.
 
-**`c_recruiters` — The Offer Letters** (timer 60 s → option 2)
-> `Anthrosoft has offered your alignment lead twice her salary and a team of her own.`
-> `She has not said no.`
+**The offer letters** are no longer a modal. `p_retention` (§4.2 row 52) carries the decision as a late project with
+the description `She has not said no. If she leaves, she takes what she knows.`
 
-| Option | Tooltip | Effect |
+**Sage-3** has no modal either. When the first run with `capAfter ≥ 4.0` reaches red-team, the two release buttons
+change their tooltips, and the console prints `{run} writes better code than anyone at OpenMind. The evals team ran the test twice.`
+
+| Button | Tooltip at ≥ 4× | Effect |
 |---|---|---|
-| `match it` | `$20,000,000. She stays.` | true +2 |
-| `wish her well` | `She knows what she knows.` | true −3; `whistleblowRisk +1` |
+| `Release` | `Every engineer on Earth gets a colleague who does not sleep. Market grows; approval −6; lead −0.5 months.` | public release |
+| `Keep internal` | `OpenMind keeps the only one. Research takes it at once; lead +1 month; the public keeps {deployed}.` | internal release |
 
-**`c_sage3` — Release Sage-3** (no timer)
-> `{run} writes better code than anyone at OpenMind. The evals team ran the test twice.`
-> `Public: every engineer on Earth gets a colleague who does not sleep.`
-> `Internal: OpenMind keeps the only one.`
-
-| Option | Tooltip | Effect |
-|---|---|---|
-| `release publicly` | `Market grows; approval −6; lead −0.5 months.` | public release |
-| `keep it internal` | `Research takes it at once. Lead +1 month. The public keeps {deployed}.` | internal release |
-
-Either way `p_superhuman_coder` becomes affordable. `c_gamble` and `c_customer_email` carry over unchanged
-(`c_customer_email` reward cap from the Stage 1 fix).
+Either way `p_superhuman_coder` becomes affordable. `c_gamble` and `c_customer_email` carry over as built, within the
+budget above.
 
 ### 5.3 Crises and incidents
 
@@ -840,7 +902,7 @@ block. Research panel: `+1 Trust at`, Hire / Expand, `Researchers`, `Lab Space`,
 ### 6.2 Removed or hidden on arrival
 
 `panel-power` (kWh, Buy Power, Grid Contract) · `panel-compute` (Rent GPU, GPUs rented, Copies running, Tasks per sec) ·
-`API customers` · the Stage 1 demand line · the Stage 1 site-ladder lines · `Available Funds`, `Research x / y`,
+`panel-site` (the Abilene panel) · the `Contracts` line and the Stage 1 demand line in Business · `Available Funds`, `Research x / y`,
 `Insight`, `Trust` as lines (their values live in Stores) · the seed Infrastructure panel's stock lines,
 `Nimbus chip price`, `Powered GPUs`. After Automated evals the six benchmark bars and four evaluator cards collapse into
 `Evaluating Sage-2.3 … 34/40 · 2.46× · 2 issues open` (bars and cards in the hover).
@@ -853,7 +915,7 @@ sliders, enabled or not.
 
 | ts | Numbers | Interactive | Panels | What changed |
 |---|---|---|---|---|
-| Stage 1 end (same rule) | ≈ 50 | 16 | 7 | — |
+| Stage 1 end (same rule; recount after the polish pass) | ≈ 50 | 16 | 7 | — |
 | 0:00 | 34 | 15 | 7 | Power and Compute out (−6); Stores collects 10; Infrastructure shows 2 |
 | 5:00 | 40 | 17 | 8 | gas (2), data row and data cost (2), `#nextTier`, `#leadLine` (2) |
 | 10:00 | 50 | 22 | 8 | solar (2), datacenter (3), slider and human share (2), more projects (3) |
@@ -898,7 +960,8 @@ AUTO toggle (always automatic); `+1 Trust at` (the `#nextTier` line becomes `Nex
 **Appears:** `panel-alignment`, full `panel-security`, `panel-geopolitics` (takes over `#leadLine`), `panel-oversight`;
 the slider becomes two-way with a Monitors share. Details belong to the Stage 3 spec.
 
-**State handed to Stage 3** (the Stage 3 preset; model medians, rounded):
+**State handed to Stage 3.** Superseded by `docs/specs/stage3.md` §1.1, which is rebuilt from the as-built model
+(funds and revenue about three times these, tasks about twice). Kept for the record; old arrival, scale 1:
 
 | Field | Value | Field | Value |
 |---|---|---|---|
@@ -928,7 +991,7 @@ Stage 3's `enter` applies the arc clamps (true alignment 30–75, gov 25–85, a
 
 | System | Worst case | What happens | Rescue |
 |---|---|---|---|
-| Funds | Everything spent, nothing affordable | Billing is deterministic and continuous; production cannot be zero (≥ 130 GPUs and 5 MW always) | None needed; worst wait for the cheapest item (gas, $90k) is 3 min at arrival revenue |
+| Funds | Everything spent, nothing affordable | Billing is deterministic and continuous; production cannot be zero (≥ 1,000 GPUs on 5 MW always, and the contracts line never stops) | None needed; worst wait for the cheapest item (gas, $90k) is 3 min at arrival revenue |
 | Price | AUTO off, price set absurdly high | Billing ≈ 0, backlog grows | After 30 s below 10 % of production: `Nothing sells at $2.10. Pricing AUTO is beside the price.`; tooltip `nobody pays this` above 4× the auto price |
 | Power | 5,000 GPUs on 5 MW, player buys projects instead | `Buy GPUs` greyed `no power`; nothing is lost; funds accumulate | Gas is instant. Curtailment and riots are temporary and never reach zero |
 | Interconnect queue | Two farms queued, player wants more | `Solar + storage` greyed with `queue full` | Gas, Behind-the-meter, nuclear |
@@ -949,7 +1012,7 @@ Stage 3's `enter` applies the arc clamps (true alignment 30–75, gov 25–85, a
 | Modal timers | Player away | Default is always the option that changes least | — |
 | Exit | Player never buys the exit project | After 240 s it buys itself | — |
 | Carry-over | Arrives with a research wall or 0 Trust | Pre-flight in `enter` (§1.1) | — |
-| Saves | Reload mid-queue, mid-run, mid-cooldown | All timers are stored as remaining seconds | `SAVE_VERSION = 2`; `migrate()` fills the new fields |
+| Saves | Reload mid-queue, mid-run, mid-cooldown | All timers are stored as remaining seconds | `SAVE_VERSION` + 1 (4 at the time of writing); `migrate()` fills the new fields |
 
 ---
 
@@ -961,7 +1024,7 @@ Order each tick:
 
 1. Answer modals: `c_sage2` public · `c_hearing` testify · `c_publishers` license (fight if unaffordable) · `c_gulf`
    domestic only · `c_evals_month` a week · `c_defense` sign if approval > −15, else decline · `c_theft_warning` lock it
-   down · `c_pact` sign · `c_recruiters` match if affordable · `c_sage3` public.
+   down · `c_pact` sign. Sage-3 is released publicly; `p_retention` is bought when affordable.
 2. Buy free projects and anything costing < 20 s of revenue and < 15 % of the next run's research.
 3. Fix a binding wall: no power → the cheapest $/MW among gas, solar (if the queue has < 2) and nuclear; at 80 % of
    power with an empty queue, order solar ahead. No room → Build Datacenter.
@@ -990,16 +1053,16 @@ Marketing when affordable; alternates Hire and Expand; never touches the slider 
 | A4 | Gaps between new panels or mechanics | ≤ 270 s | — |
 | A5 | Training runs in the stage | 9–12 | 7–10 |
 | A6 | Interval between training starts | mean 170–260 s, max ≤ 360 s | max ≤ 540 s |
-| A7 | Any training run's duration | 60–120 s | same |
+| A7 | Any training run's duration | 45–120 s | same |
 | A8 | Capability at exit | 4.0–4.7× | same |
 | A9 | Greyed goal visible | ≥ 99 % of ticks | same |
 | A10 | Manual `Buy GPUs` presses | ≤ 12 before Standing order, ≤ 40 total | ≤ 60 |
 | A11 | Power purchases / datacenters | ≤ 20 / ≤ 9 | same |
 | A12 | Any verb pressed > 2 times in 60 s after its automation is available | never | never |
-| A13 | Idle rescues; governor pulls | ≤ 1; ≤ 4 | ≤ 2; ≤ 6 |
+| A13 | Idle rescues; governor pulls; modals (unprompted ones ≥ 150 s apart) | ≤ 1; ≤ 4; ≤ 9 | ≤ 2; ≤ 6; ≤ 9 |
 | A14 | Visible projects; time a triggered project waits in the queue | ≤ 6; ≤ 60 s | same |
 | A15 | First power purchase; first datacenter; AI research assistants bought | ≤ 5:30; ≤ 10:00; ≤ 8:00 | ≤ 7:00; ≤ 12:00; ≤ 10:00 |
-| A16 | 5-minute marks vs §2.3 table (GPUs, revenue) | within ±40 % | — |
+| A16 | 5-minute marks vs §2.3 table: GPUs within ±40 %, capability within ±0.3×; revenue 30 s after arrival ≥ revenue 10 s before `Break ground` | required | — |
 | A17 | First meaningful choice after arrival | ≤ 90 s | — |
 | A18 | Exit project shown before the exit | ≥ 8 min | ≥ 8 min |
 | A19 | Build clean; no console or page errors; reload mid-run, mid-queue and mid-cooldown restores timers | required | — |
@@ -1014,6 +1077,12 @@ scheduler, both policies). Results, seeds 1–5: reasonable exit 37:35–41:50, 
 0–1 governor pulls; naive exit 38:00–40:10, 8 runs, longest hole 150 s, 1–3 governor pulls. Sensitivity: arrival
 capability 1.5× to 1.8× moves the reasonable exit by under 3 min. It is not the engine: no sale randomness, no incidents, approximate modals. Treat §2.3 and §4.3
 as the targets and re-derive them.
+
+**Re-run from the as-built arrival** (1,000 owned GPUs at once, deposit = one lot, 22–27 researchers ×1.25,
+`copiesPerGPU` 1.95, `copyBoost` 3, marketing level 10, `demandMult` 6, `marketBase` 54, contracts fixed at $320–640/s,
+marketing bought when a level costs ≤ 25 s of revenue, modal spacing 150 s, rows 52–53 as patched). R0 = $1,023/s.
+With the old divisor (scale 1.90) the stage ran 46–50 min: the old $540 had been measured before Enterprise was
+bought. With `R0 / 650` (scale 1.57): reasonable 35:40–42:45, naive 35:15–41:20. Each 0.15 of scale is about 3.5 min.
 
 ### 9.5 Knobs, in the order to reach for them
 
@@ -1030,16 +1099,15 @@ as the targets and re-derive them.
 
 ### 9.6 Presets
 
-**Stage 2 start** (`presets[1]`; replaces the current hand-tuned one; then `enterStage(s, 2)`):
-`date 5.9` · `tasks 1,200,000` · `funds 15,000` · `price 0.36` · `gpus 130` · `copiesPerGPU 1.5625` · `copyBoost 2.5` ·
-`hypeLevel 15` · `demandMult 1.95` (API, pricing; Enterprise visible and unbought) · `trust 2` · `nextTrust 1,597,000`
-(`fib1 1597`, `fib2 2584`) · `researchers 15` · `labSpace 12` · `labMult 2` · `research 6,000` · `insight 20` ·
-`capability 1.65` = internal · `rivalCapability 1.55`, `rivalVersion 5` · `alignmentApparent 55`, `alignmentTrue 52` ·
-`govRelations 50` · `approval 0` · `lead 3` (becomes 5) · `training.runIndex 5`, `major 1`, `minor 5`, six model records
-(1.00, 1.14, 1.20, 1.37, 1.44, 1.65) · `flags.sage2Decided false` · `stats.timePlayed 1,800`, `trainings 5`,
-`publicReleases 5`. Rebuild it from the Stage 1 sim's median `Break ground` state once the Stage 1 fixes land.
+**Stage 2 start** (`presets[1]`): keep the built preset in `src/data/presets.ts`, which was hand-tuned from the sim at
+`Break ground` and then calls `enterStage(s, 2)`: `date 5.95` · `tasks 432,000` · `funds 2,000` · `price 0.76` ·
+`gpus 95` · `copiesPerGPU 1.953` · `copyBoost 3` · `hypeLevel 10` · `demandMult 6` · `researchers 22` · `labSpace 9` ·
+`labMult 4` · `research 17,000` · `insight 9` · `capability 1.65` · `rivalCapability 1.77` · `alignmentApparent 60`,
+`alignmentTrue 55` · six contracts ($319/s) · `runIndex 7` · 28 Stage 1 projects bought. `enterStage` now also sets the
+Stage 2 fields of §1.1. Re-derive the preset from the sim's median `Break ground` state whenever Stage 1 is retuned.
+The figures that used to be listed here (130 GPUs, 1.2 M tasks, $0.36) are void.
 
-**Stage 3 start** (`presets[2]`): the table in §7, then `enterStage(s, 3)`.
+**Stage 3 start** (`presets[2]`): `docs/specs/stage3.md` §1.1, then `enterStage(s, 3)`.
 
 ---
 
@@ -1065,15 +1133,19 @@ as the targets and re-derive them.
 
 ## Appendix — engine change list
 
-* `state.ts`: `SAVE_VERSION = 2`; new fields `autoPrice`, `marketBase`, `gpusG5`, `gasPlants`, `solarFarms`, `reactors`,
-  `powerQueue`, `btm`, `g5`, `standingOrder`, `gulfExposure`, `dataSynthetic`, `aiResearchMult`, `revenueMult`,
-  `autonomy`, `jobFund`, `shareEvals`, `alignShare`, `cadence {lastRevealAt, queue, lateQueue, lastDripAt, lastLateAt}`,
-  `training.pending`, `training.cooldown`;
-  `Cost.data`; `Stats.pressCounts`. `blackout()` is no longer used by stage transitions.
-* New: `engine/market.ts` (§2.3), `engine/infrastructure.ts` (§2.1), `engine/world.ts` (§2.7–2.10), `engine/reveal.ts`
-  (§4.1). `economy.ts`: `sell()` branches on stage; `researchRate` gains the AI term; `storeBreakdown`.
-  `training.ts`: Stage 2 cost, yield, duration, gains, two slots, internal release. `stages.ts`: Stage 2 `enter`,
-  `exit: () => 0`, reveal rules for the buttons in §6.1. `projects.ts`: queue and drip, `late`, `prereq`.
+* `state.ts`: `SAVE_VERSION` + 1 (Stage 1's polish pass took 3, so 4 at the time of writing); new fields `autoPrice`,
+  `marketBase`, `contractIncome`, `gpusG5`, `gasPlants`, `solarFarms`, `reactors`, `powerQueue`, `btm`, `g5`,
+  `standingOrder`, `gulfExposure`, `dataSynthetic`, `aiResearchMult`, `revenueMult`, `autonomy`, `jobFund`,
+  `shareEvals`, `alignShare`, `training.pending`, `training.cooldown`; `cadence` gains `lateQueue`, `lastLateAt` (the
+  rest is built); `Cost.data`; `Stats.pressCounts`.
+* New: `engine/market.ts` (§2.3), `engine/infrastructure.ts` (§2.1), `engine/world.ts` (§2.7–2.10). `engine/reveal.ts`
+  is built; extend it (§4.1). `economy.ts`: `sell()` branches on stage; `researchRate` gains the AI term;
+  `storeBreakdown`; `contractIncome` pays the frozen rate. `training.ts`: funds scale, data, whole-fleet compute,
+  Stage 2 gains, two slots, internal release. `stages.ts`: extend `enterScale` (§1.1), `exit: () => 0`, reveal rules
+  for the buttons in §6.1. `data/projects.ts`: `late`, `prereq`; `stages` of `p_contract` and `p_distributed`.
+* Seed Stage 2 code to replace: `datacenterCost` (`250000 × 1.5^n`) and `DATACENTER_GPUS` → the table in §2.1;
+  `gpuBatchCost` (`chipPrice` 25, ×1.04 per batch) → lots; `turbineCost` and `TURBINE_MW` (+100 MW) → gas +20 MW;
+  `updateRival`'s band → §2.7; `noveltyKeys` and `customerEmailAmount` should read the new verbs.
 * Tick order additions: after production — power queue; after billing — rivals, jobs, approval, gov drift; after
   projects — reveal scheduler; Standing order runs with the other automation.
 * `ui`: `stores.ts` (rows, re-parenting, tooltips), `graph.ts` rewrite (§3), `render.ts` (`data-hide`, new buttons,

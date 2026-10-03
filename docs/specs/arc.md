@@ -18,7 +18,7 @@ Every feature in the original prompt, the stage that delivers it, and the mechan
 | R5 | AI-2027-style graph of relative intelligence against benchmarks (human, researcher, …) | S2 | `panel-graph` canvas at the first Stage 2 release: capability in × on a log scale, rungs `1× human researcher`, `1.5× reliable agent`, `4× superhuman coder`, then 10×/25×/250×/1,000× as each is approached; IQ gloss in the tooltip |
 | R6 | Resources panel "very similar to A Dark Room" | S2 | `panel-stores` on Stage 2 arrival: bordered box, one row per stock, hover shows income by source with a bold total. Rows are added late in S2 (chips on order), in S3 (monitors), S4 (robots, materials; `funds` leaves) and S5 (launch mass, orbital GPUs); see §2D |
 | R7 | Log of developments that updates with progress and actions (ADR, Plague Inc.) | S1+ | `panel-log`; every stage ≥ 1 line per 2 min; player choices logged in italics |
-| R8 | Opportunities presented as choices | S1+ | Choice modals: S1 ×4, S2 ×10 (`stage2.md` §5), S3 memo / neuralese / Committee, S4 autonomy / UBI vs SEZ / treaty, S5 final |
+| R8 | Opportunities presented as choices | S1+ | Choice modals, at most nine per stage (G15): S1 as built, S2 ×9 (`stage2.md` §5), S3 ×9 (`stage3.md` §5: neuralese, the memo, the vote, …), S4 autonomy / UBI vs SEZ / treaty, S5 final |
 | R9 | Fictitious names in the AI-2027 manner | all | OpenMind, Anthrosoft (Cadence-N), Baiwen (Lanzhou CDZ), Sage-N / Steward-N / Concord-1, Nimbus G4–G7, Formosa Fab, the Oversight Committee, the Project, Al-Marsa Compute Park, the Ashford strain, Atlas-class |
 | R10 | Geopolitics with China and Iran | S2–S4 | S2 Baiwen nationalised, lead line on the graph, Gulf site choice sets `gulfExposure`; S3 weights theft, Taiwan blockade, Iran strikes Al-Marsa; S4 Verify Baiwen, treaty |
 | R11 | "The only number that matters is Tasks Completed" | all | `h2#tasksHeader` is always the first thing under the console; milestone lines report it; every ending prints it; in Silence it keeps rising |
@@ -26,7 +26,7 @@ Every feature in the original prompt, the stage that delivers it, and the mechan
 | R13 | Complete tasks → revenue → compute → copies → tasks | S1–S3 | S1 UP market; S2 market where revenue = 0.25·√(market × supply), so compute always pays; S3 the same until the business panel leaves |
 | R14 | Training and releasing a model is the loop repeated many times | S1–S4 | 35–45 runs per game: S1 ≈ 5, S2 9–12, S3 12–16, S4 8–12 (automatic) |
 | R15 | Start training the next model before the previous is deployed, after a threshold | S2 | `p_parallel` Parallel pipelines; threshold = 4 Stage 2 releases and capability ≥ 2.2× |
-| R16 | Training never takes more than 1–2 minutes | all | Engine clamp: S1 45–120 s, S2 60–120 s, S3 30–60 s (Auto-train), S4 a status line |
+| R16 | Training never takes more than 1–2 minutes | all | Engine clamp: S1–S2 45–120 s, S3 30–60 s (Auto-train), S4 a status line |
 | R17 | Show the carrot: reveal on trigger, not affordability; a greyed-out goal always on screen | all | Guardrail G3; fallback lines `#nextTrust` (S1–S2) and `#nextTier` (S2+) |
 | R18 | Always something to work toward; the bottleneck is always addressable | all | §5; each bottleneck console line names the fix |
 | R19 | UI reshuffles between stages | all | §2 table C: each transition removes ≥ 1 panel and adds ≥ 1 |
@@ -57,7 +57,7 @@ Nothing in the original prompt is unplaced.
 |---|---|---|---|---|---|
 | Wall clock | 25–35 min | 35–45 min | 40–50 min | 30–40 min | 20–30 min |
 | Dates | Jul–Dec 2025 | Jan–Dec 2026 | Jan–Oct 2027 | Nov 2027–Dec 2028 | 2029–2030+ |
-| Seconds per month | 270 | 210 | 270 | 150 | 90 |
+| Seconds per month | 300 | 210 | 270 | 150 | 90 |
 | Entry | new game | buy `Break ground` | buy `Let Sage-3 write the code` | Committee choice made at ≥ 25× | treaty signed, or autonomy granted/taken |
 | Exit project (visible, greyed, ≥ 8 min early) | Break ground | Let Sage-3 write the code — needs a released 4.00× model | Slow down (Steward) / Race (Sage-5) — needs 25× | Sign the Concord treaty / Grant the fleet autonomy | The long reflection / Final instructions |
 | Training runs | ≈ 5 | 9–12 (naive 7–9) | 12–16 | 8–12, automatic | none shown |
@@ -67,26 +67,29 @@ Total 150–200 min of play; 3–4 h with reading. The date never passes the sta
 
 ### B. Scale at each boundary (for presets; ± a factor of 2 is fine after S2)
 
+S1→S2 is the built Stage 1 (`npm run sim`); S2→S3 is the Stage 2 paper model re-run from that arrival
+(`stage2.md` §9.4); S3→S4 is the Stage 3 paper model (`stage3.md` §9.4). Dollar figures are real dollars on screen.
+
 | | new game | S1→S2 | S2→S3 | S3→S4 | S4→S5 | ending |
 |---|---|---|---|---|---|---|
 | Capability | 1.0× | 1.5–1.8× | 4.0–4.6× | 25–40× | ≥ 1,000× | 10⁴–10⁶× |
-| Model | Sage-1 | Sage-1.5 | Sage-3 | Sage-5 or Steward-1 | Sage-7 / Steward-4 / Concord-1 | — |
-| Tasks per second | 0 | ≈ 1,000 | 3–6 × 10⁷ | ≈ 10¹⁰ | 10¹³–10¹⁴ | 10¹⁷+ |
-| Tasks Completed | 0 | 1–1.5 × 10⁶ | 1–3 × 10¹⁰ | ≈ 10¹³ | ≈ 10¹⁷ | 10²⁰–10²² |
-| Revenue | 0 | ≈ $300/s | $0.3–0.6M/s | ≈ $50M/s, then removed | — | — |
-| Funds on hand | 0 | $5–40k | $1–25M | $1–10B | — | — |
-| Price per task | $0.25 | ≈ $0.35 | ≈ $0.01 | — | — | — |
-| Compute | 0 | 110–150 rented GPUs | 0.5–0.8M owned GPUs (G4 + G5) | 2–4M (G6) | ≈ 10⁹ GPU-equivalents, robot-built | orbital, 10¹²+ |
-| Power | 1,000 kWh blocks | 5 MW on site | 0.55–1.1 GW | 3–5 GW | 0.5–1 TW | lunar and orbital solar |
-| Copies running | 0 | 200–300 | 4–6M | ≈ 10⁸ | ≈ 10¹⁰ | — |
-| Research per second | 0 | 150–170 (all human) | 50–90k (0.2 % human) | shown as `Research speed N×` | — | — |
-| Jobs displaced | 0 | 0 | 1.5–2.5M | 50–150M | 1–2B | — |
+| Model | Sage-1 | Sage-1.6 | Sage-3 | Sage-5 or Steward-1 | Sage-7 / Steward-4 / Concord-1 | — |
+| Tasks per second | 0 | ≈ 500 rented, ≈ 9,000 a second later | ≈ 1 × 10⁸ | ≈ 10¹⁰ | 10¹³–10¹⁴ | 10¹⁷+ |
+| Tasks Completed | 0 | 0.4–0.55 × 10⁶ | 3–7 × 10¹⁰ | ≈ 10¹³ | ≈ 10¹⁷ | 10²⁰–10²² |
+| Revenue | 0 | $0.7–1.1k/s, of which contracts $0.3–0.8k | $1.0–1.5M/s | ≈ $50M/s, then removed | — | — |
+| Funds on hand | 0 | the returned deposit: one GPU lot | $10–60M | $1–10B | — | — |
+| Price per task | $0.25 | $0.75–0.90 | ≈ $0.01 | — | — | — |
+| Compute | 0 | 90–115 rented GPUs → 1,000 owned | 0.8–1.25M owned GPUs (G4 + G5) | 2–4M (G6) | ≈ 10⁹ GPU-equivalents, robot-built | orbital, 10¹²+ |
+| Power | 1,000 kWh blocks | 5 MW on site | 1.0–1.6 GW | 3–5 GW | 0.5–1 TW | lunar and orbital solar |
+| Copies running | 0 | 110–180 | ≈ 10⁷ | ≈ 10⁸ | ≈ 10¹⁰ | — |
+| Research per second | 0 | 250–340 (all human) | 50–100k (0.3–0.6 % human) | shown as `Research speed N×` | — | — |
+| Jobs displaced | 0 | 0 | 2.6–4.2M | 50–150M | 1–2B | — |
 
 ### C. The reshuffle at each transition
 
 | Transition | Added | Removed | What the player loses | Affordable on arrival |
 |---|---|---|---|---|
-| S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), API customers line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); Stage-1-only projects are retired by name | `Unpack the first shipment` (free) |
+| S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), the Abilene panel, the Contracts line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); new custom contracts (the signed ones keep paying); Stage-1-only projects are retired by name | `Buy GPUs (1,000)`, paid by the returned deposit |
 | S2→S3 | Alignment & Interpretability, Security (full), Geopolitics, Oversight; allocation gains a Monitors share; Stores row `monitors` | Marketing, Hire Researcher, Expand Lab, Researchers / Lab Space lines, price buttons, `+1 Trust at` line (replaced by `#nextTier`) | Hiring; marketing; any pretence that humans do the research (`Research speed: N× human baseline` replaces the researcher count) | Set by the S3 spec (suggest: `Deploy Sage-2 as monitor`, free) |
 | S3→S4 | Robots, Society (UBI), Treaty, Monitors; Stores rows `robots`, `materials` | Business panel, Training panel (one status line), Complete Task button, Stores row `funds` | Money; the Train button; the manual verb. "The model runs the business now." | Set by the S4 spec |
 | S4→S5 | Space; Stores rows `launch mass`, `orbital GPUs` | Geopolitics, Robots (merged into Space), Society | Earth as the subject of the screen | Set by the S5 spec |
@@ -124,7 +127,7 @@ Where each cross-stage variable starts, everything that moves it, and what it ga
 | `gulfExposure` | 0/1 | S2 `c_gulf` | The choice | S3 Iran strike: Al-Marsa's 1,000 MW and 10 % of compute are lost |
 | `flags.defenseContract` | bool | S2 `c_defense` | The choice | Raises the nationalisation threshold from gov < 20 to gov < 35; revenue floor |
 | `flags.internalReleases` | count | S2 | Each internal-only release | Leak severity in S3 (approval and gov hit × (1 + 0.25 n)) |
-| `flags.whistleblowRisk` | 0–3 | S2 `c_evals_month`, `c_recruiters` | Choices | S3: probability a buried memo leaks = 0.4 + 0.1 n |
+| `flags.whistleblowRisk` | 0–3 | S2 `c_evals_month`, `p_retention` | Choices | S3: probability a buried memo leaks = 0.4 + 0.1 n |
 | `flags.pactSigned` | bool | S2 `c_pact` | The choice | S3–S4 treaty talks start 20 % complete; breaking it by racing costs approval 10 |
 | `flags.memo`, `flags.committeeChoice`, `flags.neuralese` | enum | S3 | Choices | Endings (§4) |
 | `autonomy` | 0–100 | S2 seed (+5 from Retire human code review) → S3 | Auto-train, autonomous research, robot-fleet autonomy, SEZs, AI negotiator | Drift `autonomy^1.2 × 10⁻⁴ × (1 − alignmentTrue/100)` per minute; seizure at ≥ 80 with `alignmentTrue` < 40 |
@@ -195,6 +198,7 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G12 | Idle rescues | ≤ 1 per stage for the reasonable bot | Sim counter |
 | G13 | No wall is carried across a transition | Next training run affordable in cap terms; Trust ≥ 0; ≥ 1 affordable action | `enter()` pre-flight |
 | G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage | Playwright count at 5-min marks |
+| G15 | Modals are rationed | ≤ 9 per stage; unprompted modals ≥ 150 s apart (one that comes due inside the window waits); a modal the player opens with their own click is exempt from the spacing; the idle rescue is outside the budget | The built pacer (`cadence.lastModalAt`); sim count per stage |
 
 The **cadence governor** enforces G1: if no first-time reveal has happened for 150 s, the engine reveals the next item
 of the stage's ordered content table whose hard prerequisites hold, ignoring its trigger. Each stage reserves ≥ 10 "late"
@@ -216,15 +220,17 @@ than 4 per stage for the reasonable bot means the triggers need retuning.
 
 ## 7. Transition contract
 
-1. **Exit is a project** the player buys; it is revealed greyed ≥ 8 min early and its price tag states the requirement.
+1. **Exit is a project** the player buys (`pinned`, so it skips the drip and the visible cap); it is revealed greyed ≥ 8 min early and its price tag states the requirement.
    From Stage 2, if it sits affordable for 240 s the model presses it (`Sage-3 has started without waiting to be asked.`).
    Stage 3's Committee choice is exempt: the player always casts that vote.
-2. **Pre-flight** in `enter()`: research cap ≥ 1.25 × the next training cost; no negative stocks; the first action of
-   the new stage is affordable; date snaps to the stage's first month.
+2. **Pre-flight** in `enter()`: research cap ≥ the next training cost; no negative stocks; the first action of
+   the new stage is affordable; date snaps to the stage's first month; earlier stages' unfired developments and
+   modals are dropped.
 3. **Narration**: keep the last four console lines; queue 3–5 lines 2 s apart (lost / replaced / what the new number
    means / what to click); one Developments entry.
-4. **Re-base, don't reset**: currencies carry over. Where a formula changes (S1→S2 market), calibrate one constant from
-   the save so the first second of the new stage matches the last second of the old one.
+4. **Re-base, don't reset**: currencies carry over, and income never falls across a boundary. Each stage spec states
+   its funds prices at scale 1 and multiplies them by one constant measured from the arrival revenue
+   (`S2_FUNDS_SCALE = R0 / 650`, `S3_FUNDS_SCALE = R0 / 1,200,000`), so retuning one stage does not unbalance the next.
 5. **Retire by name**: projects that cannot be bought any more are listed in one console line.
 6. **Presets**: each stage adds `presets[N+1]` built from the sim's median exit state, so the next stage and the critic
    can start from it.
