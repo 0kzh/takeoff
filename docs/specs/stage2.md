@@ -945,20 +945,9 @@ publicly or internally; then `(ready)`. Buying it calls `enterStage(s, 3)`. If i
 engine buys it: `Sage-3 has started without waiting to be asked.` The Stage 2 `exit()` returns 0; the project is the
 only way out.
 
-**Narration** (last four lines kept; 2 s apart):
-
-1. `Sage-3 writes better code than anyone at OpenMind.`
-2. `Marketing is closed. Sage-3 sells itself.`
-3. `Hiring is frozen. The researchers manage copies now; the panel counts research speed, not people.`
-4. `New on the board: Alignment, Geopolitics, Oversight. Baiwen is {lead} months behind.`
-5. `The next rung is 10×. Nobody has scheduled it.`
-
-Developments: `Jan 2027 — Sage-3 never stops learning. Its weights update every night on yesterday's work.`
-
-**Disappears:** Marketing block; `Hire Researcher`, `Expand Lab`, `Researchers`, `Lab Space`; `lower` / `raise` and the
-AUTO toggle (always automatic); `+1 Trust at` (the `#nextTier` line becomes `Next: country of geniuses at 10×`).
-**Appears:** `panel-alignment`, full `panel-security`, `panel-geopolitics` (takes over `#leadLine`), `panel-oversight`;
-the slider becomes two-way with a Monitors share. Details belong to the Stage 3 spec.
+**Narration, what disappears and what appears** are specified in `docs/specs/stage3.md` §1, which supersedes the
+lines that used to be here. In short: Marketing, hiring, the price buttons, Trust and the data row leave; the
+Alignment panel and the Monitors slider arrive at once; Geopolitics and Oversight follow within fifteen minutes.
 
 **State handed to Stage 3.** Superseded by `docs/specs/stage3.md` §1.1, which is rebuilt from the as-built model
 (funds and revenue about three times these, tasks about twice). Kept for the record; old arrival, scale 1:
@@ -1119,15 +1108,15 @@ The figures that used to be listed here (130 GPUs, 1.2 M tasks, $0.36) are void.
 | `securityLevel` (2 or 3) | S3 weights theft in Feb 2027 unless SL ≥ 3 |
 | `lead` | S3 theft, Slow down (−4), the Pause (needs ≥ 2) |
 | `gulfExposure` | S3 Iran strikes Al-Marsa: −1,000 MW and 10 % of compute |
-| `flags.defenseContract` | Nationalisation threshold gov < 35 instead of < 20 |
+| `flags.defenseContract` | S3: the order's threshold is relations < 35 instead of < 20; the Pentagon covers the blockade |
 | `flags.internalReleases` | Severity of the S3 leak |
 | `flags.whistleblowRisk` | Probability a buried memo leaks |
 | `flags.pactSigned` | Treaty talks start 20 % complete; breaking the pledge costs approval |
-| `flags.theftIgnored` | S3 theft fires one month earlier |
-| `flags.g6Preorder`, `flags.site2` | S3 chips during the Taiwan blockade; power beyond Abilene |
+| `flags.theftIgnored` | S3 theft fires two minutes earlier (ts 150–210 instead of 270–330) |
+| `flags.g6Preorder`, `flags.site2` | S3: the G6 allocation is free and its first lot lands at ts 60; Datacenter 10 and up need the second campus |
 | `autonomy` (0 or 5) | S3 value drift |
 | `alignShare`, `shareEvals`, `jobFund` settings | S3 monitor share default; Committee mood; S4 UBI baseline |
-| `dataSynthetic` share | S3 flavour and a small drift term |
+| `dataSynthetic` share | Not used in S3 (data retires on arrival); kept for the end screen |
 | `govRelations`, `approval`, `jobsDisplaced` | S3 Committee mood, riots; S4 treaty, UBI |
 | The two-slot pipeline, the slider, Stores, the graph, the reveal scheduler | Reused and extended, not rebuilt |
 
