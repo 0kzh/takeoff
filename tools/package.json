@@ -1,0 +1,9 @@
+{
+  "name": "takeoff-tools",
+  "private": true,
+  "type": "module",
+  "description": "Playtest tooling (Playwright). Kept out of the game's own package.json so the game stays dependency-free.",
+  "devDependencies": {
+    "playwright-core": "^1.55.0"
+  }
+}
