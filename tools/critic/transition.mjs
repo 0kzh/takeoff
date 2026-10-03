@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// Usage: node tools/critic/transition.mjs <takeoff|paperclips|adr> [--game-dir DIR] [--stage N]
+//          [--fixture NAME] [--seed N] [--accel-minutes MIN] [--autoplay] [--out LABEL]
+// Plays (stepped, scripted policy) until the stage changes, keeps ~20 s before and 30 s after, and
+// writes <out>.md: console lines, what vanished/appeared, projects gone un-bought, buttons affordable
+// on arrival, rates before/after, screenshots (<out>.tpre/.tend/.transition.png).
+// Defaults: takeoff → new game; paperclips → fixture paperclips-s1-end (HypnoDrones bought, Trust
+// 99, ~15 s before "Release the HypnoDrones" is affordable).
+import fs from 'node:fs';
+import { runGame } from './lib/runner.mjs';
+import { transitionReport } from './lib/transition-report.mjs';
+import { parseArgs, mmss } from './lib/util.mjs';
+
+const { pos, flags } = parseArgs(process.argv.slice(2), ['autoplay']);
+const game = pos[0];
+if (!game) {
+  console.error('usage: transition.mjs <takeoff|paperclips|adr> [--game-dir DIR] [--stage N] [--fixture NAME] [--out LABEL]');
+  process.exit(2);
+}
+const stage = Number(flags.stage ?? 1);
+const fixture = flags.fixture ?? (game === 'paperclips' && stage === 1 ? 'paperclips-s1-end' : undefined);
+const label = flags.out ?? `transition-${game}${stage > 1 ? `-s${stage}` : ''}`;
+const { prefix, meta, rec } = await runGame({
+  game,
+  prefix: label,
+  gameDir: flags.gameDir,
+  realtime: 0,
+  accelMinutes: flags.accelMinutes ?? (fixture ? 10 : 60),
+  autoplay: !!flags.autoplay,
+  stage,
+  seed: flags.seed ?? 1,
+  fixture,
+  quiet: true,
+});
+const md = [
+  transitionReport({ meta, snaps: rec.snaps, events: rec.events, actions: rec.actions }),
+  '## Run',
+  '',
+  `\`node tools/critic/transition.mjs ${process.argv.slice(2).join(' ')}\` → stepped run \`${meta.prefix}\` (seed ${meta.seed}${meta.fixture ? `, fixture ${meta.fixture}` : ''}${meta.autoplay ? ', Autoplay' : ''}), stage change ${meta.stageEnd != null ? `at ${mmss(meta.stageEnd)}` : 'not reached'}.`,
+  fixture ? 'The fixture is a cheated save (tools/critic/make-fixtures.mjs, see tools/critic/README.md); only the last ~15 s before the change are played.' : 'Played from a new game by the scripted policy.',
+  '',
+].join('\n');
+fs.writeFileSync(`${prefix}.md`, md);
+console.log(md);
+console.log(`(written to ${prefix}.md)`);
