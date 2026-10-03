@@ -10,7 +10,7 @@ The player is never told which stage they are in and is never told how many ther
 
 | Stage | Name | In-game dates | Target wall clock | Analogy | Exit condition |
 |---|---|---|---|---|---|
-| 1 | The Startup | Jul 2025 → Dec 2025 | 25–35 min | UP Stage 1 (manufacturing + business) | Buy **First Datacenter** |
+| 1 | The Startup | Jul 2025 → Dec 2025 | 25–35 min | UP Stage 1 (manufacturing + business) | **Break ground** at Abilene (the fourth rung of the site ladder) |
 | 2 | Scale | Jan 2026 → Dec 2026 | 35–45 min | UP Stage 2 (power management) + GDS loop | Reach **superhuman coder** (capability ≥ 4×) |
 | 3 | Takeoff | Jan 2027 → Oct 2027 | 40–50 min | The AI-2027 "race" chapters | Reach **superhuman AI researcher** (≥ 25×) **and** make the Committee choice |
 | 4 | Superintelligence | Nov 2027 → Dec 2028 | 30–40 min | AI-2027 branch chapters | Treaty signed, or autonomy granted, or nationalized |
@@ -22,54 +22,68 @@ Total: ~2.5–3.5 hours for a reasonable player; 4 hours for a cautious one.
 
 ## Stage 1 — The Startup
 
-The first stage is by far the simplest. OpenMind has a model, a cloud bill, and no customers. You manage **Funds** against the **Public Demand** for completed tasks, buy **Power** (kWh) in blocks whose price drifts, and rent **GPUs** so that copies of the model complete tasks without you clicking. Late in the stage you hire **Researchers**, who turn **Trust** into **Research** points, which buy the projects that lay the technical backbone of the later stages, and you run your first **training runs**. If you run out of money with no power and nothing to bill, the game lets you **Ask the cloud provider for credit** in exchange for Trust rather than losing the game.
+The first stage is by far the simplest. OpenMind has a model, a cloud bill, and no customers. You manage **Funds** against the market for completed tasks, buy **Power** (kWh) in blocks whose price drifts, and rent **GPUs** so that copies of the model complete tasks without you clicking. Then you hire **Researchers**, who turn **Trust** into **Research** points, which buy the projects that lay the technical backbone of the later stages, and you run your first **training runs**. The last third of the stage is the **Abilene site**: reserve the land, wait out the interconnect queue, build the substation, break ground. If you run out of money with no power, the game lets you **Ask the cloud provider for credit** in exchange for Trust rather than losing the game, and the **Complete Task** button never needs power.
 
 ### What is on screen
 
-*Minute 0:* black console (`Welcome to OpenMind.`), `Tasks Completed: 0`, the date `Jul 2025`, and one button: **Complete Task**. Below it, `Power: 1,000 kWh`.
+*Minute 0:* black console (`Welcome to OpenMind.`), `Tasks Completed: 0`, the date `Jul 2025`, one enabled button — **Complete Task** — and, greyed out with its price, `Power: 1,000 kWh` / **Buy Power (1,000 kWh) — $20.00**. Five numbers.
 
-*Reveal order (triggers, not timers; typical minute in brackets):*
+*Reveal order (triggers, not timers). Typical minute as `bot / naive` (median of seeds 1–5, `npm run sim`):*
 
-1. **Business** panel after the first task is completed [0:05] — `Available Funds`, `Unbilled Tasks`, `lower / raise` price, `Public Demand`.
-2. **Buy Power (1,000 kWh) — $20.00** when power < 900 or funds ≥ 5 [0:30].
-3. **Rent GPU — $7.00** and `GPUs rented: 0 / Copies running: 0` at funds ≥ 5 or tasks ≥ 50 [1:00]. First GPU affordable around [1:30].
-4. **Developments log** (left column) on the first world development, `Jul 2025 — Agents can order food and fill spreadsheets. Sometimes.` [1:30].
-5. **Marketing — Level 1 — $100.00** at funds ≥ 20 [3:00]. Affordable around [6:00].
-6. **Research** panel at the first Trust milestone (3,000 tasks) [3:00]: `Trust: 2`, `+1 Trust at: 5,000 tasks`, `Researchers: 1`, `Lab Space: 1`, `Research: 0 / 1,000`, `Hire Researcher (1 Trust)`, `Expand Lab (1 Trust)`.
-7. **Projects** column at the same moment, with **Better Prompting (750 research)** greyed out.
-8. **Blue-sky Research (1,000 research)** when research first hits its cap [5:00]. → **Insight** line appears.
-9. **Training Pipeline (2,000 research, $500)** at 10,000 tasks [7:00] alongside the free **Seed round**. → **Training** panel: `Current model: Sage-1`, `Train Sage-1.1`, focus buttons.
-10. First training run [9:00–10:30]; evaluation bars; first red-team; first **Release**; first hype spike; `Avg. Rev. per sec` doubles.
-11. **Grid Contract (7,000 research)** after the fifth power purchase [11:00].
-12. **Bulk GPU lease** at 50 GPUs [14:00]; **Usage-based pricing** at $10/s [16:00].
-13. **Series A** (free) at 100,000 tasks and one release [18:00].
-14. **First Datacenter ($250,000, 20,000 research)** greyed out at 500,000 tasks [22:00]; affordable around [28:00].
+1. **Business** panel after the first task [0:00] — `Available Funds`, `Unbilled Tasks`, `lower / raise`, `Price per Task $0.25`, and the billing line `Billing 2.1/s of 4.0/s produced: backlog growing`. The market starts near Paperclips' size and grows with tasks completed (word of mouth, full at 1,500 tasks), so a player clicking at 4/s sees the backlog build within seconds and fixes it by lowering the price. `Avg. Rev. per sec` with the first sale.
+2. **Compute** at $3 or 20 tasks [0:04] — **Rent GPU — $6.00** (UP's AutoClipper curve `5 + 1.1^n`); first GPU [0:08 / 0:10].
+3. **Developments** log on the first world development [0:37 / 0:54].
+4. **Marketing — Level 1 — $100** at $40 or 12 GPUs [2:15 / 1:56].
+5. **Research** at the first Trust milestone (2,000 tasks) [3:28 / 3:04] — `Trust`, `+1 Trust at`, **Hire Researcher**, `Researchers`, `Research x / 1,000`. Nothing else.
+6. **Expand Lab** and `Lab Space` when research first nears its cap [3:50 / 3:27].
+7. **Projects** 40 s after Research, with **Better Prompting (750 research)** [4:08 / 3:44]; Blue-sky Research, **Grid Contract (2,000 research)** and Chain-of-thought follow within a minute. Four projects on screen at most (rescues and the Abilene rung don't count).
+8. **Grid Contract** bought [4:46 / 4:50]: power is bought automatically; the manual row steps aside while it's on. Before that, power blocks grow with the fleet (10,000 kWh at 20 GPUs, 100,000 at 200; a player short of money gets the biggest block they can afford).
+9. **Training Pipeline (2,000 research)** at 7,000 tasks [5:41 / 5:12] → **Training** panel [5:48 / 5:30]: `Current model: Sage-1`, capability vs Anthrosoft, **Train Sage-1.1**. The first run trains with the default focus; **Copies running** appears when training diverts half the GPUs.
+10. First evaluation and red-team [~7:00], first release [7:44 / 7:59] → the **Focus** row (Capability / Efficiency / Safety, with tooltips). **Public API** 30 s later; **Usage-based pricing** after it.
+11. September [10:00]: *A Bridge Round* (modal). **Sage writes Sage** (research +25%) [11:58 / 10:28].
+12. **Series A** (free, +$20,000) at 60,000 tasks and a release [14:34 / 12:23] → **Reserve the Abilene site ($40,000)** and **Enterprise sales team**; *Open Weights* (modal) around 14:00.
+13. Enterprise sales team bought → **Custom model contract** (repeatable, research → recurring revenue; the `Contracts: $/s` line).
+14. October [15:00]: **Batch inference**; *The API Goes Down* (modal) [16:30]; **Hire a recruiter** [17:30]; **Lease the floor upstairs** at the Research Plateau.
+15. **Abilene site reserved** [17:57 / 20:37] → the **Abilene** panel and **Interconnect queue ($80,000)**; *The County Asks About Water* 30 s later.
+16. November [20:00]: **Agent mode**, *A Reporter Calls* (from 18:00), *An Open Letter* [21:30], **Publish a safety framework** [22:30].
+17. **Interconnect queue** bought [22:43 / 22:52] → a named wait, `Interconnect: 3:29` counting down, and **Substation ($120,000, 8,000 research)** greyed until it ends; *The Utility Calls* (pay to expedite) 25 s in; **Power purchase agreement** a minute in; *Taylor County Offers a Deal* (−$20,000 on the substation) when the queue clears.
+18. **Substation** [26:40 / 25:44] → `Substation: 5 MW` and **Break ground ($180,000)**; **Hire a general contractor** (−$40,000 on Break ground) 45 s later; *A Neighbour Objects* at 2:20; December [25:00]: *A Better Offer*.
+19. **Break ground** [30:30 / 28:25] → Stage 2.
+
+Every trust gain says what it is for (`Trust +1. Hire a researcher or expand the lab.`); every public release earns +1 Trust; the console names each wall and its fix (`The Research Plateau — the next run needs 13,107 research. The lab holds 8,000. Expand Lab to hold more.`, `Nobody buys at $2.25. Lower the price.`).
 
 ### Resources introduced
 
-Tasks Completed, Unbilled Tasks, Funds, Power (kWh), Compute (GPUs rented), Copies, Hype (Marketing level), Trust, Research, Insight.
+Tasks Completed, Unbilled Tasks, Funds, Power (kWh), Compute (GPUs rented), Copies, Hype (Marketing level), Trust, Research, Insight, Contracts ($/s), the Abilene site (interconnect, 5 MW).
 
 ### The bottleneck rotates
 
-power → funds → demand (price too high) → compute → research → funds again. Each has a visible fix (see design.md §6). The console names the bottleneck when it bites: `Power exhausted — copies idle.` / `Demand saturated — lower the price or market.` / `Research at capacity — insight accrues.`
+price → power → research cap → funds → compute (training) → funds again. Each has a visible fix (see design.md §6).
+
+### Training in Stage 1
+
+Capability focus gives +12–18 % per run, Efficiency +5 % and 25 % more copies per GPU, Safety +5 % and alignment — all scaled by how much of the compute the run wanted it got (`12 × 2.8^n` GPUs; a run that would need more than 120 s keeps `(120/time)²` of its gain). Rented GPUs stop teaching the model around the fourth run (`undertrained: 69 of 5,783 GPUs`), which is the case for the datacenter. Stage 1 ends around **1.6×** (still Sage-1.x; Sage-2 at 2×, Sage-3 at 4×). Revenue grows from GPUs, copies and projects. Anthrosoft's Cadence models stay within 0.85–1.15× of the deployed Sage: usually a step behind, sometimes ahead.
 
 ### Projects (Stage 1)
 
-Better Prompting · Ask the cloud provider for credit · Blue-sky Research · Chain-of-thought · Tool use · Research blog post · Training Pipeline · Seed round · Public API · Launch demo video · Grid Contract · Bulk GPU lease · Usage-based pricing · Hire an evals team · Series A · First Datacenter.
+Better Prompting · Blue-sky Research · Grid Contract · Chain-of-thought · Training Pipeline · Seed round · Research blog post · Experiment tracker · Tool use · Hire an evals team · Public API · Launch demo video · Bulk GPU lease · Usage-based pricing · Sage writes Sage · Distributed training · Alignment team · Series A · Reserve the Abilene site · Enterprise sales team · Custom model contract · Batch inference · Lease the floor upstairs · Hire a recruiter · Interconnect queue · Power purchase agreement · Agent mode · Publish a safety framework · Substation · Hire a general contractor · Break ground · Workshop paper · Conference keynote · Mixture of experts · (rescues) Ask the cloud provider for credit · Press release.
+
+### Choices (Stage 1)
+
+Can I try something? · Ship With Open Issues? (the first time only) · A Bridge Round · Open Weights · The API Goes Down · The County Asks About Water · A Reporter Calls · An Open Letter · The Utility Calls · Taylor County Offers a Deal · A Neighbour Objects · A Better Offer · (rescue) A Customer Writes.
 
 ### Stage 1 ends
 
-when you buy **First Datacenter**. The console clears, shows a single line — `Ground broken outside Abilene.` — and the date snaps to **Jan 2026**. The **Buy Power** and **Rent GPU** buttons disappear; **Infrastructure** replaces them.
+when you buy **Break ground**. The console keeps its last lines and prints, over about six seconds: `Ground broken outside Abilene.` · `The 95 rented GPUs go back. Deposit returned: $38,000.` · `1,000 Nimbus G4s on 5 MW at Abilene. Power is bought in megawatts now.` · `Tasks per second ×12: the copies run on hardware OpenMind owns.` The date snaps to **Jan 2026**. **Buy Power**, **Rent GPU** and the Abilene panel disappear; **Infrastructure** replaces them, with **Buy GPUs (1,000)** affordable from the deposit. Projects that only make sense with a rented fleet are retired by name; the rest carry over. Trust is at least 2 and the lab has room for the next run.
 
 ### Strategy
 
-* Click until you can afford one GPU; after that clicking is optional.
-* Watch the power price. Anything under $18 is cheap; stock up. Never let power hit zero with copies running — that is the first soft-lock trap, and the *Ask for credit* project is the escape hatch.
-* Keep demand under ~100 % by raising the price while the copies can't keep up; lower it when unbilled tasks pile up.
-* First Trust → Researcher (two researchers, one lab unit). Then alternate. The *Blue-sky Research* cap trick is the most important thing in the stage: you want to be sitting at the cap often.
-* Don't market before your first release; the hype spike from a release is worth more than three marketing levels.
-* The first training run with **Capability** focus roughly doubles revenue. The second with **Efficiency** lets you run two copies per GPU. Save **Safety** for later; it looks useless now (it isn't).
-* Release with issues > 0 once, just to see what happens. Then never again.
+* Click, and lower the price until the backlog stops growing. Raise it again while it says *selling out*.
+* Rent GPUs while they pay back within a few minutes; buy the Grid Contract as soon as you can hold 2,000 research.
+* First Trust → researchers; expand the lab when the console says the research wall is in the way.
+* Train Capability while the run gets most of its compute; once it says *undertrained*, train Efficiency (more copies per GPU) — the datacenter is what trains the next big model.
+* Release with open issues once, to see what happens. The incident is traced back to the release.
+* Save for the Abilene rungs, but buy the revenue projects (Enterprise sales team, Batch inference, Agent mode, contracts) on the way: they make the next rung come sooner.
 
 ---
 
@@ -238,15 +252,15 @@ There isn't any. Watch the number.
 
 | Minute | New panel / mechanic |
 |---|---|
-| 0 | Complete Task, Power |
-| 0–1 | Business, Buy Power, Rent GPU |
-| 1–3 | Developments log, Marketing |
-| 3 | Research, Trust, Projects |
-| 5 | Insight |
-| 7 | Training |
-| 9–11 | Evaluate / Red-team / Release, Grid Contract |
-| 14–18 | Bulk lease, Pricing, Series A |
-| 22–30 | First Datacenter → Stage 2: Infrastructure, Data |
+| 0 | Complete Task, Power, Buy Power (greyed) |
+| 0–1 | Business (billing line), Rent GPU, Developments log |
+| 2–4 | Marketing, Research, Expand Lab, Projects |
+| 4–6 | Insight, Grid Contract, Training |
+| 6–10 | Evaluate / Red-team / Release, Focus, Public API, Usage pricing, A Bridge Round |
+| 10–15 | Sage writes Sage, Series A, Abilene site (greyed), Enterprise, Open Weights |
+| 15–20 | Contracts, Batch inference, API outage, recruiter, Abilene panel, water |
+| 20–27 | Agent mode, reporter, open letter, interconnect queue (named wait), utility, PPA, abatement, Substation |
+| 25–31 | Break ground, contractor, neighbour, poaching → Stage 2: Infrastructure, Data |
 | 32–40 | Allocation slider, Capability graph, Government, Public |
 | 40–50 | Security, Distillation, Stats |
 | 55–70 | Stage 3: Alignment, Interpretability, Geopolitics, Auto-train |
