@@ -221,6 +221,60 @@ are probed by a second script with the same libraries and output layout:
   piles up), `PC_THINK_VALUE` (default 100: the slider position while memory is the wall; 200 = all
   Think).
 
+## Stage 2 round-2 additions (the Stage 2 round-2 critic's `explore-s2r2.mjs`)
+
+Written against build `s12-r4` (three GPU-lot rows, a Standing-order share, plants and halls that
+can be built ahead, a hard GPU requirement on Train, Unicode meters, reservations printed on the
+lot rows). `explore-s2.mjs`, `explore.mjs` and every shared file are unchanged; the shipped
+first-timer (`games/takeoff-late.mjs`) still runs on this build but reads only "No power for them…"
+/ "No room for them…" on the main lot row, so it waits at "the plant first" / "the hall first"
+beside a lit plant (it is kept as the play style `shipped`).
+
+* `explore-s2r2.mjs <name[,name…]|all-runs|all-probes|hands|table|list> --game-dir DIR [--seed N |
+  --seeds 1,2,3] [--minutes MIN] [--tag T] [--realtime SEC] [--label L] [--shots 600,1200]
+  [--modal-shots]` — every run and probe starts at Takeoff's Stage 2 preset; labels are
+  `<tag>-<name>[-seedN]` (tag default `s2r2-x`; `--label` names one run outright, e.g. the rubric's
+  real-time run).
+  * **The round-2 first-timer** (`baseline`, the control): the README's Stage 2 rules with two
+    adjustments. (1) Infrastructure follows the reason on the main lot row in its new wordings:
+    "No power for them…" or "the plant first" → the enabled power source with the lowest shown
+    $/MW; "No room for them…" or "the hall first" → Build Datacenter; "the run first", "<card>
+    first", "the offer first" → nothing to press. (2) All three lot rows belong to the
+    infrastructure rule (largest enabled row first, the main row's shrunken lots included, up to
+    three purchases a check); none is left to the sweep. Train is pressed the moment it is enabled;
+    settings are left alone (Standing order 50%, slider 15%).
+  * **Runs** (the control with ONE thing changed): `shipped` (the harness's first-timer as shipped),
+    `any-row` (obeys the reason on any lot row), `mobile`, `bot` (the game's Autoplay under this
+    file's screen reader), `lot-smallest`, `lot-largest`, `lot-full` (never a shrunken lot),
+    `lot-one`, `order-only[-25|-75|-100|-mainrow]` (no lot by hand once the Standing order is on
+    screen, at each share), `no-lots`, `no-standing`, `so-off|-25|-75|-100` (the share changed, lots
+    still bought by hand), `no-power`, `no-datacenter`, `power-only`, `overbuild`,
+    `overbuild-halls`, `overbuild-plants`, `wall-only` (ignores "… first", builds at the hard
+    wall), `slider-min`, `slider-max`, `no-assistants`, `no-trust`, `hire-only`, `expand-only`,
+    `data-ignore`, `no-data`, `run-saver`, `cards-wait`, `run-first` (the disciplined player),
+    `gate-only` (the minimalist), `train-late60`, `train-wait60`, `keep-internal`, `ship-open`,
+    `no-train`, `focus-efficiency`, `focus-safety`, `modal-ignore`, `modal-last`, `modal-worst`,
+    `modal-best`, `settings-on`. Each writes a normal run plus `.explore.md` (hands; a row per
+    minute with the meters as drawn; seconds the main lot row spent in each state; **Train under the
+    hard gate**: seconds, stretches and the longest stretch per cause — GPUs, GPUs dark, money,
+    research, data — with whether a lot, a plant, a hall or a data card was enabled meanwhile; what
+    each run asked for against the fleet, and revenue 20 s and 60 s into it; GPUs that are not
+    running and what the power row said; events with their effect lines; every card; every note and
+    line) and `.end.json`.
+  * `hands <label…> [--from SEC]` — round 1's hands measures for any stored run of either game
+    (share of 2-s checks with nothing enabled / with two or more distinct things enabled, clicks per
+    minute, share of the window inside ≥ 30-s click gaps; bulk sizes of one item count once). It
+    reproduces round 1's numbers on round 1's runs (`s2x-baseline`: 85–88 % / 5–7 % / 50–55 %;
+    `pc-s2`: 0.6 % / 97.1 % / 27.7 %, 19.5 clicks a minute). `table` prints the play-style table.
+  * **Probes**: `lot-return` (twin sessions: does the return printed on a lot row happen),
+    `gate-screens` (the Train row when GPUs are short), `dark-gpus` (every power-cutting event
+    fired from the dev list), `governor` (every state of the main lot row with its screen),
+    `reserve-refused`, `standing-cycle`, `standing-rates`, `reload-mid-build` (hall under
+    construction, plant in the queue), `reload-mid-run` (also training, evaluation, red-team),
+    `reload-mid-event`, `idle-start`, `idle-mid`, `idle-events` (30 idle minutes), `event-keys`,
+    `exit`, `hover`, `slider-ends`, `mobile-shots`, `screens` (the text of every panel at the
+    five-minute marks).
+
 ## Definitions and implementation choices
 
 The report's §1 definitions are applied verbatim (see the header of `lib/analysis.mjs`). Where §1
@@ -352,6 +406,7 @@ left something open, the harness does this:
 run.mjs analyze.mjs compare.mjs transition.mjs softlock.mjs determinism.mjs make-fixtures.mjs setup.sh
 explore.mjs decisions.mjs   (round-2 additions)
 explore-s2.mjs              (Stage 2 round-1 addition: Stage 2 play styles, probes, Paperclips Stage 2 probes)
+explore-s2r2.mjs            (Stage 2 round-2 addition: build s12-r4's first-timer, play styles, hands, Train-gate account, probes)
 lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG, Takeoff boot seed)
        pagelib.mjs (in-page snapshot/controls/click) · session.mjs (browser + clock control)
        policy.mjs · recorder.mjs (events) · runner.mjs (phases, outputs) · analysis.mjs
