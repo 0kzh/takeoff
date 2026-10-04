@@ -85,7 +85,8 @@ let homes: { id: string; parent: HTMLElement; next: Element | null }[] = [];
 let laidOut = false;
 
 function layout(s: GameState): void {
-  const want = s.stage === 4;
+  // Stage 5 keeps Stage 4's layout (stage5.md as-built deltas row 9); render5.ts adds Space and Earth.
+  const want = s.stage >= 4;
   if (want === laidOut) return;
   laidOut = want;
   if (want) {
@@ -139,7 +140,8 @@ function renderStores4(s: GameState): void {
   setText('treatyChipsPct', fmtInt(Math.floor(f.chipsInstalled * 100)));
 }
 
-function meterSpan(id: string, fraction: number, label: string): void {
+/** A Stores meter with its label in the hover and for assistive tech (Stage 5's two use it too). */
+export function meterSpan(id: string, fraction: number, label: string): void {
   setText(id, meter(Math.max(0, Math.min(1, fraction)), 'use'));
   const el = byId(id);
   if (el.title !== label) {

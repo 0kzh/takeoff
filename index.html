@@ -46,19 +46,35 @@
       <div id="panel-stores" class="panel stores" data-panel="stores" data-reveal="stores" data-legend="stores">
         <div class="storeRow" id="row-funds" data-store="funds" data-hide="stage4"><span class="storeKey">funds</span><span class="storeVal" data-slot="funds"></span></div>
         <div class="storeRow" id="row-buildFund" data-store="buildFund" data-reveal="buildShare"><span class="storeKey">build fund</span><span class="storeVal" id="buildFund">$0</span></div>
-        <div class="storeRow" id="row-research" data-store="research"><span class="storeKey">research</span><span class="storeVal"><span data-hide="takeoff"><span class="meter" id="researchMeterS" role="img"></span> </span><span data-slot="research"></span><span data-hide="takeoff"> of <span data-slot="researchCap"></span></span></span></div>
-        <div class="storeRow" id="row-insight" data-store="insight"><span class="storeKey">insight</span><span class="storeVal" data-slot="insight"></span></div>
+        <div class="storeRow" id="row-research" data-hide="beyond" data-store="research"><span class="storeKey">research</span><span class="storeVal"><span data-hide="takeoff"><span class="meter" id="researchMeterS" role="img"></span> </span><span data-slot="research"></span><span data-hide="takeoff"> of <span data-slot="researchCap"></span></span></span></div>
+        <div class="storeRow" id="row-insight" data-hide="beyond" data-store="insight"><span class="storeKey">insight</span><span class="storeVal" data-slot="insight"></span></div>
         <div class="storeRow" id="row-trust" data-store="trust" data-hide="takeoff"><span class="storeKey">trust</span><span class="storeVal" data-slot="trust"></span></div>
         <div class="storeRow" id="row-materials" data-store="materials" data-reveal="materialsRow"><span class="storeKey">materials</span><span class="storeVal" id="materials">0 t</span></div>
         <div class="storeRow" id="row-robots" data-store="robots" data-reveal="robotsRow"><span class="storeKey">robots</span><span class="storeVal"><span class="meter" id="robotsMeter" role="img"></span> <span id="robotsCount">0</span><span id="robotsCap"></span></span></div>
-        <div class="storeRow" id="row-gpus" data-store="gpus"><span class="storeKey">GPUs</span><span class="storeVal"><span data-hide="stage4"><span class="meter" id="gpuMeter" role="img"></span> </span><span data-slot="infraGpus"></span><span data-hide="stage4"> of <span data-slot="gpuCapacity"></span> <span id="gpuFull" class="note"></span></span><span data-reveal="stage4" id="gpusS4"></span></span></div>
-        <div class="storeRow" id="row-power" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span data-hide="stage4"><span class="meter" id="powerMeterS" role="img"></span> <span data-slot="powerMW"></span> of <span data-slot="powerCapMW"></span> MW <span id="powerFull" class="note"></span></span><span data-reveal="stage4" id="powerS4"></span></span></div>
-        <div class="storeRow" id="row-copies" data-store="copies"><span class="storeKey">copies</span><span class="storeVal" data-slot="infraCopies"></span></div>
+        <div class="storeRow" id="row-gpus" data-hide="beyond" data-store="gpus"><span class="storeKey">GPUs</span><span class="storeVal"><span data-hide="stage4"><span class="meter" id="gpuMeter" role="img"></span> </span><span data-slot="infraGpus"></span><span data-hide="stage4"> of <span data-slot="gpuCapacity"></span> <span id="gpuFull" class="note"></span></span><span data-reveal="stage4" id="gpusS4"></span></span></div>
+        <div class="storeRow" id="row-power" data-hide="beyond" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span data-hide="stage4"><span class="meter" id="powerMeterS" role="img"></span> <span data-slot="powerMW"></span> of <span data-slot="powerCapMW"></span> MW <span id="powerFull" class="note"></span></span><span data-reveal="stage4" id="powerS4"></span></span></div>
+        <div class="storeRow" id="row-copies" data-hide="beyond" data-store="copies"><span class="storeKey">copies</span><span class="storeVal" data-slot="infraCopies"></span></div>
         <div class="storeRow" id="row-data" data-store="data" data-reveal="dataRow"><span class="storeKey">data</span><span class="storeVal"><span id="data">0</span> T</span></div>
         <div class="storeRow" id="row-chips" data-store="chips" data-reveal="chipsRow" data-hide="takeoff"><span class="storeKey">chips on order</span><span class="storeVal" id="chipsOnOrder">0</span></div>
         <div class="storeRow" id="row-monitors" data-store="monitors" data-reveal="monitors" data-hide="takeoff"><span class="storeKey">monitors</span><span class="storeVal" id="monitorCopies">0</span></div>
         <div class="storeRow" id="row-rogue" data-store="rogue" data-reveal="rogueRow" data-hide="takeoff"><span class="storeKey">rogue copies</span><span class="storeVal" id="rogueCopies">0</span></div>
         <div class="storeRow" id="row-treatyChips" data-store="treatyChips" data-reveal="fleetChips"><span class="storeKey">treaty chips</span><span class="storeVal"><span class="meter" id="chipsMeter" role="img"></span> <span id="treatyChipsPct">0</span> of 100%</span></div>
+        <!-- Stage 5 (stage5.md §2.5): the flow, the two purses, what it built; Earth below, in grey. -->
+        <div class="storeRow" id="row-launch" data-store="launch" data-reveal="launchRow"><span class="storeKey">launch mass</span><span class="storeVal" id="launchMass">0 t/s</span></div>
+        <div class="storeRow" id="row-matter" data-store="matter" data-reveal="matterRow"><span class="storeKey">matter</span><span class="storeVal" id="matter">0 t</span></div>
+        <div class="storeRow" id="row-missionFund" data-store="missionFund" data-reveal="missionFund"><span class="storeKey">mission fund</span><span class="storeVal"><span class="meter" id="fundMeter" role="img"></span> <span id="fundText">0 of 0 t</span></span></div>
+        <div class="storeRow" id="row-orbital" data-store="orbital" data-reveal="orbitalRow"><span class="storeKey">orbital GPUs</span><span class="storeVal" id="orbitalGpus">0</span></div>
+        <div class="storeRow" id="row-swarm" data-store="swarm" data-reveal="collectors"><span class="storeKey">swarm</span><span class="storeVal"><span class="meter" id="swarmMeter" role="img"></span> <span id="swarmText">0 of 150M t</span></span></div>
+        <div class="storeRow" id="row-mercury" data-store="mercury" data-reveal="mercuryRow"><span class="storeKey">mercury</span><span class="storeVal" id="mercuryLeft">100% left</span></div>
+        <div class="storeRow" id="row-people" data-store="people" data-reveal="peopleRow"><span class="storeKey">people off Earth</span><span class="storeVal" id="peopleOff">0</span></div>
+        <div class="storeRow" id="row-probes" data-store="probes" data-reveal="probesRow"><span class="storeKey">probes</span><span class="storeVal" id="probesCount">0</span></div>
+      </div>
+
+      <!-- Stage 5: Earth as three grey rows under their own legend (stage5.md §1.1). -->
+      <div id="panel-earth" class="panel stores earth" data-panel="earth" data-reveal="earth" data-legend="earth">
+        <div class="storeRow" id="row-earthRobots" data-store="earthRobots"><span class="storeKey">robots</span><span class="storeVal" id="earthRobots">0</span></div>
+        <div class="storeRow" id="row-earthGpus" data-store="earthGpus"><span class="storeKey">GPUs</span><span class="storeVal" id="earthGpus">0</span></div>
+        <div class="storeRow" id="row-earthPower" data-store="earthPower"><span class="storeKey">power</span><span class="storeVal" id="earthPower">0</span></div>
       </div>
 
       <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
@@ -171,7 +187,7 @@
         <span class="note" id="trustCostNote">(costs Trust)</span><br>
         <span data-hide="stores">Researchers: <span id="researchers">1</span><br></span>
         <span class="hiddenIds">Lab Space: <span id="labSpace">1</span><br></span></span>
-        <span data-hide="stores"><br>Research <span class="meter" id="researchMeter" role="img"></span> <span id="research">0</span><span class="hiddenIds"> / <span id="researchCap">1,000</span></span><br></span>
+        <span data-hide="stores"><br>Research <span class="meter" id="researchMeter" role="img"></span> <span id="research">0</span> / <span id="researchCap">1,000</span><br></span>
         <span data-reveal="insight"><span data-hide="stores">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span></span>
         <div data-reveal="allocation" id="allocBlock">
           Copies on research: <input type="range" id="allocSlider" min="5" max="50" step="5" value="15" aria-label="Share of copies on research"> <span id="allocPct">15%</span><span id="allocRate" class="note"></span><br>
@@ -322,11 +338,15 @@
       <div id="panel-stats" class="panel" data-panel="stats" data-reveal="stats">
         <b>Stats</b>
         <hr>
+        <span data-hide="beyond">
         Copies think at <span id="statSpeed">1</span>× human speed<span class="hiddenIds"> (<span id="statCopies">0</span>)</span><br>
         <span class="hiddenIds">Revenue run-rate: <span id="statRunRate">$ 0</span> / yr<br></span>
         <span data-hide="geopolitics"><span id="statLeadLabel">Lead over Baiwen:</span> <span id="statLead">3</span> months<br></span>
         <span class="hiddenIds">Lost to value drift: <span id="statDrift">0</span></span>
         <span data-hide="alignment">Alignment (as measured): <span id="statAlignment">50</span> <span id="alignNote" class="note"></span></span>
+        </span>
+        <!-- Stage 5 (stage5.md §2.5): the model, the copies, value drift; nothing else. -->
+        <span data-reveal="beyond">Model: <span id="statModel">Sage</span><br>Copies thinking: <span id="statCopiesThinking">0</span><br>Lost to value drift: <span id="statDrift5">0</span></span>
         <span class="hiddenIds">Tasks per sec: <span id="statTasksPerSec">0</span> · Revenue per sec: <span id="statRevPerSec">$ 0.00</span> · Capability: <span id="statCapability">1.00</span>×</span>
       </div>
 
@@ -364,11 +384,27 @@
         <span class="hiddenIds">Lead over Baiwen: <span id="lead">3</span> months · Baiwen capability: <span id="baiwenCapability">0.70</span>×</span>
       </div>
 
+      <!-- Stage 5 (stage5.md §6): the rows (each ×1 / ×10 / max with its return), the standing split, the
+           Industry share, the mission line, the swarm; late in some runs, one sentence in their place. -->
       <div id="panel-space" class="panel" data-panel="space" data-reveal="space">
         <b>Space</b>
         <hr>
-        Launch capacity: <span id="launchCapacity">0</span><br>
-        Orbital compute: <span id="orbitalCompute">0</span>
+        <div id="spaceControls" data-hide="rowsTaken">
+          <div class="spaceRow" id="rowFoundry" data-reveal="rowFoundry"><span class="spaceName">Foundries</span> <button class="button2" id="btn-foundry">×1</button><button class="button2" id="btn-foundry10">×10</button><button class="button2" id="btn-foundryMax">max</button><br><span class="note" id="foundryLine"></span></div>
+          <div class="spaceRow" id="rowOrbital" data-reveal="rowOrbital"><span class="spaceName">Orbital datacenters</span> <button class="button2" id="btn-orbital">×1</button><button class="button2" id="btn-orbital10">×10</button><button class="button2" id="btn-orbitalMax">max</button><br><span class="note" id="orbitalLine"></span></div>
+          <div class="spaceRow" id="rowCollector" data-reveal="collectors"><span class="spaceName">Collectors</span> <button class="button2" id="btn-collector">×1</button><button class="button2" id="btn-collector10">×10</button><button class="button2" id="btn-collectorMax">max</button><br><span class="note" id="collectorLine"></span></div>
+          <div class="spaceRow" id="rowProbe" data-reveal="rowProbe"><span class="spaceName">Probes</span> <button class="button2" id="btn-probe">×1</button><button class="button2" id="btn-probe10">×10</button><button class="button2" id="btn-probeMax">max</button><br><span class="note" id="probeLine"></span></div>
+          <div id="splitBlock" data-reveal="split">
+            <div class="fleetRow"><span class="fleetJob">Foundries</span> <input type="range" id="sliderFoundry" min="0" max="100" step="5" value="35" aria-label="Share of matter the autofactory spends on Foundries"> <span id="sliderFoundryPct" class="fleetPct">35%</span> <span id="sliderFoundryRate" class="note"></span></div>
+            <div class="fleetRow"><span class="fleetJob">Datacenters</span> <input type="range" id="sliderOrbital" min="0" max="100" step="5" value="25" aria-label="Share of matter the autofactory spends on Orbital datacenters"> <span id="sliderOrbitalPct" class="fleetPct">25%</span> <span id="sliderOrbitalRate" class="note"></span></div>
+            <div class="fleetRow" data-reveal="collectors"><span class="fleetJob">Collectors</span> <input type="range" id="sliderCollector" min="0" max="100" step="5" value="0" aria-label="Share of matter the autofactory spends on Collectors"> <span id="sliderCollectorPct" class="fleetPct">0%</span> <span id="sliderCollectorRate" class="note"></span></div>
+            <span id="byHand" class="note">By hand: 40%</span>
+          </div>
+          <div id="shareRow" data-reveal="industryShare">Industry share: <button class="button2 toggle" id="btn-industryShare" title="The share of the flow that reaches matter while a mission waits, 50 / 75 / 90 %. The rest fills the mission fund. Click to change it.">75%</button> <span id="shareLine" class="note"></span></div>
+        </div>
+        <div id="splitStatus" data-reveal="rowsTaken">It buys what is needed. It is better at it.</div>
+        <div id="missionRow" data-reveal="missionLine"><span id="missionLine">Mission: none building</span></div>
+        <div id="swarmLine" data-reveal="collectors">Swarm: <span id="swarmPct">0%</span> · <span id="swarmNext">next: 0.01%</span></div>
       </div>
     </div>
   </div>

@@ -620,3 +620,41 @@ body[data-stage="4"] #panel-stores { font-size: 15px; }
   .fleetRow { white-space: normal; }
   .fleetRow input[type="range"] { width: 45%; }
 }
+
+/* ---------- Stage 5 (stage5.md §6) ---------- */
+
+/* Space at the top of the left column; Stores stays the main panel in the centre, Earth grey under it. */
+body[data-stage="5"] #leftColumn { width: 330px; }
+body[data-stage="5"] #middleColumn { width: 360px; }
+body[data-stage="5"] #middleColumn .projectButton { width: 340px; }
+body[data-stage="5"] #panel-stores { font-size: 15px; }
+.spaceRow { margin-bottom: 5px; }
+.spaceName { display: inline-block; min-width: 132px; }
+.spaceRow .button2 { margin: 0 2px 0 0; }
+.spaceRow .note { display: block; line-height: 1.25; }
+#splitBlock, #shareRow, #missionRow, #swarmLine { margin-top: 4px; }
+#splitBlock .fleetJob { width: 86px; }
+#splitBlock .fleetRow { white-space: normal; }
+#splitBlock .fleetRow input[type="range"] { width: 70px; }
+#byHand { display: block; }
+#splitStatus { margin: 4px 0; font-style: italic; }
+/* Stores' figures are right-aligned; a meter's fill runs from the left. */
+#fundMeter, #swarmMeter { text-align: left; }
+#panel-earth { color: #888; margin-top: 14px; }
+#panel-earth.stores::before { color: #888; }
+#panel-earth.quiet .storeRow { cursor: default; }
+#panel-earth.quiet .storeRow:hover .storeKey { text-decoration: none; }
+
+@media (max-width: 700px) {
+  /* Stage 5 at 390 px: Tasks, Stores, Space, Projects, Earth, Stats, the graph. */
+  body[data-stage="5"] #panel-stores { order: 2; }
+  body[data-stage="5"] #panel-space { order: 3; }
+  body[data-stage="5"] #panel-projects { order: 4; }
+  body[data-stage="5"] #panel-earth { order: 5; }
+  body[data-stage="5"] #panel-stats { order: 6; }
+  body[data-stage="5"] #panel-graph { order: 7; }
+  body[data-stage="5"] #panel-earth.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+  #row-launch, #row-missionFund, #row-swarm { grid-column: 1 / -1; }
+  .spaceName { min-width: 0; display: block; }
+  #splitBlock .fleetRow input[type="range"] { width: 40%; }
+}

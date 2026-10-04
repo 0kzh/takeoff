@@ -38,6 +38,8 @@ import {
   renderOversight, renderPublic3, renderStats3, noteState3, setOff, folded,
 } from './render3.js';
 import { mount4, renderStage4 } from './render4.js';
+import { mount5, renderStage5 } from './render5.js';
+import { missionNeeds } from '../engine/space.js';
 
 type Rest<T> = T extends (s: GameState, ...rest: infer R) => unknown ? R : never;
 export type Perform = <K extends keyof Actions>(name: K, ...args: Rest<Actions[K]>) => boolean;
@@ -90,6 +92,7 @@ export function mount(p: Perform): void {
   mountStores();
   mount3(p);
   mount4(p);
+  mount5(p);
 }
 
 /** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
@@ -116,6 +119,7 @@ export function render(s: GameState): void {
   renderWorld(s);
   renderLater(s);
   renderStage4(s);
+  renderStage5(s);
   renderGraph(s);
   renderStores(s);
   renderModal(s, (i) => perform('resolveChoice', i), () => perform('takeDefault'));
@@ -561,7 +565,8 @@ function renderProjects(s: GameState): void {
     if (b.title !== tip) b.title = tip;
     // A card the lab cannot hold says so, with the fix on screen (§3): `needs a lab that holds 2,000 — Expand Lab`.
     const reason = b.querySelector<HTMLElement>('.projectReason');
-    const why = labReason(s, def.cost(s).research ?? 0);
+    // Stage 5: a mission is grey only while its fund is short, and says by how much and when (§2.2).
+    const why = def.mission ? missionNeeds(s, def) : labReason(s, def.cost(s).research ?? 0);
     if (reason && reason.textContent !== why) reason.textContent = why;
     if (def.id === 'p_datacenter' && s.stage === 1) renderDatacenterCard(s);
     const disabled = !def.canAfford(s);
