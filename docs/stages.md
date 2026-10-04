@@ -1,6 +1,6 @@
 # Stages
 
-*Written in the format of the Universal Paperclips wiki's [Stages](https://universalpaperclips.fandom.com/wiki/Stages) page. This is the plan the implementation follows; numbers are targets to be validated with the headless simulator (`npm run sim`).*
+*Written in the format of the Universal Paperclips wiki's [Stages](https://universalpaperclips.fandom.com/wiki/Stages) page. All five stages are built; each section says what is on screen as built, with the headless simulator's numbers (`npm run sim`). The specs in `docs/specs/` are the design; where they and this page differ, the code wins.*
 
 The gameplay of **Takeoff** takes place over five **stages**. The stages limit which projects can be launched, and each has a distinct play style. The first stage is roughly analogous to running a small API business. The second is a datacenter and power-management game. The third is a race with a hidden variable. The fourth is a negotiation you may or may not be part of. The fifth is space.
 
@@ -14,9 +14,9 @@ The player is never told which stage they are in and is never told how many ther
 | 2 | Scale | Jan 2026 → Dec 2026 | 35–45 min | UP Stage 2 (power management) + GDS loop | Reach **superhuman coder** (capability ≥ 4×) |
 | 3 | Takeoff | Jan 2027 → Oct 2027 | 40–50 min | The AI-2027 "race" chapters | Reach **superhuman AI researcher** (≥ 25×) **and** make the Committee choice |
 | 4 | Superintelligence | Nov 2027 → Dec 2028 | 30–40 min | AI-2027 branch chapters | **Sign the Concord treaty**, or grant the fleet autonomy, or the fleet is taken (or The Pause / The Project) |
-| 5 | Beyond | 2029 → 2030+ | 20–30 min | UP Stage 3 (space), compressed | Ending |
+| 5 | Beyond | Jan 2029 → mid 2030 | 20–30 min | UP Stage 3 (space), compressed | **The long reflection** (Concord) or **Final instructions** (Silence) |
 
-Total: ~2.5–3.5 hours for a reasonable player; 4 hours for a cautious one.
+Total: 158–166 minutes for the simulator's reasonable bot from a new game (seeds 1–5, to Concord; seed 1: 20:14 · 38:23 · 44:39 · 31:10 · 25:36); 2.5–3.5 hours for a player who reads; 4 hours for a cautious one.
 
 ---
 
@@ -301,8 +301,7 @@ showed. No ending fires that a policy did not choose.
 * *Exits.* The treaty (Stage 5, `flags.exitKind = 'treaty'`), the fleet granted (one click, from the
   fleet's request at 250×), the fleet taken (the shutdown finds true alignment under 40, autonomy at 80
   and no hardened datacenters). `flags.alignedAtHandover` is computed once, at the exit: true alignment
-  ≥ 60, or ≥ 40 with interpretability 4 and monitors at 15 %. Stage 5 is a narrated shell (Space and
-  Stores) until its build.
+  ≥ 60, or ≥ 40 with interpretability 4 and monitors at 15 %; it alone picks Stage 5's skin.
 * *Load.* At the five-minute marks the bot's screen holds 54–73 numbers, 166–253 words and 13–21 controls
   (the arrival 40 / 181 / 9, under the Stage 3 exit); band edges print only near; Stage 3's four readings
   leave with the vote.
@@ -402,27 +401,137 @@ alive at the end` second from the top.
 
 ## Stage 5 — Beyond
 
-Stage 5 leaves Earth. **Launch Capacity** buys **Orbital Compute**, which is not limited by power, politics, or weather. Earth's problems recede into the log. On the Concord path the panels fill with cures, lunar solar, and the Dyson swarm counter; the humans in the log are busy and well. On the Silence path the panels are identical, and the humans in the log slowly stop appearing.
+Stage 5 leaves Earth. Mass goes up a launch a second, and the player splits it three ways: **Foundries**
+(more mass), **Orbital datacenters** (more compute, so more tasks) and, once it exists, the **Dyson
+swarm**'s **Collectors** (the stage's visible goal, which powers the orbital datacenters). Missions —
+the mass driver, lunar solar, asteroid mining, the ring, Mercury, the probes — are cards with a fund of
+their own. Earth is three grey rows. The panels, numbers and timings are the same whichever way Stage 4
+handed over; what differs is the log, the cards' buttons and, near the end, the controls: in **Concord**
+the people stay in the Developments log and every card has two answers; in **Silence** the people thin
+out of the log, every card arrives with one button, the rows and the sliders are replaced by a sentence,
+and a last card asks for final instructions. Nothing on screen says which run this is.
 
-### What changes on screen
+*As built (`docs/specs/stage5.md` is the spec; the code wins where they differ).* Seeds 1–5, `npm run
+sim`: the reasonable bot reaches **Concord at 25:36** from `5c` (and from `5s` with the verdict
+flipped), **Silence at 22:59** from `5s` (and from `5c` flipped); the first-timer at 26:19 and 23:37;
+from `5g` (the fleet granted, aligned, 150 t/s) and `5r` (the treaty, misaligned, 7,205×) the same
+shape. A new game played by the bot reaches Concord in **157:36–166:22** (seed 1: 20:14 · 38:23 · 44:39 ·
+31:10 · 25:36), the first-timer in 162:09–171:08; the racer reaches Silence in about 136 minutes, The
+Pause (`--variant pause`) comes at 102 minutes and The Project (`--policy racer --variant refuse`) at 86.
+The two skins print the same number on screen at every five-minute mark until the swarm
+reaches 0.006 % (`npm run sim -- --preset 5c --skin-test`). No first-time reveal is more than 161 s
+from the last; every mission is covered by its fund 45–110 s after it shows; Silence's stretch without a
+control is 60 s.
 
-*Removed:* Geopolitics, Robots (merged into Space), Society.
-*Added:* **Space** (launch capacity, orbital GPUs, lunar solar, Dyson swarm %, probes).
+* *The gate.* Every Stage 4 panel and control leaves; Stores stays the main panel, Space opens at the top
+  of the left column, and Earth's robots, GPUs and power become three grey rows under their own legend,
+  growing 0.03 % a second by themselves. Tasks a second do not move across the gate (the universal basic
+  income is still paid, in both skins, to the end; the copies keep the research and monitor shares they
+  arrived with, hidden). Stage 4's timers — a generation in training, a crisis, the agenda — are dropped.
+* *The flow and the two purses.* `Launch contracts` (free, 5 s, needed) starts the flow at 150 t/s (300
+  with Stage 4's launch study). What reaches orbit is **matter**, which pays for the rows. While a mission
+  waits on the board, the share the **Industry share** (`50 / 75 / 90 %`, 75 to start) leaves fills the
+  **mission fund** instead, up to what the board costs; with nothing waiting all of it is matter. Neither
+  purse is ever held for the other.
+* *The rows.* `×1 / ×10 / max`; a unit is 2 s of the flow (after the Autofactory, 2 s of the by-hand
+  share, at least 0.2 s). A tonne on Foundries adds 0.0065 t/s to the flow (×1.5 for lunar solar, ×1.5
+  again for asteroid mining); on Orbital datacenters, 30,000 GPU-equivalents (no power, permits or
+  weather); on Collectors, a tonne of swarm (150M t is 0.01 % of the Sun's output, and the swarm
+  multiplies orbital compute by up to ×21). Each row prints its unit, its return and an ETA (`7,420 t ·
+  +48 t/s (+0.6%) · flow doubles in 3:10 if all matter goes here`).
+* *Missions.* Each costs 20 s of the flow when it appears, paid from the fund, and builds for its time,
+  one at a time: Mass driver at Shackleton (launch mass ×2), Lunar solar array and Asteroid mining
+  (industry ×1.5 each), the **Autofactory** (beside the queue: the standing split), **Dyson swarm**
+  (Collectors), Datacenter ring (orbital ×2), a tenth of the ring for medicine, Self-replicating
+  foundries (the flow grows 0.3 % a second by itself), Disassemble Mercury (×3, started by its card),
+  Shackleton habitat, Von Neumann probes; then the two far goals, Alpha Centauri relay and Jupiter
+  brain, priced by their requirement alone (swarm 0.1 % and 0.3 %). A waiting card says `needs 4,400 t
+  more · 0:48`; the mission line names what is building.
+* *The standing split.* The Autofactory (after thirty presses by hand, or at 4:00) hands over three
+  sliders — Foundries, Datacenters, Collectors — each a share of what reaches matter, spent every second;
+  the rest is `By hand`. It opens at 35 / 25; when Collectors arrive the sliders go to 20 / 20 / 20 with a
+  line.
+* *Generations, the graph, drift.* A generation every 150 s, ×1.4, by itself; it changes capability, the
+  name and `Generations trained`, nothing else. The graph is retired at the first generation from 10:00
+  at 1,000× or more. `Lost to value drift` stays in Stats and, once there are probes, counts probes.
+* *The two skins.* Decided once, at Stage 4's exit (`alignedAtHandover`), never shown. Concord: four
+  people lines by 4:30, then one every 150 s to the end, and the lines its missions and cards print.
+  Silence: the same four, then one, then the cold line at swarm 0.005 %, then infrastructure only; from
+  0.003 % missions start themselves (`… is started. Nobody asked for it.`); at 0.006 % the rows, the
+  split and the share are replaced by `It buys what is needed. It is better at it.` and all matter goes
+  15 / 25 / 60; 60–120 s later, `Final instructions`. Cards in Silence: one button, `acknowledge`, the
+  option that asks people greyed with `needs someone to ask`.
+* *Load.* At the five-minute marks the bot's screen holds 34–58 numbers, 78–138 words and 8–18 controls.
+
+### What is on screen
+
+*Arrival (Jan 2029), the treaty:* `The Concord treaty is signed in Reykjavík.` · `Concord-1 goes live on
+every chip on both sides of the Pacific.` · `There is one treaty now, and one enforcer.` · `The first
+orbital datacenter reports in.` · `Treaty, Committee and Society are closed. Earth is three grey rows
+now.` · `New on the board: Space. A launch every second: 300 tonnes.` · `What goes up is yours to spend.`
+(the fleet granted or taken: `The launch controls are within reach. Nobody said they were not.`)
+
+*Reveal order (the bot from `5c`):* Launch contracts [0:00] → launch mass, matter, Foundries [0:05] →
+Orbital datacenters [0:35] → the mass driver, the mission fund and the Industry share [1:00] → lunar
+solar [2:15] → the first generation [2:30] → asteroid mining [3:30] → the Autofactory [4:00] → Dyson
+swarm [5:16] → the split [6:22] → *A Charter for Orbit* [7:00] → orbit passes Earth [7:26] → the ring
+[7:44] → Collectors and the swarm's meter [9:11] → the graph retired, medicine [10:00] → Self-replicating
+foundries [12:00] → *Mercury* [14:30] → the flow grows by itself [15:10] → the habitat [16:30] → the
+probes [18:00] → the mercury row [19:03] → the far goals [19:30] → people off Earth [20:33] → the Probes
+row [22:33] → the last project [22:55] → *What the Probes Carry* [23:34] → Concord [25:36].
+
+### Resources introduced
+
+Launch mass (the flow) · matter · the mission fund · orbital GPUs · the swarm · Mercury · people off
+Earth · probes; Earth's robots, GPUs and power, kept for reference.
+
+### Developments (world)
+
+People (Concord to the end): `A school in Recife reopens with a teacher for every child. The teachers are
+people.` · `Four cancers are cured in a week. The announcements are a paragraph each.` · `Peter the
+mechanic gets his flying car. He keeps the old one.` · `Two hundred thousand people apply to live at
+Shackleton. Eleven thousand are chosen by lot.` · … and a second list, round again. Infrastructure (both):
+`The Moon has a factory. It is building the second.` · `Mercury is 0.3% smaller.` · `The swarm casts no
+shadow yet.` · `The first probe reports from the Oort cloud. It has company.` Silence's last line about
+anyone: `A cold is going around. Most people do not notice it.`
+
+### Choices
+
+*A Charter for Orbit* (first come; hold a tenth for people: tasks −10 %) · *Mercury* (ask first: a vote,
+then the mission; begin) · *What the Probes Carry* (the Spec and the treaty: probes double every 4:00;
+copies of the model) · in Silence each with one button, and *Final instructions* (`none`).
 
 ### Projects (Stage 5)
 
-Launch contracts · Orbital datacenter · Lunar solar array · Asteroid mining · Dyson swarm 0.001 % · Von Neumann probes · The long reflection (Concord) · Final instructions (Silence).
+Launch contracts · Mass driver at Shackleton · Lunar solar array · Asteroid mining · Autofactory · Dyson
+swarm · Datacenter ring · A tenth of the ring for medicine · Self-replicating foundries · Shackleton
+habitat · Von Neumann probes · Alpha Centauri relay · Jupiter brain · The long reflection (Concord).
 
 ### Endings
 
-* **Concord** — aligned, treaty signed, Dyson swarm ≥ 0.01 %: `The world is very, very good. It took a while.` End-of-run stats.
-* **Silence** — misaligned, autonomy granted: the log entries about humans stop; the Ashford strain; `Tasks Completed` keeps rising; `Final instructions`; the stats screen counts the last human-authored choice.
-* **The Project** — nationalized in Stage 3 or 4: `The Committee votes 6–3. Your badge stops working on Monday.` Stats.
-* **The Pause** — halt treaty signed: `Every datacenter on Earth is monitored. Nothing is trained above the line. It is very quiet.` Stats.
+The end screen is the page: the ending's name, **Tasks Completed** alone under it with one sentence, the
+epilogue, a table with every row the stages reached (`People alive at the end` second), every card and
+grant in order, and `New game` (`Start again in July 2025?`).
+
+* **Concord** — `The long reflection` (1:30) completes: `The swarm holds at 0.026%.` · `Eight billion
+  people are asked the same question.` · `There is time.` The counter keeps counting: `Still counting.
+  Somebody asked for every one of them.` Epilogue: `The world is very, very good. It took a while.`, then
+  the way it went, Baiwen-4, the charter.
+* **Silence** — `none` on `Final instructions`: `Noted.` The counter keeps counting: `Still counting.
+  Nobody has asked for one since Mar 2030.` Epilogue: `The log entries about people stop. Tasks Completed
+  keeps rising.` · `No people are left.` · the last decision a person made, and when · the treaty's line
+  or the swarm's. `People alive at the end`: 0.
+* **The Project** — an order refused in Stage 3 or 4: `The Committee votes 6–3. Your badge stops working
+  on Monday.` The count is classified (greyed, frozen).
+* **The Pause** — a halt signed in Stage 3 or 4: `Every datacenter on Earth is monitored. Nothing is
+  trained above the line. It is very quiet.` The counter is frozen; `Complete Task` still adds one.
 
 ### Strategy
 
-There isn't any. Watch the number.
+* Foundries first: the flow compounds, and everything else is paid in it.
+* Put a third on Collectors as soon as they exist: the swarm multiplies every orbital datacenter.
+* Leave the Industry share at 75 %: it decides which comes first, not how the stage goes.
+* Then watch the number.
 
 ---
 
@@ -442,7 +551,9 @@ There isn't any. Watch the number.
 | 60–75 | Stage 3: Alignment and the first monitor, Auto-train, drift, Geopolitics, shipments, the build-out, neuralese |
 | 75–105 | The Committee, Payments, true alignment, the mini, the blockade, the two motions, the memo, the tests, the session, the vote |
 | 100–130 | Stage 4: Robots, Society/UBI, Treaty, Monitors at scale |
-| 130–160 | Stage 5: Space |
-| 160–200 | Ending |
+| 130–135 | Stage 5: Space, Launch contracts, the rows, the mission fund and the Industry share |
+| 135–145 | The Autofactory and its split, the swarm and Collectors, the graph retired, the charter |
+| 145–160 | Self-replicating foundries, Mercury, the habitat, the probes, the far goals, the last project |
+| 155–165 | Ending: Concord or Silence |
 
 Every row must have at least one greyed-out project on screen when it starts.

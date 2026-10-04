@@ -5,9 +5,10 @@ An incremental browser game about an AI lab racing to superintelligence, in the 
 modals). You run OpenMind from July 2025: complete tasks, bill them, rent GPUs, hire researchers,
 train and release Sage models, and watch the world react in the margin.
 
-Built so far: the full architecture, **Stage 1 — The Startup** (about 20–30 minutes),
-**Stage 2 — Scale** (about 36–44 minutes), **Stage 3 — Takeoff** (about 42–50 minutes) and
-**Stage 4 — Superintelligence** (about 30–40 minutes). Stage 1
+All five stages are built, with their four endings: **Stage 1 — The Startup** (about 20–30
+minutes), **Stage 2 — Scale** (about 36–44 minutes), **Stage 3 — Takeoff** (about 42–50 minutes),
+**Stage 4 — Superintelligence** (about 30–40 minutes) and **Stage 5 — Beyond** (about 23–27 minutes);
+the simulator's reasonable bot plays a new game to its ending in about 160 minutes. Stage 1
 opens one mechanic at a time (one button, then funds, a GPU to save for, the power meter, Buy Power,
 the price, Marketing, Research), and every training run needs a number of GPUs: when the next one
 needs more than the cloud will rent, `First Datacenter` (1,000 GPUs of OpenMind's own at Abilene)
@@ -25,10 +26,16 @@ fleet of Atlas robots mines, replicates and builds datacenters (Stores is the ma
 arrive by themselves and `Verify each generation` reads each one first, jobs go and a universal basic
 income comes, and a Concord treaty with Baiwen waits on verification, terms, a model that can write its
 enforcer and the treaty chips the fleet installs. Three crises read the hidden alignment number. The
-stage ends with the treaty signed, the fleet granted or taken (each into a narrated Stage 5 shell,
-with `alignedAtHandover` computed once), a halt (`The Pause`) or the Committee's order (`The
-Project`). The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the two
-differ, `docs/stages.md` and the code win).
+stage ends with the treaty signed, the fleet granted or taken (with `alignedAtHandover` computed
+once), a halt (`The Pause`) or the Committee's order (`The Project`). Stage 5 leaves Earth: mass goes
+up a launch a second and is split between Foundries (more mass), Orbital datacenters (more tasks) and
+the Dyson swarm's Collectors, by hand and then by the Autofactory's sliders; missions are paid from a
+fund of their own. Stage 4's verdict picks one of two skins with the same numbers: in Concord the people
+stay in the log and `The long reflection` ends the run; in Silence they thin out, cards come with one
+button, the controls are taken late, and `Final instructions` ends it. The end screen leads with Tasks
+Completed (still counting in Concord and Silence) over every row the run reached. The design lives in
+`docs/design.md` and the stage plan in `docs/stages.md` (where the two differ, `docs/stages.md` and the
+code win).
 
 ## Running it
 
@@ -49,6 +56,8 @@ npm run watch        # in a second terminal: recompile on save
 | `node tools/verify/smoke-stage2.mjs` | Stage 2 browser smoke test, from the Stage 2 preset through the Stage 3 arrival |
 | `node tools/verify/smoke-stage3.mjs` | Stage 3 browser smoke test, from both Stage 3 presets through the vote, the Pause and the Project |
 | `node tools/verify/smoke-stage4.mjs` | Stage 4 browser smoke test, from the four Stage 4 presets to Stage 5 or an ending, the crises in each band, the Pause and the Project |
+| `node tools/verify/smoke-stage5.mjs` | Stage 5 browser smoke test, from `5c` to Concord and `5s` to Silence, the two skins compared, the four end screens |
+| `node tools/verify/smoke-fullrun.mjs` | a new game played by Autoplay to an ending, saved and reloaded at every stage boundary |
 
 The browser loads `dist/main.js` as a native ES module, which is why every TypeScript import uses
 an explicit `.js` extension. `dist/` is gitignored.
@@ -79,12 +88,15 @@ src/
     world3.ts, oversight.ts, events3.ts   the lead, Anthrosoft, jobs and approval; the Committee, the order, the session, the vote; the scripted beats
     stage4.ts     Stage 4's coordinator: the arrival on both branches, generations and Verify, the crises' bands, the fleet's request, the three exits and alignedAtHandover
     fleet.ts, society.ts, treaty.ts   the robots and materials, jobs/approval/universal basic income/Housing, the treaty with its ceilings and the Committee's agenda
-  data/           content tables: projects (projects3.ts, projects4.ts), developments, choices (choices3.ts, choices4.ts),
-                  crises, the Stage 2, 3 and 4 content tables (stage2.ts, stage3.ts, stage4.ts), flavor text, dev presets
+    space.ts      Stage 5: the arrival, the flow and its two purses, the rows and the split, missions, probes, generations, the two skins, Silence's take-over
+  data/           content tables: projects (projects3.ts, projects4.ts, projects5.ts: the missions), developments, choices (choices3.ts,
+                  choices4.ts, choices5.ts), crises, the Stage 2–5 content tables (stage2.ts … stage5.ts, with Stage 5's people
+                  and infrastructure lines), flavor text, dev presets
   ui/             the only code that touches the DOM
     render.ts     render(state): diffs text into spans, toggles visibility from state.revealed
     render3.ts    Stage 3's panels: allocation, the loop, shipments, Alignment and its grant list, Oversight, the end screen
     render4.ts    Stage 4's layout and panels: Stores in the centre, the fleet, Society, the treaty, the agenda, the generation line
+    render5.ts    Stage 5's screen: Space (the rows, the split, the Industry share, the mission line, the swarm), Stores and Earth, Stats
     meter.ts      meter(fraction): the ten-cell capacity bar `｢￭￭￭￭￭￭￭･･･｣` (DOM-free; boot width check)
     console.ts, log.ts, modal.ts, graph.ts, stores.ts, dev.ts, save.ts, dom.ts
   sim/
@@ -92,6 +104,7 @@ src/
     policy3.ts    the Stage 3 branch of every policy, with the decision variants
     stage3sim.ts  the Stage 3 tracker and its B1–B35 block
     policy4.ts, stage4sim.ts   the Stage 4 branch of every policy; the Stage 4 tracker and its C-table block
+    policy5.ts, stage5sim.ts   the Stage 5 branch of every policy; the Stage 5 tracker, its D1–D24 block and the whole-game summary
     bot.ts        headless runner that prints a timeline
 ```
 
@@ -224,9 +237,13 @@ Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 * **A second row** of named starts: `Stage 3 start (careless)` (the same exit after a Stage 2 played
   for speed: Al-Marsa signed, the theft warning ignored, little alignment compute, relations 45,
   approval −30), the four Stage 4 starts, slow and race from each Stage 3 preset (the careless
-  pair played by the first-timer; `?seed` seeds what Stage 4 rolls), and the two Stage 5 starts, real
-  Stage 4 exits: `5c` (`4s` played by the bot to the treaty, aligned) and `5s` (`4cr` played by the
-  first-timer to the fleet granted, misaligned).
+  pair played by the first-timer; `?seed` seeds what Stage 4 rolls), and the four Stage 5 starts, real
+  Stage 4 exits whose Stage 4 `?seed` seeds: `5c` (`4s` played by the bot to the treaty, aligned), `5s`
+  (`4cr` played by the first-timer to the fleet granted, misaligned), `5g` (`4s` played by the
+  first-timer to the fleet granted, aligned, at 150 t/s) and `5r` (`4cr` played by the racer to the
+  treaty, misaligned, at 7,205×).
+* **Flip skin** (Stage 5: turns `alignedAtHandover`, and the skin with it) and **End concord / silence /
+  pause / project** (opens that end screen on the current state).
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save, and seeds the
   presets; `?speed=0` boots paused (the smoke tests reload mid-game without real-time frames).
@@ -243,7 +260,7 @@ __game.tick(ms)         // advance game time (honours Autoplay), then render
 __game.projects         // { all, byId(id), visible() }
 __game.events           // { fireable, fire(id) }
 __game.presets          // preset table
-__game.loadPreset(n)    // 1–5, or a named start: '3c', '4s', '4r', '4cs', '4cr', '5c', '5s'
+__game.loadPreset(n)    // 1–5, or a named start: '3c', '4s', '4r', '4cs', '4cr', '5c', '5s', '5g', '5r'
 __game.setSpeed(n)      // 1, 5, 20 … (0 freezes the real-time loop; drive it with tick)
 __game.setAutoplay(on, policy?, holdTransition?, variant?)
                         // policy 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
@@ -258,15 +275,18 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 10; versions
-1–9 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 11; versions
+1–10 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
 Datacenter, and the opening's new flags are set; version 7 adds Stage 3's fields: shipments,
 autonomy, drift and rogue copies, interpretability, the Committee, the ending; version 8 the wallet
 rule's: the build fund and the build share and an armed Train, a Stage 2 standing pool moved into the
 build fund; version 9 `marketingBought`, the Marketing levels paid for, estimated for an older save
 from its level less the levels rounds, cards and events gave; version 10 Stage 4's `s4` block: the
 fleet, materials, society, the treaty and its agenda, the generation in progress, the crises' clocks,
-all as remaining seconds). The game saves every 15 s,
+all as remaining seconds; version 11 Stage 5's `s5` block: the flow and its parts, both purses, the
+Industry share, the rows' stocks, the split, the mission queue as remaining seconds, the probes, and the
+shell's two stub fields dropped; a save made in the old shell is set up as an arrival). The game saves
+every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -288,7 +308,10 @@ npm run sim -- --minutes 90 --preset 3 --stop-at-stage 4   # Stage 3 from its pr
 npm run sim -- --minutes 90 --preset 3 --policy racer --variant memo-bury
 npm run sim -- --minutes 60 --preset 4s --seed 3           # Stage 4 from its slow start (4r, 4cs, 4cr)
 npm run sim -- --minutes 60 --preset 4r --variant verify-off
-npm run sim -- --minutes 200 --seed 1                       # a new game through Stage 4
+npm run sim -- --minutes 45 --preset 5c --seed 1           # Stage 5 from the treaty (5s, 5g, 5r)
+npm run sim -- --minutes 45 --preset 5c --variant flip      # the same arrival in the other skin
+npm run sim -- --minutes 45 --preset 5c --skin-test         # D7: both skins, numbers compared at each mark
+npm run sim -- --minutes 230 --seed 1                       # a new game to its ending, with the whole-game summary
 ```
 
 `--preset N` starts from the dev overlay's Stage N preset (2: the Stage 1 median at First Datacenter;
@@ -312,7 +335,11 @@ offered) and `refuse` (refuses the Committee's order: The Project). Stage 4 (`st
 `refuse-consolidation`, `grant-at-first-ask`, `refuse-fleet`, `draft-never` / `draft-30`,
 `housing-never`, `hearings-never`, `goal-people` / `goal-treaty`, `hold-25`, `alignwork-0` …
 `alignwork-30`, `pause` (signs the halt from 12:00), `refuse`, and three that expose the crises' bands:
-`nano-oversight-never`, `hardened-never`, `warning-never`. Variants combine with commas.
+`nano-oversight-never`, `hardened-never`, `warning-never`. Stage 5 (`stage5.md` §9): `industry-heavy` (80 / 10 / 10 held),
+`swarm-rush` (30 / 5 / 65), `compute-heavy` (15 / 70 / 15), `count-chaser` (Foundries a third, the rest
+to the row printing the better tasks return), `linger` (the last project left five minutes),
+`no-charter`, `begin`, `copies`, `share-50` / `share-90`, `answers-silence` (Silence's answer at every
+card) and `flip` (the other skin). Variants combine with commas.
 
 Six policies play through `actions` only:
 
@@ -421,6 +448,23 @@ it signs the treaty at 100 %. The first-timer buys every card in screen order (n
 takes every first option (open zones, the labs, sign with Baiwen-4 anyway, grant the fleet at its first
 request), never moves a slider, share or toggle, presses Housing when it can now and then, holds a
 hearing whenever the agenda is empty, and raises the dividend a step when an approval warning names it.
+
+In Stage 5 (`stage5.md` §9) the bot leaves the Industry share at 75 %, buys Foundries ×10 and Orbital
+datacenters ×10 by hand 60 / 40 until the Autofactory, then sets the sliders to 50 / 30 (by hand 20 %),
+30 / 20 / 30 once the swarm exists and 10 / 20 / 50 from 0.005 %, spending what is left by hand on the
+row its ETA favours; it buys every mission the moment its fund covers it, the last project like any
+other, and answers the cards with the people's option (a tenth held, ask first, the Spec). The
+first-timer presses the rows in turn, a unit at a time, never moves a slider or the share, buys every
+mission and takes first options.
+
+The Stage 5 block prints D1–D24 of `stage5.md` §9 that a headless run can see: duration and ending,
+reveal and mechanic gaps, the second row's time, the promised launch mass, greyed goals at the ending,
+Silence's people lines after the cold line and its cards, text rates, the hands measures (nothing to
+buy, two or more things, click gaps, the swarm standing still), Silence's stretch without a control,
+dead grey and repeated lines, the gate (tasks a second across it, and no Stage 4 line after it), each
+mission's time from shown to covered, the swarm's thresholds, cards, choices and 5-minute marks (flow,
+orbital compute, tasks a second, tasks, the swarm, capability). From a new game it adds the whole game:
+the minutes in each stage, the total, the ending and the end screen's rows. `--json` carries it as `s5`.
 
 The Stage 4 block prints the C1–C28 numbers of `stage4.md` §9.3 that a headless run can see: duration and
 how it ended, reveal and mechanic gaps (the verification wait, Concord-1's design and the crises'
@@ -538,7 +582,7 @@ business, money written off, the button, the robots, Steward-1; Business, Traini
 Complete Task gone; Stores in the centre column with no funds row; the car plant marked needed; Verify
 on with its trade), the promised number (10,000 robots and rising 30 s after the car plant, the row
 against its permits), the fleet's beat (three sliders with their rates, the materials row); the bot from
-`4s` to Stage 5 by the treaty (the exit's narration, the Stage 5 shell) with save → reload
+`4s` to Stage 5 by the treaty (the exit's narration, Stage 5's first screen) with save → reload
 mid-generation, mid-agenda and mid-crisis keeping their timers, numbers / controls / words at each
 5-minute mark (≤ 85 / 30 / 350, the arrival under the Stage 3 exit) and no `… first` hold string; the race
 arrival (`Sage-5 is … away. Nobody scheduled it.`, Verify off with its trade, one click turns it on) and
@@ -548,3 +592,32 @@ the bottom band without hardened datacenters; The Pause (the bot's `pause` varia
 (an order refused at relations 15), each end screen with Stage 4's rows and `People alive at the end`
 second; the `5c` and `5s` presets; 390 px without horizontal overflow; and no page errors. Screenshots
 go to `agent-tools/shots/stage4/`.
+
+```sh
+node tools/verify/smoke-stage5.mjs [--seed 1] [--dump]
+```
+
+Loads the Stage 5 starts and plays them. It checks the arrival from `5c` (every Stage 4 panel gone, Space
+at the top of the left column, Stores in the centre and Earth as three grey rows, Stats trimmed, the
+narration with the real launch rate, Launch contracts marked needed, the promised launch mass and the
+first two rows with their returns); the bot from `5c` to Concord (The long reflection's three lines, a
+reload mid-mission keeping the queue and both purses, numbers / controls / words at each 5-minute mark
+≤ 85 / 30 / 350, two greyed goals and a further swarm goal at the ending, the last project's card like
+any mission's, no string naming the skin), Concord's end screen (Tasks Completed alone at the top and
+still counting, its sentence, the epilogue, every row with `People alive at the end` second, the Stage 5
+cards in the history), a reload on the end screen, and `New game` back to the one-button opening; the bot
+from `5s` to Silence (one-button cards with the people's option greyed, the cold line and no people
+after it, the rows taken and 60–120 s with no enabled control, Final instructions with one button,
+`Noted.`, Silence's end screen with `0` people and `No people are left.`); D7 in the browser (`5c` with
+the skin flipped, the numbers on screen identical at every mark to 0.006 %); The Pause's and The
+Project's end screens opened from Stage 5; 390 px at minute 12 and on the end screen; and no page
+errors. Screenshots go to `agent-tools/shots/stage5/`.
+
+```sh
+node tools/verify/smoke-fullrun.mjs [--seed 1] [--policy bot] [--variant ...]
+```
+
+Plays a new game with Autoplay in 5-second steps to its ending, saving and reloading at every stage
+boundary (the stage, the date, the score, the time played and the panels must come back), and checks
+the ending's screen, the whole game's length (140–210 minutes) and that no page error occurred. It
+prints the minutes spent in each stage. Screenshots go to `agent-tools/shots/fullrun/`.
