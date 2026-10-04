@@ -109,9 +109,19 @@ export const CHOICES: ChoiceDef[] = [
       '"It might work. It might also break a few things."',
     ],
     timer: 20,
-    defaultOption: 1,
+    // The timer's default first, then what costs something (stage1-round3-fixes.md §4).
+    defaultOption: 0,
     valid: (s, ctx) => runFor(s, ctx)?.phase === 'training',
     options: [
+      {
+        label: 'not now',
+        record: 'no gamble',
+        line: 'the run trains as planned',
+        effect: (s, ctx) => {
+          const run = runFor(s, ctx);
+          if (run) run.gamble = 'declined';
+        },
+      },
       {
         label: 'let her try',
         record: 'gamble',
@@ -135,15 +145,6 @@ export const CHOICES: ChoiceDef[] = [
             s.hypeBoost = Math.max(1, s.hypeBoost - 0.2);
             say(s, 'It did not work. The red team has more to do.');
           }
-        },
-      },
-      {
-        label: 'not now',
-        record: 'no gamble',
-        line: 'the run trains as planned',
-        effect: (s, ctx) => {
-          const run = runFor(s, ctx);
-          if (run) run.gamble = 'declined';
         },
       },
     ],
@@ -192,7 +193,7 @@ export const CHOICES: ChoiceDef[] = [
     id: 'c_ship_issues',
     title: 'Ship With Open Issues?',
     timer: 60,
-    defaultOption: 1,
+    defaultOption: 0,
     text: (s, ctx) => {
       const n = Number(ctx['issues'] ?? 1);
       return [
@@ -202,6 +203,14 @@ export const CHOICES: ChoiceDef[] = [
     },
     options: [
       {
+        label: 'keep red-teaming',
+        record: 'red-teamed',
+        line: 'a clean release: +1 Trust',
+        effect: (s) => {
+          s.flags['shipIssuesAsked'] = true;
+        },
+      },
+      {
         label: 'release anyway',
         record: 'shipped issues',
         tooltip: 'Incidents follow in 2–4 minutes: each cuts demand by 40% and pauses the contract customers for 1:30, and costs 1 Trust. No Trust for this release.',
@@ -210,14 +219,6 @@ export const CHOICES: ChoiceDef[] = [
           s.flags['shipIssuesAsked'] = true;
           const run = runFor(s, ctx);
           if (run) releaseChecked(s, run);
-        },
-      },
-      {
-        label: 'keep red-teaming',
-        record: 'red-teamed',
-        line: 'a clean release: +1 Trust',
-        effect: (s) => {
-          s.flags['shipIssuesAsked'] = true;
         },
       },
     ],
@@ -234,21 +235,8 @@ export const CHOICES: ChoiceDef[] = [
       'It wants a board observer, and the observer wants a say in which banks sign with OpenMind.',
     ],
     timer: 60,
-    defaultOption: 1,
+    defaultOption: 0,
     options: [
-      {
-        label: 'take the bridge',
-        record: 'bridge',
-        tooltip: (_s, ctx) => `+${fmtMoney(ctxNum(ctx, 'amount', 10000))} now. −1 Trust. The observer steers deals to the fund's portfolio: contract customers buy 30% less, for good.`,
-        line: (_s, ctx) => `+${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} now · −1 Trust · contracts 30% smaller`,
-        effect: (s, ctx) => {
-          addFunds(s, ctxNum(ctx, 'amount', 10000));
-          s.trust -= 1;
-          scaleContracts(s, 0.7);
-          say(s, `Bridge closed. ${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} and a new face at board meetings.`);
-        },
-        log: 'OpenMind takes a bridge round. The observer takes notes on everything.',
-      },
       {
         label: 'wait for a real round',
         record: 'no bridge',
@@ -258,6 +246,20 @@ export const CHOICES: ChoiceDef[] = [
           s.flags['seriesABonus'] = ctxNum(ctx, 'amount', 10000);
         },
         log: 'OpenMind turns down a bridge round. The fund calls twice more.',
+      },
+      {
+        label: 'take the bridge',
+        record: 'bridge',
+        tooltip: (_s, ctx) => `+${fmtMoney(ctxNum(ctx, 'amount', 10000))} now. −1 Trust. The observer steers deals to the fund's portfolio: contract customers buy 30% less, for good.`,
+        line: (_s, ctx) => `+${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} now · −1 Trust · contracts 30% smaller`,
+        // The board seat is paid in Trust the lab has (critic round 3 §10.9: `Trust: 0 (1 owed)`).
+        cost: { trust: 1 },
+        effect: (s, ctx) => {
+          addFunds(s, ctxNum(ctx, 'amount', 10000));
+          scaleContracts(s, 0.7);
+          say(s, `Bridge closed. ${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} and a new face at board meetings.`);
+        },
+        log: 'OpenMind takes a bridge round. The observer takes notes on everything.',
       },
     ],
   },
@@ -269,8 +271,16 @@ export const CHOICES: ChoiceDef[] = [
       'Eleven of them work here. A reporter asks whether OpenMind will sign.',
     ],
     timer: 60,
-    defaultOption: 2,
+    defaultOption: 0,
     options: [
+      {
+        label: 'say nothing',
+        record: 'silence',
+        tooltip: 'Nothing changes.',
+        line: 'nothing changes',
+        effect: () => undefined,
+        log: 'OpenMind does not comment on the letter. The eleven signatories are asked to lunch.',
+      },
       {
         label: 'sign it',
         record: 'signed',
@@ -295,14 +305,6 @@ export const CHOICES: ChoiceDef[] = [
         },
         log: 'OpenMind publishes a rebuttal: "the safest lab should be at the frontier." Three signatories resign.',
       },
-      {
-        label: 'say nothing',
-        record: 'silence',
-        tooltip: 'Nothing changes.',
-        line: 'nothing changes',
-        effect: () => undefined,
-        log: 'OpenMind does not comment on the letter. The eleven signatories are asked to lunch.',
-      },
     ],
   },
   {
@@ -318,26 +320,8 @@ export const CHOICES: ChoiceDef[] = [
       (s.projects['p_contract']?.bought ?? 0) > 0 ? 'They built the contract models. Their bank would follow them.' : 'They built the last two training runs.',
     ],
     timer: 60,
-    defaultOption: 2,
+    defaultOption: 0,
     options: [
-      {
-        label: 'match the offer',
-        record: 'matched',
-        tooltip: (_s, ctx) => `${fmtMoney(ctxNum(ctx, 'price', 12000))}. Both stay.`,
-        line: (_s, ctx) => `both stay · ${fmtMoneyShort(ctxNum(ctx, 'price', 12000))}`,
-        cost: (_s, ctx) => ({ funds: ctxNum(ctx, 'price', 12000) }),
-        effect: () => undefined,
-        log: 'OpenMind matches an offer for two researchers. Salaries come up at lunch.',
-      },
-      {
-        label: 'offer equity',
-        record: 'equity',
-        tooltip: '1 Trust. Both stay.',
-        line: 'both stay · 1 Trust',
-        cost: { trust: 1 },
-        effect: () => undefined,
-        log: 'Two OpenMind researchers take equity instead of a raise. They check the valuation daily.',
-      },
       {
         label: 'let them go',
         record: 'let go',
@@ -355,6 +339,24 @@ export const CHOICES: ChoiceDef[] = [
         },
         log: 'Two OpenMind researchers leave for a larger lab. They take a whiteboard, and a bank.',
       },
+      {
+        label: 'offer equity',
+        record: 'equity',
+        tooltip: '1 Trust. Both stay.',
+        line: 'both stay · 1 Trust',
+        cost: { trust: 1 },
+        effect: () => undefined,
+        log: 'Two OpenMind researchers take equity instead of a raise. They check the valuation daily.',
+      },
+      {
+        label: 'match the offer',
+        record: 'matched',
+        tooltip: (_s, ctx) => `${fmtMoney(ctxNum(ctx, 'price', 12000))}. Both stay.`,
+        line: (_s, ctx) => `both stay · ${fmtMoneyShort(ctxNum(ctx, 'price', 12000))}`,
+        cost: (_s, ctx) => ({ funds: ctxNum(ctx, 'price', 12000) }),
+        effect: () => undefined,
+        log: 'OpenMind matches an offer for two researchers. Salaries come up at lunch.',
+      },
     ],
   },
   {
@@ -365,8 +367,16 @@ export const CHOICES: ChoiceDef[] = [
       'Anthrosoft has already said yes.',
     ],
     timer: 60,
-    defaultOption: 1,
+    defaultOption: 0,
     options: [
+      {
+        label: 'decline',
+        record: 'declined',
+        tooltip: 'Nothing changes.',
+        line: 'nothing changes',
+        effect: () => undefined,
+        log: 'OpenMind declines the year-end leaderboard. Its row reads "declined to participate".',
+      },
       {
         label: 'submit Sage',
         record: 'submitted',
@@ -387,14 +397,6 @@ export const CHOICES: ChoiceDef[] = [
           ? `${s.training.deployedName} tops the year-end leaderboard. Two labs dispute the methodology.`
           : `${s.training.deployedName} places second on the year-end leaderboard. OpenMind disputes the methodology.`),
       },
-      {
-        label: 'decline',
-        record: 'declined',
-        tooltip: 'Nothing changes.',
-        line: 'nothing changes',
-        effect: () => undefined,
-        log: 'OpenMind declines the year-end leaderboard. Its row reads "declined to participate".',
-      },
     ],
   },
   {
@@ -405,8 +407,17 @@ export const CHOICES: ChoiceDef[] = [
       'The board wants a response by the end of the day.',
     ],
     timer: 60,
-    defaultOption: 2,
+    defaultOption: 0,
     options: [
+      {
+        label: 'say nothing',
+        record: 'silence',
+        tooltip: 'Customers try the free model: demand −15% for 3:00.',
+        line: 'demand −15% for 3:00',
+        effect: (s) => {
+          s.effects.push({ id: 'freeModel', remaining: 180, demandMult: 0.85 });
+        },
+      },
       {
         label: 'open-source the first Sage',
         record: 'open-sourced',
@@ -430,15 +441,6 @@ export const CHOICES: ChoiceDef[] = [
         },
         log: 'OpenMind cuts prices by a fifth. Its banks ask for the same.',
       },
-      {
-        label: 'say nothing',
-        record: 'silence',
-        tooltip: 'Customers try the free model: demand −15% for 3:00.',
-        line: 'demand −15% for 3:00',
-        effect: (s) => {
-          s.effects.push({ id: 'freeModel', remaining: 180, demandMult: 0.85 });
-        },
-      },
     ],
   },
   {
@@ -453,8 +455,19 @@ export const CHOICES: ChoiceDef[] = [
       'She has a source on the red team.',
     ],
     timer: 60,
-    defaultOption: 1,
+    defaultOption: 0,
     options: [
+      {
+        label: 'no comment',
+        record: 'no comment',
+        tooltip: 'The piece runs without OpenMind: demand −30% for 3:00. Government relations −2.',
+        line: 'the piece runs: demand −30% for 3:00',
+        effect: (s) => {
+          s.effects.push({ id: 'thePiece', remaining: 180, demandMult: 0.7 });
+          moveGov(s, -2);
+        },
+        log: '"OpenMind did not respond to a request for comment." The piece is shared widely.',
+      },
       {
         label: 'publish the system card',
         record: 'system card',
@@ -468,17 +481,6 @@ export const CHOICES: ChoiceDef[] = [
           moveGov(s, 2);
         },
         log: 'OpenMind publishes a long system card. The piece runs anyway, shorter.',
-      },
-      {
-        label: 'no comment',
-        record: 'no comment',
-        tooltip: 'The piece runs without OpenMind: demand −30% for 3:00. Government relations −2.',
-        line: 'the piece runs: demand −30% for 3:00',
-        effect: (s) => {
-          s.effects.push({ id: 'thePiece', remaining: 180, demandMult: 0.7 });
-          moveGov(s, -2);
-        },
-        log: '"OpenMind did not respond to a request for comment." The piece is shared widely.',
       },
     ],
   },

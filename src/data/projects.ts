@@ -4,7 +4,10 @@ import {
   researchCap, gpuCost, fleetPowerBlock, bestCapability, researchRate, nextContractWeight,
   rentQuota,
 } from '../engine/economy.js';
-import { atPlateau, plateauSeconds, trainCost, researchFor, startCapability, gpusShort, needsDatacenter } from '../engine/training.js';
+import {
+  atPlateau, plateauSeconds, trainCost, researchFor, startCapability, gpusShort, needsDatacenter, cardWallSeconds, gpusForS1,
+  gpusNeeded, MAX_RENT_QUOTA,
+} from '../engine/training.js';
 import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.js';
 import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall, dataNotInHand } from '../engine/world.js';
@@ -155,17 +158,20 @@ const sinceFlag = (s: GameState, key: string): number => {
 };
 
 /**
- * First Datacenter (owner feedback 1, B2; critic round 3 §6.4): three minutes of the lab's best
- * revenue so far, at least $90,000 and at most $300,000, a sixth less with the tax abatement; held
- * where it stands from the moment the wall is reached, so the goal stops moving for the lab that has
- * to save for it. One rule for everyone: the player who saves pays what the player who hits the wall
- * pays at the same income (round 3 found a $250,000 card for the saver and $75,000 at the wall).
- * The best revenue only rises, so the price cannot be talked down by pricing nobody in.
+ * First Datacenter (owner feedback 1, B2; critic round 3 §6.4): 200 s of the lab's best revenue so
+ * far, at least $100,000 and at most $450,000, a sixth less with the tax abatement; held where it
+ * stands from the moment the wall is reached, so the goal stops moving for the lab that has to save
+ * for it. One rule for everyone: the player who saves pays what the player who hits the wall pays at
+ * the same income (round 3 found a $250,000 card for the saver and $75,000 at the wall). The best
+ * revenue only rises, so the price cannot be talked down by pricing nobody in. Round 3's economy (research
+ * buys the revenue cards; it no longer pays for runs) reaches the wall at $2,500–3,500 a second: the
+ * old three minutes capped at $300,000 left about 1:30 of saving; this keeps the wait at the wall under
+ * the four minutes the stage promises (stage1-round3-fixes.md §1).
  */
-export const DATACENTER_LIST = 300000;
+export const DATACENTER_LIST = 450000;
 export const DATACENTER_WALL_CAP = DATACENTER_LIST;
 export const DATACENTER_FLOOR = 100000;
-export const DATACENTER_WALL_SECONDS = 180;
+export const DATACENTER_WALL_SECONDS = 200;
 
 export function datacenterPrice(s: GameState): number {
   const held = s.flags['dcWallPrice'];
@@ -197,6 +203,54 @@ function threeSig(raw: number): number {
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 2));
   return Math.round(raw / unit) * unit;
 }
+
+/**
+ * First Datacenter's status under its sentence (stage1-round3-fixes.md §2), as numbers for the
+ * renderer: how near the cloud is to full (the GPUs the next model needs against what the cloud
+ * rents), whether the run after next fits at all, and the price in income — minutes of revenue until
+ * the wall, then the money still short and how long it takes.
+ */
+export interface DatacenterStatus {
+  need: number;
+  rent: number;
+  /** The run after next needs more GPUs than any cloud rents. */
+  afterTooBig: boolean;
+  /** The next run needs the datacenter (the wall). */
+  needed: boolean;
+  price: number;
+  /** Price ÷ revenue a second (Infinity with no revenue). */
+  incomeSeconds: number;
+  short: number;
+  /** Seconds to the price at today's revenue (Infinity with none). */
+  eta: number;
+}
+
+/** A Capability run adds about 12 % in Stage 1, the other focuses 5 % (training.ts focusBase). */
+const STEP_S1 = { capability: 0.12, efficiency: 0.05, safety: 0.05 };
+
+export function datacenterStatus(s: GameState): DatacenterStatus {
+  const price = datacenterPrice(s);
+  const rev = Math.max(0, s.stats.revPerSec);
+  const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
+  const after = startCapability(s) * (1 + STEP_S1[s.training.focus]);
+  const short = Math.max(0, price - s.funds);
+  return {
+    need: gpusNeeded(s),
+    rent: rentQuota(s),
+    afterTooBig: gpusForS1(after) / mult > MAX_RENT_QUOTA,
+    needed: needsDatacenter(s),
+    price,
+    incomeSeconds: rev > 0 ? price / rev : Infinity,
+    short,
+    eta: short <= 0 ? 0 : rev > 0 ? short / rev : Infinity,
+  };
+}
+
+/**
+ * The Series A's money (stage1-round3-fixes.md §1's second knob, after the run price's exponent; it was
+ * $20,000): at about 10:30 it shortens the third run's wait instead of paying two runs at once.
+ */
+export const SERIES_A = 5000;
 
 /** What turning the bridge round down adds to the Series A. */
 export function seriesABonus(s: GameState): number {
@@ -267,8 +321,10 @@ export const PROJECTS: ProjectDef[] = [
     priceTag: (s) => `($${deskCost(s).toLocaleString('en-US')})`,
     cost: (s) => ({ funds: deskCost(s) }),
     description: 'Two more lab spaces. Each lease costs twice the last.',
-    // The plateau's last-resort fix: no Trust for Expand Lab and nothing else on screen raises the cap.
-    trigger: (s) => s.stage === 1 && plateauSeconds(s) >= 45 && s.trust < 1,
+    // The lab wall's last-resort fix: a card on screen costs more than the lab holds, no Trust for
+    // Expand Lab, and nothing else on screen raises the cap (a Stage 1 run costs no research). Not in
+    // the first lab, whose wall (the pipeline) waits for the next Trust and Expand Lab (§3).
+    trigger: (s) => s.stage === 1 && s.revealed['training'] === true && cardWallSeconds(s) >= 45 && s.trust < 1,
     buy: (s) => {
       s.labSpace += 2;
     },
@@ -289,22 +345,13 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Prompt templates rewritten. Copies 25% faster.',
     stages: [1, 2],
   }),
-  project({
-    id: 'p_insight',
-    title: 'Blue-sky Research',
-    cost: { research: 1000 },
-    description: 'Insight accrues while research is full.',
-    trigger: (s) => s.research >= Math.min(researchCap(s), 1000) || s.labSpace >= 2,
-    buy: (s) => {
-      s.insightUnlocked = true;
-    },
-    consoleMsg: 'Insight unlocked. It accrues while research is full, and with every release.',
-    stages: [1, 2],
-  }),
+  // The first lab's cards, in this order, each 10 s after the one before it is bought (stage1-round3-
+  // fixes.md §3): Better Prompting, Grid Contract, Blue-sky Research, Training Pipeline.
   project({
     id: 'p_grid',
     title: 'Grid Contract',
-    cost: { research: 2000 },
+    // Inside the first lab's reach (critic round 3 §10.1: at 2,000 it left power a chore to 6:30).
+    cost: { research: 1000 },
     description: 'Power is bought when it runs low.',
     trigger: (s) => s.powerBought >= 1 || s.gpus >= 12,
     buy: (s) => {
@@ -314,12 +361,26 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Grid contract signed. Power is bought when it runs low.',
   }),
   project({
+    id: 'p_insight',
+    title: 'Blue-sky Research',
+    cost: { research: 1000 },
+    description: 'Insight accrues while research is full.',
+    // After the Grid Contract in the first lab's order (stage1-round3-fixes.md §3), or a full lab.
+    trigger: (s) => isBought(s, 'p_grid') || s.research >= Math.min(researchCap(s), 1000) || s.labSpace >= 2,
+    buy: (s) => {
+      s.insightUnlocked = true;
+    },
+    consoleMsg: 'Insight unlocked. It accrues while research is full, and with every release.',
+    stages: [1, 2],
+  }),
+  project({
     id: 'p_prompting2',
     chain: true,
     title: 'Chain-of-thought',
     cost: { research: 2500 },
     description: 'Copies think before they answer. 50% faster.',
-    trigger: (s) => isBought(s, 'p_prompting'),
+    // After the pipeline: before the Training panel the first lab's four cards come alone (§3 (c)).
+    trigger: (s) => isBought(s, 'p_prompting') && isBought(s, 'p_training'),
     buy: (s) => {
       s.copyBoost += 0.5;
     },
@@ -332,10 +393,12 @@ export const PROJECTS: ProjectDef[] = [
     cost: { research: 2000 },
     description: 'Train the next Sage.',
     trigger: (s) => s.tasks >= 7000,
+    // The Training panel brings five numbers in one beat, which arc G5 allows only after the opening's
+    // five minutes (stage1-round3-fixes.md §3 has it at 5:30): bought sooner, it opens at 5:00
+    // (engine/stages.ts, the `training` rule, which also says the line).
     buy: (s) => {
-      s.revealed['training'] = true;
+      s.flags['trainingDue'] = true;
     },
-    consoleMsg: 'Training infrastructure online.',
   }),
   project({
     id: 'p_seed',
@@ -368,8 +431,9 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Experiment tracker',
     cost: { research: 3000 },
     description: 'Research capacity ×2.',
-    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || plateauSeconds(s) >= 30,
-    urgent: (s) => plateauSeconds(s) >= 30,
+    // Stage 1's lab wall is a card it cannot hold (cardWall); Stage 2's is the next run (the plateau).
+    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || cardWallSeconds(s) >= 30 || plateauSeconds(s) >= 30,
+    urgent: (s) => cardWallSeconds(s) >= 30 || plateauSeconds(s) >= 30,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -493,12 +557,12 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_series_a',
     title: 'Series A',
     cost: {},
-    description: '+$20,000, +2 Trust, marketing level +2.',
+    description: `+${fmtMoneyShort(SERIES_A)}, +2 Trust, marketing level +2.`,
     trigger: (s) => s.tasks >= 60000 && releases(s) >= 1,
     buy: (s) => {
       s.flags['seriesAAt'] = s.stats.timePlayed;
       // A lab that waited for a real round (A Bridge Round) is paid for the patience.
-      addFunds(s, 20000 + seriesABonus(s));
+      addFunds(s, SERIES_A + seriesABonus(s));
       s.trust += 2;
       s.hypeLevel += 2;
     },
@@ -513,9 +577,11 @@ export const PROJECTS: ProjectDef[] = [
     // The price and what comes back for the rented fleet, both on the card (critic round 3 §6.4).
     priceTag: (s) => `(${fmtMoneyShort(datacenterPrice(s))}; the rented GPUs return ${fmtMoneyShort(rentDeposit(s))})`,
     description: '1,000 GPUs of our own at Abilene. Stop renting.',
-    // Greyed from Series A, the second release or October, whichever comes first: about minute
-    // 10–12, nine to fourteen minutes before it is bought (arc G11). Urgent at the wall.
-    trigger: (s) => s.stage === 1 && (isBought(s, 'p_series_a') || releases(s) >= 2 || dateAtLeast(s, 2025, 10)),
+    // Greyed once the next model needs 45 GPUs or more, or at the third release (three Capability runs
+    // land at 1.33–1.48×, 35–60 GPUs), or from mid-October for a lab that trains slowly: about minute
+    // 12–14, eight minutes or more before it is bought (arc G11), with the cloud's meter and the price
+    // in income under it (stage1-round3-fixes.md §2). Urgent at the wall.
+    trigger: (s) => s.stage === 1 && (gpusForS1(startCapability(s)) >= 45 || releases(s) >= 3 || dateAtLeast(s, 2025, 10.5)),
     urgent: (s) => needsDatacenter(s),
     onShow: (s) => {
       s.flags['dcCardAt'] = s.stats.timePlayed;
@@ -526,11 +592,13 @@ export const PROJECTS: ProjectDef[] = [
     pinned: true,
     logMsg: 'OpenMind is said to be pricing a datacenter of its own in West Texas.',
   }),
-  // The ladder's side offers, re-keyed to the card's appearance: real trades on the way to it.
-  // A card whose return is a point of Trust or a discount costs clearly less than it returns: no floor.
+  // The ladder's side offers, re-keyed to the card's appearance: real trades on the way to it. The
+  // dollar ones cost the larger of their list price and two minutes of revenue (§4: goals, not a
+  // conveyor); the abatement costs a Trust.
   project({
     id: 'p_cooling',
     sideline: true,
+    revealFunds: 120,
     title: 'Closed-loop cooling',
     cost: { funds: 10000 },
     description: 'Spare the town\'s water. +1 Trust.',
@@ -555,6 +623,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_soundwall',
     sideline: true,
+    revealFunds: 120,
     title: 'Build a sound wall',
     cost: { funds: 5000 },
     description: 'So the rancher next to the Abilene site can sleep. +1 Trust.',
@@ -683,15 +752,16 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_floor',
-    revealFunds: 100,
+    revealFunds: 120,
     title: 'Lease the floor upstairs',
     cost: { funds: 15000 },
     description: 'More desks. Research capacity ×2.',
-    // The Research Plateau's named fix (or, late in the stage, room for the runs to come).
-    // A plateau names the Experiment tracker first; the floor follows if the lab is still full a
-    // minute later (critic C12: two fixes drawn in one beat).
-    trigger: (s) => s.training.runIndex >= 4 || plateauSeconds(s) >= 90,
-    urgent: (s) => plateauSeconds(s) >= 90,
+    // The lab wall's named fix (Stage 1: a card on screen costs more than the lab holds; Stage 2: the
+    // Research Plateau), or, late in the stage, room for the cards to come. A wall names the
+    // Experiment tracker first; the floor follows if the lab is still short a minute later (critic C12:
+    // two fixes drawn in one beat).
+    trigger: (s) => s.training.runIndex >= 4 || cardWallSeconds(s) >= 90 || plateauSeconds(s) >= 90,
+    urgent: (s) => cardWallSeconds(s) >= 90 || plateauSeconds(s) >= 90,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -701,7 +771,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_recruiter',
-    revealFunds: 100,
+    revealFunds: 120,
     title: 'Hire a recruiter',
     cost: { funds: 12000 },
     description: 'She knows everyone. Three researchers.',

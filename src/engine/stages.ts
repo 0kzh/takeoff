@@ -4,7 +4,7 @@ import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
-import { trainCost, atPlateau, nextRunName, arrivalRunScale } from './training.js';
+import { trainCost, atPlateau, nextRunName, arrivalRunScale, cardWallSeconds } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
 import { SUBSTATION_MW, lotCostOf, arrivalScaleS2 } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
@@ -399,6 +399,8 @@ const sinceFlag = (s: GameState, key: string): number => {
  */
 /** Stage 1's opening beats 5–8 come at least this long after the beat before (owner feedback 1, (a)). */
 export const BEAT_SPACING = 30;
+/** The Training panel opens no earlier than this (the end of the opening's five minutes, arc G5). */
+export const TRAINING_PANEL_FROM = 300;
 
 /** The opening's last beat, for the spacing; beats 4–8 stamp it. */
 function beat(s: GameState): void {
@@ -406,6 +408,28 @@ function beat(s: GameState): void {
 }
 
 const spaced = (s: GameState): boolean => s.stage > 1 || sinceFlag(s, 'beatAt') < 0 || sinceFlag(s, 'beatAt') >= BEAT_SPACING;
+
+/**
+ * Stage 1's first training cycle (stage1-round3-fixes.md §3): the Focus row, the first event and the
+ * quota line are each a first-time mechanic, at least 30 s apart, in that order. The quota waits for
+ * the Focus row once a model has shipped.
+ */
+export function mechanic(s: GameState): void {
+  s.flags['s1MechanicAt'] = s.stats.timePlayed;
+}
+
+export function mechanicClear(s: GameState): boolean {
+  if (s.stage !== 1) return true;
+  if (typeof s.flags['firstReleaseAt'] === 'number' && !s.revealed['focus']) return false;
+  const at = sinceFlag(s, 's1MechanicAt');
+  return at < 0 || at >= BEAT_SPACING;
+}
+
+/** The quota line after the first event, once a model has shipped (two minutes at most). */
+function quotaAfterEvent(s: GameState): boolean {
+  const released = sinceFlag(s, 'firstReleaseAt');
+  return released < 0 || s.flags['calendarOpened'] === true || released >= 120;
+}
 
 const REVEAL_RULES: RevealRule[] = [
   // Beat 1: a task pays.
@@ -475,12 +499,27 @@ const REVEAL_RULES: RevealRule[] = [
     },
   },
   { id: 'revPerSec', stages: [2, 3], when: (s) => s.tasksSold >= 300 },
-  // The quota, from 60 rented: a meter and one line.
+  // The quota, from 60 rented: a meter and one line, held from Train to 30 s after that run's release
+  // (stage1-round3-fixes.md §3: the first training cycle is not shared with another mechanic).
   {
     id: 'quota',
     stages: [1],
-    when: (s) => s.gpus >= 60,
-    then: (s) => say(s, `The cloud will rent OpenMind ${fmtInt(rentQuota(s))} GPUs and no more.`),
+    when: (s) => s.gpus >= 60 && !s.training.run && !s.training.pending && (sinceFlag(s, 'lastReleaseAt') < 0 || sinceFlag(s, 'lastReleaseAt') >= 30)
+      && mechanicClear(s) && quotaAfterEvent(s),
+    then: (s) => {
+      mechanic(s);
+      say(s, `The cloud will rent OpenMind ${fmtInt(rentQuota(s))} GPUs and no more.`);
+    },
+  },
+  // The Focus row comes with the second run's Train row, 30 s after the first release (§3).
+  {
+    id: 'focus',
+    stages: [1],
+    when: (s) => sinceFlag(s, 'firstReleaseAt') >= 30,
+    then: (s) => {
+      mechanic(s);
+      say(s, 'Focus chooses what the next model is trained for.');
+    },
   },
   // The Developments column (and the date) from 3:30 (owner feedback 1, beat 9).
   { id: 'log', stages: [1, 2, 3, 4, 5], when: (s) => s.log.length > 0 && (s.stage > 1 || s.stats.timePlayed >= 210) },
@@ -498,17 +537,39 @@ const REVEAL_RULES: RevealRule[] = [
       say(s, `Trust earned: ${fmtInt(s.trust)}. Each one hires a researcher.`);
     },
   },
+  // Beat 11 comes with a Trust award (economy.ts `expandLabBeat`: the first one 40 s after the Projects
+  // panel with the lab full). This is its fallback for a lab that holds its Trust: full, under a card
+  // it cannot hold for 30 s, with a Trust to spend (never while Trust is 0). Stage 1 only: from Stage 2
+  // cards size the lab and Hire and Expand Lab are gone.
   {
     id: 'expandLab',
-    stages: [1, 2],
-    // When the lab is full and something on screen (or the next run) needs more than it holds.
-    when: (s) => s.revealed['research'] === true && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s),
+    stages: [1],
+    when: (s) => s.revealed['projects'] === true && sinceFlag(s, 'projectsAt') >= 40 && s.trust >= 1
+      && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s) && cardWallSeconds(s) >= 30,
     then: (s) => say(s, `The lab is full at ${fmtInt(researchCap(s))}. Expand Lab makes room for more research.`),
   },
+  // Beat 12: the Training panel, once the pipeline is bought and not before the opening's five
+  // minutes are over (arc G5: the panel is five numbers in one beat; stage1-round3-fixes.md §3: 5:30).
+  {
+    id: 'training',
+    stages: [1],
+    when: (s) => s.flags['trainingDue'] === true && s.stats.timePlayed >= TRAINING_PANEL_FROM,
+    then: (s) => {
+      // A beat of its own: the next card waits 10 s (engine/reveal.ts).
+      s.flags['trainingAt'] = s.stats.timePlayed;
+      say(s, 'Training infrastructure online.');
+    },
+  },
+  // Beat 9: the Projects panel, with its first card (engine/reveal.ts draws it in the same tick).
   {
     id: 'projects',
     stages: [1, 2, 3, 4, 5],
     when: (s) => (s.revealed['research'] === true && sinceFlag(s, 'researchAt') >= 40) || (STUCK(s) && s.gpus > 0),
+    then: (s) => {
+      s.flags['projectsAt'] = s.stats.timePlayed;
+      // Not when the credit rescue opens the panel before there is research to spend.
+      if (s.stage === 1 && s.revealed['research']) say(s, 'Research buys projects.');
+    },
   },
   // The Insight line arrives with the first insight, not with the card that unlocks it (critic round 2 §6.7).
   { id: 'insight', stages: [1, 2], when: (s) => s.insightUnlocked && s.insight >= 1 },

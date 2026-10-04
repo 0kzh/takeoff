@@ -22,6 +22,13 @@ export interface DevelopmentDef {
   crisis?: string;
   choice?: string;
   effect?: (s: GameState) => void;
+  /**
+   * Stage 1's calendar is a queue (stage1-round3-fixes.md §4): these open in `month` order, the first
+   * 60 s after the first release and each later one 2:36 after the last was answered, never while a
+   * run waits for evaluation, Red-team or Release (engine/events.ts `updateCalendar`). One whose
+   * `requires` fails gives its slot to the next and comes back.
+   */
+  calendar?: boolean;
 }
 
 const num = (s: GameState, k: string): number => {
@@ -66,15 +73,17 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     trigger: (s) => s.priceRaises >= 3 && s.stats.timePlayed >= 300,
   },
   // Each calendar event waits for what it talks about (critic round 3 §6.3: a $15,000 bridge round
-  // at 0 tasks; two researchers leaving a lab of one). Not yet true on its date, it waits; never
-  // true in Stage 1, it is dropped with the stage.
+  // at 0 tasks; two researchers leaving a lab of one). The six are a queue behind the player's
+  // progress (`calendar`); one whose condition fails gives its slot to the next and comes back, and
+  // any still waiting are dropped with the stage.
   {
     id: 'd_bridge',
     stage: 1,
     choice: 'c_bridge',
+    calendar: true,
     month: monthOf(2025, 9) + 0.2,
-    // A fund bridges a business: tasks sold and money coming in.
-    requires: (s) => s.tasks >= 10000 && s.stats.revPerSec >= 10,
+    // A fund bridges a business with money coming in, ahead of a proper round.
+    requires: (s) => s.stats.revPerSec >= 10 && !(s.projects['p_series_a']?.bought ?? 0),
   },
   {
     id: 'd_lead_times',
@@ -82,15 +91,17 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
-  // ---- The modal calendar: six choices 2:36 apart from about 8:50 at 240 s a month (MODAL_SPACING is 2½). ----
+  // ---- The calendar: six choices in this order, the first a minute after the first release, then
+  // each 2:36 after the last was answered. ----
   {
     id: 'd_rival',
     stage: 1,
     crisis: 'cr_rival_open_weights',
     choice: 'c_rival',
+    calendar: true,
     month: monthOf(2025, 9) + 0.85,
-    // A rival undercuts a lab with customers and a price to cut.
-    requires: (s) => s.revealed['pricing'] === true && s.stats.revPerSec >= 1,
+    // A rival undercuts a released model, at a price there is room to cut.
+    requires: (s) => s.stats.publicReleases >= 1 && s.price > 0.1,
   },
   {
     id: 'd_outage',
@@ -127,8 +138,9 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_journalist',
     stage: 1,
     choice: 'c_journalist',
+    calendar: true,
     // The piece is about how a released model was tested, and the answer costs research.
-    requires: (s) => s.stats.releases >= 1 && s.revealed['research'] === true,
+    requires: (s) => s.stats.publicReleases >= 1 && s.revealed['research'] === true,
     text: 'A reporter is writing about how frontier models are tested. Nobody is sure who tests them.',
     month: monthOf(2025, 10) + 0.5,
   },
@@ -136,8 +148,9 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_letter',
     stage: 1,
     choice: 'c_letter',
-    // Signatories who work here, and three who can resign.
-    requires: (s) => s.researchers >= 4,
+    calendar: true,
+    // Signatories who work here, and three who can resign with a lab left behind them.
+    requires: (s) => s.researchers >= 5,
     text: 'Two hundred researchers sign a letter asking frontier labs to slow down. Eleven work at OpenMind.',
     month: monthOf(2025, 11) + 0.15,
   },
@@ -164,6 +177,7 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_poach',
     stage: 1,
     choice: 'c_poach',
+    calendar: true,
     // Two researchers to poach, and a lab left behind them.
     requires: (s) => s.researchers >= 3,
     text: 'Pay for AI researchers passes that of professional athletes. Nobody checks the comparison.',
@@ -173,8 +187,9 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_leaderboard',
     stage: 1,
     choice: 'c_leaderboard',
-    // The board ranks a released model.
-    requires: (s) => s.stats.releases >= 1,
+    calendar: true,
+    // The board ranks a lab with a record: two released models.
+    requires: (s) => s.stats.publicReleases >= 2,
     month: monthOf(2025, 12) + 0.45,
   },
   {

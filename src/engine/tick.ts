@@ -15,7 +15,7 @@ import {
 } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames, needsDatacenter, nextRunName, gpusNeeded,
-  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun,
+  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun, cardWall,
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
 import { alignWork, reimage } from './alignment.js';
@@ -147,12 +147,17 @@ function slowStats(s: GameState): void {
   stage3Slow(s);
 }
 
-/** When the plateau began (the desks offer waits 45 s for Trust or another fix first). */
+/**
+ * When the plateau began (the desks offer waits 45 s for Trust or another fix first); Stage 1's is the
+ * card wall, a card on screen the lab cannot hold (a Stage 1 run costs no research).
+ */
 function trackPlateau(s: GameState): void {
-  if (atPlateau(s)) {
-    if (typeof s.flags['plateauSince'] !== 'number') s.flags['plateauSince'] = s.stats.timePlayed;
-  } else if (s.flags['plateauSince'] !== undefined) {
-    delete s.flags['plateauSince'];
+  for (const [key, on] of [['plateauSince', atPlateau(s)], ['cardWallSince', cardWall(s)]] as const) {
+    if (on) {
+      if (typeof s.flags[key] !== 'number') s.flags[key] = s.stats.timePlayed;
+    } else if (s.flags[key] !== undefined) {
+      delete s.flags[key];
+    }
   }
 }
 
@@ -165,10 +170,13 @@ function taskMilestones(s: GameState): void {
   }
 }
 
-/** The most research anything on screen asks for: the next run, or a visible project. */
+/**
+ * The most research anything on screen asks for: the next run, or a visible project. Stage 1's runs
+ * cost no research: the lab's size limits cards only (stage1-round3-fixes.md §1).
+ */
 export function researchWanted(s: GameState): { amount: number; what: string } {
   let best = { amount: 0, what: '' };
-  if (s.revealed['training'] && !s.training.run) {
+  if (s.stage >= 2 && s.revealed['training'] && !s.training.run) {
     best = { amount: trainCost(s).research ?? 0, what: 'the next run' };
   }
   for (const p of visibleProjects(s)) {

@@ -11,8 +11,11 @@
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
  * first purchase; no yield wording; the Train row's GPU shortfall; numeric-token counts at minutes
  * 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
- * width at every fill; no horizontal overflow at 390 px. Screenshots go to agent-tools/shots/stage1/.
- * Exits non-zero when any check fails.
+ * width at every fill; no horizontal overflow at 390 px. Round 3 (stage1-round3-fixes.md, the wallet
+ * rule): the Train row costs money only and arms when short; a printed delay; First Datacenter's two
+ * status lines before and at the wall; the power and quota rows with their capacity; Focus's three
+ * trades and `Next run:`; each event's default listed first; no `… first` hold anywhere.
+ * Screenshots go to agent-tools/shots/stage1/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
 import { readFile, stat, mkdir } from 'node:fs/promises';
@@ -118,6 +121,35 @@ const SNAPSHOT = () => {
     // G3 as amended: a greyed purchase on screen; in the first three minutes the next GPU or power block counts lit.
     greyed: buttons.some((b) => b.disabled && /^(btn-|proj-)/.test(b.id) && !/^btn-(task|lowerPrice|raisePrice)$/.test(b.id)),
     unitShown: ['btn-gpu', 'btn-buyPower'].some((id) => vis(document.getElementById(id))),
+    // Round 3 (stage1-round3-fixes.md, the wallet rule): the Train row, printed delays, First
+    // Datacenter's status lines, capacity rows with their capacity, the Focus row, the event order.
+    train: (() => {
+      const b = document.getElementById('btn-train');
+      if (!vis(b)) return null;
+      return {
+        enabled: !b.disabled, armed: b.classList.contains('armed'), label: b.innerText.trim(),
+        cost: document.getElementById('trainCost').innerText, reason: document.getElementById('trainReason').innerText,
+        short: s.funds < (window.__game.state.stage === 1 ? Number(document.getElementById('trainCost').innerText.replace(/[^0-9.]/g, '')) : 0),
+      };
+    })(),
+    delays: (text.match(/· (?:Sage-\d+\.\d+|First Datacenter) \d+:\d\d later/g) ?? []),
+    dc: (() => {
+      const need = document.getElementById('dcNeedLine');
+      if (!need || !vis(need)) return null;
+      return { need: need.innerText, money: document.getElementById('dcMoneyLine').innerText, wall: s.flags['wallAt'] !== undefined };
+    })(),
+    powerLine: vis(document.getElementById('panel-power')) ? document.getElementById('panel-power').innerText.split('\n')[0] : '',
+    quotaLine: vis(document.getElementById('quotaMeter')) ? document.getElementById('quotaMeter').parentElement.parentElement.innerText.split('\n')[0] : '',
+    focus: vis(document.getElementById('focusRow'))
+      ? { head: document.getElementById('focusHead').innerText, trades: ['capability', 'efficiency', 'safety'].map((f) => document.getElementById(`focusTrade-${f}`).innerText), running: !!s.training.run }
+      : null,
+    held: /\b(?:the run|the plant|the hall|First Datacenter) first\b|keeps [^.]*'s price/.test(text),
+    event: modal && modal.classList.contains('shown')
+      ? {
+        first: (document.querySelector('#modalButtons button .optLabel') ?? document.querySelector('#modalButtons button'))?.innerText.trim(),
+        then: (document.getElementById('modalTimer').innerText.split('then: ')[1] ?? '').trim(),
+      }
+      : null,
   };
 };
 
@@ -278,6 +310,9 @@ try {
   let arrival = null;
   let bannedAt = null;
   const shortLines = new Set();
+  const trainRows = new Set();
+  // Round 3's observations (stage1-round3-fixes.md §1–§4 and the wallet rule).
+  const r3 = { armed: null, clicked: null, delay: null, dcBefore: null, dcWall: null, powerOf: null, quotaOf: null, focusFirst: null, focusRunHeads: new Set(), events: new Map(), heldAt: null };
   let firstPurchase = null;
   const goal = { ticks: 0, ok: 0, misses: [] };
   const shotsAt = { 1: '02-minute1', 3: '03-minute3', 5: '04-minute5', 10: '05-minute10', 20: '07-minute20' };
@@ -295,6 +330,36 @@ try {
     beats.push({ t: snap.t, newButtons, dNumbers: firstTime.length ? snap.numbersOutside - prev.numbersOutside : 0 });
     if (snap.banned && bannedAt === null) bannedAt = snap.t;
     if (snap.stage === 1 && snap.trainShort) shortLines.add(snap.trainShort);
+    if (snap.stage === 1) {
+      if (snap.train) {
+        trainRows.add(`${snap.train.cost} | ${snap.train.reason}`);
+        if (snap.train.armed && !r3.armed) r3.armed = { t: snap.t, ...snap.train };
+        // A policy that waits to afford its runs never arms: press Train once while it is lit and
+        // short, read the row, and press again to stand down (arc G34 rule 4).
+        if (!r3.armed && !r3.clicked && snap.train.enabled && snap.train.short && !snap.train.armed) {
+          r3.clicked = await page.evaluate(() => {
+            const b = document.getElementById('btn-train');
+            b.click();
+            const on = { armed: b.classList.contains('armed'), enabled: !b.disabled, reason: document.getElementById('trainReason').innerText };
+            b.click();
+            return { ...on, stoodDown: !b.classList.contains('armed') };
+          });
+          r3.clicked.t = snap.t;
+          if (r3.clicked.armed && r3.clicked.stoodDown) r3.armed = { t: snap.t, label: snap.train.label, cost: snap.train.cost, enabled: r3.clicked.enabled, reason: r3.clicked.reason };
+        }
+      }
+      if (snap.delays.length && !r3.delay) r3.delay = { t: snap.t, text: snap.delays[0] };
+      if (snap.dc && !snap.dc.wall && !r3.dcBefore) r3.dcBefore = { t: snap.t, ...snap.dc };
+      if (snap.dc && snap.dc.wall && !r3.dcWall) r3.dcWall = { t: snap.t, ...snap.dc };
+      if (!r3.powerOf && /[\d,]+ of [\d,]+ kWh/.test(snap.powerLine)) r3.powerOf = { t: snap.t, line: snap.powerLine };
+      if (!r3.quotaOf && /[\d,]+ of [\d,]+/.test(snap.quotaLine)) r3.quotaOf = { t: snap.t, line: snap.quotaLine };
+      if (snap.focus) {
+        r3.focusFirst ??= { t: snap.t, ...snap.focus };
+        if (snap.focus.running) r3.focusRunHeads.add(snap.focus.head);
+      }
+      if (snap.event && !r3.events.has(snap.modal)) r3.events.set(snap.modal, snap.event);
+    }
+    if (snap.held && r3.heldAt === null) r3.heldAt = snap.t;
     if (firstPurchase === null && snap.gpus > 0) firstPurchase = snap.t;
     if (firstPurchase !== null && snap.stage === 1 && !snap.modal) {
       goal.ticks++;
@@ -361,11 +426,13 @@ try {
         const s = window.__game.state;
         const vis = (id) => document.getElementById(id).checkVisibility();
         const infraEnabled = ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter((id) => vis(id) && !document.getElementById(id).disabled);
+        // The wallet rule (arc G34): a lot is lit, or grey with the build fund's shortfall and clock.
+        const lotReason = document.getElementById('gpuReason').innerText;
         const cap = s.labSpace * 1000 * s.labMult;
         const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
         const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
         const need = Math.round(raw / unit) * unit;
-        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, trust: s.trust, cap, need };
+        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, lotReason, buildFund: Math.round(s.buildFund), trust: s.trust, cap, need };
       });
       transitionAt = arrival.t;
       for (const id of await page.evaluate(() => [...document.querySelectorAll('[id]')].filter((el) => !el.closest('#dev') && el.checkVisibility()).map((el) => el.id))) {
@@ -428,6 +495,37 @@ try {
     /^Needs [\d,]+ GPUs\. The cloud will rent [\d,]+\. Build the First Datacenter\.$/.test(l);
   check('a Train short of GPUs names the shortfall and its fix', lines.length > 0 && lines.every(okLine), lines.slice(0, 4).join(' | '));
 
+  // ----- round 3: a run costs money and GPUs; the wallet rule (stage1-round3-fixes.md §1–§4) -----
+  const rows = [...trainRows];
+  check('the Stage 1 Train row costs money only (no research line, no research price)', rows.length > 0 && rows.every((r) => !/research/i.test(r)),
+    rows.slice(0, 3).join(' || '));
+  const a = r3.armed;
+  check('Train short of money is lit and arms: `Sage-1.x starts when paid for — about m:ss`',
+    !!a && a.enabled && /^Sage-\d+\.\d+ starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+$/.test(a.cost),
+    a ? `${clock(a.t)} ${a.label}: ${a.cost} · ${a.reason}` : 'never armed');
+  check('a purchase that delays the waiting run prints it (`· Sage-1.x 0:41 later` / `· First Datacenter 0:15 later`)', !!r3.delay,
+    r3.delay ? `${clock(r3.delay.t)} ${r3.delay.text}` : 'no delay printed');
+  const dcb = r3.dcBefore;
+  check('First Datacenter, before the wall: the cloud meter `… 45 of 80` and `Price: N minutes of income.`',
+    !!dcb && /^Cloud GPUs the next model needs \S+ [\d,]+ of [\d,]+(\. The one after will not fit\.)?$/.test(dcb.need) && /^Price: ([\d,]+ minutes|\d+:\d\d) of income\.$/.test(dcb.money),
+    dcb ? `${clock(dcb.t)} ${dcb.need} / ${dcb.money}` : 'card never seen before the wall');
+  const dcw = r3.dcWall;
+  // A first-timer may buy the card before the wall (the test clicks it as soon as it can).
+  check('First Datacenter, at the wall: the money meter `｢…｣ $87,000 short — about 2:25`',
+    dcw ? /^\S+ (\$[\d,.]+[MBK]? short( — about \d+:\d\d)?|in hand)$/.test(dcw.money) : POLICY !== 'bot',
+    dcw ? `${clock(dcw.t)} ${dcw.money}` : 'no wall in this run');
+  check('capacity rows print the capacity: power `968 of 1,000 kWh`, the quota `61 of 80`',
+    !!r3.powerOf && !!r3.quotaOf, `${r3.powerOf ? `${clock(r3.powerOf.t)} "${r3.powerOf.line}"` : 'power: none'} · ${r3.quotaOf ? `${clock(r3.quotaOf.t)} "${r3.quotaOf.line}"` : 'quota: none'}`);
+  const ff = r3.focusFirst;
+  check('Focus prints all three trades from its first appearance, and reads `Next run:` during a run',
+    !!ff && ff.trades.join(' · ') === '+10–14% capability · +5%, copies per GPU ×1.25 · +5%, fewer issues for good' &&
+      r3.focusRunHeads.size > 0 && [...r3.focusRunHeads].every((h) => h === 'Next run:'),
+    ff ? `${clock(ff.t)} ${ff.head} ${ff.trades.join(' · ')}; during runs: ${[...r3.focusRunHeads].join(', ') || '—'}` : 'never shown');
+  const evs = [...r3.events.entries()];
+  check('every event lists the timer\'s default first', evs.length > 0 && evs.every(([, e]) => e.then && e.first === e.then),
+    evs.map(([title, e]) => `${title}: ${e.first}${e.first === e.then ? '' : ` (default ${e.then})`}`).join(' · '));
+  check('nothing is held for the player: no `… first` or `keeps …\'s price` anywhere', r3.heldAt === null, r3.heldAt === null ? '' : `seen at ${clock(r3.heldAt)}`);
+
   // Reveal gaps as the critic measures them: panels, buttons, project buttons, modals.
   const revealTimes = [...first.entries()]
     .filter(([id]) => id.startsWith('panel-') || id.startsWith('btn-') || id.startsWith('proj-') || id.startsWith('modal:'))
@@ -454,14 +552,21 @@ try {
   const row = keys.map((k) => (counts[k] ? counts[k].numbers : '—')).join(' / ');
   const irow = keys.map((k) => (counts[k] ? counts[k].interactive : '—')).join(' / ');
   const wrow = keys.map((k) => (counts[k] ? counts[k].words : '—')).join(' / ');
-  check('numeric tokens recorded at 0/1/3/5/10/20/end', keys.every((k) => counts[k]), `numbers ${row}; controls ${irow}; words ${wrow}`);
-  // Critic round 2 §6.1 targets at minute 10: ≤ 38 numbers, ≤ 15 controls, ≤ 230 words.
+  // A stage that ends before minute 20 has no minute-20 mark.
+  const due = keys.filter((k) => k === 'end' || transitionAt === null || Number(k) * 60 <= transitionAt);
+  check('numeric tokens recorded at 0/1/3/5/10/20/end (each mark the stage reached)', due.every((k) => counts[k]), `numbers ${row}; controls ${irow}; words ${wrow}`);
+  // Critic round 2 §6.1 set minute 10 at ≤ 38 numbers, ≤ 15 controls, ≤ 230 words (the build before
+  // round 3 measured 35 / 15 / 231). Round 3 adds what the spec puts on that screen: all three Focus
+  // trades (5 numbers), the power and quota capacities (2), the printed delays while a run waits (2 a
+  // row), the armed Train row's model name (1): 48 / 16 / 250.
   const m10 = counts['10'];
-  check('minute 10: ≤ 38 numbers, ≤ 15 controls, ≤ 230 words', !!m10 && m10.numbers <= 38 && m10.interactive <= 15 && m10.words <= 230,
+  check('minute 10: ≤ 48 numbers, ≤ 16 controls, ≤ 250 words', !!m10 && m10.numbers <= 48 && m10.interactive <= 16 && m10.words <= 250,
     m10 ? `${m10.numbers} numbers, ${m10.interactive} controls, ${m10.words} words` : 'no minute-10 snapshot');
   const paperclips = { 0: 10, 1: 12, 3: 15, 5: 30, 10: 26, 20: 29, end: 49 };
-  const over = keys.filter((k) => counts[k] && counts[k].numbers > paperclips[k] * 1.6 + 6);
-  check('numeric tokens stay near the Paperclips curve (≤ 1.6× + 6)', over.length === 0, over.length ? `over at ${over.join(', ')}` : 'Paperclips 10 / 12 / 15 / 30 / 26 / 29 / 49');
+  // Round 3's additions above, and First Datacenter's two status lines from the third release (five
+  // numbers; minute 20 is at the wall for the bot, with every side card up): + 14 (was + 6).
+  const over = keys.filter((k) => counts[k] && counts[k].numbers > paperclips[k] * 1.6 + 14);
+  check('numeric tokens stay near the Paperclips curve (≤ 1.6× + 14)', over.length === 0, over.length ? `over at ${over.join(', ')}` : 'Paperclips 10 / 12 / 15 / 30 / 26 / 29 / 49');
 
   // ----- transition narration -----
   if (narration) {
@@ -479,7 +584,13 @@ try {
     const i3 = firstIdx(/Tasks per second ×/);
     check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
     check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
-    check('Stage 2 arrival: an Infrastructure button is affordable', arrival.infraEnabled.length >= 1, arrival.infraEnabled.join(', '));
+    // Under the wallet rule the deposit starts the build fund; a first lot is lit, or its row prints
+    // the fund's shortfall and clock (the build before round 3 already arrived with $48,000–$56,000
+    // against a $120,000 lot: a Stage 2 matter, reported, not changed here).
+    const lotWaits = /^\$[\d,.]+[MK]? short — \d+:\d\d$/.test(arrival.lotReason);
+    check('Stage 2 arrival: an Infrastructure button is affordable, or the lot row names the build fund\'s wait',
+      arrival.infraEnabled.length >= 1 || lotWaits,
+      arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}: "${arrival.lotReason}"`);
     check('Stage 2 arrival: Trust ≥ 2 and research cap ≥ next run', arrival.trust >= 2 && arrival.cap >= arrival.need, `Trust ${arrival.trust}, cap ${arrival.cap} vs ${arrival.need}`);
     console.log(`      console during the narration: ${JSON.stringify(narration.frames[13])}`);
   } else {
@@ -525,10 +636,13 @@ try {
         stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
         need: Math.round(raw / unit) * unit, infra: vis('panel-infrastructure'),
         compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
+        lotReason: document.getElementById('gpuReason').innerText,
       };
     });
     await shot(p3, '12-stage2-preset');
-    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && pre.batch, JSON.stringify(pre));
+    // As at the arrival above: a lot lit, or grey with the build fund's shortfall and clock (arc G34).
+    const presetLot = pre.batch || /^\$[\d,.]+[MK]? short — \d+:\d\d$/.test(pre.lotReason);
+    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && presetLot, JSON.stringify(pre));
     await c3.close();
   }
 

@@ -6,13 +6,16 @@
 import { newGame, GameState, isBought } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
-import { noveltyKeys, isRescueKey, PLAYER_MODALS, enabledPurchases } from '../engine/events.js';
+import { noveltyKeys, isRescueKey, PLAYER_MODALS, enabledPurchases, choiceById, optionCost } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
+  powerBlockCost, gpuCost, rentQuota, atRentQuota,
 } from '../engine/economy.js';
 import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
-import { trainCost, canStartTraining, gpusShort, trainSlotFree } from '../engine/training.js';
+import {
+  trainCost, canStartTraining, gpusShort, trainSlotFree, canPressTrain, needsDatacenter, gpusNeeded, runDelaySeconds,
+} from '../engine/training.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.js';
 import { presetByKey } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
@@ -111,10 +114,43 @@ export interface Summary {
   exitState1: ExitState1 | null;
   /** Stage 1 modal answers, `id:option`. */
   choices1: string[];
+  /** Stage 1 round-3 measures (stage1-round3-fixes.md §1–§4). */
+  s1x: Stage1Extra;
   /** Stage 2 block (null when the run never reached Stage 2). */
   s2: Stage2Summary | null;
   /** Stage 3 block (null when the run never reached Stage 3). */
   s3: Stage3Summary | null;
+}
+
+/** stage1-round3-fixes.md acceptance, as the sim can see it. Times are seconds from the start. */
+export interface Stage1Extra {
+  /** Run starts in Stage 1, and the longest gap between two of them. */
+  trainStarts: number[];
+  maxStartGap: number | null;
+  firstRun: number | null;
+  /** Seconds the Train row was up with nothing in the slot and the run could not start, by cause. */
+  blocked: Record<string, number>;
+  /** Seconds Train was disabled (a requirement unmet) with nothing training, before the wall. */
+  disabledIdle: number;
+  /** First Datacenter: seconds on screen before its purchase, and that as a share of the stage (%). */
+  dcOnScreen: number | null;
+  dcShare: number | null;
+  /** Dollar purchases that delayed the waiting run (or the datacenter) by 10 s or more, and those with no delay printed on their row. */
+  delayed: number;
+  unprinted: number;
+  /** Research at the cap between the Projects panel and the Training panel (s); the panel's longest empty stretch then (s). */
+  capBeforeTraining: number;
+  emptyPanelMax: number;
+  /** Longest stretch with Marketing on screen and grey from 5:00 on (s). */
+  marketingGreyMax: number;
+  /** Longest gap between dollar purchases other than power, runs included, from the card to the wall (s). */
+  dollarGapMax: number | null;
+  /**
+   * Most console lines in any 26 s from the first Train to 60 s after the first release: the game's own,
+   * and with the replies to the policy's purchases (`Grid contract signed.`) counted too.
+   */
+  linesIn26: number;
+  linesIn26All: number;
 }
 
 export interface ExitState1 {
@@ -314,6 +350,23 @@ function meaningfulChoice(s: GameState): boolean {
   return prices.reduce((x, y) => x + y, 0) > s.funds;
 }
 
+/**
+ * Stage 1: why the next run cannot start while the Train row is up with nothing in the slot ('' when it
+ * can, or when there is no row): money (armable), GPUs to rent, the rental quota, the wall, an
+ * evaluation month; a run costs no research in Stage 1, so `research` and `lab` should never appear.
+ */
+function trainBlockedBy(s: GameState): string {
+  if (!s.revealed['training'] || s.training.run || s.training.pending || canStartTraining(s)) return '';
+  if (s.training.cooldown > 0) return 'cooldown';
+  if (needsDatacenter(s)) return 'wall';
+  if (gpusShort(s)) return gpusNeeded(s) > rentQuota(s) || atRentQuota(s) ? 'quota' : 'gpus';
+  const c = trainCost(s);
+  if ((c.research ?? 0) > researchCap(s)) return 'lab';
+  if ((c.research ?? 0) > s.research) return 'research';
+  if ((c.funds ?? 0) > s.funds) return 'money';
+  return 'other';
+}
+
 /** What keeps the next run from starting right now ('' never: 'ready' when nothing does). */
 function runBlocker(s: GameState): string {
   const t = s.training;
@@ -433,17 +486,63 @@ export function simulate(args: Args): SimResult {
   let longestRelease = 0;
   let longestReleaseAt = 0;
   const t3 = new Stage3Tracker();
+  // Stage 1 round-3 measures: dollar purchases (for the delay audit and the gaps between them).
+  let delayedBuys = 0;
+  let unprintedBuys = 0;
+  const dollarBuys: number[] = [];
+  /** A Stage 1 purchase's dollar price, and whether its row prints the delay it causes (arc G34 rule 3). */
+  const dollarOf = (prop: string, args: unknown[]): { funds: number; printed: boolean } | null => {
+    if (s.stage !== 1) return null;
+    if (prop === 'buyPower') return { funds: powerBlockCost(s), printed: false };
+    if (prop === 'buyMarketing') return { funds: marketingCost(s), printed: true };
+    // A GPU the next run still needs is part of the run (its row prints no delay).
+    if (prop === 'rentGpu') return gpusShort(s) && !needsDatacenter(s) ? null : { funds: gpuCost(s), printed: true };
+    if (prop === 'buyProject') {
+      const def = projectById(String(args[1]));
+      const funds = def && def.id !== 'p_datacenter' ? def.cost(s).funds ?? 0 : 0;
+      return funds > 0 ? { funds, printed: true } : null;
+    }
+    if (prop === 'resolveChoice' && s.activeChoice) {
+      const def = choiceById(s.activeChoice.id);
+      const opt = def?.options[Number(args[1])];
+      const funds = opt ? optionCost(s, opt)?.funds ?? 0 : 0;
+      return funds > 0 ? { funds, printed: true } : null;
+    }
+    return null;
+  };
   const tracked = new Proxy(actions, {
     get(target, prop: string) {
       const fn = (target as unknown as Record<string, (...args: unknown[]) => unknown>)[prop];
       if (typeof fn !== 'function') return fn;
       return (...args: unknown[]) => {
+        const buy = dollarOf(prop, args);
+        const delay = buy ? runDelaySeconds(s, { funds: buy.funds }) : 0;
         const r = fn(...args);
         if (r && prop !== 'clickTask') actionTimes.push(s.stats.timePlayed);
+        if (r && buy) {
+          if (prop !== 'buyPower') dollarBuys.push(s.stats.timePlayed);
+          if (delay >= 10) {
+            delayedBuys++;
+            if (!buy.printed) unprintedBuys++;
+          }
+        }
         return r;
       };
     },
   }) as typeof actions;
+  // Train blocked by cause, Train disabled while idle, research at the cap, the empty panel, Marketing grey, console lines.
+  const blocked: Record<string, number> = {};
+  let disabledIdle = 0;
+  let capBeforeTraining = 0;
+  let emptySince: number | null = null;
+  let emptyPanelMax = 0;
+  let greySince: number | null = null;
+  let marketingGreyMax = 0;
+  const lineTimes: number[] = [];
+  const allLineTimes: number[] = [];
+  let replyLines = 0;
+  let linesSeen = s.stats.consoleLines ?? 0;
+  const s1Starts: number[] = [];
   /** Per second in Stage 2: what kept the next run from starting (for the longest interval). */
   const blockLog: [number, string][] = [];
   const revHistory: [number, number][] = [];
@@ -516,7 +615,10 @@ export function simulate(args: Args): SimResult {
       if (n === 0) handsNone++;
       if (n >= 2) handsTwo++;
     }
+    const linesBefore = s.stats.consoleLines ?? 0;
     policyStep(s, tracked, mem);
+    // Lines printed in reply to the policy's own purchases, and the engine's (the 26-s count below).
+    replyLines += (s.stats.consoleLines ?? 0) - linesBefore;
     step(s);
     t3.tick(s, actionTimes);
     // An ending stops the run (tick() would; the sim steps directly).
@@ -524,9 +626,36 @@ export function simulate(args: Args): SimResult {
     const t = s.stats.timePlayed;
     // Stage 1: a free slot with Train blocked by the GPU requirement (owner feedback U1's measure).
     if (s.stage === 1) {
-      const blocked = s.revealed['training'] === true && trainSlotFree(s) && s.training.cooldown <= 0 && gpusShort(s);
-      if (blocked && gpuBlockedSince === null) gpuBlockedSince = t;
-      if (!blocked && gpuBlockedSince !== null) {
+      const why = trainBlockedBy(s);
+      if (why) blocked[why] = Math.round(((blocked[why] ?? 0) + 0.1) * 10) / 10;
+      if (why && why !== 'money' && why !== 'wall' && s.flags['wallAt'] === undefined && !canPressTrain(s)) disabledIdle += 0.1;
+      // From the first card (the credit rescue can open the panel early; an empty panel draws no heading).
+      if (s.revealed['projects'] && !s.revealed['training'] && Object.entries(s.projects).some(([id, st]) => (st.shown || st.bought > 0) && !RESCUE_PROJECTS.includes(id))) {
+        if (s.research >= researchCap(s) - 0.5) capBeforeTraining += 0.1;
+        // §3 (a): no card on screen while a card's trigger has fired (an empty panel draws no heading).
+        const empty = !visibleProjects(s).some((p) => !p.rescue) && s.cadence.queue.length > 0;
+        if (empty && emptySince === null) emptySince = t;
+        if (!empty && emptySince !== null) {
+          emptyPanelMax = Math.max(emptyPanelMax, t - emptySince);
+          emptySince = null;
+        }
+      }
+      // After the opening (the built beats to 3:32 and the first lab, untouched by round 3).
+      const grey = t - t0 >= 300 && s.revealed['marketing'] === true && s.funds < marketingCost(s);
+      if (grey && greySince === null) greySince = t;
+      if (!grey && greySince !== null) {
+        marketingGreyMax = Math.max(marketingGreyMax, t - greySince);
+        greySince = null;
+      }
+      const lines = s.stats.consoleLines ?? 0;
+      for (; linesSeen < lines; linesSeen++) {
+        allLineTimes.push(t);
+        if (replyLines > 0) replyLines--;
+        else lineTimes.push(t);
+      }
+      const blockedGpu = s.revealed['training'] === true && trainSlotFree(s) && s.training.cooldown <= 0 && gpusShort(s);
+      if (blockedGpu && gpuBlockedSince === null) gpuBlockedSince = t;
+      if (!blockedGpu && gpuBlockedSince !== null) {
         if (t - gpuBlockedSince > gpuBlockedMax) {
           gpuBlockedMax = t - gpuBlockedSince;
           gpuBlockedAt = gpuBlockedSince - t0;
@@ -618,6 +747,8 @@ export function simulate(args: Args): SimResult {
       if (s.stage === 1) {
         runs++;
         runGpus1.push(r.gpus);
+        s1Starts.push(t);
+        dollarBuys.push(t);
       } else if (s.stage === 2) {
         s2TrainStarts.push(t);
         s2Durations.push(r.duration);
@@ -930,9 +1061,47 @@ export function simulate(args: Args): SimResult {
       maxReveals6minAt = Math.round(s1Reveals[a]! - t0);
     }
   }
+  // Stage 1 round-3 measures.
+  if (emptySince !== null) emptyPanelMax = Math.max(emptyPanelMax, Math.min(end, milestones['reveal:training'] ?? end) - emptySince);
+  if (greySince !== null) marketingGreyMax = Math.max(marketingGreyMax, horizon - greySince);
+  const dcShownAt = milestones['shown:p_datacenter'];
+  const wallAt = typeof s.flags['wallAt'] === 'number' ? (s.flags['wallAt'] as number) : null;
+  const startGaps = s1Starts.slice(1).map((x, k) => x - s1Starts[k]!);
+  const firstTrain = milestones['firstTrainingStart'];
+  const densest = (times: number[]): number => {
+    if (firstTrain === undefined) return 0;
+    const to = (milestones['firstRelease'] ?? end) + 60;
+    const ts = times.filter((x) => x >= firstTrain && x <= to);
+    let most = 0;
+    for (let a = 0, b = 0; b < ts.length; b++) {
+      while (ts[b]! - ts[a]! > 26) a++;
+      most = Math.max(most, b - a + 1);
+    }
+    return most;
+  };
+  const linesIn26 = densest(lineTimes);
+  const linesIn26All = densest(allLineTimes);
+  const s1x: Stage1Extra = {
+    trainStarts: s1Starts.map((x) => Math.round(x - t0)),
+    maxStartGap: startGaps.length ? Math.round(Math.max(...startGaps)) : null,
+    firstRun: s1Starts.length ? Math.round(s1Starts[0]! - t0) : null,
+    blocked: Object.fromEntries(Object.entries(blocked).map(([k, v]) => [k, Math.round(v)])),
+    disabledIdle: Math.round(disabledIdle),
+    dcOnScreen: dcShownAt !== undefined && transition !== null ? Math.round(transition - dcShownAt) : null,
+    dcShare: dcShownAt !== undefined && transition !== null ? Math.round((100 * (transition - dcShownAt)) / Math.max(1, transition - t0)) : null,
+    delayed: delayedBuys,
+    unprinted: unprintedBuys,
+    capBeforeTraining: Math.round(capBeforeTraining),
+    emptyPanelMax: Math.round(emptyPanelMax),
+    marketingGreyMax: Math.round(marketingGreyMax),
+    dollarGapMax: dcShownAt !== undefined ? Math.round(longestGap(dollarBuys, dcShownAt, wallAt ?? horizon).gap) : null,
+    linesIn26,
+    linesIn26All,
+  };
   const summary: Summary = {
     seed: args.seed,
     policy: args.policy,
+    s1x,
     transition,
     firstGpu: milestones['firstGpu'] ?? null,
     longestRevealGap: Math.round(rg.gap),
@@ -1077,6 +1246,14 @@ function main(): void {
     console.log(`modals                   ${sum.modals} (min spacing ${sum.minModalSpacing ?? '—'} s)   (target 7–9, ≥ 150 s apart)`);
     console.log(`reveal → purchase        median ${sum.latencyMedian ?? '—'} s, ${sum.latencyWithin10Pct}% within 10 s (${sum.latencies.length} projects)   (target bot ≥ 90, naive ≥ 60; ≤ 10 %)`);
     console.log(`densest six minutes      ${sum.maxReveals6min} first-time reveals from ${fmtClock(sum.maxReveals6minAt)}   (target ≤ 16)`);
+    const x1 = sum.s1x;
+    console.log(`run starts               ${x1.trainStarts.map((v) => fmtClock(v)).join(' ')}; longest gap ${clock(x1.maxStartGap)}   (first by 6:45; ≤ 5:00 apart reading delays, ≤ 8:00 buying everything)`);
+    console.log(`Train blocked by         ${Object.entries(x1.blocked).map(([k, v]) => `${k} ${v} s`).join(', ') || 'nothing'}; disabled with nothing training ${x1.disabledIdle} s before the wall   (research 0; ≤ 60)`);
+    console.log(`First Datacenter         on screen ${clock(x1.dcOnScreen)} before its purchase, ${x1.dcShare ?? '—'}% of the stage   (≥ 8:00, ≤ 50%)`);
+    console.log(`delays                   ${x1.delayed} purchases delayed the wait 10 s or more, ${x1.unprinted} with no delay on their row   (0 unprinted)`);
+    console.log(`minutes 3–7              research at the cap ${x1.capBeforeTraining} s, Projects empty ${x1.emptyPanelMax} s at most   (≤ 60, ≤ 15)`);
+    console.log(`money's second half      Marketing grey ${x1.marketingGreyMax} s at most; longest gap between dollar buys, card to wall ${x1.dollarGapMax ?? '—'} s   (≤ 180, ≤ 180)`);
+    console.log(`first training cycle     ${x1.linesIn26} console lines in the densest 26 s, ${x1.linesIn26All} with the replies to purchases   (≤ 4)`);
     const x = sum.exitState1;
     if (x) console.log(`exit state               capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, Trust ${x.trust}, ${x.researchers} researchers, lab ${x.labSpace}, marketing ${x.hypeLevel}, ${x.contracts} contracts ($${x.contractRate}/s of $${x.revPerSec}/s), price $${x.price}, ${x.gpus} GPUs, ${x.incidents} incidents`);
     if (sum.choices1.length) console.log(`modal answers            ${sum.choices1.join(', ')}`);

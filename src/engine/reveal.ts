@@ -69,6 +69,9 @@ const STAGE1_GOVERNED = ['p_dogfood', 'p_batch', 'p_agents', 'p_recruiter', 'p_a
 function stage1Governor(s: GameState): void {
   if (s.stage !== 1 || !s.revealed['training'] || s.activeChoice) return;
   if (s.stats.timePlayed - s.cadence.lastRevealAt < STAGE1_GOVERNOR_SECONDS) return;
+  // It may go one past the cap (stage1-round3-fixes.md §4), so the stream cannot stall behind four
+  // cards nobody is buying, and no further.
+  if (room(s) < 0) return;
   for (const id of STAGE1_GOVERNED) {
     const def = projectDef(id);
     const st = s.projects[id];
@@ -100,8 +103,19 @@ function uncapped(s: GameState, def: ProjectDef): boolean {
   return def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
+/**
+ * Stage 1's first lab (stage1-round3-fixes.md §3 (c)): before the Training panel only these come out,
+ * in this order, each 10 s after the one before it is bought; the rest follow the pipeline.
+ */
+export const OPENING_CARDS = ['p_prompting', 'p_grid', 'p_insight', 'p_training'];
+/** Once shown, the Projects panel is never empty longer than this while a card's trigger has fired (§3 (a)). */
+export const EMPTY_PANEL_SECONDS = 10;
+/** A card already paid for when it would come out waits this long at most for a purchase to take the balance below it (§4). */
+export const ON_SIGHT_SECONDS = 60;
+
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
+  if (s.stage === 1 && !s.revealed['training'] && !def.rescue && !OPENING_CARDS.includes(def.id)) return false;
   // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6), except
   // the carried cards (their `stages` name Stage 3: code review, honesty evals, the second campus).
   if (s.stage >= 3 && def.late && !def.stages.includes(s.stage)) return false;
@@ -116,6 +130,7 @@ function show(s: GameState, def: ProjectDef): void {
   const st = projectState(s, def.id);
   const first = !st.shown && st.bought === 0 && !s.cadence.seen.includes(`p:${def.id}`);
   st.shown = true;
+  delete s.flags[`sight:${def.id}`];
   const q = s.cadence.queue.indexOf(def.id);
   if (q >= 0) s.cadence.queue.splice(q, 1);
   const l = s.cadence.lateQueue.indexOf(def.id);
@@ -178,6 +193,30 @@ function room(s: GameState): number {
  */
 export const BEAT_GAP_SECONDS = 4;
 
+/**
+ * Stage 1 (stage1-round3-fixes.md §4, "cards are goals, not a conveyor"): a card whose price is already
+ * in hand when it would come out waits until a purchase takes the balance below it, for at most 60 s,
+ * then comes out lit; with the panel empty, 10 s at most (§3 (a)). Rescues, the stage goal, urgent
+ * fixes and gifts (a card with no price) never wait. True while it waits.
+ */
+function heldOnSight(s: GameState, def: ProjectDef, now: number, empty: boolean): boolean {
+  // The first lab's four cards are beats with their own timing (§3), not goals to wait for.
+  if (s.stage !== 1 || exempt(s, def) || OPENING_CARDS.includes(def.id)) return false;
+  const key = `sight:${def.id}`;
+  const c = def.cost(s);
+  const priced = !!(c.funds || c.research || c.insight || c.trust);
+  if (!priced || !def.canAfford(s)) {
+    delete s.flags[key];
+    return false;
+  }
+  const at = s.flags[key];
+  if (typeof at !== 'number') {
+    s.flags[key] = now;
+    return true;
+  }
+  return now - at < (empty ? EMPTY_PANEL_SECONDS : ON_SIGHT_SECONDS);
+}
+
 /** Every tick: triggers feed the queue; the drip releases from it. */
 export function updateProjects(s: GameState): void {
   if (!s.revealed['projects']) return;
@@ -185,6 +224,18 @@ export function updateProjects(s: GameState): void {
   let free = room(s);
   const approach = inApproach(s);
   const modalBeat = now - s.cadence.lastModalAt < BEAT_GAP_SECONDS;
+  // Stage 1: when the panel last emptied (its last card bought); the next card comes 10 s after (§3 (a)).
+  const stage1 = s.stage === 1;
+  if (stage1) {
+    const onScreen = visibleProjects(s).some((p) => !p.rescue);
+    if (onScreen) delete s.flags['panelEmptyAt'];
+    else if (typeof s.flags['panelEmptyAt'] !== 'number') s.flags['panelEmptyAt'] = now;
+  }
+  const emptyAt = s.flags['panelEmptyAt'];
+  const empty = stage1 && typeof emptyAt === 'number';
+  // The Training panel is a beat of its own (arc G5): cards wait 10 s after it appears.
+  const trainingAt = s.flags['trainingAt'];
+  const trainingBeat = stage1 && typeof trainingAt === 'number' && now - trainingAt < EMPTY_PANEL_SECONDS;
 
   const approach3 = inApproach3(s);
   for (const def of PROJECTS) {
@@ -205,7 +256,7 @@ export function updateProjects(s: GameState): void {
     // Until the Training panel is up, a chained card waits for the drip like any other (critic round 2 §6.1).
     const early = s.stage === 1 && !s.revealed['training'];
     if (exempt(s, def)) show(s, def);
-    else if (def.chain && !early && free > 0 && !modalBeat && !s.cadence.queue.includes(def.id)) {
+    else if (def.chain && !early && !trainingBeat && free > 0 && !modalBeat && !s.cadence.queue.includes(def.id) && !heldOnSight(s, def, now, empty)) {
       show(s, def);
       free--;
     } else enqueue(s, def.id);
@@ -224,15 +275,19 @@ export function updateProjects(s: GameState): void {
   // are separate beats (no beat adds more than ~8 numbers).
   const released = s.flags['releasedAt'];
   const releaseBeat = typeof released === 'number' && now - released < 4;
-  if (s.cadence.queue.length && !releaseBeat && !modalBeat && now - s.cadence.lastDripAt >= dripSeconds(s)) {
+  // Stage 1: the drip only spaces cards that would overlap; an empty panel gets its next card 10 s
+  // after its last one was bought (stage1-round3-fixes.md §3 (a)).
+  const dripDue = now - s.cadence.lastDripAt >= dripSeconds(s) || (empty && now - (emptyAt as number) >= EMPTY_PANEL_SECONDS);
+  if (s.cadence.queue.length && !releaseBeat && !modalBeat && !trainingBeat && dripDue) {
     // The first queued project that fits: side-offers never wait for room. After a quiet spell
-    // (Stage 1: 140 s; Stage 2: 160 s) the next one comes out over the cap (Stage 2: eight cards at most).
+    // (Stage 1: 140 s, one card past the cap at most; Stage 2: 160 s, eight cards at most) the next one
+    // comes out over the cap. Stage 1 holds a card already paid for (heldOnSight).
     const quiet = s.stage === 1
-      ? s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS
+      ? s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS && free >= 0
       : overdue(s) && free > -OVERFLOW;
     const id = s.cadence.queue.find((q) => {
       const def = projectDef(q);
-      return !!def && (free > 0 || uncapped(s, def) || quiet);
+      return !!def && (free > 0 || uncapped(s, def) || quiet) && !heldOnSight(s, def, now, empty);
     });
     const def = id ? projectDef(id) : undefined;
     if (def) {
