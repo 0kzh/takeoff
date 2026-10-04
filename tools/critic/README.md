@@ -174,6 +174,53 @@ stage of a run).
   game's own confirmation modal (title, options, the option that releases) as well as browser
   dialogs, and confirms through it.
 
+## Stage 2 round-1 additions (the Stage 2 critic's `explore-s2.mjs`)
+
+`explore.mjs` is unchanged (its runs and probes were written for Stage 1). Stage 2's own systems
+are probed by a second script with the same libraries and output layout:
+
+* `explore-s2.mjs <name[,name…]|list|all-runs|all-probes|all-paperclips|table> --game-dir DIR
+  [--seed N | --seeds 1,2,3] [--minutes MIN] [--tag T] [--shots 600,1200] [--modal-shots]` — every
+  run and probe starts at Takeoff's Stage 2 preset; labels are `<tag>-<name>[-seedN]` (tag default
+  `s2x`).
+  * **Runs** play the whole stage with the first-timer's Stage 2 rules and ONE thing changed:
+    `baseline`, `mobile` (390 × 844), `no-power`, `no-datacenter`, `power-only`, `no-standing`,
+    `slider-min`, `slider-max`, `no-assistants`, `no-research`, `hire-only`, `expand-only`,
+    `data-ignore` (buys the Web crawl, then no other data source), `no-data`, `keep-internal`,
+    `ship-open`, `no-train`, `focus-efficiency`, `focus-safety`, `modal-ignore`, `modal-timed-only`
+    (timed events expire, untimed ones are answered), `modal-last`, `modal-worst` / `modal-best` (by
+    a per-title table of the reckless / careful option; an unknown event falls back to a score of
+    the printed effect line and is listed in the report), `modal-gov` / `modal-approval` /
+    `modal-lead` (the option that prints the largest gain of that meter), `settings-off` (every
+    ON/AUTO setting switched off whenever seen, slider to its minimum; the backlog rule then moves
+    the price), `auto-off` (AUTO off, price never touched), `settings-on`, `share-evals`,
+    `job-fund`, `align-max`, `no-security`. Each writes a normal run plus `.explore.md` (a row per
+    minute with the meters on screen and in the state, model releases, how long each greyed-button
+    reason stood, what the training pipeline was doing or waiting for at each 2-s check, every event
+    with its printed effect lines, every card's full text at first sight, every line), `.end.json`
+    (the last Stage 2 screen: meters, greyed and enabled buttons, console), `.modals.json`,
+    `.cards.json`, `.end.png` / `.cap.png`.
+  * `table [--tag T] [name,…]` prints the play-style table (stage end and end-of-stage meters per
+    seed) from the `.end.json` files and writes `<tag>-table.md`.
+  * **Probes** (each writes `<tag>-<name>.md` and screenshots): `idle-start`, `idle-mid`,
+    `idle-rescue` (the event that opens for an idle player), `reload-mid-run` (also mid-training and
+    mid-evaluation; compares the whole serialized state before and after), `reload-mid-queue`,
+    `reload-mid-event` (untimed and timed), `slider-ends`, `mobile-shots`, `event-keys` (real mouse
+    behind the event panel, Tab, Escape), `untimed-open` (an untimed event left open for 20
+    minutes), `exit` (the gate card held ready for 30 s, then clicked: what the click changes, the
+    narration, the screen 4 s and 30 s later), `hover` (Stores-row breakdowns and every tooltip),
+    `auto-off-raise`.
+  * **Paperclips Stage 2 probes** (fixture `paperclips-stage2`): `pc-all-in-drones`, `pc-no-power`,
+    `pc-disassemble-all`, `pc-idle`, `pc-reload`, `pc-slider`, `pc-mobile`, `pc-words` (numbers,
+    controls, panels and words on screen at the five-minute marks). `pc-stage [--yomi N]` replays
+    the stage with the scripted player, optionally arriving with yomi (the fixture has 0).
+* `games/paperclips-late.mjs` reads three optional environment variables that give reference
+  variants of the Stage 2 player for the fairness check; unset, the rules are exactly as described
+  below: `PC_TRIVIAL_SHARE` (default 0.1: the share of the clips a bulk purchase may cost),
+  `PC_FACTORY_HORIZON` (default 120 s; `Infinity` = drones always wait for a factory while wire
+  piles up), `PC_THINK_VALUE` (default 100: the slider position while memory is the wall; 200 = all
+  Think).
+
 ## Definitions and implementation choices
 
 The report's §1 definitions are applied verbatim (see the header of `lib/analysis.mjs`). Where §1
@@ -304,6 +351,7 @@ left something open, the harness does this:
 ```
 run.mjs analyze.mjs compare.mjs transition.mjs softlock.mjs determinism.mjs make-fixtures.mjs setup.sh
 explore.mjs decisions.mjs   (round-2 additions)
+explore-s2.mjs              (Stage 2 round-1 addition: Stage 2 play styles, probes, Paperclips Stage 2 probes)
 lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG, Takeoff boot seed)
        pagelib.mjs (in-page snapshot/controls/click) · session.mjs (browser + clock control)
        policy.mjs · recorder.mjs (events) · runner.mjs (phases, outputs) · analysis.mjs

@@ -16,8 +16,16 @@ export const FACTORY = 'btnMakeFactory';
 export const SPACE_EXPLORATION = 'projectButton46';
 export const LAUNCH_PROBE = 'btnMakeProbe';
 
-/** A bulk button is used once N × the shown unit price is ≤ 10% of the unused clips. */
-export const TRIVIAL_SHARE = 0.1;
+/**
+ * A bulk button is used once N × the shown unit price is ≤ 10% of the unused clips.
+ * (Stage 2 critic, round 1: PC_TRIVIAL_SHARE / PC_FACTORY_HORIZON in the environment give reference
+ * variants of the player for the fairness check; unset, the rules are exactly as before.)
+ */
+export const TRIVIAL_SHARE = Number(process.env.PC_TRIVIAL_SHARE || 0.1);
+/** Work/Think slider position (0–200) while memory is what blocks a visible project: 100 = half think. */
+export const THINK_VALUE = Number(process.env.PC_THINK_VALUE || 100);
+/** Seconds of the shown clip income within which a factory counts as "affordable soon" (drones wait for it). */
+export const FACTORY_HORIZON = Number(process.env.PC_FACTORY_HORIZON || 120);
 /** Per-unit power draw read off the Power panel (drones 1 MW, factories 200 MW, farms +50 MW). */
 const MW = { harvester: 1, wireDrone: 1, factory: 200, farm: 50 };
 const STATS = ['Speed', 'Nav', 'Rep', 'Haz', 'Fac', 'Harv', 'Wire', 'Combat'];
@@ -134,7 +142,7 @@ export async function swarmSlider(ctx) {
   if (!(m.swarmStatus || '').length) return; // the Swarm Computing box (with the slider) is not on screen
   const opsCosts = c.buttons.filter((b) => b.kind === 'project' && b.costs && b.costs.ops > 0).map((b) => b.costs.ops);
   const needMemory = opsCosts.some((x) => x > m.maxOps);
-  const target = needMemory ? 100 : 0;
+  const target = needMemory ? THINK_VALUE : 0;
   if (Number(m.slider) !== target) {
     await ctx.set('#slider', target, 'slider', needMemory ? `a project needs more than ${fmtN(m.maxOps)} ops: think (gifts) half-way` : 'no project waits for memory: all work');
   }
@@ -202,7 +210,7 @@ export async function stage2(ctx, mem) {
 
   // Still piling up and the next factory is affordable within ~2 minutes of the clip income shown:
   // save for it (more drones would only add wire). A factory further off does not stop the drones.
-  if (mem.wireUpChecks >= 2 && m.factoryCost <= m.unusedClips + 120 * (m.rate || 0)) return;
+  if (mem.wireUpChecks >= 2 && (FACTORY_HORIZON === Infinity || m.factoryCost <= m.unusedClips + FACTORY_HORIZON * (m.rate || 0))) return;
 
   // Matter piling up → wire drones; otherwise (matter left on Earth) → harvesters; in step (≤ 1.4×).
   c = ctx.controls;
