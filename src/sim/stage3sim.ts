@@ -429,7 +429,8 @@ export class Stage3Tracker {
 
   private markOf(s: GameState, t: number): Mark3 {
     const unit = researchUnit(s);
-    const researchSinks = (s.revealed['alignWork'] && s.research >= unit ? 1 : 0)
+    // A standing share counts as a sink (arc G27 as amended): Alignment work is one from its reveal.
+    const researchSinks = (s.revealed['alignWork'] ? 1 : 0)
       + (s.revealed['experiments'] && counter(s, 'expPts') < EXPERIMENTS_MAX && s.research >= unit ? 1 : 0);
     const revenueSinks = (LOT_SIZES_S3.some((n) => !orderReasonS3(s, n) && s.funds >= lotCostOf(s, n)) ? 1 : 0)
       + (s.revealed['lobby'] && s.funds >= lobbyCost(s) ? 1 : 0)

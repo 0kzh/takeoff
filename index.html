@@ -53,9 +53,9 @@
         <div class="storeRow" id="row-power" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span class="meter" id="powerMeterS" role="img"></span> <span data-slot="powerMW"></span> of <span data-slot="powerCapMW"></span> MW <span id="powerFull" class="note"></span></span></div>
         <div class="storeRow" id="row-copies" data-store="copies"><span class="storeKey">copies</span><span class="storeVal" data-slot="infraCopies"></span></div>
         <div class="storeRow" id="row-data" data-store="data" data-reveal="dataRow"><span class="storeKey">data</span><span class="storeVal"><span id="data">0</span> T</span></div>
-        <div class="storeRow" id="row-chips" data-store="chips" data-reveal="chipsRow"><span class="storeKey">chips on order</span><span class="storeVal" id="chipsOnOrder">0</span></div>
-        <div class="storeRow" id="row-monitors" data-store="monitors" data-reveal="monitors"><span class="storeKey">monitors</span><span class="storeVal" id="monitorCopies">0</span></div>
-        <div class="storeRow" id="row-rogue" data-store="rogue" data-reveal="rogueRow"><span class="storeKey">rogue copies</span><span class="storeVal" id="rogueCopies">0</span></div>
+        <div class="storeRow" id="row-chips" data-store="chips" data-reveal="chipsRow" data-hide="takeoff"><span class="storeKey">chips on order</span><span class="storeVal" id="chipsOnOrder">0</span></div>
+        <div class="storeRow" id="row-monitors" data-store="monitors" data-reveal="monitors" data-hide="takeoff"><span class="storeKey">monitors</span><span class="storeVal" id="monitorCopies">0</span></div>
+        <div class="storeRow" id="row-rogue" data-store="rogue" data-reveal="rogueRow" data-hide="takeoff"><span class="storeKey">rogue copies</span><span class="storeVal" id="rogueCopies">0</span></div>
       </div>
 
       <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
@@ -84,7 +84,7 @@
           <span id="priceHint" class="note">lower: more tasks sell, each earns less</span><br>
         </span>
         <span data-hide="autoPrice">Price per Task: <span id="price">$ 0.25</span><br></span></span>
-        <span data-reveal="autoPrice" id="billingLine2"><span data-hide="stores">Billing <span id="billRate">0</span> tasks/s at </span><span data-reveal="stores">Price per task: </span><span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
+        <span data-reveal="autoPrice" data-hide="takeoff" id="billingLine2"><span data-hide="stores">Billing <span id="billRate">0</span> tasks/s at </span><span data-reveal="stores">Price per task: </span><span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
         <span data-reveal="pricing"><span data-hide="autoPrice"><span id="billingLine"></span><span class="hiddenIds"><span id="soldPerSec">0</span> <span id="tasksPerSec">0</span> <i id="marketState">idle</i></span><br></span></span>
         <span data-reveal="demandPct">Public Demand: <span id="demand">0</span>%<br></span>
         <span id="hypeLine">Release hype: <span id="hype">strong</span><br></span>
@@ -307,14 +307,14 @@
         <span data-reveal="trueAlignment">Alignment (read from the weights): <span id="alignTrue">0</span><br></span>
         <span id="interpLine">Interpretability: level <span id="interpretability">0</span> — <span id="interpWords">the weights are numbers</span></span><br>
         <span id="autonomyLine" class="hasTip">Autonomy granted: <span id="autonomy">0</span></span> <span id="autonomyNote" class="note"></span><br>
-        <span data-reveal="drift"><span id="driftLine">Lost to value drift: <span id="driftLost">0</span> · recaptured <span id="driftCaught">0</span></span><br></span>
+        <span data-reveal="drift"><span id="driftLine">Lost to value drift: <span id="driftLost">0</span><span id="driftCaughtPart"> · recaptured <span id="driftCaught">0</span></span></span><br></span>
         <span data-reveal="rogueRow"><span id="rogueLine">Rogue copies: <span class="meter" id="rogueMeter" role="img"></span> <span id="roguePct">0%</span> of the fleet</span> <span id="rogueNote" class="note"></span><br></span>
         <span data-reveal="monitorGen"><span id="monitorGen" class="warn">Monitor: Sage-2, two generations behind. Efficacy halved.</span><br></span>
         <span data-reveal="honeypot"><span id="honeypotLine">Honeypot: behaviour unchanged</span><br></span>
         <span data-reveal="noise"><span id="noiseLine">Noise test: no change</span><br></span>
         <span data-reveal="successor"><span id="successorLine">Successor: aligned to the Spec</span><br></span>
         <span data-reveal="lie"><span id="lieLine">Checkpoints: alignment about 60</span><br></span>
-        <div data-reveal="alignWork" id="alignWorkRow"><button class="button2" id="btn-alignWork" title="A unit of research spent checking Sage: measured +0.1, the real thing a little too.">Alignment work</button> <button class="button2" id="btn-alignWork5">×5</button> <span id="alignWorkNote" class="note"></span></div>
+        <div data-reveal="alignWork" id="alignWorkRow"><button class="button2 toggle" id="btn-alignWork" title="A share of research spent checking Sage, 0 / 10 / 20 / 30 %: each 2 % of a run's research buys measured +0.1 and the real thing +0.08. Click to change it.">Alignment work: 0%</button> <button class="button2" id="btn-alignWork5">×5</button> <span id="alignWorkNote" class="note"></span></div>
         <div id="grantList"></div>
       </div>
 

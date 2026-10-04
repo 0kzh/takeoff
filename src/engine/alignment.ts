@@ -197,20 +197,47 @@ export function reimage(s: GameState): boolean {
 
 // ---------- the research sink (§2.14) ----------
 
-/** One unit of `Alignment work`: measured +0.1, true +0.08 (2 % of the next run's research). */
+/**
+ * `Alignment work` (stage3.md, the wallet-rule addendum): a share of research, 0 / 10 / 20 / 30 %,
+ * converted at the built rate — each 2 % of a run's research (a unit) buys measured +0.1 and true
+ * +0.08. A share, not a button: a bottomless sink at a flat price never shares the run's purse, and
+ * pressing what is lit can no longer starve the run (the critic's first-timer pressed it 2,044 times).
+ */
 export const ALIGN_WORK_MEASURED = 0.1;
 export const ALIGN_WORK_TRUE = 0.08;
+export const ALIGN_WORK_SHARES = [0, 0.1, 0.2, 0.3];
 
-export function alignWork(s: GameState, units = 1): boolean {
-  if (s.stage < 3 || !s.revealed['alignWork'] || units <= 0) return false;
-  const cost = units * researchUnit(s);
-  if (s.research < cost) return false;
-  s.research -= cost;
-  s.alignmentApparent = clamp100(s.alignmentApparent + ALIGN_WORK_MEASURED * units);
-  s.alignmentTrue = clamp100(s.alignmentTrue + ALIGN_WORK_TRUE * units);
-  bump(s, 'alignWorkUnits', units);
+export function alignWorkShare(s: GameState): number {
+  const v = s.flags['alignWorkShare'];
+  return typeof v === 'number' ? v : 0;
+}
+
+/** The button: the share's next step, 0 → 10 → 20 → 30 % → 0. */
+export function alignWork(s: GameState): boolean {
+  if (s.stage < 3 || !s.revealed['alignWork']) return false;
+  const i = ALIGN_WORK_SHARES.findIndex((x) => Math.abs(x - alignWorkShare(s)) < 1e-9);
+  s.flags['alignWorkShare'] = ALIGN_WORK_SHARES[(i + 1) % ALIGN_WORK_SHARES.length]!;
   press(s, 'alignWork');
   return true;
+}
+
+/** Sets the share directly (the sim's policies). */
+export function setAlignWork(s: GameState, share: number): boolean {
+  if (s.stage < 3 || !s.revealed['alignWork'] || !ALIGN_WORK_SHARES.some((x) => Math.abs(x - share) < 1e-9)) return false;
+  if (Math.abs(alignWorkShare(s) - share) < 1e-9) return false;
+  s.flags['alignWorkShare'] = share;
+  press(s, 'alignWork');
+  return true;
+}
+
+/** Every tick: the share's research becomes alignment at the unit rate (called from the research tick). */
+export function alignWorkTick(s: GameState, research: number): void {
+  const unit = researchUnit(s);
+  if (research <= 0 || unit <= 0) return;
+  const units = research / unit;
+  s.alignmentApparent = clamp100(s.alignmentApparent + ALIGN_WORK_MEASURED * units);
+  s.alignmentTrue = clamp100(s.alignmentTrue + ALIGN_WORK_TRUE * units);
+  s.flags['alignWorkUnits'] = counter(s, 'alignWorkUnits') + units;
 }
 
 /** The next run's research (for the sinks' delay line). */

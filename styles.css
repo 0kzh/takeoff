@@ -220,6 +220,9 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   cursor: pointer;
 }
 .projectButton:hover { border: 1px solid rgba(0, 0, 0, 0.25); }
+/* A read card keeps its title and price; its description lives in the hover (the on-screen budget). */
+.projectButton.folded .projectDesc,
+.projectButton.folded br { display: none; }
 .projectButton:active { background: #d1d1d1; border: 1px solid #000; }
 .projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
 .projectButton.rescue { border-style: dashed; }
@@ -409,6 +412,10 @@ div.storeRow[data-reveal].shown { display: flex; }
 }
 #endingScreen.shown { display: block; }
 #endingBox { max-width: 520px; margin: 80px auto; }
+/* The end screen is the page (coordinator, round 3): nothing of the game below it, scrolled as a page. */
+body.ended > *:not(#endingScreen):not(#dev) { display: none !important; }
+body.ended #endingScreen { position: static; min-height: 100vh; overflow: visible; }
+@media (max-width: 600px) { #endingBox { margin: 32px 16px; } }
 #endingStats td { padding: 2px 16px 2px 0; }
 
 /* ---------- toast (ADR "saved.") ---------- */

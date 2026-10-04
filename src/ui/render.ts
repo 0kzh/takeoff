@@ -33,7 +33,7 @@ import { renderGraph } from './graph.js';
 import { mountStores, renderStores } from './stores.js';
 import {
   mount3, renderResearch3, renderTraining3, renderInfrastructure3, renderAlignment, renderSecurity3, renderGeopolitics,
-  renderOversight, renderPublic3, renderStats3, noteState3, setOff,
+  renderOversight, renderPublic3, renderStats3, noteState3, setOff, folded,
 } from './render3.js';
 
 type Rest<T> = T extends (s: GameState, ...rest: infer R) => unknown ? R : never;
@@ -394,7 +394,8 @@ function renderBuildShare(s: GameState): void {
     const eta = buildEta(s, lotCostOf(s, n));
     if (Number.isFinite(eta) && eta < 3600) parts.push(`next ${fmtInt(n)} lot in ${fmtClock(Math.max(1, eta))}`);
   }
-  if (s.revealed['training'] && trainSlotFree(s) && s.training.cooldown <= 0) {
+  // Stage 3's runs are paid in research, not from either purse: the share's one clock is the lot's.
+  if (s.stage === 2 && s.revealed['training'] && trainSlotFree(s) && s.training.cooldown <= 0) {
     const eta = runPaidInSeconds(s);
     if (eta >= 1 && Number.isFinite(eta) && eta < 3600) parts.push(`${nextRunName(s)} in ${fmtClock(eta)}`);
   }
@@ -494,6 +495,11 @@ function renderProjects(s: GameState): void {
     const delay = def.canAfford(s) ? delayNote(s, def.cost(s)) : '';
     const label = `${def.title} ${priceTag(s, def)}${needs}${delay}`;
     if (title.textContent !== label) title.textContent = label;
+    // From Stage 2 a card's description is read in its first 45 s on screen, then lives in its hover.
+    const fold = s.stage >= 2 && folded(s, `card:${def.id}`);
+    if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
+    const tip = fold ? def.description : '';
+    if (b.title !== tip) b.title = tip;
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
     // The card that answers a standing wall, or that the stage cannot go on without (arc G31).
@@ -783,6 +789,10 @@ let endingShown = '';
 function renderEnding(s: GameState): void {
   const screen = byId('endingScreen');
   setShown(screen, !!s.ending);
+  if (document.body.classList.contains('ended') !== !!s.ending) {
+    document.body.classList.toggle('ended', !!s.ending);
+    if (s.ending) window.scrollTo(0, 0);
+  }
   if (!s.ending) {
     endingShown = '';
     return;

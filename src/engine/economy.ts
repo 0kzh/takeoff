@@ -5,6 +5,7 @@ import { visibleProjects } from './projects.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
 import { sellS2 } from './market.js';
+import { alignWorkShare, alignWorkTick } from './alignment.js';
 
 export {
   activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
@@ -554,7 +555,14 @@ export function researchTick(s: GameState, dt: number): void {
   if (!s.revealed['research']) return;
   const cap = researchCap(s);
   if (s.research < cap) {
-    s.research = Math.min(cap, s.research + researchRate(s) * dt);
+    let gained = researchRate(s) * dt;
+    // Stage 3: `Alignment work` takes its share of research before it reaches the pool.
+    const share = s.stage === 3 && s.revealed['alignWork'] ? alignWorkShare(s) : 0;
+    if (share > 0) {
+      alignWorkTick(s, gained * share);
+      gained *= 1 - share;
+    }
+    s.research = Math.min(cap, s.research + gained);
   }
   if (s.stage >= 3) {
     s.insight += insightRate(s) * dt;

@@ -1,13 +1,12 @@
 import { GameState, isBought, counter } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import type { BotMemory } from './policy.js';
-import { researchRate } from '../engine/economy.js';
 import {
-  trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct, researchUnit,
+  trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct,
   trainSlotFree, EXPERIMENTS_MAX,
 } from '../engine/training.js';
 import {
-  LOT_SIZES_S3, orderReasonS3, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost,
+  LOT_SIZES_S3, orderReasonS3, lotCostOf, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost,
   nuclearCost, reactorQueueFull, needsSite2,
 } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
@@ -157,10 +156,12 @@ function monitorTarget(s: GameState, mem: BotMemory): number {
   return t;
 }
 
+/** The Alignment work share (§9.1 item 6, now a share): 10 %; the racer none; the variants pin 0 or 30 %. */
 function alignShareOfResearch(mem: BotMemory): number {
   if (mem.policy === 'racer' || has(mem, 'alignwork-0')) return 0;
   if (has(mem, 'alignwork-30')) return 0.3;
-  return 1 / 7;
+  if (has(mem, 'alignwork-20')) return 0.2;
+  return 0.1;
 }
 
 /** The build share the bot keeps (arc G34): 50 %; the variants pin 25 % (`budget-0`) or 75 % (`budget-100`). */
@@ -213,7 +214,6 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
 
   // The rest twice a second.
   if (mem.ticks % 5 !== 0) return;
-  const dt = m.lastPass < 0 ? 0 : now - m.lastPass;
   m.lastPass = now;
 
   // Sliders.
@@ -243,7 +243,12 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
     const reactorQueued = s.powerQueue.some((o) => o.kind === 'nuclear');
     if (!reactorQueued && !reactorQueueFull(s) && freePowerGpus(s) < 2 * big && s.buildFund >= nuclearCost(s)) a.buyNuclear(s);
   }
-  if (isBought(s, 'p_standing_order') && !s.standingOrder) a.toggleStanding(s);
+  // The bot orders its own lots (the Standing order off): the largest the fund covers and the queue takes.
+  if (isBought(s, 'p_standing_order') && s.standingOrder) a.toggleStanding(s);
+  if (s.revealed['infrastructure']) {
+    const fit = LOT_SIZES_S3.filter((n) => !orderReasonS3(s, n) && lotCostOf(s, n) <= s.buildFund);
+    if (fit.length) a.buyGpuBatch(s, fit[fit.length - 1]!);
+  }
   setShare(s, a, budgetTarget(mem));
 
   // Funds: Security level 3 first (the theft is in February), then Distillation, code review and the
@@ -267,14 +272,7 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (saving) return;
 
   // Repeatables (§9.1 item 6).
-  if (s.revealed['alignWork'] && dt > 0) {
-    m.alignBudget += (researchRate(s) * dt * alignShareOfResearch(mem));
-    const unit = researchUnit(s);
-    if (m.alignBudget >= unit && s.research >= unit) {
-      if (a.alignWork(s, 1)) m.alignBudget -= unit;
-    }
-    m.alignBudget = Math.min(m.alignBudget, 10 * unit);
-  }
+  if (s.revealed['alignWork']) a.setAlignWork(s, alignShareOfResearch(mem));
   if (s.revealed['experiments']) experiments(s, a);
   if (s.revealed['lobby'] && !has(mem, 'lobby-never') && seats(s) < 7 && counter(s, 'lobbyHeat') === 0 && s.funds >= lobbyCost(s)) a.lobby(s);
   if (s.revealed['counterintel'] && s.lead < 2 && counter(s, 'ciHeat') === 0 && s.funds >= counterintelCost(s)) a.counterintel(s);

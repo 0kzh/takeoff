@@ -637,14 +637,15 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if ((wall === 'room' || freeSlots(s) < 2000 || freeSlots(s) < 0.3 * gpuCapacity(s)) && s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) {
     a.buildDatacenter(s);
   }
-  if (!standingOrderOn(s)) {
+  // The bot steers its own lots (the Standing order stays off): the largest whole lot that fits.
+  if (standingOrderOn(s)) a.toggleStanding(s);
+  {
     let guard = 0;
     while (guard++ < 4) {
       const size = [25000, 5000, 1000].find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
       if (!size || !a.buyGpuBatch(s, size)) break;
     }
   }
-  if (isBought(s, 'p_standing_order') && !s.standingOrder) a.toggleStanding(s);
 
   // 4. The build share by what binds: 75 % while the run waits for GPUs, 25 % while it waits only
   //    for money with GPUs to spare, 50 % otherwise (a variant pins it).

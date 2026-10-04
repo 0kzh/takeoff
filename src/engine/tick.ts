@@ -18,7 +18,7 @@ import {
   approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun,
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
-import { alignWork, reimage } from './alignment.js';
+import { alignWork, setAlignWork, reimage } from './alignment.js';
 import { lobby, counterintel, stepPayments } from './world3.js';
 import { buyProject, visibleProjects } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
@@ -339,6 +339,7 @@ export const actions = {
   setRedteamDepth,
   runExperiments,
   alignWork,
+  setAlignWork,
   reimage,
   setMonitorShare,
   lobby,

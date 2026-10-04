@@ -172,7 +172,6 @@ export function enabledPurchasesS3(s: GameState): string[] {
     if (s.flags['buildout'] !== true && s.revealed['nuclearButton'] && !reactorQueueFull(s) && s.buildFund >= nuclearCost(s)) out.push('nuclear');
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
-  if (s.revealed['alignWork'] && s.research >= researchUnit(s)) out.push('alignWork');
   if (s.revealed['experiments'] && counter(s, 'expPts') < EXPERIMENTS_MAX && s.research >= researchUnit(s)) out.push('experiments');
   if (s.revealed['lobby'] && s.funds >= lobbyCost(s)) out.push('lobby');
   if (s.revealed['counterintel'] && s.funds >= counterintelCost(s)) out.push('counterintel');
