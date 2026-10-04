@@ -40,8 +40,12 @@ export function buyProject(s: GameState, id: string): boolean {
   const st = projectState(s, id);
   st.bought += 1;
   if (remainingUses(s, def) > 0 && def.rehide) st.shown = false;
+  // A grant's first line is its WARNING (stage3.md §4.2), so its effect runs before its message.
+  if (def.grant) def.buy(s);
   if (def.consoleMsg) say(s, def.consoleMsg);
-  if (def.logMsg) logNews(s, def.logMsg);
-  def.buy(s);
+  // Stage 2's carried cards keep their console line in Stage 3; the Developments log is Stage 3's own.
+  const carriedIntoS3 = s.stage >= 3 && def.stages.some((x) => x < 3);
+  if (def.logMsg && !carriedIntoS3) logNews(s, def.logMsg);
+  if (!def.grant) def.buy(s);
   return true;
 }

@@ -1,4 +1,4 @@
-import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter } from './state.js';
+import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { effGpus, S2_FUNDS_SCALE, poweredGpus } from './infrastructure.js';
 import { researchCap, researchRate, rentQuota, atRentQuota } from './economy.js';
@@ -13,8 +13,10 @@ export const EVAL_SECONDS = 5;
 export const BENCHMARKS = ['Coding', 'Research', 'Persuasion', 'Agency', 'Bio', 'Cyber'] as const;
 export const EVALUATORS = ['HumanBench', 'Tech press', 'Enterprise analyst', 'Safety Institute'] as const;
 const BENCH_WEIGHT = [0.9, 0.6, 0.5, 0.55, 0.3, 0.35];
-/** Crossing each tier bumps the major version: Sage-2 at 2×, Sage-3 at 4×, … */
-export const MAJOR_TIERS = [2, 4, 8, 16, 32, 64];
+/** Crossing each tier bumps the major version: Sage-2 at 2×, Sage-3 at 4×, Sage-4 at 10× (the next name comes from the vote). */
+export const MAJOR_TIERS = [2, 4, 10];
+/** Stage 3 rounds a run that lands just under a named rung up to it (G33: the built 2 %). */
+export const S3_RUNGS = [10, 25];
 export const FRONTIER_SCORE = 32;
 /** Insight each public release brings the lab (critic round 2 §6.7: insight was dead UI for an efficient player). */
 export const RELEASE_INSIGHT = 6;
@@ -138,6 +140,20 @@ export function gpusForS3(c: number): number {
   return twoSig(300000 * Math.pow(Math.max(1, c) / 4, 1.3));
 }
 
+/**
+ * Stage 3's research per run (stage3.md §2.5, as-built deltas row 2): `18,000,000 × (c/4)^3`, to
+ * three figures — 18.0M for Sage-3.1, 35M at 5×, 144M at 8×, 281M at 10×, 4.4B at 25×. A re-base,
+ * not a continuation: the arrival's narration names the number.
+ */
+export const S3_RUN_BASE = 17000000;
+export const S3_RUN_EXPONENT = 3.15;
+
+export function researchForS3(c: number): number {
+  const raw = S3_RUN_BASE * Math.pow(Math.max(1, c) / 4, S3_RUN_EXPONENT);
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 2));
+  return Math.round(raw / unit) * unit;
+}
+
 function twoSig(raw: number): number {
   if (raw < 100) return Math.max(GPU_NEED_BASE, Math.round(raw / 5) * 5);
   const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
@@ -147,8 +163,8 @@ function twoSig(raw: number): number {
 export function trainCost(s: GameState): Cost {
   const c = startCapability(s);
   if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
-  // Stage 3: runs are research programs (stage3.md §1.1); its build re-bases the price itself.
-  if (s.stage >= 3) return { research: researchFor(c, 3) };
+  // Stage 3: a run is a research program and nothing else (stage3.md §2.5): no money, no data.
+  if (s.stage >= 3) return { research: researchForS3(c) };
   const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
@@ -190,6 +206,8 @@ export function gpusShort(s: GameState): boolean {
 export function trainingDuration(s: GameState): number {
   const n = Math.max(1, gpusNeeded(s));
   if (s.stage < 2) return Math.min(80, Math.max(45, 45 + 10 * Math.log2(n / 10)));
+  // Stage 3: `30 + 6 × log2(N / 300,000)`, 30–60 s, for every run, automatic or not (stage3.md §2.5).
+  if (s.stage >= 3) return Math.min(60, Math.max(30, 30 + 6 * Math.log2(n / 300000)));
   return Math.min(110, Math.max(60, 60 + 8 * Math.log2(n / 1000)));
 }
 
@@ -326,6 +344,8 @@ export function runOtherwiseReady(s: GameState): boolean {
 
 export function canStartTraining(s: GameState): boolean {
   if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0 || gpusShort(s)) return false;
+  // Stage 3: `Training: held` stops the next run from starting (stage3.md §2.5).
+  if (s.stage >= 3 && s.flags['holdRuns'] === true) return false;
   return canPay(s, trainCost(s));
 }
 
@@ -339,6 +359,8 @@ export function setFocus(s: GameState, focus: Focus): boolean {
 
 export function startTraining(s: GameState): boolean {
   if (!canStartTraining(s)) return false;
+  // Stage 3 counts Train presses by hand (B10: Continual learning should come before the second).
+  if (s.stage >= 3 && !isBought(s, 'p_auto_train')) press(s, 'train');
   return startRun(s, trainCost(s));
 }
 
@@ -380,6 +402,12 @@ function startRun(s: GameState, cost: Cost): boolean {
     syntheticShare: synthetic,
     alignShare: s.alignShare,
   };
+  // Stage 3: what went into Experiments goes into this run (+0.25 points a unit, at most +5).
+  if (s.stage >= 3) {
+    run.gainBonus += Math.min(EXPERIMENTS_MAX, counter(s, 'expPts')) / 100;
+    s.flags['expPts'] = 0;
+    run.probeFlags = 0;
+  }
   if (t.run) t.pending = run;
   else t.run = run;
   t.runIndex += 1;
@@ -388,8 +416,10 @@ function startRun(s: GameState, cost: Cost): boolean {
   // (from Stage 2; in Stage 1 the Training panel's own line says half the GPUs are training).
   if (s.stage >= 2) s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.`);
-  if (s.stage >= 2) startedInStage2(s, run);
+  // Stage 3 with Continual learning: runs start themselves every two minutes; the Training panel
+  // says so and the console keeps the run's one line for when it is ready.
+  if (!(s.stage >= 3 && isBought(s, 'p_auto_train'))) say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.`);
+  if (s.stage === 2) startedInStage2(s, run);
   return true;
 }
 
@@ -439,7 +469,9 @@ export function updateTraining(s: GameState, dt: number): void {
       const r = t.run;
       if (r && r.phase === 'redteam' && r.issues > 0) {
         r.issues -= 1;
-        say(s, r.issues === 0 ? 'Red team signs off. Ready to release.' : `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
+        // Stage 3: the button carries the count; the console hears only the sign-off.
+        if (r.issues === 0) say(s, `Red team signs off. Ready to ${s.stage >= 3 ? 'approve' : 'release'}.`);
+        else if (s.stage < 3) say(s, `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
       }
     }
   }
@@ -452,7 +484,7 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
     const progress = run.elapsed / run.duration;
     // One flavour line per run, at the halfway mark (critic round 2 §6.1: the console is for
     // lines that carry a number or an instruction).
-    if (run.flavorShown < 1 && progress >= 0.5) {
+    if (run.flavorShown < 1 && progress >= 0.5 && s.stage < 3) {
       const pool = TRAINING_FLAVOR[1] ?? [];
       run.flavorShown = 1;
       if (pool.length) say(s, pick(s, pool));
@@ -472,8 +504,10 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
     }
     run.phase = 'evaluating';
     run.evalElapsed = 0;
-    computeResults(s, run);
-    say(s, `Training complete. Evaluating ${run.name}.`);
+    // A run sent back is retrained for 20 s and keeps the results it was given (stage3.md §2.5).
+    if (!(run.sentBack && run.capAfter > 0)) computeResults(s, run);
+    // Stage 3 says one line per run when it is ready (readyInStage3): runs come every two minutes.
+    if (s.stage < 3) say(s, `Training complete. Evaluating ${run.name}.`);
   }
 }
 
@@ -546,6 +580,9 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
  * first-timer's Capability-only runs both reach 4× in 10–12 runs.
  */
 export function focusBase(s: GameState, run: TrainingRun): number {
+  // Stage 3 (stage3.md §2.5): Capability +16–22 %, Efficiency and Safety +10 %; neuralese ×1.3,
+  // thoughts kept in English ×0.9; the step size, once Sage stops asking, ×0.6 / ×1 / ×1.3.
+  if (s.stage >= 3) return (run.focus === 'capability' ? 0.16 + 0.03 * (rng(s) + rng(s)) : 0.1) * thoughtsGain(s) * stepFactors(s).gain;
   if (s.stage >= 2) return run.focus === 'capability' ? 0.07 + 0.015 * (rng(s) + rng(s)) : 0.07;
   return run.focus === 'capability' ? 0.10 + 0.02 * (rng(s) + rng(s)) : 0.05;
 }
@@ -559,14 +596,25 @@ function computeResults(s: GameState, run: TrainingRun): void {
     const tier = MAJOR_TIERS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
     if (tier) run.capAfter = tier;
   }
+  if (s.stage >= 3) {
+    const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
+    if (rung) run.capAfter = rung;
+  }
   run.benchmarks = BENCHMARKS.map((_, i) => {
     const base = 10 * (1 - Math.exp(-run.capAfter * BENCH_WEIGHT[i]! * 0.8));
     const noisy = base + rand(s, -0.4, 0.4) + run.benchBonus[i]!;
     return Math.round(Math.min(10, Math.max(0, noisy)) * 10) / 10;
   });
-  const lambda = Math.max(0.3, 2 + run.capAfter / 3 - safetyInvestment(s, run));
+  // Stage 3: one or two issues a run, more at the top and under neuralese, fewer for a Safety run.
+  const lambda = s.stage >= 3
+    ? Math.min(4, Math.max(0.3, 1 + 0.5 * Math.log2(run.capAfter / 4) + (s.flags['neuralese'] === 'neuralese' ? 1 : 0) - (run.focus === 'safety' ? 1 : 0)))
+    : Math.max(0.3, 2 + run.capAfter / 3 - safetyInvestment(s, run));
   run.issuesFound = poisson(s, lambda) + run.extraIssues;
   run.issues = run.issuesFound;
+  // Interpretability lab II: the probes flag a run by how far the hidden number sits under 70 (§2.5).
+  if (s.stage >= 3 && isBought(s, 'p_interp2')) {
+    run.probeFlags = Math.min(5, Math.max(0, Math.round((70 - s.alignmentTrue) / 15 + rand(s, -1, 1))));
+  }
   run.scores = scoreCards(s, run);
   // A run that crosses a tier takes the new name now, so a run started behind it is numbered after it.
   const newMajor = majorFor(run.capAfter);
@@ -625,12 +673,16 @@ function finishEvaluation(s: GameState, run: TrainingRun): void {
     say(s, `${renamed} is good enough to be called ${run.name}.`);
   }
   const frontier = total >= FRONTIER_SCORE ? ' Frontier model.' : '';
-  say(s, `Evaluation done.${frontier} ${issueWords(run.issuesFound)}`);
+  if (s.stage < 3) say(s, `Evaluation done.${frontier} ${issueWords(run.issuesFound)}`);
   s.training.frontierBonus = total >= FRONTIER_SCORE ? 0.01 : 0;
   if (total >= LEADERBOARD_SCORE) s.flags['leaderboardEligible'] = true;
   const maxBench = Math.max(...run.benchmarks);
   if (maxBench > ((s.flags['maxBenchmark'] as number) || 0)) s.flags['maxBenchmark'] = maxBench;
-  if (s.stage >= 2 && run.capAfter >= SUPERHUMAN_CODER) {
+  if (s.stage >= 3) {
+    readyInStage3(s, run);
+    return;
+  }
+  if (s.stage === 2 && run.capAfter >= SUPERHUMAN_CODER) {
     if (!s.flags['sage3Said']) {
       s.flags['sage3Said'] = true;
       say(s, `${run.name} writes better code than anyone at OpenMind. The evals team ran the test twice.`);
@@ -656,12 +708,14 @@ export function canRedTeam(s: GameState): boolean {
 }
 
 export function redTeamSeconds(s: GameState): number {
+  if (s.stage >= 3) return RED_TEAM_SECONDS_AUTO;
   if (s.stage >= 2) return isBought(s, 'p_auto_evals') ? RED_TEAM_SECONDS_AUTO : RED_TEAM_SECONDS_S2;
   return isBought(s, 'p_eval_team') ? RED_TEAM_SECONDS_EVALS : RED_TEAM_SECONDS;
 }
 
 export function redTeam(s: GameState): boolean {
   if (!canRedTeam(s)) return false;
+  if (s.stage >= 3) press(s, 'redteam');
   const t = s.training;
   t.redTeamDuration = redTeamSeconds(s);
   t.redTeamRemaining = t.redTeamDuration;
@@ -687,6 +741,8 @@ export function canReleasePublic(s: GameState): boolean {
  * so; the first Sage-2 asks whether the public gets it.
  */
 export function release(s: GameState): boolean {
+  // Stage 3: one button, `Approve`, deploys the run everywhere.
+  if (s.stage >= 3) return approve(s);
   const run = s.training.run;
   if (!run || run.phase !== 'redteam' || !canReleasePublic(s)) return false;
   if (run.issues > 0 && !s.flags['shipIssuesAsked']) {
@@ -699,7 +755,7 @@ export function release(s: GameState): boolean {
 /** Keep internal (Stage 2, after the Sage-2 choice): research gets the model, customers do not. */
 export function releaseInternal(s: GameState): boolean {
   const run = s.training.run;
-  if (s.stage < 2 || !s.revealed['releaseInternal'] || !run || !canRelease(s)) return false;
+  if (s.stage !== 2 || !s.revealed['releaseInternal'] || !run || !canRelease(s)) return false;
   return doRelease(s, run, false);
 }
 
@@ -728,9 +784,11 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
   // The first release is when the second run becomes possible: the Focus row appears now.
   s.revealed['focus'] = true;
-  if (s.stage >= 2) releasedInStage2(s, run, isPublic);
+  if (s.stage === 2) releasedInStage2(s, run, isPublic);
   if (run.focus === 'safety' && s.stage < 3) bump(s, 'safetyReleases');
-  if (isPublic) {
+  if (s.stage >= 3) {
+    approvedInStage3(s, run);
+  } else if (isPublic) {
     t.deployedName = run.name;
     s.capability = run.capAfter;
     s.hypeBoost = Math.max(s.hypeBoost, 2.0);
@@ -817,20 +875,27 @@ function releasedInStage2(s: GameState, run: TrainingRun, isPublic: boolean): vo
  */
 /** Efficiency's copies-per-GPU step: ×1.25 in Stage 1, ×1.15 from Stage 2 (its copies compound into every later run's money). */
 export function efficiencyStep(s: GameState): number {
+  if (s.stage >= 3) return 1.2;
   return s.stage >= 2 ? 1.15 : 1.25;
 }
 
 export function focusChange(s: GameState, run: TrainingRun): string {
   if (run.focus === 'efficiency') return `copies per GPU ${fmtNum(s.copiesPerGPU, 2)} → ${fmtNum(s.copiesPerGPU * efficiencyStep(s), 2)}`;
-  if (run.focus === 'safety') return `measured alignment ${Math.round(s.alignmentApparent)} → ${Math.round(Math.min(100, s.alignmentApparent + 8))}`;
+  if (run.focus === 'safety') return `measured alignment ${Math.round(s.alignmentApparent)} → ${Math.round(Math.min(100, s.alignmentApparent + safetyMeasured(s)))}`;
   return `capability ${fmtNum(run.capBefore, 2)}× → ${fmtNum(run.capAfter, 2)}×`;
+}
+
+/** What a Safety run adds to measured alignment: +8 (Stages 1–2), +6 (Stage 3). */
+function safetyMeasured(s: GameState): number {
+  return s.stage >= 3 ? 6 : 8;
 }
 
 function applyFocusRewards(s: GameState, run: TrainingRun): void {
   if (run.focus === 'efficiency') s.copiesPerGPU *= efficiencyStep(s);
   if (run.focus === 'safety') {
-    s.alignmentApparent = Math.min(100, s.alignmentApparent + 8);
-    s.alignmentTrue = Math.min(100, s.alignmentTrue + 5);
+    s.alignmentApparent = Math.min(100, s.alignmentApparent + safetyMeasured(s));
+    // A run sent back already carries its own +1 (Stage 3); Safety's +5 / +4 otherwise.
+    if (!run.sentBack) s.alignmentTrue = Math.min(100, s.alignmentTrue + (s.stage >= 3 ? 4 : 5));
   }
 }
 
@@ -851,4 +916,252 @@ export function superhumanTooltips(s: GameState): { release: string; internal: s
     release: 'Every engineer on Earth gets a colleague who does not sleep. Market grows; approval −6; lead −0.5 months.',
     internal: `OpenMind keeps the only one. Research takes it at once; lead +1 month; the public keeps ${s.training.deployedName}.`,
   };
+}
+
+// ---------- Stage 3: the loop collapses (stage3.md §2.5, §2.6) ----------
+
+/** Thoughts as vectors or as words (c_neuralese): every gain ×1.3 or ×0.9. */
+export function thoughtsGain(s: GameState): number {
+  const n = s.flags['neuralese'];
+  return n === 'neuralese' ? 1.3 : n === 'transparent' ? 0.9 : 1;
+}
+
+export type StepSize = 'small' | 'normal' | 'large';
+
+/** `Step size` once Sage stops asking: gains ×0.6 / ×1 / ×1.3, a Capability run's hidden loss ×0.3 / ×1 / ×1.5. */
+export function stepFactors(s: GameState): { gain: number; loss: number } {
+  const v = s.flags['stepSize'];
+  if (v === 'small') return { gain: 0.6, loss: 0.3 };
+  if (v === 'large') return { gain: 1.3, loss: 1.5 };
+  return { gain: 1, loss: 1 };
+}
+
+export type RedteamDepth = 'quick' | 'thorough';
+
+/** `Red-team depth` once Sage red-teams Sage: quick ships the issues, thorough takes 15 s and closes them. */
+export function redteamDepth(s: GameState): RedteamDepth {
+  return s.flags['redteamDepth'] === 'thorough' ? 'thorough' : 'quick';
+}
+
+export const THOROUGH_SECONDS = 15;
+export const SEND_BACK_SECONDS = 20;
+/** Experiments: at most +5 points on the next run's gain (twenty units of a quarter point). */
+export const EXPERIMENTS_MAX = 5;
+/** One unit of a research sink (Experiments, Alignment work) is 2 % of the next run's research. */
+export const RESEARCH_UNIT_SHARE = 0.02;
+
+/** Sage deploys its own runs: `Stop asking for sign-off`, unless an order took it back. */
+export function autoApproveOn(s: GameState): boolean {
+  return s.stage >= 3 && isBought(s, 'p_auto_approve') && s.flags['conceded'] !== true;
+}
+
+/** The run in the release slot has been evaluated (and, with a thorough red team, reviewed). */
+export function runReady(s: GameState): boolean {
+  const run = s.training.run;
+  return s.stage >= 3 && !!run && run.phase === 'redteam' && !((run.reviewLeft ?? 0) > 0);
+}
+
+export function canApprove(s: GameState): boolean {
+  return runReady(s) && !autoApproveOn(s);
+}
+
+/** `Approve`: the waiting run deploys everywhere (tasks, research, market); open issues ship. */
+export function approve(s: GameState): boolean {
+  if (!canApprove(s)) return false;
+  press(s, 'approve');
+  return doRelease(s, s.training.run!, true);
+}
+
+export function canSendBack(s: GameState): boolean {
+  const run = s.training.run;
+  return canApprove(s) && !!run && isBought(s, 'p_interp2') && (run.probeFlags ?? 0) > 0 && !run.sentBack;
+}
+
+/**
+ * `Send back` (lab II): the flagged run is retrained for 20 s and keeps 70 % of its gain; its hidden
+ * change becomes +1 whatever its focus; lead −0.1 (stage3.md §2.5).
+ */
+export function sendBack(s: GameState): boolean {
+  if (!canSendBack(s)) return false;
+  const run = s.training.run!;
+  const gain = run.capAfter / run.capBefore - 1;
+  run.capAfter = run.capBefore * (1 + 0.7 * gain);
+  const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
+  if (rung) run.capAfter = rung;
+  const m = majorFor(run.capAfter);
+  if (m < run.major) {
+    run.major = m;
+    run.minor = (s.training.major === m ? s.training.minor : 0) + 1;
+    run.name = `Sage-${m}.${run.minor}`;
+  }
+  run.sentBack = true;
+  run.probeFlags = 0;
+  run.phase = 'training';
+  run.elapsed = 0;
+  run.duration = SEND_BACK_SECONDS;
+  run.evalElapsed = 0;
+  s.training.redTeamRemaining = 0;
+  s.lead = Math.max(-2, s.lead - 0.1);
+  press(s, 'sendBack');
+  say(s, `${run.name} sent back — 0:20 of retraining. It keeps 70% of its gain.`);
+  return true;
+}
+
+/** `Training: running / held` (stage3.md §2.5): the only training verb left after the grants. */
+export function toggleHold(s: GameState): boolean {
+  if (s.stage < 3 || !s.revealed['holdRuns']) return false;
+  const held = s.flags['holdRuns'] !== true;
+  s.flags['holdRuns'] = held;
+  s.flags['holdSaidAt'] = s.stats.timePlayed;
+  press(s, 'hold');
+  say(s, held ? 'Training held. No run starts until it is released.' : 'Training running. The next run starts when it is ready.');
+  return true;
+}
+
+export function setStepSize(s: GameState, v: StepSize): boolean {
+  if (s.stage < 3 || !s.revealed['stepSize'] || !autoApproveOn(s)) return false;
+  if (v !== 'small' && v !== 'normal' && v !== 'large') return false;
+  if (s.flags['stepSize'] === v || (v === 'normal' && s.flags['stepSize'] === undefined)) return false;
+  s.flags['stepSize'] = v;
+  press(s, 'stepSize');
+  return true;
+}
+
+export function setRedteamDepth(s: GameState, v: RedteamDepth): boolean {
+  if (s.stage < 3 || !s.revealed['redteamDepth']) return false;
+  if (v !== 'quick' && v !== 'thorough') return false;
+  if (redteamDepth(s) === v) return false;
+  s.flags['redteamDepth'] = v;
+  press(s, 'redteamDepth');
+  return true;
+}
+
+/** Research in one unit of a research sink: 2 % of the next run's price. */
+export function researchUnit(s: GameState): number {
+  return Math.max(1, Math.round(RESEARCH_UNIT_SHARE * (trainCost(s).research ?? 0)));
+}
+
+/** Seconds a purchase of `research` pushes the next run back at today's rate (0 once the run is paid for). */
+export function delaySeconds(s: GameState, research: number): number {
+  const need = trainCost(s).research ?? 0;
+  const short = Math.max(0, need - s.research);
+  const after = Math.max(0, need - (s.research - research));
+  return Math.max(0, (after - short) / Math.max(1, researchRate(s)));
+}
+
+/** `Experiments` (with Continual learning): the next run's gain +0.25 points a unit, at most +5; resets each run. */
+export function runExperiments(s: GameState, units = 1): boolean {
+  if (s.stage < 3 || !s.revealed['experiments']) return false;
+  const room = EXPERIMENTS_MAX - counter(s, 'expPts');
+  const n = Math.min(units, Math.floor(room / 0.25 + 1e-9));
+  if (n <= 0) return false;
+  const cost = n * researchUnit(s);
+  if (s.research < cost) return false;
+  s.research -= cost;
+  s.flags['expPts'] = counter(s, 'expPts') + 0.25 * n;
+  press(s, 'experiments');
+  return true;
+}
+
+/** The next run's Capability step as the Experiments button prints it, in percent: `+18.0%`. */
+export function nextGainPct(s: GameState, extraPts = 0): number {
+  const base = (s.training.focus === 'capability' ? 0.19 : 0.1) * thoughtsGain(s) * stepFactors(s).gain;
+  return 100 * base + Math.min(EXPERIMENTS_MAX, counter(s, 'expPts') + extraPts);
+}
+
+/** Stage 3, when an evaluation ends: the ready line, and the thorough red team's 15 s. */
+function readyInStage3(s: GameState, run: TrainingRun): void {
+  if (isBought(s, 'p_auto_redteam') && redteamDepth(s) === 'thorough') run.reviewLeft = THOROUGH_SECONDS;
+  const flags = isBought(s, 'p_interp2') ? ` · probe flags: ${run.probeFlags ?? 0}` : '';
+  const issues = run.issues === 0 ? 'no issues open' : `${run.issues} issue${run.issues === 1 ? '' : 's'} open`;
+  // Once Sage deploys its own runs the Developments line (`Sage-4.2 deployed. 16.4×.`) says it.
+  if (!autoApproveOn(s)) say(s, `${run.name} ready — ${fmtNum(run.capAfter, 2)}× · ${issues}${flags}`);
+}
+
+const clampTrue = (v: number) => Math.min(100, Math.max(0, v));
+
+/**
+ * Stage 3: an approved run deploys everywhere, and capability is one number from here (stage3.md §1.1,
+ * §2.5). The hidden bookkeeping per run; the measured number's bands (§2.14: 80 and over, relations
+ * +1; under 55, the Safety Institute's advisory); no Trust, no insight, and no lead change (Stage 3's
+ * lead moves by §2.10 only).
+ */
+function approvedInStage3(s: GameState, run: TrainingRun): void {
+  const t = s.training;
+  const auto = autoApproveOn(s);
+  const before = s.capability;
+  t.deployedName = run.name;
+  s.capability = run.capAfter;
+  s.hypeBoost = Math.max(s.hypeBoost, 1.5);
+  s.stats.publicReleases += 1;
+  const neuralese = s.flags['neuralese'] === 'neuralese';
+  let change = 0;
+  if (run.sentBack) change = 1;
+  else if (run.focus === 'capability') change = -(neuralese ? 3 : 2) * stepFactors(s).loss;
+  else if (run.focus === 'efficiency') change = -0.5;
+  if (s.monitorShare >= 0.15 - 1e-9) change += 1;
+  if (auto) change -= 1;
+  change -= 0.5 * run.issues;
+  s.alignmentTrue = clampTrue(s.alignmentTrue + change);
+  if (s.shareEvals) {
+    s.alignmentApparent = clampTrue(s.alignmentApparent + 1);
+    moveGov(s, 1);
+  }
+  if (s.alignmentApparent >= 80) moveGov(s, 1);
+  else if (s.alignmentApparent < 55) s.scheduled.push({ id: 'inc_advisory', delay: 20, source: run.name });
+  bump(s, 'approvalsS3');
+  logNews(s, `${run.name} deployed. ${fmtNum(run.capAfter, 1)}×.`);
+  if (run.issues > 0) {
+    say(s, `${run.name} deployed with ${run.issues} open issue${run.issues === 1 ? '' : 's'}.`);
+    scheduleIncidents(s, run.issues, run.name);
+  }
+  if (before < 10 && run.capAfter >= 10) {
+    say(s, 'Sage-4. A year of progress every month.');
+    s.flags['crossed10At'] = s.stats.timePlayed;
+  }
+  if (before < 25 && run.capAfter >= 25) {
+    say(s, `${run.name} is a better AI researcher than anyone alive. It has started on its successor's design.`);
+    s.flags['crossed25At'] = s.stats.timePlayed;
+  }
+  s.flags['graphDirty'] = true;
+}
+
+/**
+ * Every tick in Stage 3: the thorough red team's review, Sage deploying its own runs, Continual
+ * learning starting the next one, and the Hold reminder.
+ */
+export function updateTakeoffTraining(s: GameState, dt: number): void {
+  if (s.stage < 3) return;
+  const run = s.training.run;
+  if (run && run.phase === 'redteam' && (run.reviewLeft ?? 0) > 0) {
+    run.reviewLeft = Math.max(0, (run.reviewLeft ?? 0) - dt);
+    if (run.reviewLeft <= 0 && run.issues > 0) {
+      run.issues = 0;
+      s.alignmentApparent = clampTrue(s.alignmentApparent + 0.5);
+    }
+  }
+  if (run && runReady(s) && autoApproveOn(s)) doRelease(s, run, true);
+  if (isBought(s, 'p_auto_train') && canStartTraining(s)) startTraining(s);
+  if (s.flags['holdRuns'] === true && s.stats.timePlayed - counter(s, 'holdSaidAt') >= 180) {
+    s.flags['holdSaidAt'] = s.stats.timePlayed;
+    say(s, 'Training is held. Research is piling up.');
+  }
+}
+
+/**
+ * `#trainStatus`, the Training panel's line once Continual learning has taken the button:
+ * `Sage-3.2 starts when research allows — 1:46`, the GPU shortfall, or `Training: held`.
+ */
+export function trainStatus(s: GameState): string {
+  const running = trainingRun(s);
+  if (running && running.elapsed < running.duration) return `${running.name} training — ${fmtClock(Math.ceil(running.duration - running.elapsed))}`;
+  if (s.flags['holdRuns'] === true) return 'Training: held. No run starts.';
+  if (!trainSlotFree(s)) return `${nextRunName(s)} waits for ${s.training.run?.name ?? 'the last run'} to deploy.`;
+  if (gpusShort(s)) return trainGpuLine(s);
+  const need = (trainCost(s).research ?? 0) - s.research;
+  if (need > 0) {
+    const eta = need / Math.max(1, researchRate(s));
+    return `${nextRunName(s)} starts when research allows — ${fmtClock(eta)}`;
+  }
+  return `${nextRunName(s)} starts now.`;
 }

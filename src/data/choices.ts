@@ -98,6 +98,8 @@ function runName(s: GameState, ctx: Ctx): string {
 /** The publishers' licence (scale-1 dollars): about 20 s of revenue when the crawl runs out (critic follow-up B5). */
 const publishersLicence = (): number => s2(150000);
 
+import { CHOICES3 } from './choices3.js';
+
 export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_gamble',
@@ -847,3 +849,6 @@ function hearingDone(s: GameState): void {
   s.revealed['government'] = true;
 }
 
+
+// Stage 3's modals live in data/choices3.ts (it imports only this file's types).
+CHOICES.push(...CHOICES3);

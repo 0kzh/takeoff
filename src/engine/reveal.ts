@@ -1,6 +1,8 @@
 import { GameState, projectState } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
 import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, MECHANIC_FLAGS, inApproach, rowById } from '../data/stage2.js';
+import { STAGE3_TABLE, STAGE3_ORDER, MECHANIC_FLAGS_S3, inApproach3, dateFallback3, rowById3 } from '../data/stage3.js';
+import { bestCapability } from './economy.js';
 import { visibleProjects } from './projects.js';
 
 /**
@@ -38,11 +40,20 @@ export function maxVisible(s: GameState): number {
   return s.stage === 1 ? 4 : 6;
 }
 
+/** Stage 3: grants on offer at once, and their spacing (stage3.md §4.1 item 1). */
+export const GRANTS_ON_OFFER = 3;
+export const GRANT_SECONDS = 15;
+/** Stage 3's late rows released on the date fallback, 90 s apart (§4.1 item 9). */
+export const FALLBACK_SECONDS = 90;
+/** Stage 3's drip for its first five minutes (§4.1 item 8). */
+export const OPENING_DRIP_S3 = 30;
+
 /**
  * Stage 1 slows the drip while the early systems arrive: one card a minute until the Training panel,
  * then one every 30 s (critic round 2 §6.1: no more than 16 new things in any six minutes); Stage 2, 15 s.
  */
 function dripSeconds(s: GameState): number {
+  if (s.stage === 3) return s.stats.timeInStage < 300 ? OPENING_DRIP_S3 : DRIP_SECONDS;
   if (s.stage !== 1) return DRIP_SECONDS;
   if (!s.revealed['training']) return EARLY_DRIP_SECONDS;
   return STAGE1_DRIP_SECONDS;
@@ -90,8 +101,9 @@ function uncapped(s: GameState, def: ProjectDef): boolean {
 
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
-  // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6).
-  if (s.stage >= 3 && def.late) return false;
+  // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6), except
+  // the carried cards (their `stages` name Stage 3: code review, honesty evals, the second campus).
+  if (s.stage >= 3 && def.late && !def.stages.includes(s.stage)) return false;
   // Before the Research panel, only rescues can appear (their prices are not in research).
   return def.rescue === true || s.revealed['research'] === true;
 }
@@ -149,7 +161,10 @@ function overdue(s: GameState): boolean {
 
 /** Free places under the cap. Stage 2 counts the stage goal and urgent fixes too (only rescues ride free). */
 function room(s: GameState): number {
-  const counted = s.stage === 2 ? visibleProjects(s).filter((p) => !p.rescue) : visibleProjects(s).filter((p) => !uncapped(s, p));
+  // Stage 3: grants have their own list; the stage goals ride free as before.
+  const counted = s.stage === 2
+    ? visibleProjects(s).filter((p) => !p.rescue)
+    : visibleProjects(s).filter((p) => !uncapped(s, p) && !p.grant);
   return maxVisible(s) - counted.length;
 }
 
@@ -167,10 +182,20 @@ export function updateProjects(s: GameState): void {
   const approach = inApproach(s);
   const modalBeat = now - s.cadence.lastModalAt < BEAT_GAP_SECONDS;
 
+  const approach3 = inApproach3(s);
   for (const def of PROJECTS) {
     if (s.projects[def.id]?.shown || !eligible(s, def) || def.expires?.(s) || !def.trigger(s)) continue;
     if (def.late && s.stage === 2) {
       if (approach) enqueueLate(s, def.id);
+      continue;
+    }
+    // Stage 3: grants wait for a place in their own list; late rows for the approach.
+    if (s.stage === 3 && def.grant) {
+      enqueueGrant(s, def.id);
+      continue;
+    }
+    if (s.stage === 3 && def.lateAt !== undefined) {
+      if (approach3) enqueueLate3(s, def.id);
       continue;
     }
     // Until the Training panel is up, a chained card waits for the drip like any other (critic round 2 §6.1).
@@ -212,6 +237,25 @@ export function updateProjects(s: GameState): void {
     }
   }
   if (s.cadence.queue.length === 0) stage1Governor(s);
+}
+
+/** Stage 3: a grant whose trigger fired waits in table order for a place in the list. */
+function enqueueGrant(s: GameState, id: string): void {
+  const q = (s.cadence.grantQueue ??= []);
+  if (q.includes(id)) return;
+  const at = q.findIndex((other) => order(other) > order(id));
+  if (at < 0) q.push(id);
+  else q.splice(at, 0, id);
+}
+
+/** Stage 3's late rows wait in content-table order (projects and the memo alike). */
+function enqueueLate3(s: GameState, id: string): void {
+  const q = s.cadence.lateQueue;
+  if (q.includes(id)) return;
+  const rank = (x: string) => STAGE3_ORDER.get(x) ?? 999;
+  const at = q.findIndex((other) => rank(other) > rank(id));
+  if (at < 0) q.push(id);
+  else q.splice(at, 0, id);
 }
 
 /** Takes a project off the screen and out of the queue (it stopped making sense). */
@@ -263,6 +307,10 @@ function revealRow(s: GameState, row: ContentRow, overCap = 0): boolean {
  * governor fills any 150 s hole in first-time reveals.
  */
 export function updateStageContent(s: GameState): void {
+  if (s.stage === 3) {
+    updateStage3Content(s);
+    return;
+  }
   if (s.stage !== 2) return;
   const approach = inApproach(s);
   for (const row of STAGE2_TABLE) {
@@ -336,6 +384,117 @@ function governor(s: GameState, approach: boolean): void {
   }
 }
 
+// ---------- Stage 3: the grant list, the approach, the governor (stage3.md §4.1) ----------
+
+function rowDone3(s: GameState, row: ContentRow): boolean {
+  if (row.kind === 'project') {
+    const st = s.projects[row.id];
+    return !!st && (st.shown || st.bought > 0);
+  }
+  return row.done?.(s) === true;
+}
+
+function rowLate3(row: ContentRow): boolean {
+  if (row.kind === 'project') return projectDef(row.id)?.lateAt !== undefined;
+  return row.late === true;
+}
+
+/** A late row's capability threshold (the memo: 14×). */
+function lateAtOf(id: string): number {
+  return projectDef(id)?.lateAt ?? 14;
+}
+
+/**
+ * Every tick in Stage 3: rows other than projects appear when their trigger fires (the late ones go
+ * to the late queue); grants enter their list three at most, 15 s apart; the approach releases one
+ * late row per 75 s once the best model passes its threshold (from September 2027 regardless, 90 s
+ * apart); the governor fills a 170 s hole with the next non-late row whose prerequisite holds.
+ */
+function updateStage3Content(s: GameState): void {
+  const approach = inApproach3(s);
+  for (const row of STAGE3_TABLE) {
+    if (row.kind === 'project' || rowDone3(s, row) || !row.trigger || !row.trigger(s)) continue;
+    if (row.late) {
+      if (approach) enqueueLate3(s, row.id);
+      continue;
+    }
+    if (rowPrereq(s, row)) revealRow(s, row);
+  }
+  grantDrip(s);
+  lateDrip3(s, approach);
+  governor3(s);
+}
+
+function grantDrip(s: GameState): void {
+  const c = s.cadence;
+  const q = (c.grantQueue ??= []);
+  c.grantQueue = q.filter((id) => {
+    const def = projectDef(id);
+    return !!def && !s.projects[id]?.shown && eligible(s, def);
+  });
+  if (c.grantQueue.length === 0) return;
+  const onOffer = visibleProjects(s).filter((p) => p.grant).length;
+  if (onOffer >= GRANTS_ON_OFFER) return;
+  if (s.stats.timePlayed - (c.lastGrantAt ?? -999) < GRANT_SECONDS) return;
+  const def = projectDef(c.grantQueue[0]!);
+  if (!def) return;
+  show(s, def);
+  c.lastGrantAt = s.stats.timePlayed;
+}
+
+function lateDrip3(s: GameState, approach: boolean): void {
+  const c = s.cadence;
+  c.lateQueue = c.lateQueue.filter((id) => {
+    const row = rowById3(id);
+    return !!row && !rowDone3(s, row) && !(projectDef(id)?.expires?.(s) ?? false);
+  });
+  if (!approach || c.lateQueue.length === 0) return;
+  const now = s.stats.timePlayed;
+  const fallback = dateFallback3(s);
+  const since = now - c.lastLateAt;
+  if (since < LATE_SECONDS) return;
+  const best = bestCapability(s);
+  for (const id of c.lateQueue) {
+    const row = rowById3(id);
+    if (!row || !rowPrereq(s, row)) continue;
+    const due = best >= lateAtOf(id) - 1e-9;
+    // The date fallback releases rows whose threshold has not come, in table order, 90 s apart.
+    if (!due && !(fallback && since >= FALLBACK_SECONDS)) continue;
+    if (revealRow(s, row, OVERFLOW)) {
+      c.lastLateAt = now;
+      c.lateQueue = c.lateQueue.filter((q) => q !== id);
+      return;
+    }
+  }
+}
+
+function governor3(s: GameState): void {
+  const c = s.cadence;
+  const now = s.stats.timePlayed;
+  if (s.activeChoice) return;
+  const reveals = now - c.lastRevealAt >= GOVERNOR_SECONDS;
+  const mechanics = now - c.lastMechanicAt >= MECHANIC_GOVERNOR_SECONDS;
+  if (!reveals && !mechanics) return;
+  for (const row of STAGE3_TABLE) {
+    if (row.governed === false || rowDone3(s, row) || rowLate3(row)) continue;
+    if (!reveals && row.mechanic !== true) continue;
+    if (row.kind === 'project' && projectDef(row.id)?.grant) {
+      // A grant the governor pulls joins the list (it is still a grant).
+      const def = projectDef(row.id);
+      if (!def || !eligible(s, def) || visibleProjects(s).filter((p) => p.grant).length >= GRANTS_ON_OFFER) continue;
+      show(s, def);
+      c.lastGrantAt = now;
+    } else {
+      if (!rowPrereq(s, row)) continue;
+      if (!revealRow(s, row, OVERFLOW)) continue;
+    }
+    c.governed.push(`${Math.round(now)}:${row.id}`);
+    c.lastRevealAt = now;
+    if (row.mechanic) c.lastMechanicAt = now;
+    return;
+  }
+}
+
 /** Lookup sets for `cadence.seen`, keyed by the array itself (a load replaces the array). */
 const seenSets = new WeakMap<string[], Set<string>>();
 
@@ -359,7 +518,7 @@ export function noteReveals(s: GameState): void {
     return true;
   };
   for (const [id, on] of Object.entries(s.revealed)) {
-    if (on && mark(`f:${id}`) && MECHANIC_FLAGS.includes(id)) s.cadence.lastMechanicAt = s.stats.timePlayed;
+    if (on && mark(`f:${id}`) && (MECHANIC_FLAGS.includes(id) || MECHANIC_FLAGS_S3.includes(id))) s.cadence.lastMechanicAt = s.stats.timePlayed;
   }
   for (const [id, st] of Object.entries(s.projects)) {
     if (!st.shown) continue;

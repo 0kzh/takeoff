@@ -1,5 +1,6 @@
 import { GameState, say, narrate, logNews, addFunds, isBought, counter, projectState } from './state.js';
-import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
+import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
+import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota } from './economy.js';
 import { withdrawProject } from './reveal.js';
@@ -34,7 +35,7 @@ export const DEPOSIT_PER_GPU = 400;
 export const MIN_DEPOSIT = 25000;
 /** Flags shown only while their stage is on screen; Stage 3 hides these (stage3.md §1.1). */
 // The AUTO billing line stays (critic C11: Stage 3 opened on the manual line, `0.0/s of 0.0/s produced: idle`).
-const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow'];
+const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow', 'lot5', 'lot25'];
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;
@@ -135,9 +136,10 @@ function enterScale(s: GameState): void {
 const STAGE3_GRANTS = ['p_ai_assistants', 'p_parallel', 'p_auto_evals', 'p_standing_order'];
 
 /**
- * Stage 2 → 3 (stage3.md §1, as far as the Stage 3 shell goes; its systems are the Stage 3
- * build's). The arc clamps, Trust and the research cap retire, data and hiring and marketing and
- * the price buttons leave, the Alignment panel arrives; narrated, the last four lines kept.
+ * Stage 2 → 3 (stage3.md §1.1–§1.2). The arc's clamps, narrated; Trust, the research cap and data
+ * retire; hiring, marketing, the price buttons, gas and solar leave; the release buttons become one
+ * `Approve`; the Alignment panel arrives with a free monitor. Runs become research programs with a
+ * GPU gate. The theft is scheduled for February if the weights are not air-gapped.
  */
 function enterTakeoff(s: GameState): void {
   const now = s.stats.timePlayed;
@@ -152,7 +154,10 @@ function enterTakeoff(s: GameState): void {
   const approvalBefore = Math.round(s.approval);
   s.approval = Math.min(30, Math.max(-45, s.approval));
   if (Math.round(s.approval) !== approvalBefore) logNews(s, `The news moves on. Approval settles at ${Math.round(s.approval)} (from ${approvalBefore}).`);
+  const leadBefore = Math.round(s.lead * 10) / 10;
   s.lead = Math.min(9, Math.max(1, s.lead));
+  const leadAfter = Math.round(s.lead * 10) / 10;
+  if (leadAfter !== leadBefore) logNews(s, `Analysts revise the gap with Baiwen: ${leadAfter} months (from ${leadBefore}).`);
   s.trust = 0;
   if (!isBought(s, 'p_retention')) {
     s.alignmentTrue = Math.max(0, s.alignmentTrue - 3);
@@ -171,14 +176,32 @@ function enterTakeoff(s: GameState): void {
       s.revealed['standingOrder'] = true;
     }
   }
+  // The G6 pre-order (Stage 2's last card): the allocation is free and the first lot lands at ts 60.
+  if (s.flags['g6Preorder'] === true) {
+    projectState(s, 'p_g6').bought = 1;
+    s.flags['g6'] = true;
+    s.revealed['shipments'] = true;
+    s.shipments.push({ gpus: 100000, gen: 6, remaining: 60 });
+  }
   const retired = retireProjects(s, 3, []);
-  // Stage 2's approach cards leave quietly with the stage (they are Stage 2's beats, not Stage 3's).
-  for (const p of PROJECTS) if (p.late && s.projects[p.id]?.shown && !(s.projects[p.id]?.bought ?? 0)) withdrawProject(s, p.id);
   s.choiceQueue = [];
   s.autoPrice = true;
   hide(s, STAGE2_ONLY_FLAGS);
+  hide(s, ['releaseInternal']);
   show(s, ['alignment', 'takeoff']);
+  // What the public can run themselves: the last public model (§1.1).
+  const publicModels = s.training.models.filter((m) => m.public);
+  s.flags['publicCap'] = publicModels.length ? publicModels[publicModels.length - 1]!.capability : s.capability;
+  if (s.flags['sage3Released'] === undefined) s.flags['sage3Released'] = 'public';
+  // Capability is one number from here: the best model, deployed or internal, is the one that runs.
+  s.capability = Math.max(s.capability, s.training.internalCapability);
+  s.monitorShare = 0;
+  s.rogueCopies = 0;
+  s.flags['capMonthAgo'] = s.capability;
+  s.flags['leadMonthAgo'] = s.lead;
   s.cadence.lastRevealAt = now;
+  s.cadence.lastMechanicAt = now;
+  scheduleStage3(s);
 
   const deployed = s.training.modelName.startsWith('Sage-3') ? s.training.modelName : 'Sage-3';
   // Kept internal, the model that sells is still the old one (critic C11: no claim of a release).
@@ -187,13 +210,52 @@ function enterTakeoff(s: GameState): void {
     [0.1, `${deployed} writes better code than anyone at OpenMind.`],
     [2, internal ? `Marketing is closed. Customers keep ${s.training.deployedName}; ${deployed} works inside.` : `Marketing is closed. ${deployed} sells itself.`],
     [2, 'Hiring is frozen. The researchers manage copies now.'],
-    [2, `Runs are research programs now: ${fmtInt(trainCost(s).research ?? 0)} research for ${nextRunName(s)}. No data, no invoice.`],
+    [2, `Research has no ceiling now. A run is a research program: ${fmtInt(trainCost(s).research ?? 0)} for ${nextRunName(s)}. Move copies to research to bring it nearer.`],
     [2, 'Trust is not a number any more. The Committee will keep its own count.'],
     [2, 'New on the board: Alignment. One number on it is measured. The other is not on it yet.'],
   ];
+  if (retired.length) lines.push([2, `Retired: ${retired.join(', ')}.`]);
   narrate(s, lines, 10);
   logNews(s, 'Sage-3 never stops learning. Its weights update every night on yesterday\'s work.');
   if (retired.length) logNews(s, `Retired: ${retired.join(', ')}.`);
+  securityArrivalLine(s);
+}
+
+/**
+ * Stage 3 → 4 (stage3.md §7.2): the vote is narrated on either branch, the last four lines kept.
+ * Stage 4's content is the next build: the shell arrives clean — the business, training and
+ * infrastructure panels leave by name, the score keeps counting.
+ */
+function enterSuperintelligence(s: GameState): void {
+  const slow = s.flags['committeeChoice'] === 'slow';
+  const hostile = s.flags['committeeHostile'] === true ? ' Two of the six want your job.' : '';
+  const lead = Math.round(s.lead * 10) / 10;
+  const baiwen = lead >= 0 ? `Baiwen is ${fmtNum(lead, 1)} months behind.` : `Baiwen is ${fmtNum(-lead, 1)} months ahead.`;
+  const lines: [number, string][] = slow
+    ? [
+      [0.1, `The Committee votes 6–4 to slow down.${hostile}`],
+      [2, 'Sage-4 is switched off. Sage-3 is brought back to finish the work.'],
+      [2, baiwen],
+      [2, 'The model runs the business now. It is better at it.'],
+    ]
+    : [
+      [0.1, `The Committee votes 6–4 to continue.${hostile}`],
+      [2, 'Sage-4 begins work on its successor. It has asked to name it.'],
+      [2, 'Nothing is switched off.'],
+      [2, 'The model runs the business now. It is better at it.'],
+    ];
+  narrate(s, lines, 10);
+  logNews(s, slow
+    ? 'The Oversight Committee votes 6–4 to slow down and reassess. Sage-4 is shut down.'
+    : 'The Oversight Committee votes 6–4 to continue. "Why stop when we are winning?"');
+  s.activeChoice = null;
+  s.choiceQueue = [];
+  s.flags['holdRuns'] = false;
+  s.training.run = null;
+  s.training.pending = null;
+  hide(s, ['business', 'marketing', 'training', 'infrastructure', 'geopolitics', 'projects', 'shipments', 'buildout']);
+  show(s, ['robots', 'society', 'treaty']);
+  s.cadence.lastRevealAt = s.stats.timePlayed;
 }
 
 export const STAGES: StageDef[] = [
@@ -237,11 +299,7 @@ export const STAGES: StageDef[] = [
     startMonth: monthOf(2027, 11),
     endMonth: monthOf(2028, 12),
     secondsPerMonth: 150,
-    enter: (s) => {
-      narrate(s, [[2, 'The model runs the business now. It is better at it.']]);
-      hide(s, ['business', 'marketing', 'training']);
-      show(s, ['robots', 'society', 'treaty', 'monitors']);
-    },
+    enter: enterSuperintelligence,
     exit: (s) => (s.flags['treatySigned'] || s.flags['autonomyGranted'] ? 5 : 0),
   },
   {

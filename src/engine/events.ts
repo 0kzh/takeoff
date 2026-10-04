@@ -55,6 +55,12 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   return true;
 }
 
+/** Fires a development unless it already has (Stage 3: a project and a date can both name one). */
+export function fireDevelopmentOnce(s: GameState, id: string): boolean {
+  if (s.developments[id]) return false;
+  return fireDevelopment(s, id);
+}
+
 /** Seconds until the next dated development that opens a modal (Infinity when none is left). */
 export function secondsToNextCalendarModal(s: GameState): number {
   let next = Infinity;
@@ -86,6 +92,8 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
     });
   }
   c.effect(s);
+  // Stage 3 counts each crisis by id (the sim's CRISIS lines and the end screen read it).
+  if (s.stage >= 3) bump(s, `crisis:${id}`);
   const line = typeof c.console === 'function' ? c.console(s, source) : c.console;
   if (line) say(s, line);
   const incident = INCIDENTS.includes(c);
@@ -174,7 +182,7 @@ export function rivalRelease(s: GameState): void {
 /** Seconds between two modals opening on their own; a modal the player's click caused is exempt. */
 export const MODAL_SPACING = 150;
 /** Modals that answer the player's own click (a confirm), so they open at once. */
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2'];
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote'];
 
 export interface OpenOptions {
   /** Open only if it can open right now; otherwise do nothing (a passing offer, like the gamble). */

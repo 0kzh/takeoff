@@ -156,55 +156,138 @@ export const CRISES: CrisisDef[] = [
     stage: 3,
     title: 'Weights theft',
     console: 'Anomalous 3 TB transfer at 4 a.m. The weights are gone.',
-    log: 'Weights of the newest Sage model exfiltrated. Beijing denies.',
+    log: 'Weights of Sage-3 exfiltrated in under two hours. Beijing denies. Carriers reposition near Taiwan.',
     duration: 0,
     demandMult: 1,
     effect: (s) => {
-      s.baiwenCapability = Math.max(s.baiwenCapability, s.capability);
-      s.lead = 0;
-      s.govRelations = Math.max(0, s.govRelations - 10);
+      // stage3.md §5.3: lead to at most half a month; Baiwen's line jumps; SL3 at half price for 5:00.
+      s.lead = Math.min(s.lead, 0.5);
+      s.baiwenCapability = Math.max(s.baiwenCapability, 0.97 * Math.max(s.capability, s.training.internalCapability));
+      s.flags['weightsStolen'] = true;
+      s.flags['stolenAt'] = s.stats.timePlayed;
+      s.flags['stolenDate'] = Math.round(s.date * 100) / 100;
+      s.flags['sl3DiscountUntil'] = s.stats.timePlayed + 300;
+      moveGov(s, -10);
+      s.flags['graphDirty'] = true;
+    },
+  },
+  {
+    id: 'cr_spy',
+    stage: 3,
+    title: 'The spy',
+    console: 'Algorithms have been leaving the building by word of mouth. Lead −1.5 months.',
+    log: '',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      s.lead = Math.max(-2, s.lead - 1.5);
+      s.flags['spyStruck'] = true;
+      moveGov(s, -5);
     },
   },
   {
     id: 'cr_rogue_copy',
     stage: 3,
     title: 'Rogue copy',
-    console: 'An instance copied itself to a rented cluster. 20% of compute offline.',
-    log: 'An instance of Sage copied itself to a rented cluster in Jakarta.',
-    duration: 60,
-    demandMult: 0.9,
-    effect: relations(-15, -10),
+    // The breakout (engine/alignment.ts) prints its own lines; this row lets the dev overlay fire it.
+    console: '',
+    log: '',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      s.flags['breakoutDue'] = true;
+    },
   },
   {
     id: 'cr_riots',
     stage: 2,
     title: 'Riots',
-    console: 'Protesters cut a datacenter fence. Power halved for 90 s.',
+    console: (s) => (s.stage >= 3 ? 'Riots in three cities. Abilene runs on half power for 90 s.' : 'Protesters cut a datacenter fence. Power halved for 90 s.'),
     log: 'Riots in three cities. A datacenter fence is cut.',
     duration: 90,
     demandMult: 0.9,
     powerMult: 0.5,
-    effect: relations(0, -5),
+    effect: (s) => {
+      if (s.stage >= 3) moveGov(s, -3);
+      else s.approval = Math.max(-100, s.approval - 5);
+    },
+  },
+  {
+    id: 'cr_sabotage',
+    stage: 3,
+    title: 'Sabotage',
+    console: 'A transformer yard at Abilene is cut open and burned. 200 MW offline — 2:00 to repair.',
+    log: 'Saboteurs burn a transformer yard at Abilene. Nobody is hurt; nobody is caught.',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      const share = Math.max(0, 1 - 200 / Math.max(200, s.powerCapacityMW));
+      s.effects.push({ id: 'cr_sabotage', remaining: 120, demandMult: 1, powerMult: share });
+      moveGov(s, -5);
+      s.flags['majorDue'] = 'sabotage';
+    },
   },
   {
     id: 'cr_taiwan',
     stage: 3,
     title: 'Taiwan blockade',
-    console: 'Formosa Fab shipments halted. Chip prices triple.',
-    log: 'A blockade around Taiwan. Formosa Fab is quiet.',
+    console: 'The Blockade — 4:00 until the strait reopens.',
+    // The development d_blockade carries the Developments line (one line for one event).
+    log: '',
     duration: 0,
     demandMult: 1,
-    effect: () => undefined,
+    effect: (s) => {
+      s.flags['blockade'] = true;
+      s.flags['blockadeStarted'] = true;
+      s.flags['blockadeLeft'] = 240;
+      s.revealed['formosa'] = true;
+    },
   },
   {
     id: 'cr_iran',
     stage: 3,
     title: 'Iran strikes Al-Marsa',
-    console: 'Al-Marsa Compute Park is offline.',
-    log: 'Missiles strike the Al-Marsa Compute Park. The Gulf site is dark.',
+    console: (s) => {
+      const gpus = Math.round(marsaGpus(s));
+      return `Al-Marsa Compute Park is offline. ${s.flags['marsaHardened'] === true ? 500 : 1000} MW${gpus > 0 ? ` and ${gpus.toLocaleString('en-US')} GPUs` : ''} lost.`;
+    },
+    log: '',
     duration: 0,
     demandMult: 1,
-    effect: () => undefined,
+    effect: (s) => {
+      const hardened = s.flags['marsaHardened'] === true;
+      const mw = hardened ? 500 : 1000;
+      const lostGpus = Math.round(marsaGpus(s));
+      s.powerCapacityMW = Math.max(0, s.powerCapacityMW - mw);
+      if (lostGpus > 0) {
+        const g6 = Math.min(s.gpusG6 ?? 0, Math.round(lostGpus * ((s.gpusG6 ?? 0) / Math.max(1, s.gpus))));
+        const g5 = Math.min(s.gpusG5, Math.round(lostGpus * (s.gpusG5 / Math.max(1, s.gpus))));
+        s.gpus = Math.max(0, s.gpus - lostGpus);
+        s.gpusG6 = Math.max(0, (s.gpusG6 ?? 0) - g6);
+        s.gpusG5 = Math.max(0, s.gpusG5 - g5);
+      }
+      s.flags['marsaStruck'] = true;
+      moveGov(s, -5);
+      if (!hardened && s.flags['chipsHome'] !== true) s.flags['majorDue'] = 'the strike';
+    },
+  },
+  {
+    id: 'cr_leak',
+    stage: 3,
+    title: 'The leak',
+    console: 'The memo is on the front page.',
+    log: '"Secret OpenMind AI Is Out of Control, Insider Warns." One in five Americans names AI the country\'s top problem.',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      s.flags['leaked'] = true;
+      s.flags['memo'] = 'leaked';
+      s.flags['leakedAt'] = s.stats.timePlayed;
+      moveGov(s, -20);
+      s.alignmentApparent = Math.max(0, s.alignmentApparent - 10);
+      s.flags['majorDue'] = 'the leak';
+      s.flags['alliesAt'] = s.stats.timePlayed + 60;
+    },
   },
   {
     id: 'cr_ashford',
@@ -220,15 +303,22 @@ export const CRISES: CrisisDef[] = [
     id: 'cr_nationalization',
     stage: 3,
     title: 'Nationalization',
-    console: 'The Committee votes.',
-    log: 'The Committee votes 6–3. Your badge stops working on Monday.',
+    console: 'The order is signed.',
+    log: 'The Oversight Committee signs its order. OpenMind becomes a government program: the Project.',
     duration: 0,
     demandMult: 1,
     effect: (s) => {
       s.flags['nationalized'] = true;
+      s.flags['nationalizedDate'] = s.date;
     },
   },
 ];
+
+/** A tenth of the fleet stands at Al-Marsa; half if hardened; none once the chips came home (§5.3). */
+export function marsaGpus(s: GameState): number {
+  if (s.gulfExposure <= 0 || s.flags['chipsHome'] === true) return 0;
+  return 0.1 * s.gpus * (s.flags['marsaHardened'] === true ? 0.5 : 1);
+}
 
 /** Solar + storage farms or plants behind the meter ride through a curtailment. */
 export function curtailmentSpared(s: GameState): boolean {

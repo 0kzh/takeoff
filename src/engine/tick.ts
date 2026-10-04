@@ -3,7 +3,7 @@ import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota,
+  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota, setMonitorShare,
 } from './economy.js';
 import {
   buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
@@ -15,7 +15,11 @@ import {
 } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames, needsDatacenter, nextRunName, gpusNeeded,
+  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments,
 } from './training.js';
+import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
+import { alignWork, reimage } from './alignment.js';
+import { lobby, counterintel, stepPayments } from './world3.js';
 import { buyProject, visibleProjects } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
 import { updateProjects, updateStageContent, noteReveals } from './reveal.js';
@@ -83,6 +87,7 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
+  stage3Tick(s, dt);
 
   updateReveals(s);
   updateProjects(s);
@@ -136,6 +141,7 @@ function slowStats(s: GameState): void {
     floodedCheck(s);
     updateStage2(s);
   }
+  stage3Slow(s);
 }
 
 /** When the plateau began (the desks offer waits 45 s for Trust or another fix first). */
@@ -309,6 +315,19 @@ export const actions = {
   release,
   releaseInternal,
   finishTraining,
+  approve,
+  sendBack,
+  toggleHold,
+  setStepSize,
+  setRedteamDepth,
+  runExperiments,
+  alignWork,
+  reimage,
+  setMonitorShare,
+  lobby,
+  counterintel,
+  stepPayments,
+  setBuildBudget,
   buyProject,
   resolveChoice,
   takeDefault,

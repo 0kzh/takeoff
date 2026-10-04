@@ -8,6 +8,7 @@ import { atPlateau, plateauSeconds, trainCost, researchFor, startCapability, gpu
 import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.js';
 import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall } from '../engine/world.js';
+import { stage3Projects, granted } from './projects3.js';
 
 /**
  * One row of the project table. `trigger` decides when the button appears (always before it is
@@ -61,23 +62,39 @@ export interface ProjectDef {
   repeatable?: boolean;
   consoleMsg?: string;
   logMsg?: string;
+  /**
+   * Stage 3: an autonomy grant (stage3.md §2.6). It renders in the Alignment panel's grant list, not
+   * in Projects, outside the visible cap, three on offer at most; buying one prints the WARNING line.
+   */
+  grant?: boolean;
+  /** Stage 3 approach item: appears at this capability (or on the September 2027 fallback), 75 s apart. */
+  lateAt?: number;
+  /** Stage 3: what a greyed card waits for when it is not money (`needs Interpretability lab II`). */
+  needs?: (s: GameState) => string;
 }
 
-type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> & {
+export type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> & {
   cost: Cost | ((s: GameState) => Cost);
 } & Partial<Pick<ProjectDef, 'canAfford' | 'stages' | 'uses'>>;
 
-function project(def: ProjectInput): ProjectDef {
+export function project(def: ProjectInput): ProjectDef {
   const base = typeof def.cost === 'function' ? def.cost : ((c: Cost) => () => c)(def.cost);
   const secs = def.revealFunds;
   const rsecs = def.revealResearch;
   // A card with `revealFunds` / `revealResearch` costs at least that many seconds of the revenue
   // (research rate) at the moment it first shows, fixed then (critic round 2 §6.2: a card is a goal
   // for a minute or two, not a conveyor belt). Before it shows, the preview uses today's rates.
+  // A Stage 1 card's floor never passes four times its list price: a card that returns a researcher or
+  // a doubling of the lab must not out-price First Datacenter (a $340,000 recruiter was a trap).
+  const stage1 = (def.stages ?? [1]).includes(1);
   const cost = secs === undefined && rsecs === undefined ? base : (s: GameState): Cost => {
     const c = base(s);
     const out: Cost = { ...c };
-    if (secs !== undefined) out.funds = Math.max(c.funds ?? 0, revealPrice(s, def.id, secs));
+    if (secs !== undefined) {
+      const floor = revealPrice(s, def.id, secs);
+      // The cap is Stage 1's: a card carried into Stage 2 keeps Stage 2's floor.
+      out.funds = Math.max(c.funds ?? 0, stage1 && s.stage === 1 && c.funds ? Math.min(floor, 4 * c.funds) : floor);
+    }
     if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
     return out;
   };
@@ -86,10 +103,12 @@ function project(def: ProjectInput): ProjectDef {
     if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
     def.onShow?.(s);
   };
+  // Stage 3 (stage3.md §4.1 item 7): a prerequisite gates the purchase, not the appearance.
+  const gated = !!def.prereq && (def.stages ?? [1]).includes(3);
   return {
     stages: [1],
     uses: 1,
-    canAfford: (s) => canPay(s, cost(s)),
+    canAfford: (s) => (!gated || s.stage < 3 || def.prereq!(s)) && canPay(s, cost(s)),
     ...def,
     cost,
     onShow,
@@ -412,7 +431,6 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_region',
-    revealResearch: 100,
     title: 'Second cloud region',
     cost: { research: 9000 },
     description: 'Twenty more GPUs on the quota; prices rise more slowly.',
@@ -424,7 +442,6 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_reserved',
-    revealResearch: 100,
     title: 'Reserved capacity',
     cost: { research: 14000 },
     description: 'Twenty more GPUs on the quota, booked for the year.',
@@ -436,7 +453,6 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_compute_deal',
-    revealResearch: 100,
     title: 'Bulk GPU lease',
     cost: { research: 5000 },
     description: 'Twenty more GPUs on the quota; prices rise more slowly.',
@@ -496,9 +512,9 @@ export const PROJECTS: ProjectDef[] = [
     logMsg: 'OpenMind is said to be pricing a datacenter of its own in West Texas.',
   }),
   // The ladder's side offers, re-keyed to the card's appearance: real trades on the way to it.
+  // A card whose return is a point of Trust or a discount costs clearly less than it returns: no floor.
   project({
     id: 'p_cooling',
-    revealFunds: 90,
     sideline: true,
     title: 'Closed-loop cooling',
     cost: { funds: 10000 },
@@ -523,7 +539,6 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_soundwall',
-    revealFunds: 90,
     sideline: true,
     title: 'Build a sound wall',
     cost: { funds: 5000 },
@@ -613,7 +628,6 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_ppa',
-    revealResearch: 100,
     sideline: true,
     title: 'Power purchase agreement',
     cost: { research: 7000 },
@@ -752,6 +766,7 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Mixture of experts deployed. More copies fit on each GPU.',
   }),
   ...stage2Projects(),
+  ...stage3Projects(project),
 ];
 
 // ---------- Stage 2 (stage2.md §4.2): rows in table order; funds at scale 1 through s2() ----------
@@ -880,6 +895,7 @@ function stage2Projects(): ProjectDef[] {
       cost: () => ({ funds: s2(250000), research: 40000 }),
       description: 'Customers hand over whole jobs instead of questions: market ×1.6.',
       trigger: (s) => s2Releases(s) >= 1 && priceLowFor(s) >= 30,
+      stages: [2, 3],
       buy: (s) => {
         s.demandMult *= 1.6;
       },
@@ -1140,7 +1156,7 @@ function stage2Projects(): ProjectDef[] {
       buy: (s) => {
         applyBehindTheMeter(s);
       },
-      stages: [2, 3],
+      // Retired at the Stage 3 gate: gas and solar are gone there (stage3.md as-built deltas row 16).
       consoleMsg: 'The plants sit on our side of the meter now. The queue is 30 seconds.',
     }),
     s2project({
@@ -1239,6 +1255,8 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_code_review',
       revealFunds: 90,
       late: true,
+      // Stage 3's first autonomy grant (as-built deltas row 16): it sits with the grants.
+      grant: true,
       title: 'Retire human code review',
       cost: { research: 1200000 },
       description: 'Sage reviews Sage: the research copies get half again as much done.',
@@ -1246,7 +1264,8 @@ function stage2Projects(): ProjectDef[] {
       buy: (s) => {
         s.aiResearchMult *= 1.5;
         s.alignmentTrue = Math.max(0, s.alignmentTrue - 2);
-        s.autonomy += 5;
+        if (s.stage >= 3) granted(s, 'Retire human code review', 5);
+        else s.autonomy += 5;
       },
       stages: [2, 3],
       consoleMsg: 'Sage reviews Sage\'s code now. Merges go through at 3 a.m.',

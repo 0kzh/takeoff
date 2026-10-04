@@ -29,7 +29,8 @@ function onNewMonth(s: GameState): void {
 
 /** December: the annual leaderboard pays Trust and hype to a model whose evaluation scored ≥ 36. */
 export function awardLeaderboard(s: GameState): void {
-  if (!s.flags['leaderboardEligible']) return;
+  // Trust is retired in Stage 3 (stage3.md §1.1).
+  if (!s.flags['leaderboardEligible'] || s.stage >= 3) return;
   const year = 2025 + Math.floor((Math.floor(s.date) + 6) / 12);
   if (s.flags['leaderboardYear'] === year) return;
   s.flags['leaderboardYear'] = year;

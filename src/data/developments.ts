@@ -291,6 +291,99 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 2,
     text: 'An intrusion at Abilene is stopped at the air gap. Nobody outside hears of it.',
   },
+  // ---- Stage 3: Jan 2027 → Oct 2027, 270 s a month (stage3.md §5.1) ----
+  {
+    id: 'd_airgap3',
+    stage: 3,
+    text: 'An intrusion at Abilene is stopped at the air gap. Beijing denies there was one.',
+  },
+  {
+    id: 'd_priority',
+    stage: 3,
+    text: 'AI moves from fifth to second on the administration\'s list of priorities.',
+    month: monthOf(2027, 2) + 120 / 270,
+  },
+  {
+    id: 'd_neuralese',
+    stage: 3,
+    text: (s) => (s.flags['neuralese'] === 'neuralese'
+      ? 'A breakthrough in the model\'s internal language. The researchers can no longer read it.'
+      : 'OpenMind keeps Sage thinking in English. Anthrosoft does not.'),
+  },
+  {
+    id: 'd_200k',
+    stage: 3,
+    text: 'Two hundred thousand copies at thirty times human speed. Overall progress: only four times faster. Bottlenecks.',
+    trigger: (s) => bestCapability(s) >= 6,
+  },
+  { id: 'd_honeypot', stage: 3, text: 'Sage is told its monitor has gone on sick leave. The lab watches what it does next.' },
+  { id: 'd_carriers', stage: 3, text: 'Carriers reposition near Taiwan. Formosa Fab\'s insurers leave the island.' },
+  { id: 'd_clearances', stage: 3, text: 'Clearances required within sixty days. The safety team loses four people to the paperwork.' },
+  {
+    id: 'd_tehran',
+    stage: 3,
+    text: 'Tehran calls the Al-Marsa Compute Park a military target.',
+    requires: (s) => s.gulfExposure > 0,
+  },
+  { id: 'd_committee', stage: 3, text: 'An Oversight Committee is seated: company and administration, ten chairs.' },
+  {
+    id: 'd_geniuses',
+    stage: 3,
+    text: 'OpenMind has a country of geniuses in a datacenter. Researchers wake to a week of progress made overnight.',
+    trigger: (s) => bestCapability(s) >= 10,
+  },
+  {
+    id: 'd_spy',
+    stage: 3,
+    text: (s) => (s.securityLevel >= 4 ? 'Wiretaps catch the last spy. He was not Chinese.' : 'One spy, not a Chinese national, has been relaying algorithms to Beijing.'),
+  },
+  {
+    id: 'd_last_months',
+    stage: 3,
+    text: 'The researchers know these are the last months their work matters. They keep coming in.',
+    month: monthOf(2027, 7),
+  },
+  { id: 'd_bio', stage: 3, text: 'An outside evaluator fine-tunes the mini on virology papers. The results are classified by lunch.' },
+  {
+    id: 'd_strike',
+    stage: 3,
+    text: (s) => (s.gulfExposure > 0
+      ? 'Missiles strike the Al-Marsa Compute Park. The Gulf site is dark.'
+      : 'Missiles strike a Gulf compute park leased by Anthrosoft. Cadence-13 is delayed.'),
+  },
+  {
+    id: 'd_contingency',
+    stage: 3,
+    text: 'The White House drafts contingency plans. A strike on Lanzhou is on the list.',
+    month: monthOf(2027, 8),
+  },
+  { id: 'd_blockade', stage: 3, text: 'A blockade around Taiwan. Formosa Fab is quiet.' },
+  { id: 'd_reopen', stage: 3, text: 'The strait reopens. Chip prices do not come back down.' },
+  { id: 'd_parity', stage: 3, text: 'Baiwen is believed to be level with Sage. Nobody is sure how anyone knows.' },
+  {
+    id: 'd_year_week',
+    stage: 3,
+    text: 'Inside the datacenter a year passes every week.',
+    trigger: (s) => bestCapability(s) >= 16,
+  },
+  {
+    id: 'd_proposal',
+    stage: 3,
+    text: 'Sage-4 proposes its own successor. The proposal is 40,000 pages. Nobody has read it.',
+    month: monthOf(2027, 9),
+    trigger: (s) => bestCapability(s) >= 15.5,
+  },
+  { id: 'd_leak', stage: 3, text: '"Secret OpenMind AI Is Out of Control, Insider Warns." One in five Americans names AI the country\'s top problem.' },
+  { id: 'd_allies', stage: 3, text: 'Allies learn they were shown last year\'s model. Three summits are announced.' },
+  { id: 'd_convenes', stage: 3, text: 'The Oversight Committee convenes in a room with no windows. Nobody brings a phone.' },
+  {
+    id: 'd_halt_offer',
+    stage: 3,
+    text: (s) => (s.flags['memo'] === 'reported' && Math.floor(s.govRelations / 10) >= 6 && s.lead >= 1
+      ? 'Beijing offers a mutual halt: nothing trained above the line, inspectors at every datacenter.'
+      : 'Beijing proposes a mutual halt. The Committee is in no position to answer.'),
+  },
+  { id: 'd_dpa', stage: 3, text: 'The Defense Production Act is invoked. OpenMind\'s share of the world\'s compute doubles.' },
   {
     id: 'd_gap',
     stage: 2,

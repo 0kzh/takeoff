@@ -1,4 +1,4 @@
-import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay } from './state.js';
+import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay, bump } from './state.js';
 import { fmtInt, fmtClock } from './format.js';
 import { trainCost, trainSlotFree, runOtherwiseReady, gpusShort, gpusAvailable, gpusNeeded } from './training.js';
 import { visibleProjects } from './projects.js';
@@ -34,8 +34,9 @@ export const REACTOR_SECONDS = 120;
 export const GULF_SECONDS = 120;
 /** Solar farms in the interconnect queue at once (the one connecting and one behind it). */
 export const SOLAR_QUEUE_MAX = 2;
-/** A G5 does the work of one and a half G4s. */
+/** A G5 does the work of one and a half G4s; a G6 two and a half (stage3.md §2.1). */
 export const G5_COMPUTE = 1.5;
+export const G6_COMPUTE = 2.5;
 export const G4_PRICE = 50;
 /** stage2.md: $90; §9.5's knob when minutes 25–30 are too steep. */
 export const G5_PRICE = 110;
@@ -63,6 +64,14 @@ function dcRow(n: number): [number, number] {
 }
 
 /** GPU slots in the first `n` datacenters. */
+/** Stage 3: from Datacenter 9 a hall costs this many seconds of revenue at the press (stage3.md §2.1). */
+export const HALL_SECONDS_S3 = 60;
+/** Stage 3: a reactor (1,000 MW) costs this many seconds of revenue, a quarter off at relations ≥ 60. */
+export const REACTOR_SECONDS_S3 = 75;
+export const REACTOR_MW_S3 = 1000;
+/** Stage 3 reactor restarts queued at once. */
+export const REACTOR_QUEUE_MAX = 2;
+
 export function datacenterSlots(n: number): number {
   let total = 0;
   for (let i = 1; i <= n; i++) total += dcRow(i)[0];
@@ -71,7 +80,9 @@ export function datacenterSlots(n: number): number {
 
 /** Slots: the halls built, plus the part of the one under construction that is finished (a quarter at a time). */
 export function gpuCapacity(s: GameState): number {
-  return datacenterSlots(s.datacenters) + openedSlots(s);
+  // The Defense Production Act brings five rival labs' halls with their chips (Stage 3).
+  const extra = typeof s.flags['extraSlots'] === 'number' ? (s.flags['extraSlots'] as number) : 0;
+  return datacenterSlots(s.datacenters) + openedSlots(s) + extra;
 }
 
 /** A hall opens a quarter at a time as it is built, so the first lots go in before it is done. */
@@ -86,7 +97,21 @@ function openedSlots(s: GameState): number {
 export function nextDatacenter(s: GameState): { n: number; add: number; cost: number } {
   const n = s.datacenters + 1;
   const [add, cost] = dcRow(n);
+  // Stage 3: Datacenter 8 keeps its built price; from 9 a hall is a minute of revenue at the press.
+  if (s.stage >= 3 && n >= 9) return { n, add, cost: secondsOfRevenue(s, HALL_SECONDS_S3) };
   return { n, add, cost: s2(cost) };
+}
+
+/** `seconds` of revenue at the press, to two significant figures (Stage 3's prices, amendment 9). */
+export function secondsOfRevenue(s: GameState, seconds: number): number {
+  const raw = seconds * Math.max(1, s.stats.revPerSec);
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
+  return Math.round(raw / unit) * unit;
+}
+
+/** Datacenter 10 and up stand at New Carlisle: they need the second campus (stage3.md §2.1). */
+export function needsSite2(s: GameState): boolean {
+  return s.stage >= 3 && s.datacenters + 1 >= 10 && s.flags['site2'] !== true;
 }
 
 export function datacenterCost(s: GameState): number {
@@ -107,24 +132,29 @@ export function poweredGpus(s: GameState): number {
   return Math.floor((s.powerCapacityMW * powerScale(s) * 1000) / KW_PER_GPU);
 }
 
+/** The newest chips get power first: G6, then G5, then G4. */
+export function activeG6(s: GameState): number {
+  return Math.min(s.gpusG6 ?? 0, poweredGpus(s));
+}
+
 export function activeG5(s: GameState): number {
-  return Math.min(s.gpusG5, poweredGpus(s));
+  return Math.min(s.gpusG5, Math.max(0, poweredGpus(s) - activeG6(s)));
 }
 
 export function activeG4(s: GameState): number {
-  return Math.max(0, Math.min(s.gpus - s.gpusG5, poweredGpus(s) - activeG5(s)));
+  return Math.max(0, Math.min(s.gpus - s.gpusG5 - (s.gpusG6 ?? 0), poweredGpus(s) - activeG5(s) - activeG6(s)));
 }
 
 /** GPUs that have power. Stage 1 buys power by the kWh, so every rented GPU is active. */
 export function activeGpus(s: GameState): number {
   if (s.stage < 2) return s.gpus;
-  return activeG4(s) + activeG5(s);
+  return activeG4(s) + activeG5(s) + activeG6(s);
 }
 
-/** Compute in G4-equivalents: G5 lots get power first and count one and a half. */
+/** Compute in G4-equivalents: a G5 counts one and a half, a G6 two and a half. */
 export function effGpus(s: GameState): number {
   if (s.stage < 2) return s.gpus;
-  return activeG4(s) + G5_COMPUTE * activeG5(s);
+  return activeG4(s) + G5_COMPUTE * activeG5(s) + G6_COMPUTE * activeG6(s);
 }
 
 export function powerDrawMW(s: GameState): number {
@@ -133,11 +163,16 @@ export function powerDrawMW(s: GameState): number {
 
 /** GPUs the plants online could still power (crises do not count: a lot is bought for good). */
 export function freePowerGpus(s: GameState): number {
-  return Math.max(0, Math.floor((s.powerCapacityMW * 1000) / KW_PER_GPU) - s.gpus);
+  return Math.max(0, Math.floor((s.powerCapacityMW * 1000) / KW_PER_GPU) - s.gpus - inTransit(s));
 }
 
 export function freeSlots(s: GameState): number {
-  return Math.max(0, gpuCapacity(s) - s.gpus);
+  return Math.max(0, gpuCapacity(s) - s.gpus - inTransit(s));
+}
+
+/** Stage 3: GPUs on their way (ordered lots take room and power from the moment they are ordered). */
+export function inTransit(s: GameState): number {
+  return (s.shipments ?? []).reduce((a, o) => a + o.gpus, 0);
 }
 
 // ---------- GPU lots ----------
@@ -147,6 +182,72 @@ export function freeSlots(s: GameState): number {
  * hands, each with what it returns printed beside it).
  */
 export const LOT_SIZES = [1000, 5000, 25000] as const;
+/** Stage 3's lots (stage3.md §2.1): 10,000 / 25,000 / 100,000 for 4 / 10 / 40 s of revenue at the press. */
+export const LOT_SIZES_S3 = [10000, 25000, 100000] as const;
+export const LOT_SECONDS_S3 = [4, 10, 40] as const;
+/** Each Stage 3 order is one shipment of 75 s, landing one at a time, two on order at most. */
+export const SHIPMENT_SECONDS = 75;
+export const SHIPMENTS_MAX = 2;
+
+/** The Stage 3 lot the button at `index` sells (0, 1, 2). Stage 2 sizes map onto them by position. */
+export function lotSizeS3(size: number): number {
+  const i = (LOT_SIZES as readonly number[]).indexOf(size);
+  if (i >= 0) return LOT_SIZES_S3[i]!;
+  return (LOT_SIZES_S3 as readonly number[]).includes(size) ? size : 0;
+}
+
+/** A Stage 3 lot's price: its seconds of revenue at the press (× 1.5 once the strait has been closed). */
+export function lotPriceS3(s: GameState, n: number): number {
+  const i = (LOT_SIZES_S3 as readonly number[]).indexOf(n);
+  const secs = i >= 0 ? LOT_SECONDS_S3[i]! : (40 * n) / 100000;
+  return Math.round(secondsOfRevenue(s, secs) * (s.flags['chipsDear'] === true ? 1.5 : 1));
+}
+
+/** Seconds a Stage 3 shipment takes: 75, 60 with eight seats on the Committee, 90 with four or five. */
+export function shipmentSeconds(s: GameState): number {
+  if (s.revealed['oversight'] === true) {
+    const seats = Math.floor(s.govRelations / 10);
+    if (seats >= 8) return 60;
+    if (seats <= 5 && seats >= 4) return 90;
+  }
+  return SHIPMENT_SECONDS;
+}
+
+/** Why a Stage 3 lot of `n` cannot be ordered now ('' when it can): the queue, the strait, room or power. */
+export function orderReasonS3(s: GameState, n: number): string {
+  if ((s.shipments ?? []).length >= SHIPMENTS_MAX) return '2 / 2 on order';
+  if (s.flags['blockade'] === true && s.flags['secondSource'] !== true) return 'the strait is closed';
+  if (freeSlots(s) < n) return 'no room';
+  if (freePowerGpus(s) < n) return 'no power';
+  return '';
+}
+
+/** Stage 3: order a lot of `n` — it ships in 75 s, behind the one on its way. */
+export function orderLot(s: GameState, n: number, cost: number): void {
+  addFunds(s, -cost);
+  const half = s.flags['blockade'] === true;
+  const secs = shipmentSeconds(s) * (half ? 2 : 1);
+  s.shipments.push({ gpus: n, gen: s.flags['g6'] === true ? 6 : 5, remaining: secs });
+  // The first order names the wait; after it the Infrastructure panel's shipment line carries it.
+  if (s.shipments.length === 1 && s.flags['shipmentSaid'] !== true) {
+    s.flags['shipmentSaid'] = true;
+    say(s, `Shipment — ${fmtClock(secs)} until ${fmtInt(n)} Nimbus ${s.flags['g6'] === true ? 'G6' : 'G5'} arrive.`);
+  }
+}
+
+/** Every tick in Stage 3: the shipment at the head of the queue counts down and lands. */
+export function updateShipments(s: GameState, dt: number): void {
+  const q = s.shipments;
+  if (!q || q.length === 0) return;
+  const head = q[0]!;
+  head.remaining -= dt;
+  if (head.remaining > 0) return;
+  q.shift();
+  s.gpus += head.gpus;
+  if (head.gen === 6) s.gpusG6 = (s.gpusG6 ?? 0) + head.gpus;
+  else s.gpusG5 += head.gpus;
+  s.flags['lastShipmentAt'] = s.stats.timePlayed;
+}
 
 /** The smallest lot (the main button, `btn-gpuBatch`). */
 export function nominalLot(_s: GameState): number {
@@ -202,6 +303,7 @@ export function urgentCard(s: GameState): { price: number; title: string } | nul
  * in the queue counts as power to come; a hall being built, as room to come.
  */
 export function wallFix(s: GameState): { price: number; what: 'plant' | 'hall' } | null {
+  if (s.stage >= 3) return wallFixS3(s);
   if (s.stage !== 2 || !s.revealed['infrastructure']) return null;
   const reach = (60 * Math.max(0, s.stats.revPerSec)) / gpuUnitPrice(s);
   const power = freePowerGpus(s) + Math.floor((queuedMW(s) * 1000) / KW_PER_GPU);
@@ -217,6 +319,24 @@ export function wallFix(s: GameState): { price: number; what: 'plant' | 'hall' }
     if (prices.length) fix = { price: Math.min(...prices), what: 'plant' };
   }
   // A fix more than two minutes of income away is the player's to save for, not the lots'.
+  if (fix && fix.price > 120 * Math.max(1, s.stats.revPerSec)) return null;
+  return fix;
+}
+
+/**
+ * Stage 3: the fix for the wall the lots reach first (stage3.md as-built deltas row 4): the next hall
+ * when room runs out, a reactor when power does, while it is within two minutes of income. The
+ * build-out grant takes both over.
+ */
+function wallFixS3(s: GameState): { price: number; what: 'plant' | 'hall' } | null {
+  if (!s.revealed['infrastructure'] || s.flags['buildout'] === true) return null;
+  const smallest = LOT_SIZES_S3[0];
+  const power = freePowerGpus(s) + Math.floor((queuedMW(s) * 1000) / KW_PER_GPU);
+  const room = datacenterBuilding(s) ? Infinity : freeSlots(s);
+  if (Math.min(power, room) >= 2 * smallest) return null;
+  const fix = room <= power
+    ? (needsSite2(s) ? null : { price: datacenterCost(s), what: 'hall' as const })
+    : (reactorQueueFull(s) ? null : { price: nuclearCost(s), what: 'plant' as const });
   if (fix && fix.price > 120 * Math.max(1, s.stats.revPerSec)) return null;
   return fix;
 }
@@ -275,6 +395,7 @@ export function shownLot(s: GameState): number {
 }
 
 export function lotCostOf(s: GameState, n: number): number {
+  if (s.stage >= 3) return lotPriceS3(s, lotSizeS3(n) || n);
   return Math.round(n * gpuUnitPrice(s));
 }
 
@@ -299,7 +420,7 @@ export function lotReason(s: GameState): '' | 'no room' | 'no power' {
  */
 export function lotReturn(s: GameState, n: number): number {
   const eff = Math.max(1, effGpus(s));
-  const add = n * (s.g5 ? G5_COMPUTE : 1);
+  const add = n * (s.stage >= 3 && s.flags['g6'] === true ? G6_COMPUTE : s.g5 ? G5_COMPUTE : 1);
   const taskRevenue = Math.max(0, s.stats.revPerSec - Math.max(0, s.contractIncome || 0));
   return taskRevenue * (Math.sqrt(1 + add / eff) - 1);
 }
@@ -328,6 +449,7 @@ function addLot(s: GameState, lot: number, cost: number): void {
 
 /** Buy a lot of `n` by hand (also with the standing order on: the order never takes the buttons away). */
 export function buyGpuBatch(s: GameState, size: number = LOT_SIZES[0]): boolean {
+  if (s.stage >= 3) return buyLotS3(s, size);
   if (s.stage < 2 || !s.revealed['infrastructure'] || !(LOT_SIZES as readonly number[]).includes(size)) return false;
   // The main lot buys what fits and what the money above the hold pays for; the others are whole.
   const n = size === LOT_SIZES[0] ? lotSize(s) : size;
@@ -338,6 +460,21 @@ export function buyGpuBatch(s: GameState, size: number = LOT_SIZES[0]): boolean 
   s.gpuBatches += 1;
   s.flags['lotByHandAt'] = s.stats.timePlayed;
   press(s, 'gpuLot');
+  return true;
+}
+
+/** Stage 3: a lot by hand (the three buttons; Stage 2's sizes map onto Stage 3's by position). */
+export function buyLotS3(s: GameState, size: number): boolean {
+  if (!s.revealed['infrastructure']) return false;
+  const n = lotSizeS3(size);
+  if (!n || orderReasonS3(s, n)) return false;
+  const cost = lotCostOf(s, n);
+  if (s.funds < cost || s.funds - cost < lotHold(s)) return false;
+  orderLot(s, n, cost);
+  s.gpuBatches += 1;
+  s.flags['lotByHandAt'] = s.stats.timePlayed;
+  press(s, 'gpuLot');
+  bump(s, 'infraPressesS3');
   return true;
 }
 
@@ -391,8 +528,25 @@ export function runStandingOrder(s: GameState): void {
   const byHand = s.flags['lotByHandAt'];
   if (typeof byHand === 'number' && s.stats.timePlayed - byHand < 20) return;
   const share = s.standingBudget * Math.max(0, s.stats.revPerSec);
-  s.standingPool = Math.min(s.standingPool + share, Math.max(120 * share, lotCostOf(s, LOT_SIZES[0])));
+  // Stage 3's pool holds 150 s of the share, so at 50 % it reaches the big lot even while a run
+  // trains and revenue dips by a third.
+  const poolSeconds = s.stage >= 3 ? STANDING_POOL_SECONDS_S3 : 120;
+  s.standingPool = Math.min(s.standingPool + share, Math.max(poolSeconds * share, lotCostOf(s, LOT_SIZES[0])));
   const reserve = standingReserve(s);
+  if (s.stage >= 3) {
+    // Stage 3 (stage3.md §2.1): the share saves for the largest lot its pool can reach and orders it
+    // when the queue has room. A small lot would hold a 75 s shipment slot for a tenth of the GPUs.
+    const fitting = LOT_SIZES_S3.filter((n) => !orderReasonS3(s, n));
+    if (!fitting.length) return;
+    const reachable = fitting.filter((n) => lotCostOf(s, n) <= poolSeconds * share);
+    const size = reachable.length ? reachable[reachable.length - 1]! : fitting[0]!;
+    const cost = lotCostOf(s, size);
+    if (s.standingPool < cost || s.funds - cost < reserve) return;
+    orderLot(s, size, cost);
+    s.standingPool -= cost;
+    s.flags['standingLots'] = ((s.flags['standingLots'] as number) || 0) + 1;
+    return;
+  }
   let guard = 0;
   while (guard++ < 3) {
     const size = LOT_SIZES.slice().reverse().find((n) => lotFits(s, n) && s.standingPool >= lotCostOf(s, n) && s.funds - lotCostOf(s, n) >= reserve);
@@ -403,6 +557,9 @@ export function runStandingOrder(s: GameState): void {
     s.flags['standingLots'] = ((s.flags['standingLots'] as number) || 0) + 1;
   }
 }
+
+/** Seconds of its share the Stage 3 standing order's pool holds. */
+export const STANDING_POOL_SECONDS_S3 = 150;
 
 /** The standing order's share of income, cycled by its button: 25 → 50 → 75 → 100 % → off → 25 %. */
 export const BUDGET_STEPS = [0.25, 0.5, 0.75, 1, 0];
@@ -438,17 +595,19 @@ export function datacenterReason(s: GameState): '' | 'building' {
 /** Why a plant button is greyed for a reason other than money ('' when it is not): only a full queue. */
 export function plantReason(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): '' | 'queue full' {
   if (kind === 'solar' && solarQueueFull(s)) return 'queue full';
+  if (kind === 'nuclear' && reactorQueueFull(s)) return 'queue full';
   return '';
 }
 
 export function buildDatacenter(s: GameState): boolean {
-  if (s.stage < 2 || !s.revealed['dcButton'] || datacenterBuilding(s)) return false;
+  if (s.stage < 2 || !s.revealed['dcButton'] || datacenterBuilding(s) || needsSite2(s)) return false;
   const next = nextDatacenter(s);
   if (s.funds < next.cost) return false;
   addFunds(s, -next.cost);
   const seconds = dcBuildSeconds(s);
   s.powerQueue.push({ kind: 'datacenter', mw: 0, remaining: seconds, total: seconds, label: `Datacenter ${next.n}` });
   press(s, 'datacenter');
+  if (s.stage >= 3) bump(s, 'infraPressesS3');
   say(s, `Datacenter ${next.n} — ${fmtClock(seconds)} until the halls are ready${seconds > DC_BUILD_SECONDS ? ' (the permit took a minute longer)' : ''}.`);
   return true;
 }
@@ -478,8 +637,15 @@ export function solarCost(s: GameState): number {
 }
 
 export function nuclearCost(s: GameState): number {
+  // Stage 3: a 1,000 MW reactor for 75 s of revenue at the press, a quarter off at relations ≥ 60.
+  if (s.stage >= 3) return Math.round(secondsOfRevenue(s, REACTOR_SECONDS_S3) * (s.govRelations >= 60 ? 0.75 : 1));
   const n = s.reactors + queued(s, 'nuclear').length;
   return s2(15000000 * Math.pow(2, n) * (s.govRelations >= 60 ? 0.75 : 1));
+}
+
+/** Stage 3: two reactor restarts at most in the queue. */
+export function reactorQueueFull(s: GameState): boolean {
+  return s.stage >= 3 && queued(s, 'nuclear').length >= REACTOR_QUEUE_MAX;
 }
 
 export function solarQueueFull(s: GameState): boolean {
@@ -545,15 +711,24 @@ export function buyNuclear(s: GameState): boolean {
   addFunds(s, -cost);
   queueNuclear(s);
   press(s, 'nuclear');
+  if (s.stage >= 3) bump(s, 'infraPressesS3');
   return true;
 }
 
 /** A reactor restart (the Nuclear PPA): 500 MW after a named two-minute wait. */
 export function queueNuclear(s: GameState): void {
   const first = s.reactors + queued(s, 'nuclear').length === 0;
-  s.powerQueue.push({ kind: 'nuclear', mw: NUCLEAR_MW, remaining: REACTOR_SECONDS, label: 'the Nuclear PPA' });
-  say(s, `Reactor restart — ${fmtClock(REACTOR_SECONDS)} until the Nuclear PPA delivers.`);
+  const mw = s.stage >= 3 ? REACTOR_MW_S3 : NUCLEAR_MW;
+  const seconds = REACTOR_SECONDS + (s.stage >= 3 && s.approval <= -30 ? DC_PERMIT_SECONDS : 0);
+  s.powerQueue.push({ kind: 'nuclear', mw, remaining: seconds, label: s.stage >= 3 ? 'the reactor' : 'the Nuclear PPA' });
+  // Once Sage plans the build-out, its own line on the Infrastructure panel carries the wait.
+  if (!handedOver(s)) say(s, `Reactor restart — ${fmtClock(seconds)} until ${s.stage >= 3 ? `${fmtInt(mw)} MW come online` : 'the Nuclear PPA delivers'}.`);
   if (first) logNews(s, 'A shuttered reactor in the Midwest is restarting. Its only customer is OpenMind.');
+}
+
+/** Stage 3 after `Let Sage plan the build-out`: halls and reactors are Sage's, and so are their lines. */
+function handedOver(s: GameState): boolean {
+  return s.stage >= 3 && s.flags['buildout'] === true;
 }
 
 /** Al-Marsa (the Gulf offer): a gigawatt in two minutes. */
@@ -587,7 +762,7 @@ export function updatePowerQueue(s: GameState, dt: number): void {
   for (const o of done) {
     if (o.kind === 'datacenter') {
       s.datacenters += 1;
-      say(s, `${o.label} complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
+      if (!handedOver(s)) say(s, `${o.label} complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
       continue;
     }
     s.powerCapacityMW += o.mw;
@@ -596,7 +771,7 @@ export function updatePowerQueue(s: GameState, dt: number): void {
       say(s, `Solar farm connected. +${o.mw} MW.`);
     } else if (o.kind === 'nuclear') {
       s.reactors += 1;
-      say(s, `The Nuclear PPA delivers. +${fmtInt(o.mw)} MW.`);
+      if (!handedOver(s)) say(s, s.stage >= 3 ? `Reactor online. +${fmtInt(o.mw)} MW.` : `The Nuclear PPA delivers. +${fmtInt(o.mw)} MW.`);
     } else {
       s.gulfSites += 1;
       say(s, 'Al-Marsa energised. +1,000 MW.');

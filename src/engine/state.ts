@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -32,6 +32,14 @@ export interface PowerOrder {
   /** Seconds it started with (datacenters: they open a quarter at a time). */
   total?: number;
   label: string;
+}
+
+/** A Stage 3 GPU lot on its way: the head of the queue counts down; the rest wait their turn. */
+export interface Shipment {
+  gpus: number;
+  /** Chip generation: 5 (Nimbus G5) or 6 (Nimbus G6). */
+  gen: number;
+  remaining: number;
 }
 
 export interface LogEntry {
@@ -78,6 +86,12 @@ export interface TrainingRun {
   syntheticShare: number;
   /** Alignment compute (share of copies) while the run trained (stage2.md §2.11). */
   alignShare: number;
+  /** Stage 3: the interpretability probes' flags on this run (lab II); 0 before it. */
+  probeFlags?: number;
+  /** Stage 3: sent back once (retrained 20 s, keeps 70 % of its gain, true alignment +1). */
+  sentBack?: boolean;
+  /** Stage 3: seconds of the thorough red-team review left before it can deploy. */
+  reviewLeft?: number;
 }
 
 export interface ModelRecord {
@@ -132,6 +146,8 @@ export interface TimedEffect {
   powerMult?: number;
   /** Stage 2: research rate multiplier (lock-down, the Bureau, a subpoena). */
   researchMult?: number;
+  /** Stage 3: share of copies online (a breakout takes a fifth offline; a re-image all of them). */
+  copiesMult?: number;
 }
 
 /** A crisis that fires after `delay` seconds. */
@@ -185,6 +201,10 @@ export interface Cadence {
   governed: string[];
   /** When a new panel, verb, toggle, slider or Stores row last appeared (arc G2). */
   lastMechanicAt: number;
+  /** Stage 3: grants whose trigger has fired, waiting for a place in the grant list (three on offer). */
+  grantQueue: string[];
+  /** When the last grant was offered (grants come 15 s apart). */
+  lastGrantAt: number;
 }
 
 /** Bookkeeping for the idle guard (design.md §8). */
@@ -233,6 +253,12 @@ export interface Stats {
   priceHist: number[];
   /** Game seconds of recent incidents (approval remembers five minutes of them). */
   incidentTimes: number[];
+  /** Stage 3: copies lost to value drift, and caught again by the monitors (running totals). */
+  lostToDrift: number;
+  recaptured: number;
+  /** Lines printed to the console and the Developments log (the sim's text-rate checks, arc G19). */
+  consoleLines?: number;
+  logLines?: number;
 }
 
 export interface GameState {
@@ -350,6 +376,16 @@ export interface GameState {
   shareEvals: boolean;
   /** Share of copies on alignment work: 0.01 baseline, 0.05 or 0.10 (stage2.md §2.11). */
   alignShare: number;
+  /** Stage 3: share of copies watching the others (the Monitors slider, 0–0.40). */
+  monitorShare: number;
+  /** Stage 3: copies that have drifted and work for nobody (they sit on the player's GPUs). */
+  rogueCopies: number;
+  /** Stage 3: Nimbus G6s in the fleet (2.5 G4-equivalents each); `gpus` counts them too. */
+  gpusG6: number;
+  /** Stage 3: GPU lots in transit, landing one at a time (75 s each, two on order at most). */
+  shipments: Shipment[];
+  /** Stage 3: the Committee's count of major incidents (0–3). */
+  majorIncidents: number;
   robots: number;
   launchCapacity: number;
   orbitalCompute: number;
@@ -426,6 +462,8 @@ export function newStats(): Stats {
     pressCounts: {},
     priceHist: [],
     incidentTimes: [],
+    lostToDrift: 0,
+    recaptured: 0,
   };
 }
 
@@ -523,6 +561,11 @@ export function newGame(seed: number = Date.now()): GameState {
     jobFund: false,
     shareEvals: false,
     alignShare: 0.01,
+    monitorShare: 0,
+    rogueCopies: 0,
+    gpusG6: 0,
+    shipments: [],
+    majorIncidents: 0,
     robots: 0,
     launchCapacity: 0,
     orbitalCompute: 0,
@@ -543,7 +586,7 @@ export function newGame(seed: number = Date.now()): GameState {
     choiceQueue: [],
     choicesMade: [],
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
-    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [], lastMechanicAt: 0 },
+    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [], lastMechanicAt: 0, grantQueue: [], lastGrantAt: -999 },
     stats: newStats(),
 
     tickAccum: 0,
@@ -565,6 +608,7 @@ export function say(s: GameState, text: string): void {
 
 /** Writes straight to the console (the queue drain uses this). */
 export function printLine(s: GameState, text: string): void {
+  s.stats.consoleLines = (s.stats.consoleLines ?? 0) + 1;
   s.console.push(text);
   if (s.console.length > CONSOLE_LINES) s.console.splice(0, s.console.length - CONSOLE_LINES);
 }
@@ -583,6 +627,7 @@ export function narrate(s: GameState, lines: [number, string][], holdAfter = 0):
 }
 
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {
+  s.stats.logLines = (s.stats.logLines ?? 0) + 1;
   s.log.push({ date: dateLabel(s.date), text, kind });
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
 }
@@ -779,7 +824,27 @@ function migrateV5(raw: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5];
+/**
+ * v6 → v7 (Stage 3): the monitors, drift, G6 shipments and the Committee's count are new fields
+ * (filled from the new-game defaults); a run in flight gets Stage 3's bookkeeping. A save already in
+ * Stage 3 (the shell) keeps going: its preset lacked `sage3Released`, which the shell's first release
+ * read as a second 4× release (stage3.md as-built deltas, row 8).
+ */
+function migrateV6(raw: Record<string, unknown>): Record<string, unknown> {
+  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}) };
+  for (const key of ['run', 'pending']) {
+    const run = training[key] as Record<string, unknown> | null | undefined;
+    if (run && typeof run === 'object') {
+      if (typeof run['probeFlags'] !== 'number') run['probeFlags'] = 0;
+    }
+  }
+  const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
+  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
+  if (stage >= 3 && flags['sage3Released'] === undefined) flags['sage3Released'] = 'public';
+  return { ...raw, training, flags };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

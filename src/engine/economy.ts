@@ -126,7 +126,8 @@ export const AI_RESEARCH_COEFF = 10;
 
 export function aiResearchRate(s: GameState): number {
   if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return 0;
-  const onResearch = copies(s) * s.researchAlloc;
+  // Stage 3: rogue copies work for nobody (stage3.md §2.4: the working copies).
+  const onResearch = workingCopies(s) * s.researchAlloc;
   return AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
 }
 
@@ -156,12 +157,24 @@ export function insightTrickle(s: GameState): number {
 /** Copies running: compute × copies per GPU, less what a training run diverts. */
 export function copies(s: GameState): number {
   // GPUs a run holds while it trains serve no tasks; the rest keep serving (owner feedback U1).
-  return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU);
+  return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU * copiesOnline(s));
 }
 
-/** Tasks per second per copy: `capability^0.8 × prompting boosts`. */
+/** Share of copies online: a breakout or a re-image takes machines offline for a while (Stage 3). */
+export function copiesOnline(s: GameState): number {
+  let m = 1;
+  for (const e of s.effects) if (e.copiesMult !== undefined) m *= e.copiesMult;
+  return m;
+}
+
+/** Stage 3: the copies that work for OpenMind (rogue copies sit on its GPUs and do nothing for it). */
+export function workingCopies(s: GameState): number {
+  return Math.max(0, copies(s) - Math.floor(s.rogueCopies ?? 0));
+}
+
+/** Tasks per second per copy: `capability^0.8 × prompting boosts` (Stage 3: the best model). */
 export function perCopyRate(s: GameState): number {
-  return Math.pow(s.capability, 0.8) * s.copyBoost;
+  return Math.pow(s.stage >= 3 ? bestCapability(s) : s.capability, 0.8) * s.copyBoost;
 }
 
 /** Alignment compute above the 1 % baseline comes out of the copies on tasks (stage2.md §2.11). */
@@ -169,13 +182,14 @@ export function alignExtra(s: GameState): number {
   return Math.max(0, s.alignShare - 0.01);
 }
 
-/** Share of copies on tasks: what the research slider and alignment compute leave. */
+/** Share of copies on tasks: what the research slider and alignment compute leave (Stage 3: and the monitors). */
 export function taskShare(s: GameState): number {
+  if (s.stage >= 3) return Math.max(0, 1 - s.researchAlloc - (s.monitorShare ?? 0));
   return Math.max(0, 1 - s.researchAlloc - alignExtra(s));
 }
 
 export function potentialTasksPerSec(s: GameState): number {
-  return copies(s) * taskShare(s) * perCopyRate(s);
+  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s);
 }
 
 /** Stage 1: copies stop when the power runs out. */
@@ -648,11 +662,34 @@ export const RESEARCH_ALLOC_MIN = 5;
 
 export function setResearchAlloc(s: GameState, pct: number): boolean {
   if (s.stage < 2 || !s.revealed['allocation'] || !Number.isFinite(pct)) return false;
-  // 5–50 %: some copies always help the researchers (at 0 % a lab past its human ceiling stalls).
-  const v = Math.min(50, Math.max(RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
+  // Stage 3: 0–70 %, and the sliders stop where tasks would fall under 10 % (stage3.md §2.2).
+  // Stage 2: 5–50 %, some copies always help the researchers (at 0 % a lab past its human ceiling stalls).
+  const s3 = s.stage >= 3;
+  const max = s3 ? Math.min(RESEARCH_ALLOC_MAX_S3, 90 - Math.round((s.monitorShare ?? 0) * 100)) : 50;
+  const v = Math.min(max, Math.max(s3 ? 0 : RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
   if (Math.abs(v - s.researchAlloc) < 1e-9) return false;
   s.researchAlloc = v;
   press(s, 'slider');
+  return true;
+}
+
+/** Stage 3: research may take up to 70 % of the copies, monitors up to 40 % (stage3.md §2.2). */
+export const RESEARCH_ALLOC_MAX_S3 = 70;
+export const MONITOR_SHARE_MAX = 40;
+
+/** The Monitors slider's floor: 15 % for good once an order has been conceded. */
+export function monitorFloor(s: GameState): number {
+  return s.flags['conceded'] === true ? 15 : 0;
+}
+
+/** The Monitors slider (Stage 3, after `Deploy Sage-2 as monitor`): 0–40 %, tasks never under 10 %. */
+export function setMonitorShare(s: GameState, pct: number): boolean {
+  if (s.stage < 3 || !s.revealed['monitors'] || !Number.isFinite(pct)) return false;
+  const max = Math.min(MONITOR_SHARE_MAX, 90 - Math.round(s.researchAlloc * 100));
+  const v = Math.min(max, Math.max(monitorFloor(s), Math.round(pct / 5) * 5)) / 100;
+  if (Math.abs(v - s.monitorShare) < 1e-9) return false;
+  s.monitorShare = v;
+  press(s, 'monitorSlider');
   return true;
 }
 

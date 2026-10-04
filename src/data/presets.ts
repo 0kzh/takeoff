@@ -306,6 +306,13 @@ function stage2End(seed: number): GameState {
     safetyRuns: 2,
     safetyReleasesS2: 2,
     superhumanReleased: true,
+    // Sage-3 shipped publicly at the exit (stage3.md as-built deltas row 8): the shell's first
+    // release must not pay Stage 2's −0.5 again.
+    sage3Released: 'public',
+    internalReleases: 0,
+    g6Preorder: false,
+    site2: false,
+    theftIgnored: false,
   });
   Object.assign(s.stats, {
     timePlayed: 3571,
@@ -319,6 +326,7 @@ function stage2End(seed: number): GameState {
     tasksPerSec: 4.89e7,
     peakTasksPerSec: 4.96e7,
     lastTasks: 9.79e9,
+    nextTaskMilestone: 1e10,
     taskHist: Array(10).fill(4.89e7),
     revHist: Array(10).fill(8.14e5),
     soldHist: Array(10).fill(4.96e7),
@@ -348,6 +356,33 @@ function stage3(seed: number): GameState {
   return s;
 }
 
+/**
+ * Stage 3 start (careless), stage3.md §1.1: the same exit after a Stage 2 played for speed — Al-Marsa
+ * signed (1,525 MW, Gulf exposure), the theft warning reviewed quietly, little alignment compute, the
+ * public and Washington cool. Set before the arrival so its clamps and lines are the arrival's own:
+ * true alignment 40 and whistleblow risk 2 after the retention penalty.
+ */
+function stage3Careless(seed: number): GameState {
+  const s = stage2End(seed);
+  Object.assign(s, {
+    alignmentTrue: 43,
+    alignmentApparent: 70,
+    gulfExposure: 1,
+    gulfSites: 1,
+    powerCapacityMW: 1525,
+    approval: -30,
+    govRelations: 45,
+    trust: 0,
+    lead: 1,
+    alignShare: 0.01,
+  });
+  Object.assign(s.flags, { whistleblowRisk: 1, theftIgnored: true, gulfSigned: true, gulfDeclined: false });
+  s.choicesMade = s.choicesMade.map((c) =>
+    c.id === 'c_gulf' ? { ...c, option: 'signed Al-Marsa' } : c.id === 'c_theft_warning' ? { ...c, option: 'reviewed quietly' } : c);
+  enterStage(s, 3);
+  return s;
+}
+
 export const PRESETS: Preset[] = [
   { stage: 1, label: 'Stage 1 start', ready: true, build: (seed) => newGame(seed) },
   { stage: 2, label: 'Stage 2 start', ready: true, build: stage2 },
@@ -356,6 +391,18 @@ export const PRESETS: Preset[] = [
   { stage: 5, label: 'Stage 5 start', ready: false, build: stage3 },
 ];
 
+/** Presets that are variants of a stage's start (`--preset 3c`, the dev overlay's second row). */
+export const EXTRA_PRESETS: Record<string, Preset> = {
+  '3c': { stage: 3, label: 'Stage 3 start (careless)', ready: true, build: stage3Careless },
+};
+
 export function presetFor(stage: number): Preset {
   return PRESETS[Math.min(PRESETS.length, Math.max(1, stage)) - 1]!;
+}
+
+/** `3`, `3c`, `4s`…: a stage number or a named variant. */
+export function presetByKey(key: string): Preset | undefined {
+  if (EXTRA_PRESETS[key]) return EXTRA_PRESETS[key];
+  const n = Number(key);
+  return Number.isFinite(n) && n >= 1 ? presetFor(n) : undefined;
 }

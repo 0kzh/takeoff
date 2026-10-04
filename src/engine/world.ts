@@ -3,7 +3,7 @@ import { rand, pick } from './rng.js';
 import { fmtNum, fmtInt, monthOf } from './format.js';
 import { bestCapability, copies, qualityMult, researchCap } from './economy.js';
 import { trainCost } from './training.js';
-import { s2 } from './infrastructure.js';
+import { s2, secondsOfRevenue } from './infrastructure.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { stageDef } from './stages.js';
 
@@ -309,6 +309,9 @@ export const SECURITY_NOTES: Record<number, string> = {
 export function sl3Cost(s: GameState): { funds: number; trust: number } {
   const until = s.flags['sl3DiscountUntil'];
   const discounted = typeof until === 'number' && s.stats.timePlayed < until;
+  // Stage 3 (as-built deltas row 15): a minute of revenue at the press and no Trust (there is none
+  // left); half that for five minutes after the theft, while the forensics team is in the building.
+  if (s.stage >= 3) return { funds: secondsOfRevenue(s, discounted ? 30 : 60), trust: 0 };
   return discounted ? { funds: s2(4000000), trust: 0 } : { funds: s2(20000000), trust: 3 };
 }
 
@@ -319,7 +322,9 @@ export function buySL3(s: GameState): boolean {
   pay(s, cost);
   s.securityLevel = 3;
   moveGov(s, 5);
-  moveLead(s, 1);
+  // Stage 3's lead runs on its own scale, [−2, 12] (stage3.md §2.10).
+  if (s.stage >= 3) s.lead = clamp(s.lead + 1, -2, 12);
+  else moveLead(s, 1);
   press(s, 'sl3');
   say(s, 'Weights air-gapped. Two people and two keys to move a checkpoint. SL3.');
   logNews(s, 'OpenMind\'s weights now live on machines with no network cable.');
