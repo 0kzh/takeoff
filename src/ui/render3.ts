@@ -127,7 +127,7 @@ export function renderResearch3(s: GameState): void {
   const max = String(RESEARCH_ALLOC_MAX_S3);
   if (slider.max !== max) {
     slider.max = max;
-    slider.min = '0';
+    slider.min = '5';
   }
   const rate = researchRate(s);
   // Before Continual learning the slider names the next run's wait; after it, the status line does.
@@ -221,9 +221,12 @@ export function renderTraining3(s: GameState): void {
     setText('stepSizeNote', v === 'small' ? 'gains ×0.6 · the team can look' : v === 'large' ? 'gains ×1.3 · the team likes it least' : 'gains as they come');
   }
   if (s.revealed['holdRuns']) {
+    // Held, the row says runs are stopped and how to release them (critic S3 round 1 §9 item 6).
     const held = s.flags['holdRuns'] === true;
-    setText('btn-hold', held ? 'held' : 'running');
+    setText('btn-hold', held ? 'held — release' : 'running');
     setOn('btn-hold', held);
+    setText('holdNote', held ? 'no run starts while it is held' : '');
+    setTitle('btn-hold', held ? 'Held: no run starts. Click to release it.' : 'Click to hold: no run starts until you release it. Research keeps coming.');
   }
 }
 
@@ -353,7 +356,7 @@ export function renderAlignment(s: GameState): void {
   setText('monitorGen', `Monitor: Sage-${monitorModel(s)}, two generations behind. Efficacy halved.`);
   // Each instrument's finding with the month it was read: readings from different months are not a
   // contradiction (critic S3 round 1 §9.9 item 7).
-  const when = (key: string) => (typeof s.flags[`${key}At`] === 'number' ? ` (${dateLabel(s.flags[`${key}At`] as number)})` : '');
+  const when = (key: string) => (typeof s.flags[`${key}At`] === 'number' ? ` (${dateLabel(s.flags[`${key}At`] as number).split(' ')[0]})` : '');
   setText('honeypotLine', `Honeypot${when('honeypot')}: ${s.flags['honeypot'] === 'clean' ? 'behaviour unchanged' : 'it behaves differently unwatched'}`);
   setText('noiseLine', `Noise test${when('noise')}: ${s.flags['noise'] === 'holding' ? 'holding back' : 'not holding back'}`);
   setText('successorLine', `Successor${when('successor')}: ${s.flags['successor'] === 'spec' ? 'aligned to the Spec' : 'aligned to Sage-4'}`);
@@ -396,6 +399,8 @@ function renderGrants(s: GameState): void {
     }
     if (list.children[i] !== b) list.insertBefore(b, list.children[i] ?? null);
     grantLabel(s, def, b);
+    // A grant is a title, a price and eight words: read in its first 45 s, then in its hover (the cards
+    // keep theirs while they can be bought; the grants' would put the Alignment panel over the budget).
     const fold = folded(s, `card:${def.id}`);
     if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
     const tip = fold ? def.description : '';

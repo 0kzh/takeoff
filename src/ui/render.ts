@@ -552,8 +552,10 @@ function renderProjects(s: GameState): void {
     // from its purses' income is not drawn; the stage goal and a wall's fix are excepted.
     const far = s.stage === 2 && !def.pinned && !def.rescue && def.urgent?.(s) !== true && cardEta(s, def.cost(s)) > 180;
     if (b.classList.contains('off') !== far) b.classList.toggle('off', far);
-    // From Stage 2 a card's description is read in its first 45 s on screen, then lives in its hover.
-    const fold = s.stage >= 2 && folded(s, `card:${def.id}`);
+    // From Stage 2 a card's description is read in its first 45 s on screen, then lives in its hover
+    // while the card is greyed; a card that can be bought shows it until it is (critic S3 round 1 §9
+    // item 8: the median card is bought after 152–176 s, and at 390 px there is no hover).
+    const fold = s.stage >= 2 && !def.canAfford(s) && folded(s, `card:${def.id}`);
     if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
     const tip = fold ? def.description : '';
     if (b.title !== tip) b.title = tip;

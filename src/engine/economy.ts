@@ -758,11 +758,12 @@ export const RESEARCH_ALLOC_MIN = 5;
 
 export function setResearchAlloc(s: GameState, pct: number): boolean {
   if (s.stage < 2 || !s.revealed['allocation'] || !Number.isFinite(pct)) return false;
-  // Stage 3: 0–70 %, and the sliders stop where tasks would fall under 10 % (stage3.md §2.2).
+  // Stage 3: 5–70 %, and the sliders stop where tasks would fall under 10 % (stage3.md §2.2); at 0 % the
+  // next run never came, under a clock that said so (critic S3 round 1 §9 item 6), so 5 % is the floor.
   // Stage 2: 5–50 %, some copies always help the researchers (at 0 % a lab past its human ceiling stalls).
   const s3 = s.stage >= 3;
   const max = s3 ? Math.min(RESEARCH_ALLOC_MAX_S3, 90 - Math.round((s.monitorShare ?? 0) * 100)) : 50;
-  const v = Math.min(max, Math.max(s3 ? 0 : RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
+  const v = Math.min(max, Math.max(RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
   if (Math.abs(v - s.researchAlloc) < 1e-9) return false;
   s.researchAlloc = v;
   press(s, 'slider');

@@ -1,5 +1,5 @@
 import type { GameState } from '../engine/state.js';
-import { choiceById, choiceOptionEnabled, choiceOptionVisible, optionCost, optionTooltip, optionLine, optionNeeds } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, choiceOptionVisible, optionCost, optionTooltip, optionLine, optionNeeds, defaultIndex } from '../engine/events.js';
 import { costLabel } from '../engine/projects.js';
 import { byId, make, setShown, setText } from './dom.js';
 
@@ -73,7 +73,7 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
       if (line && line.textContent !== want) line.textContent = want;
     }
   });
-  const fallback = def.options[def.defaultOption ?? def.options.length - 1];
+  const fallback = def.options[defaultIndex(s, def)];
   setText('modalTimer', def.timer && fallback ? `${Math.ceil(active.remaining)} s — then: ${fallback.label}` : '');
 }
 
@@ -87,11 +87,30 @@ function placeModal(): void {
   if (window.innerWidth <= 700 || !mid) {
     modal.style.left = '';
     modal.style.transform = '';
+    modal.style.top = '';
+    modal.style.maxHeight = '';
     return;
   }
   const left = Math.max(8, Math.min(window.innerWidth - modal.offsetWidth - 8, Math.round(mid.getBoundingClientRect().left)));
   modal.style.left = `${left}px`;
   modal.style.transform = 'none';
+  // Docked below any slider under it (critic S3 round 1 §9 item 8: the panel sat on both sliders for the
+  // length of every timed event, the one about monitors on the monitors slider).
+  const right = left + modal.offsetWidth;
+  let top = 120;
+  for (const el of Array.from(document.querySelectorAll<HTMLInputElement>('#columns input[type="range"]'))) {
+    if (!el.checkVisibility()) continue;
+    const b = el.getBoundingClientRect();
+    if (b.right > left && b.left < right && b.bottom > 0) top = Math.max(top, Math.round(b.bottom + 16));
+  }
+  // No room below them on this screen: beside the column instead, at the usual height.
+  if (top + Math.min(modal.offsetHeight, 300) > window.innerHeight) {
+    const beside = Math.min(window.innerWidth - modal.offsetWidth - 8, Math.round(mid.getBoundingClientRect().right + 12));
+    modal.style.left = `${Math.max(8, beside)}px`;
+    top = 120;
+  }
+  modal.style.top = `${top}px`;
+  modal.style.maxHeight = `calc(100vh - ${top + 20}px)`;
 }
 
 function takeFocus(): void {

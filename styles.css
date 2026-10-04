@@ -298,6 +298,11 @@ div.storeRow[data-reveal] { display: none; }
 div.storeRow[data-reveal].shown { display: flex; }
 .storeRow:hover .storeKey, .storeRow.tipOpen .storeKey { text-decoration: underline; }
 .storeVal { text-align: right; white-space: nowrap; }
+/* A long row wraps inside the box instead of running past it (critic S3 round 1 §9 item 8: the GPU row
+   ran 12 px past the box from the millionth GPU): the meter keeps its line, the figures move under it. */
+.storeRow { flex-wrap: wrap; }
+.storeRow .storeVal { white-space: normal; margin-left: auto; min-width: 0; }
+.storeRow .storeVal .meter { white-space: nowrap; }
 /* A row's words (`runs 5,000 GPUs`, `the halls are full · Build Datacenter`) sit under its figure. */
 #gpuFull, #powerFull { display: block; white-space: normal; line-height: 1.2; }
 #storeTip {
@@ -477,6 +482,9 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 }
 
 @media (max-width: 700px) {
+  /* Developments as a list that scrolls down, not a strip past the screen's edge (critic S3 round 1 §9 item 8). */
+  #logList { display: block; max-height: 260px; overflow-x: hidden; overflow-y: auto; }
+  .logEntry, .logMonth { flex: none; }
   /*
    * One column (stage2.md §6.4): the columns dissolve and the panels take their own order —
    * Tasks, Stores, Training, Projects, Business, Infrastructure, Research, the graph, then the

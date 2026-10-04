@@ -191,7 +191,7 @@ function renderResearch4(s: GameState): void {
   const slider = byId<HTMLInputElement>('allocSlider');
   if (slider.max !== '50') {
     slider.max = '50';
-    slider.min = '0';
+    slider.min = '5';
   }
   const rate = researchRate(s);
   setText('allocRate', ` · ${fmtShortNum(rate)} research/s`);
