@@ -70,6 +70,16 @@ export function render(s: GameState): void {
 
 function renderPower(s: GameState): void {
   setText('power', fmtInt(s.power));
+  const fraction = Math.max(0, Math.min(1, s.power / 1000));
+  const meter = byId('powerMeter');
+  let fill = meter.firstElementChild as HTMLElement | null;
+  if (!fill) {
+    fill = document.createElement('span');
+    fill.className = 'meterFill';
+    meter.append(fill);
+  }
+  setWidth(fill, fraction);
+  if (meter.classList.contains('warn') !== (fraction <= 0.2)) meter.classList.toggle('warn', fraction <= 0.2);
   setText('powerCost', fmtMoney(s.powerPrice));
   setDisabled('btn-buyPower', s.funds < s.powerPrice);
   setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
@@ -81,6 +91,7 @@ function renderBusiness(s: GameState): void {
   setText('revPerSec', fmtMoney(s.stats.revPerSec));
   setText('soldPerSec', fmtInt(s.stats.soldPerSec));
   setText('unbilled', fmtInt(s.unbilled));
+  showId('unbilledLine', s.unbilled > 0);
   setText('price', fmtMoney(s.price));
   setText('demand', fmtInt(demandPercent(s)));
   setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
@@ -88,6 +99,7 @@ function renderBusiness(s: GameState): void {
   setText('hype', fmtNum(s.hypeBoost, 2));
   setText('apiCustomers', fmtInt(s.apiCustomers));
   setText('hypeLevel', fmtInt(s.hypeLevel));
+  showId('hypeLevelLine', s.hypeLevel > 1);
   setText('marketingCost', fmtMoney(marketingCost(s)));
   setDisabled('btn-marketing', s.funds < marketingCost(s));
 }

@@ -401,7 +401,6 @@ export function blackout(s: GameState, delay: number, text: string): void {
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {
   s.log.push({ date: dateLabel(s.date), text, kind });
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
-  s.revealed['log'] = true;
 }
 
 export function counter(s: GameState, name: string): number {

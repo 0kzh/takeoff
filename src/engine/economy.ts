@@ -248,9 +248,14 @@ export function rentGpu(s: GameState): boolean {
   return true;
 }
 
+function notePriceMove(s: GameState): void {
+  if (typeof s.flags['firstPriceMoveAt'] !== 'number') s.flags['firstPriceMoveAt'] = s.stats.timePlayed;
+}
+
 export function lowerPrice(s: GameState): boolean {
   if (!s.revealed['pricing'] || s.price <= MIN_PRICE + 1e-9) return false;
   s.price = Math.max(MIN_PRICE, Math.round((s.price - 0.01) * 100) / 100);
+  notePriceMove(s);
   return true;
 }
 
@@ -258,6 +263,7 @@ export function raisePrice(s: GameState): boolean {
   if (!s.revealed['pricing']) return false;
   s.price = Math.round((s.price + 0.01) * 100) / 100;
   s.priceRaises += 1;
+  notePriceMove(s);
   return true;
 }
 
@@ -372,7 +378,7 @@ export function bottleneckMessages(s: GameState): void {
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
   const tps = s.stats.tasksPerSec;
   const sold = Math.max(0.5, s.stats.soldPerSec);
-  if (s.revealed['business'] && s.unbilled > 500 && s.unbilled > 30 * sold && tps > sold * 1.5 && ready('saturatedAt')) {
+  if (s.revealed['pricing'] && s.unbilled > 500 && s.unbilled > 30 * sold && tps > sold * 1.5 && ready('saturatedAt')) {
     s.flags['saturatedAt'] = now;
     say(s, 'Demand saturated — lower the price or market.');
   }
