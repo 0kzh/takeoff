@@ -105,7 +105,9 @@ export function shipmentLine(s: GameState): string {
   const q = s.shipments ?? [];
   if (q.length === 0) return s.flags['blockade'] === true ? `The Blockade — ${fmtClock(counter(s, 'blockadeLeft'))} until the strait reopens` : '';
   const head = q[0]!;
-  return `Shipment: ${fmtInt(head.gpus)} GPUs in ${fmtClock(Math.ceil(head.remaining))}${q.length > 1 ? ` · ${q.length - 1} waiting` : ''}`;
+  // Two on order at most: the second is named in words (the on-screen count, stage3.md §6.3).
+  const behind = q.length - 1;
+  return `Shipment: ${fmtInt(head.gpus)} GPUs in ${fmtClock(Math.ceil(head.remaining))}${behind === 1 ? ' · another behind it' : behind > 1 ? ` · ${behind} behind it` : ''}`;
 }
 
 /**
