@@ -304,7 +304,9 @@ try {
   check('Stage 4 arrival: the vote is narrated and the model runs the business', last.stage === 4 && last.console.some((l) => /The Committee votes 6–4/.test(l)) && last.console.some((l) => /The model runs the business now/.test(l)), last.console.join(' | '));
   await shot(page, '05-stage4-arrival');
   const s4panels = await page.evaluate(() => [...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.id));
-  check('Stage 4 arrival: the business, training, infrastructure and projects have left', !['panel-business', 'panel-training', 'panel-infrastructure', 'panel-projects'].some((id) => s4panels.includes(id)), s4panels.join(', '));
+  const carPlant = await page.evaluate(() => !!document.getElementById('proj-p_car_plant')?.checkVisibility());
+  // Stage 4 is built (stage4.md §1.1): the business, training and infrastructure leave; the car plant is the first card.
+  check('Stage 4 arrival: the business, training and infrastructure have left; the car plant is on screen', !['panel-business', 'panel-training', 'panel-infrastructure'].some((id) => s4panels.includes(id)) && carPlant, s4panels.join(', '));
   for (const id of ['panel-alignment', 'panel-geopolitics', 'panel-oversight', 'panel-security', 'panel-public']) check(`Stage 3 panel appears: ${id}`, panelsSeen.has(id));
   check('grants render in the Alignment panel\'s list', maxGrants >= 1, `up to ${maxGrants} on offer`);
   check('a grant prints its WARNING', [...consoleSeen].some((l) => l === 'WARNING: risk of value drift increased.'));

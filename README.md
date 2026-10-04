@@ -6,7 +6,8 @@ modals). You run OpenMind from July 2025: complete tasks, bill them, rent GPUs, 
 train and release Sage models, and watch the world react in the margin.
 
 Built so far: the full architecture, **Stage 1 — The Startup** (about 20–30 minutes),
-**Stage 2 — Scale** (about 36–44 minutes) and **Stage 3 — Takeoff** (about 42–50 minutes). Stage 1
+**Stage 2 — Scale** (about 36–44 minutes), **Stage 3 — Takeoff** (about 42–50 minutes) and
+**Stage 4 — Superintelligence** (about 30–40 minutes). Stage 1
 opens one mechanic at a time (one button, then funds, a GPU to save for, the power meter, Buy Power,
 the price, Marketing, Research), and every training run needs a number of GPUs: when the next one
 needs more than the cloud will rent, `First Datacenter` (1,000 GPUs of OpenMind's own at Abilene)
@@ -18,9 +19,16 @@ program, the player hands the lab to the model one autonomy grant at a time (eac
 `WARNING: risk of value drift increased.`), copies drift at a rate set by a true alignment nobody can
 see until the interpretability labs read it, older generations watch the new as monitors, and an
 Oversight Committee counts seats, incidents and a memo. The stage ends with the Committee's vote
-(`Slow down — the Steward program` or `Race — Sage-5`) into a clean Stage 4 shell, or with one of two
-endings (`The Pause`, `The Project`) and the end screen. The design lives in `docs/design.md` and the
-stage plan in `docs/stages.md` (where the two differ, `docs/stages.md` and the code win).
+(`Slow down — the Steward program` or `Race — Sage-5`), or with one of two endings (`The Pause`,
+`The Project`) and the end screen. In Stage 4 the model runs the business and money is retired: a
+fleet of Atlas robots mines, replicates and builds datacenters (Stores is the main panel), generations
+arrive by themselves and `Verify each generation` reads each one first, jobs go and a universal basic
+income comes, and a Concord treaty with Baiwen waits on verification, terms, a model that can write its
+enforcer and the treaty chips the fleet installs. Three crises read the hidden alignment number. The
+stage ends with the treaty signed, the fleet granted or taken (each into a narrated Stage 5 shell,
+with `alignedAtHandover` computed once), a halt (`The Pause`) or the Committee's order (`The
+Project`). The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the two
+differ, `docs/stages.md` and the code win).
 
 ## Running it
 
@@ -40,6 +48,7 @@ npm run watch        # in a second terminal: recompile on save
 | `node tools/verify/smoke.mjs` | Stage 1 browser smoke test (after `npm run build`; needs `npm install` in `tools/`) |
 | `node tools/verify/smoke-stage2.mjs` | Stage 2 browser smoke test, from the Stage 2 preset through the Stage 3 arrival |
 | `node tools/verify/smoke-stage3.mjs` | Stage 3 browser smoke test, from both Stage 3 presets through the vote, the Pause and the Project |
+| `node tools/verify/smoke-stage4.mjs` | Stage 4 browser smoke test, from the four Stage 4 presets to Stage 5 or an ending, the crises in each band, the Pause and the Project |
 
 The browser loads `dist/main.js` as a native ES module, which is why every TypeScript import uses
 an explicit `.js` extension. `dist/` is gitignored.
@@ -68,17 +77,21 @@ src/
     stage3.ts     Stage 3's coordinator: shipments, the loop, drift every tick; budget, world, Committee each second
     alignment.ts  drift, monitors, rogue copies, Re-image, the labs and the instruments
     world3.ts, oversight.ts, events3.ts   the lead, Anthrosoft, jobs and approval; the Committee, the order, the session, the vote; the scripted beats
-  data/           content tables: projects (projects3.ts for Stage 3), developments, choices (choices3.ts),
-                  crises, the Stage 2 and 3 content tables (stage2.ts, stage3.ts), flavor text, dev presets
+    stage4.ts     Stage 4's coordinator: the arrival on both branches, generations and Verify, the crises' bands, the fleet's request, the three exits and alignedAtHandover
+    fleet.ts, society.ts, treaty.ts   the robots and materials, jobs/approval/universal basic income/Housing, the treaty with its ceilings and the Committee's agenda
+  data/           content tables: projects (projects3.ts, projects4.ts), developments, choices (choices3.ts, choices4.ts),
+                  crises, the Stage 2, 3 and 4 content tables (stage2.ts, stage3.ts, stage4.ts), flavor text, dev presets
   ui/             the only code that touches the DOM
     render.ts     render(state): diffs text into spans, toggles visibility from state.revealed
     render3.ts    Stage 3's panels: allocation, the loop, shipments, Alignment and its grant list, Oversight, the end screen
+    render4.ts    Stage 4's layout and panels: Stores in the centre, the fleet, Society, the treaty, the agenda, the generation line
     meter.ts      meter(fraction): the ten-cell capacity bar `｢￭￭￭￭￭￭￭･･･｣` (DOM-free; boot width check)
     console.ts, log.ts, modal.ts, graph.ts, stores.ts, dev.ts, save.ts, dom.ts
   sim/
     policy.ts     the "reasonable player" bot and the other policies (pure; also drives the dev overlay's Autoplay)
     policy3.ts    the Stage 3 branch of every policy, with the decision variants
     stage3sim.ts  the Stage 3 tracker and its B1–B35 block
+    policy4.ts, stage4sim.ts   the Stage 4 branch of every policy; the Stage 4 tracker and its C-table block
     bot.ts        headless runner that prints a timeline
 ```
 
@@ -207,11 +220,13 @@ Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
   the median Stage 2 exit (bot from the Stage 2 preset, seeds 1–5: every number the median of the
   five, the records the median run's, seed 2 at 36:46 of 35:52–39:09) run through the Stage 3
   arrival; Stage 4 is a real Stage 3 exit: the bot plays the Stage 3 preset (median seed) until the
-  session is ready and the slow-down motion is brought. Stage 5 says `preset pending`.
+  session is ready and the slow-down motion is brought. Stage 5 is a real Stage 4 exit (`5c`).
 * **A second row** of named starts: `Stage 3 start (careless)` (the same exit after a Stage 2 played
   for speed: Al-Marsa signed, the theft warning ignored, little alignment compute, relations 45,
-  approval −30) and the four Stage 4 starts, slow and race from each Stage 3 preset (the careless
-  pair played by the first-timer).
+  approval −30), the four Stage 4 starts, slow and race from each Stage 3 preset (the careless
+  pair played by the first-timer; `?seed` seeds what Stage 4 rolls), and the two Stage 5 starts, real
+  Stage 4 exits: `5c` (`4s` played by the bot to the treaty, aligned) and `5s` (`4cr` played by the
+  first-timer to the fleet granted, misaligned).
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save, and seeds the
   presets; `?speed=0` boots paused (the smoke tests reload mid-game without real-time frames).
@@ -228,7 +243,7 @@ __game.tick(ms)         // advance game time (honours Autoplay), then render
 __game.projects         // { all, byId(id), visible() }
 __game.events           // { fireable, fire(id) }
 __game.presets          // preset table
-__game.loadPreset(n)    // 1–5, or a named start: '3c', '4s', '4r', '4cs', '4cr'
+__game.loadPreset(n)    // 1–5, or a named start: '3c', '4s', '4r', '4cs', '4cr', '5c', '5s'
 __game.setSpeed(n)      // 1, 5, 20 … (0 freezes the real-time loop; drive it with tick)
 __game.setAutoplay(on, policy?, holdTransition?, variant?)
                         // policy 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
@@ -243,13 +258,15 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 9; versions
-1–8 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 10; versions
+1–9 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
 Datacenter, and the opening's new flags are set; version 7 adds Stage 3's fields: shipments,
 autonomy, drift and rogue copies, interpretability, the Committee, the ending; version 8 the wallet
 rule's: the build fund and the build share and an armed Train, a Stage 2 standing pool moved into the
 build fund; version 9 `marketingBought`, the Marketing levels paid for, estimated for an older save
-from its level less the levels rounds, cards and events gave). The game saves every 15 s,
+from its level less the levels rounds, cards and events gave; version 10 Stage 4's `s4` block: the
+fleet, materials, society, the treaty and its agenda, the generation in progress, the crises' clocks,
+all as remaining seconds). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -269,6 +286,9 @@ npm run sim -- --minutes 60 --preset 2 --stop-at-stage 3   # Stage 2 from its pr
 npm run sim -- --minutes 60 --preset 2 --variant modals-worst --json
 npm run sim -- --minutes 90 --preset 3 --stop-at-stage 4   # Stage 3 from its preset (3c: the careless start)
 npm run sim -- --minutes 90 --preset 3 --policy racer --variant memo-bury
+npm run sim -- --minutes 60 --preset 4s --seed 3           # Stage 4 from its slow start (4r, 4cs, 4cr)
+npm run sim -- --minutes 60 --preset 4r --variant verify-off
+npm run sim -- --minutes 200 --seed 1                       # a new game through Stage 4
 ```
 
 `--preset N` starts from the dev overlay's Stage N preset (2: the Stage 1 median at First Datacenter;
@@ -285,7 +305,14 @@ fixed at N %), `share-25` / `share-50` / `share-75` (the bot's build share pinne
 `committee-counsel`, `blockade-escort` / `blockade-channel`, `modals-first` / `modals-last` /
 `modals-never`, `sendback-always`, `alignwork-0` … `alignwork-30` (the Alignment work share), `budget-0` … `budget-100`,
 `lobby-never`, `payments-0` / `payments-5`, `step-small` / `step-large`, `pause` (signs the Pause when
-offered) and `refuse` (refuses the Committee's order: The Project). Variants combine with commas.
+offered) and `refuse` (refuses the Committee's order: The Project). Stage 4 (`stage4.md` §9.2):
+`sez-open` / `sez-none`, `verify-off` (and refuses consolidation, which would lock Verify on),
+`grants-none` / `grants-all`, `negotiate`, `stance-concede` / `stance-hold`, `no-monitors`,
+`dividend-0` / `dividend-20`, `chips-25` / `chips-100`, `labs` / `pool`, `sign-anyway` / `walk-away`,
+`refuse-consolidation`, `grant-at-first-ask`, `refuse-fleet`, `draft-never` / `draft-30`,
+`housing-never`, `hearings-never`, `goal-people` / `goal-treaty`, `hold-25`, `alignwork-0` …
+`alignwork-30`, `pause` (signs the halt from 12:00), `refuse`, and three that expose the crises' bands:
+`nano-oversight-never`, `hardened-never`, `warning-never`. Variants combine with commas.
 
 Six policies play through `actions` only:
 
@@ -310,10 +337,12 @@ Six policies play through `actions` only:
   Infrastructure buttons up to fifteen times a check); its Infrastructure follows the main lot's
   reason (a lot when it is enabled, the cheapest power per MW at "no power", a hall at "no
   room"), as the harness does.
-* **racer** and **cautious** (Stage 3 only; the bot before it) — the reasonable bot with one
+* **racer** and **cautious** (Stages 3 and 4; the bot before them) — the reasonable bot with one
   temperament changed: the racer adopts neuralese, puts half the copies on research, buys no lab
   after the first and no alignment project, trains three Capability runs to one Efficiency and buries
-  the memo; the cautious player buys no grant.
+  the memo (in Stage 4: Verify off, open zones, the labs for Ashford, every grant including the
+  negotiation, no Monitors at scale, sign with Baiwen-4 anyway); the cautious player buys no grant (in
+  Stage 4 also no zones, 20 % Alignment work).
 
 In Stage 3 (`stage3.md` §9.1–§9.2) the bot answers each modal with the careful option (keep it in
 English, brief quarterly, enterprise only, report, concede) and brings Slow down when its best reading
@@ -378,6 +407,37 @@ purchase latency, text rates, the hands measures (nothing enabled, two or more t
 the longest capability step), the `REMOVED → GAINED` log, dead grey and repeated lines, and 5-minute
 marks (GPUs, power, tasks, revenue, capability, research, autonomy, true and measured alignment, the
 rogue share, lead, seats, approval, jobs). `--json` carries it as `s3`.
+
+In Stage 4 (`stage4.md` §9.1) the bot converts the car plant, keeps the fleet at 35 / 40 / 25 until the
+permit cap and 30 / 0 / 70 after it, puts half the fleet on treaty chips from 80 %, keeps Verify on,
+research at 40 % and monitors at 15 % or more, a tenth of research on Alignment work and a fifth on
+Draft clauses while the treaty is under its ceiling; universal basic income at 10 % once the approval
+target without it is −25 or less and 20 % at −55 (three points of hysteresis); Housing while the target
+is below 0 or the model pays a dividend to hold its line, after the cards and never out of what a wanted
+card needs; a hearing whenever the agenda is empty below eight seats; every card, agenda item and grant
+but the negotiation, Revoke and the goals; Fleet goal Growth, then Treaty from 60 %; Approval to hold 0;
+zones with a dividend, human trials, accept consolidation, demand a rebuild, `not yet` to the fleet;
+it signs the treaty at 100 %. The first-timer buys every card in screen order (not the halt or Revoke),
+takes every first option (open zones, the labs, sign with Baiwen-4 anyway, grant the fleet at its first
+request), never moves a slider, share or toggle, presses Housing when it can now and then, holds a
+hearing whenever the agenda is empty, and raises the dividend a step when an approval warning names it.
+
+The Stage 4 block prints the C1–C28 numbers of `stage4.md` §9.3 that a headless run can see: duration and
+how it ended, reveal and mechanic gaps (the verification wait, Concord-1's design and the crises'
+readings count as mechanics), generations and the intervals between their landings, capability,
+compute, robots and tasks per second at the exit, robots 30 s after the car plant, fleet presses,
+governor pulls and modals (distinct, and with the fleet's repeated ask), each crisis with its band and
+how long its mitigation had been on screen, the reveal → purchase latency, text rates, the hands
+measures, the `REMOVED → GAINED` log, dead grey, the exit state (`alignedAtHandover`, true and measured
+alignment, interpretability, monitors, autonomy, approval, jobs, seats, lead, the treaty, the dividend,
+verified generations, Baiwen-4, the zones, Ashford deaths) and 5-minute marks. `--json` carries it as
+`s4`.
+
+Stage 4 targets (seeds 1–5): 30–40 minutes for the bot from `4s` and `4r`, 22–45 for the first-timer
+from the careless starts, an exit or an ending in every run; 9–11 generations 170–200 s apart on
+average; capability 400–1,500× at the exit; no first-time reveal gap over 180 s; every crisis once,
+five minutes or more after its mitigation; `verify-off` from `4r` hands over misaligned and the bot from
+`4cr` aligned.
 
 Stage 3 targets (seeds 1–5 from both Stage 3 presets and from a new game): 40–50 minutes for the bot
 (the first-timer 40–55, the racer 28–38, the cautious player at most 64); no first-time reveal gap
@@ -468,3 +528,23 @@ the Pause (signed by the test when the bot is offered it) and the Project (the f
 the Choices list scrolling with it); 390 px without horizontal overflow; and no page errors. `--dump`
 prints what it counted.
 Screenshots go to `agent-tools/shots/stage3/`.
+
+```sh
+node tools/verify/smoke-stage4.mjs [--seed 1] [--dump]
+```
+
+Loads the Stage 4 starts and plays them. It checks the slow arrival (the narration: the vote, the
+business, money written off, the button, the robots, Steward-1; Business, Training, Infrastructure and
+Complete Task gone; Stores in the centre column with no funds row; the car plant marked needed; Verify
+on with its trade), the promised number (10,000 robots and rising 30 s after the car plant, the row
+against its permits), the fleet's beat (three sliders with their rates, the materials row); the bot from
+`4s` to Stage 5 by the treaty (the exit's narration, the Stage 5 shell) with save → reload
+mid-generation, mid-agenda and mid-crisis keeping their timers, numbers / controls / words at each
+5-minute mark (≤ 85 / 30 / 350, the arrival under the Stage 3 exit) and no `… first` hold string; the race
+arrival (`Sage-5 is … away. Nobody scheduled it.`, Verify off with its trade, one click turns it on) and
+the bot from `4r` to Stage 5; the first-timer from `4cs` and `4cr` to Stage 5 or an ending; the three
+crises at true alignment 75, 50 and 15 (pinned), each reading line in its band, and the fleet taken in
+the bottom band without hardened datacenters; The Pause (the bot's `pause` variant) and The Project
+(an order refused at relations 15), each end screen with Stage 4's rows and `People alive at the end`
+second; the `5c` and `5s` presets; 390 px without horizontal overflow; and no page errors. Screenshots
+go to `agent-tools/shots/stage4/`.

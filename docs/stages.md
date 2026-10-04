@@ -13,7 +13,7 @@ The player is never told which stage they are in and is never told how many ther
 | 1 | The Startup | Jul 2025 → Dec 2025 | 20–30 min | UP Stage 1 (manufacturing + business), opened like A Dark Room | **First Datacenter** at Abilene (1,000 GPUs of OpenMind's own) |
 | 2 | Scale | Jan 2026 → Dec 2026 | 35–45 min | UP Stage 2 (power management) + GDS loop | Reach **superhuman coder** (capability ≥ 4×) |
 | 3 | Takeoff | Jan 2027 → Oct 2027 | 40–50 min | The AI-2027 "race" chapters | Reach **superhuman AI researcher** (≥ 25×) **and** make the Committee choice |
-| 4 | Superintelligence | Nov 2027 → Dec 2028 | 30–40 min | AI-2027 branch chapters | Treaty signed, or autonomy granted, or nationalized |
+| 4 | Superintelligence | Nov 2027 → Dec 2028 | 30–40 min | AI-2027 branch chapters | **Sign the Concord treaty**, or grant the fleet autonomy, or the fleet is taken (or The Pause / The Project) |
 | 5 | Beyond | 2029 → 2030+ | 20–30 min | UP Stage 3 (space), compressed | Ending |
 
 Total: ~2.5–3.5 hours for a reasonable player; 4 hours for a cautious one.
@@ -233,42 +233,170 @@ with the vote, once a model has passed 25× and the session is two minutes old. 
 
 ## Stage 4 — Superintelligence
 
-Stage 4 is a negotiation. On the **slowdown** branch you build the **Steward** line, keep the old generations as monitors, verify Baiwen's model jointly, and work toward the **Concord treaty** while managing a robot economy and the people it displaces (**UBI**). On the **race** branch the same panels appear but the model is doing the negotiating; choices arrive with a single button. Either way, **Atlas** humanoid robots build datacenters, power plants and fabs faster than money ever did, **Special Economic Zones** remove the last friction, and three crises — the **Ashford strain**, **nanofabrication**, and **robots shutting down datacenters** — resolve very differently depending on true alignment.
+Stage 4 is a negotiation run on a robot economy. The model runs the business now, so money is retired
+on arrival (`Money is retired: $5.5B is written off. Nobody notices.`) and the Complete Task button
+goes. The player has a fleet of **Atlas** robots split between three jobs (mine, replicate, build; a
+fourth, treaty chips, late), a population losing its jobs (**universal basic income**, **Housing**),
+a **Concord treaty** that needs Baiwen-4 verified and a model able to write its enforcer, and
+generations that arrive by themselves (**Verify each generation** reads each one first). Three
+crises — the **Ashford strain**, the **nanofab line**, **robots at the breakers** — each read the
+hidden number in one of three bands. The stage ends when something is signed (the treaty, Stage 5;
+or a halt, *The Pause*), given away (the fleet granted) or taken (the fleet taken), or by the
+Committee's order (*The Project*).
 
-### What changes on screen
+*As built (`docs/specs/stage4.md` is the spec; the code wins where they differ).* Seeds 1–5, `npm run
+sim`: the reasonable bot signs the treaty at **31:00–32:55** from `4s`, **31:01–31:57** from `4r`,
+31:52–38:21 from `4cs`, 37:51–41:21 from `4cr` and 31:10–33:37 from a new game (whose bot takes the
+race branch); Baiwen-4 comes back aligned in about three runs of ten, and those runs are the shorter.
+The first-timer grants the fleet at its first request: 23:49–25:36 from every start. The racer takes
+the negotiation grant and signs at 26:10–26:38; the cautious player (no grants) at 33:53–35:11. The bot
+sees 9–11 generations (mean 175–211 s apart), exits at 575–833× with 3.0–5.4 × 10⁹ GPU-equivalents,
+4.7M robots and 0.9–2.6 × 10¹³ tasks a second; every crisis fires, at least 393 s after its mitigation
+showed. No ending fires that a policy did not choose.
 
-*Removed:* Business, Training (auto), Hire/Expand.
-*Added:* **Robots**, **Society** (jobs, UBI, approval), **Treaty** (joint verification, terms), **Monitors**.
+* *Arrival.* Slow: Sage-4 is switched off and **Steward-1** runs at 0.6 of it (15×), thoughts in English,
+  Verify on. Race: the next model is **Sage-5** (`Sage-5 is 2:35 away. Nobody scheduled it.`), Verify
+  off if `Stop asking for sign-off` was kept. Business, Training, Infrastructure and Complete Task leave;
+  **Stores is the main panel** (centre column); Payments become universal basic income in a line
+  (levels 1–2 → 5 %, 3–4 → 10 %, 5 → 20 %); the approval formula is re-based so the target starts where
+  Stage 3 ended; floors are narrated (`A new session sits. Relations start again at 30 (from 12).`).
+* *Generations.* `G(c) = 95 s of the arrival's research potential × (c / c₀)^2.5`, started the moment
+  research covers it; 50 s to train, plus Verify's read (40 s; 20 s at measured ≥ 80; 10 s after the last
+  sign-off); +44 % a generation slow, +42 % race; within 3 % under 100×, 250× or 1,000× it is called the
+  rung. Names: Steward-1.1 … Steward-2 at 100×, Steward-3 at 250×, Steward-4 at 1,000×; Sage-5, then
+  Sage-6 at 100×, Sage-7 at 250×. A verified generation: true alignment +5 slow / +2 race, measured +3
+  and a fifth of what it trails by, lead −0.15. One nobody read: true −2 / −4 / −6 slow, −4 / −8 / −12
+  race (below 100×, to 250×, beyond), lead +0.1; under 55 measured it also costs relations 2.
+* *The fleet.* `Convert a car plant` (free, needed) gives 10,000 robots; 30 s later the three sliders
+  arrive with what each share makes (`· +12,400 t/s`, `· +52 robots/s, doubling in 2:20`, `· +14,000
+  GPUs/s`, or `at the permit cap` / `out of materials`). Mining 0.5 t/s a robot, a robot 40 t
+  (0.0065 a second a replicating robot), a GPU-equivalent 0.02 t and a kilowatt (0.5 a second a
+  builder). Atlas Mk II ×1.5 and the fleet grant ×1.25 on replication; the zones (×2 / ×1.5) and the
+  Growth goal (×1.25) on output; Deep mines ×2 and Nanofabrication ×3 mining; Robot-built fabs ×2 and
+  Nanofabrication ×2 building. Permits: 400,000 until *Special Economic Zones*; then 1.2M, 4.8M or no
+  cap (open zones slow toward 30M). Robots double in about 2.3 minutes and reach 4.7M at 22–25 minutes.
+* *Society.* Jobs follow half the best model (`3,400 × (1 − e^(−cap/700))` million); approval moves
+  0.1 a second toward a target the dividend (+15 / +30 / +50 at 5 / 10 / 20 %), Cure portfolio (+10),
+  the Ashford strain and its cure, the zones, the transition grant (+10) and Housing (+0.3 a unit for
+  good; 3 s of mining, ×1.2 a unit, relaxing a step every 25 s) set. Riots at −40, sabotage at −55,
+  the treaty stalls at −60.
+* *The treaty.* `Treaty talks` (the Committee's agenda, 1:00–1:30) opens it at 10–35 %. One point every
+  27 s while five seats sit with OpenMind and approval is above −60; Baiwen-4 ahead ×1.25, more than three
+  months behind ×0.75; `Draft clauses` (0 / 10 / 20 / 30 % of research) +0.2 points per 2 % of a
+  generation; ceilings 40 (50 with Inspectors) until Baiwen-4 is verified (3:00, then *What Baiwen-4
+  Wants*: aligned in three runs of ten), 60 until `Treaty terms`, 80 until **Design Concord-1** (a
+  250× model, 150× with the negotiation grant; 1:30 to write), then the fleet installs **treaty chips**
+  (half the fleet 5:00; `Treaty chip lines` ×1.25). `Sign the Concord treaty` is on screen, greyed, from
+  the talks; `Sign a halt instead` from 12:00.
+* *The Committee.* The agenda takes one item at a time (talks, terms, Nationalisation-proofing, the
+  Spec; 60 s at eight seats); `Hold a hearing` (60 s, relations +2, +4 at approval ≥ 0) from the agenda,
+  or from the arrival below five seats. *Consolidation* (compute ×1.5, relations +10, Verify locked on);
+  the order's second answer is now **hand over the keys** (Verify forced on, monitors 25 %, the newest
+  grant revoked).
+* *Grants hand over a selector* (G28): `Let it assign the fleet` → **Fleet goal: Growth / People / Treaty**;
+  `Let it run the transition` → **Approval to hold: −25 / 0 / +25** (it sets the dividend; the cost is
+  printed); `Let it negotiate with Baiwen-4` → **Negotiator's stance** (treaty ×2 / ×3 / ×4).
+  `Revoke a grant` gives the newest back. On the race branch three cards arrive with one button and name
+  the grant that took the other.
+* *Exits.* The treaty (Stage 5, `flags.exitKind = 'treaty'`), the fleet granted (one click, from the
+  fleet's request at 250×), the fleet taken (the shutdown finds true alignment under 40, autonomy at 80
+  and no hardened datacenters). `flags.alignedAtHandover` is computed once, at the exit: true alignment
+  ≥ 60, or ≥ 40 with interpretability 4 and monitors at 15 %. Stage 5 is a narrated shell (Space and
+  Stores) until its build.
+* *Load.* At the five-minute marks the bot's screen holds 54–73 numbers, 166–253 words and 13–21 controls
+  (the arrival 40 / 181 / 9, under the Stage 3 exit); band edges print only near; Stage 3's four readings
+  leave with the vote.
+
+### What is on screen
+
+*Arrival (Nov 2027), slow:* `The Committee votes 6–4 to slow down.` · `Sage-4 is switched off. Sage-3 is
+brought back to finish the work.` · `The model runs the business now. It is better at it.` · `Money is
+retired: $5.5B is written off. Nobody notices.` · `The Complete Task button is gone. Tasks Completed is
+not.` · `New on the board: Robots. 10,000 Atlas-class units are waiting at a car plant in Ohio.` ·
+`Payments become a universal basic income: level 4 → 10% of output.` · `Steward-1 is slower than Sage-4
+was: 15.0×. It thinks in English.` · `Counter-intelligence is the Committee's now.`
+
+*Reveal order (the bot from `4s`, seed 3):* the car plant [0:00] → the fleet's sliders and materials
+[0:30] → Atlas Mk II [1:00] → Society and Housing [2:00] → Deep mines [2:30] → `Let it assign the fleet`
+and Fleet goal [3:30–3:46] → the agenda, hearings, `Treaty talks` [4:30] → early warning [5:00] → the
+Treaty panel, Draft clauses, the treaty's goal [5:30] → Cure portfolio, Robot-built fabs, Inspectors
+[6:30–8:10] → *Special Economic Zones* [9:00] → Monitors at scale [9:30] → `Let it run the transition`
+and Approval to hold [10:00] → Verify Baiwen-4 [11:00] → *The Ashford Strain* [11:30] → the halt [12:00]
+→ *Consolidation* [14:00] → *What Baiwen-4 Wants* [16:30] → the negotiation grant [17:00] → Hardened
+datacenters, Nanofabrication and its oversight [18:00–18:43] → the breakers [19:32] → Revoke a grant
+[20:00] → proofing, the appetite line, the Spec, Treaty terms [21:00–22:08] → Design Concord-1 and *The
+Fleet Asks* [24:22] → the nanofab reading [26:41] → Launch study [27:00] → treaty chips [28:17] → the
+last sign-off [29:27] → the shutdown's reading [30:11] → Treaty chip lines [30:17] → *The Concord
+Treaty* [32:52].
 
 ### Resources introduced
 
-Robots (Atlas units) · Robot-built compute (grows without funds) · UBI (−revenue, +approval) · Treaty progress.
+Robots and permits · materials (tonnes) · robot-built GPU-equivalents and their power · universal
+basic income · Housing · treaty progress and its ceilings · treaty chips · the Committee's agenda ·
+generations and Verify.
 
 ### Developments (world)
 
-`Nov 2027 — Baiwen-4 is believed to be as capable as Sage-5. Nobody is sure.` · `Jan 2028 — The first Atlas factory makes an Atlas factory.` · `Mar 2028 — Special Economic Zones: no permits, no unions, no inspectors.` · `Jun 2028 — Unemployment 23 %. Approval depends on the cheque.` · `Sep 2028 — The two models have been talking. The transcript is 2 million tokens.` · `Dec 2028 — A treaty is proposed. Humans are listed as a party.`
+`Baiwen-4 is believed to be as capable as Steward-1. Nobody is sure.` · `The first Atlas factory makes
+an Atlas factory.` · `A tenth of America's car plants now make robots. A hundred thousand a month.` ·
+`Unemployment passes a fifth. Approval depends on the cheque.` · `The Ashford strain is confirmed in four
+countries. It was built, not born.` · `The two models have been talking. The transcript is 2 million
+tokens.` · `Both parties promise a universal basic income. Neither says who is paying.` · `Delegations
+arrive in Reykjavík.` · `A treaty is proposed. Humans are listed as a party.`
 
 ### Crises
 
-The Ashford strain · Nanobots · Robots shut down all datacenters · Nationalization (still possible if gov < 20).
+Each resolves in one of three bands of true alignment (60 or more, 40–59, under 40) and leaves a reading
+line in Alignment; each mitigation is on screen at least five minutes before. **The Ashford strain** (from
+10:00): cure in 1:00 / 2:30 / 4:00 (half with early warning; the labs give the fastest), 40,000 /
+0.9M / 6M dead (a tenth with early warning). **The nanofab line** (5:30 after Nanofabrication):
+`It reported itself.` / contained in 2:00 / nothing printed for two minutes while materials drain, then
+robots −20 % and a major incident; Nanofab oversight puts it in the top band. **Robots at the breakers**
+(treaty 85 %, 400× or December, five minutes after Hardened datacenters showed): off 45 s / 45 s with
+an objection / back in 5 s and autonomy +20, the fleet taken at 80 — or `It tried the breakers. They
+are in human hands.` with the datacenters hardened. Riots and sabotage (approval −40 / −55) and the
+order carry over.
 
 ### Choices
 
-*Grant autonomy over the robot fleet.* · *UBI vs SEZ growth.* · *Let the model negotiate with Baiwen-4 directly.* · *Sign the Concord treaty.* · *Share weights with the government.*
+*Special Economic Zones* (open, with a dividend, none) · *The Ashford Strain* (the labs, human trials,
+pool data with Beijing) · *Consolidation* (accept, ask for time, refuse) · *What Baiwen-4 Wants* (sign
+with it anyway, demand a rebuild, walk away; one button when it is aligned) · *The Fleet Asks* (grant,
+not yet — it asks again in 3:00 — refuse for good) · *The Concord Treaty* · *A Halt Instead* · *The
+Committee Drafts an Order* · on the race branch *The Schedule*, *It Has Been Talking to Baiwen-4* and
+*The Fleet, Reassigned*, one button each.
 
 ### Projects (Stage 4)
 
-Atlas robot factory · Robot-built datacenters · Special Economic Zones · UBI · Cure portfolio · Monitors at scale · Verify Baiwen-4 · Concord treaty · Hardened datacenters · Pandemic early warning · Nanofab oversight · Nationalization-proofing · Domestic fab (built).
+Convert a car plant · Atlas Mk II · Deep mines · Pandemic early warning · Cure portfolio · Robot-built
+fabs · Inspectors at every datacenter · Monitors at scale · Verify Baiwen-4 · Nanofabrication ·
+Nanofab oversight · Hardened datacenters · Revoke a grant · Launch study · Design Concord-1 · Treaty
+chip lines · The last sign-off · the agenda (Treaty talks, Treaty terms, Nationalisation-proofing,
+Write the Spec with the Committee) · the grants (Let it assign the fleet, Let it run the transition,
+Let it negotiate with Baiwen-4) · the goals (Sign the Concord treaty, Sign a halt instead, Grant the
+fleet autonomy) · carried: Interpretability lab V, Lock shared memory, Deploy Sage-3 as monitor.
 
 ### Stage 4 ends
 
-with the **Concord treaty** (aligned branch → Stage 5 as partners), with **autonomy granted** to a model whose true alignment is below 50 (→ Stage 5 as spectators), or with **nationalization** (ending: *The Project*). The date snaps to **Jan 2029**.
+with `Sign the Concord treaty` at 100 % (`The Concord treaty is signed in Reykjavík.` · `Concord-1 goes
+live on every chip on both sides of the Pacific.` · `There is one treaty now, and one enforcer.` · `The
+first orbital datacenter reports in.`), with `Grant the fleet autonomy` (`The fleet is its own.`), or with
+the fleet taken at the shutdown (`The fleet no longer takes instructions. It is polite about it.`); the
+narration is the same whichever way `alignedAtHandover` falls. Two endings can come first: **The Pause**
+(`Sign a halt instead`: `The halt is signed. Nothing above …× is trained anywhere.`) and **The Project**
+(an order refused). Their end screens add Stage 4's rows: robots built, peak compute, universal basic
+income paid, Ashford deaths, the treaty, verified generations, the fleet; every ending prints `People
+alive at the end` second from the top.
 
 ### Strategy
 
-* UBI early. Approval under −60 makes the treaty impossible.
-* Verify Baiwen-4 before signing anything. If verification fails and you sign anyway, Stage 5 is short.
-* On the race branch there is still a way out: if interpretability ≥ 3 and you kept monitors, *Monitors at scale* can catch the model before autonomy. It costs 40 % of compute.
+* Keep Verify on. On the race branch it is the difference between handing over a model at 100 and one
+  at 25 (`4r` with Verify off), and accepting consolidation locks it on anyway.
+* The universal basic income is the cheapest approval; Housing is for spare materials. Approval at −60
+  stops the treaty.
+* Demand the rebuild if Baiwen-4 is not aligned: it costs two minutes and the treaty stays honest.
+* Hardened datacenters before the shutdown, always.
+* Half the fleet on chips once Concord-1 is designed; a player who leaves the chips at zero waits at 80 %.
 
 ---
 
