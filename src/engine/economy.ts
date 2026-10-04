@@ -1,9 +1,9 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, press, isBought } from './state.js';
+import { GameState, say, canPay, pay, press, isBought, bump } from './state.js';
 import { trainingShare } from './training.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
-import { sellS2, S2_MIN_PRICE, S2_PRICE_STEP, fmtPrice, autoTarget } from './market.js';
+import { sellS2 } from './market.js';
 
 export {
   activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
@@ -21,21 +21,32 @@ export const MARKET_START = 1.55;
 export const MARKET_FULL = 3;
 export const MARKET_GROWTH_TASKS = 1500;
 
-/** Each Custom model contract adds recurring revenue; later contracts pay more. */
-export const CONTRACT_BASE = 25;
-export const CONTRACT_GROWTH = 1.3;
+/**
+ * Each Custom model contract is a customer that buys at your price (critic round 2 §5): it adds
+ * `15 % × 1.15^k` to demand, so price, hype, marketing and incidents act on it like on the rest of
+ * the market. Stage 2 freezes what the contracts were paying into a fixed rate.
+ */
+export const CONTRACT_WEIGHT = 0.25;
+export const CONTRACT_WEIGHT_GROWTH = 1.15;
+/** Seconds an incident pauses every contract customer ("The bank pauses its pilot."). */
+export const CONTRACT_PAUSE_SECONDS = 90;
 
 /** The Abilene interconnect queue, in seconds. */
-export const INTERCONNECT_SECONDS = 210;
+export const INTERCONNECT_SECONDS = 240;
 
 // ---------- costs ----------
 
-/** The cloud provider rents OpenMind only so many Nimbus G4s: 80, or 100 with the Bulk GPU lease. */
+/**
+ * The cloud provider rents OpenMind only so many Nimbus G4s: 80, and 20 more with each of the Bulk
+ * GPU lease, the Second cloud region and Reserved capacity (research-priced steps from ~10 to ~24
+ * minutes: renting stays a live decision until Break ground).
+ */
 export const RENT_QUOTA = 80;
-export const RENT_QUOTA_LEASED = 100;
+export const QUOTA_STEP = 20;
+const QUOTA_CARDS = ['p_compute_deal', 'p_region', 'p_reserved'];
 
 export function rentQuota(s: GameState): number {
-  return s.projects['p_compute_deal']?.bought ? RENT_QUOTA_LEASED : RENT_QUOTA;
+  return RENT_QUOTA + QUOTA_STEP * QUOTA_CARDS.filter((id) => (s.projects[id]?.bought ?? 0) > 0).length;
 }
 
 /** Every G4 the provider will rent is rented: owning compute (Abilene) is the way past it. */
@@ -205,9 +216,14 @@ export function marketSize(s: GameState): number {
   return MARKET_START + (MARKET_FULL - MARKET_START) * grown;
 }
 
-/** `demand = (0.8 / price) × 1.1^(hype−1) × qualityMult × hypeBoost(t) × boosts`; shown ×10 as a percent. */
+/** `demand = (0.8 / price) × 1.1^(hype−1) × qualityMult × hypeBoost(t) × boosts × contracts`; shown ×10 as a percent. */
 export function demand(s: GameState): number {
-  return (0.8 / s.price) * marketingMult(s) * qualityMult(s) * s.hypeBoost * marketSize(s) * s.demandMult * effectsDemandMult(s);
+  return demandAt(s, s.price);
+}
+
+/** Demand at price `p`, everything else as it is now. */
+export function demandAt(s: GameState, p: number): number {
+  return (0.8 / p) * marketingMult(s) * qualityMult(s) * s.hypeBoost * marketSize(s) * s.demandMult * effectsDemandMult(s) * (1 + contractDemand(s));
 }
 
 export function demandPercent(s: GameState): number {
@@ -218,6 +234,28 @@ export function demandPercent(s: GameState): number {
 export function expectedSalesPerSec(s: GameState): number {
   const d = demand(s);
   return 10 * Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
+}
+
+/** Expected sales at price `p` (no floor: smooth, for AUTO's search). */
+function smoothSalesAt(s: GameState, p: number): number {
+  const d = demandAt(s, p);
+  return 10 * Math.min(1, d / 100) * 0.7 * Math.pow(d, 1.15);
+}
+
+/**
+ * Stage 1 AUTO (Dynamic pricing): the price at which the market takes what the copies make plus a
+ * thirtieth of the backlog. Sales fall with price, so a bisection on log-price finds it.
+ */
+export function autoTarget1(s: GameState): number {
+  const want = Math.max(0.5, productionPerSec(s) + s.unbilled / 30);
+  let lo = Math.log(MIN_PRICE);
+  let hi = Math.log(50);
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (smoothSalesAt(s, Math.exp(mid)) > want) lo = mid;
+    else hi = mid;
+  }
+  return Math.max(MIN_PRICE, Math.exp((lo + hi) / 2));
 }
 
 /** The price is absurd when practically nobody buys: under half a task a second, or 2% of output. */
@@ -305,38 +343,67 @@ export function sell(s: GameState, dt: number = TICK_SECONDS): void {
   bill(s, n);
 }
 
+/** Every cent is kept: fractions of a cent accumulate (UP floors per sale; 485 tasks at $0.01 paid $0.38). */
 function bill(s: GameState, n: number): void {
-  const revenue = Math.floor(n * s.price * 1000) / 1000;
+  const revenue = n * s.price;
   s.unbilled -= n;
   s.tasksSold += n;
-  s.funds = Math.floor((s.funds + revenue) * 100) / 100;
+  s.funds += revenue;
   s.totalRevenue += revenue;
   s.stats.secRevenue += revenue;
   s.stats.secSold += n;
 }
 
-// ---------- contracts (recurring revenue) ----------
+// ---------- contracts (customers who buy at your price) ----------
 
-/** Dollars per second from contracts: Stage 1's growing rate, frozen at the Stage 2 arrival. */
+/** The contract customers' weight before pauses: Σ `15 % × 1.15^k`, × renewals and the lasting modal terms. */
+export function contractWeight(s: GameState): number {
+  const n = s.projects['p_contract']?.bought ?? 0;
+  let w = 0;
+  for (let k = 0; k < n; k++) w += CONTRACT_WEIGHT * Math.pow(CONTRACT_WEIGHT_GROWTH, k);
+  return w * contractTerms(s);
+}
+
+/** Renewal season ×1.25; a bridge observer ×0.9; a price cut ×0.8 (flags set by projects and choices). */
+export function contractTerms(s: GameState): number {
+  const num = (k: string) => (typeof s.flags[k] === 'number' ? (s.flags[k] as number) : 1);
+  return num('contractMult') * num('contractTermsMult');
+}
+
+/** An incident pauses the contract customers for a minute. */
+export function contractsPaused(s: GameState): boolean {
+  const until = s.flags['contractsPausedUntil'];
+  return typeof until === 'number' && s.stats.timePlayed < until;
+}
+
+/** Stage 1: the contract customers' share of demand (0 while paused; Stage 2 pays a frozen rate instead). */
+export function contractDemand(s: GameState): number {
+  if (s.stage >= 2 || contractsPaused(s)) return 0;
+  return contractWeight(s);
+}
+
+/** What one more contract would add to demand. */
+export function nextContractWeight(s: GameState): number {
+  return CONTRACT_WEIGHT * Math.pow(CONTRACT_WEIGHT_GROWTH, s.projects['p_contract']?.bought ?? 0) * contractTerms(s);
+}
+
+/** Dollars per second from contracts: Stage 1's share of billing, frozen at the Stage 2 arrival. */
 export function contractRate(s: GameState): number {
   return s.stage >= 2 ? s.contractIncome : contractRateStage1(s);
 }
 
-/** Stage 1: `25 × 1.3^k` for the k-th Custom model contract, × the renewal bonus. */
+/** Stage 1: the part of billed revenue the contract customers pay (their share of demand). */
 export function contractRateStage1(s: GameState): number {
-  const n = s.projects['p_contract']?.bought ?? 0;
-  let r = 0;
-  for (let k = 0; k < n; k++) r += CONTRACT_BASE * Math.pow(CONTRACT_GROWTH, k);
-  const mult = s.flags['contractMult'];
-  return r * (typeof mult === 'number' ? mult : 1);
+  const c = s.stage >= 2 ? contractWeight(s) : contractDemand(s);
+  return c > 0 ? (s.stats.revPerSec * c) / (1 + c) : 0;
 }
 
 /** Stage 2: the job-transition fund's share of revenue while it is on. */
 export const JOB_FUND_SHARE = 0.02;
 
-/** Recurring income every tick: contracts (frozen at the Stage 2 arrival), less the job fund. */
+/** Recurring income every tick: Stage 2's frozen contracts, less the job fund (Stage 1's contracts bill as tasks). */
 export function payContracts(s: GameState, dt: number): void {
-  const rate = contractRate(s);
+  const rate = s.stage >= 2 ? s.contractIncome : 0;
   if (rate > 0) {
     const amount = rate * dt;
     s.funds = Math.round((s.funds + amount) * 100) / 100;
@@ -415,8 +482,9 @@ export function trustCheck(s: GameState): void {
   }
 }
 
-/** Milestone lines say what the Trust is for. */
+/** Milestone lines say what the Trust is for (or that it only paid back what the lab owed). */
 export function trustRewardLine(s: GameState): string {
+  if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
   if (s.stage >= 2) return s.revealed['expandLab'] ? 'Trust +1. Expand the lab, or save it.' : 'Trust +1.';
   return s.revealed['expandLab'] ? 'Trust +1. Hire a researcher or expand the lab.' : 'Trust +1. Hire a researcher.';
 }
@@ -471,40 +539,40 @@ export function rentGpu(s: GameState): boolean {
   return true;
 }
 
-/** Stage 1: a cent at a time. Stage 2: 5 % of the price (floor $0.001), and only with AUTO off. */
+/** Below $0.20 the price moves a cent at a time; above, 5 % (critic round 2 §6.4). */
+export const PRICE_STEP_FROM = 0.2;
+export const PRICE_STEP = 0.05;
+
+export function priceUp(p: number): number {
+  if (p < PRICE_STEP_FROM - 1e-9) return Math.round((p + 0.01) * 100) / 100;
+  return Math.max(Math.round((p + 0.01) * 100) / 100, Math.round(p * (1 + PRICE_STEP) * 100) / 100);
+}
+
+export function priceDown(p: number): number {
+  if (p <= PRICE_STEP_FROM + 1e-9) return Math.max(MIN_PRICE, Math.round((p - 0.01) * 100) / 100);
+  return Math.max(PRICE_STEP_FROM, Math.min(Math.round((p - 0.01) * 100) / 100, Math.round((p / (1 + PRICE_STEP)) * 100) / 100));
+}
+
+/** Stage 1 only, and only by hand (Dynamic pricing hands the price to finance; Stage 2 prices itself). */
 export function lowerPrice(s: GameState): boolean {
-  if (!s.revealed['business']) return false;
-  if (s.stage >= 2) {
-    if (s.autoPrice || s.price <= S2_MIN_PRICE + 1e-9) return false;
-    s.price = Math.max(S2_MIN_PRICE, Math.round(s.price * (1 - S2_PRICE_STEP) * 1000) / 1000);
-    press(s, 'price');
-    return true;
-  }
+  if (!s.revealed['business'] || s.stage >= 2 || s.autoPrice) return false;
   if (s.price <= MIN_PRICE + 1e-9) return false;
-  s.price = Math.max(MIN_PRICE, Math.round((s.price - 0.01) * 100) / 100);
+  s.price = priceDown(s.price);
+  bump(s, 'priceMoves');
   return true;
 }
 
 export function raisePrice(s: GameState): boolean {
-  if (!s.revealed['business']) return false;
-  if (s.stage >= 2) {
-    if (s.autoPrice) return false;
-    s.price = Math.max(S2_MIN_PRICE + 0.001, Math.round(s.price * (1 + S2_PRICE_STEP) * 1000) / 1000);
-    s.priceRaises += 1;
-    press(s, 'price');
-    return true;
-  }
-  s.price = Math.round((s.price + 0.01) * 100) / 100;
+  if (!s.revealed['business'] || s.stage >= 2 || s.autoPrice) return false;
+  s.price = priceUp(s.price);
   s.priceRaises += 1;
+  bump(s, 'priceMoves');
   return true;
 }
 
-/** Pricing AUTO (Stage 2): on, the price follows the market; off, lower/raise come back. */
-export function toggleAutoPrice(s: GameState): boolean {
-  if (s.stage < 2 || !s.revealed['autoPrice']) return false;
-  s.autoPrice = !s.autoPrice;
-  press(s, 'toggleAuto');
-  return true;
+/** Kept for old saves and scripts: pricing is never toggled by hand any more (AUTO is a project, then the stage). */
+export function toggleAutoPrice(_s: GameState): boolean {
+  return false;
 }
 
 export function buyMarketing(s: GameState): boolean {
@@ -602,45 +670,28 @@ export function decayEffects(s: GameState, dt: number): void {
 
 /**
  * The console names the bottleneck when it bites (each at most once per 90 s), and names the
- * fix: an absurd price is called out by its value; a backlog points at the price or marketing.
+ * fix: an absurd price is called out with what it costs; a backlog points at the price or marketing.
+ * Stage 2 prices itself, so nothing here speaks there.
  */
-/** Seconds of a growing backlog under a manual price before finance turns AUTO back on. */
-export const AUTO_RESCUE_SECONDS = 300;
-
 export function bottleneckMessages(s: GameState): void {
   const now = s.stats.timePlayed;
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
-  if (s.stage >= 2) {
-    // Manual pricing above what the market takes: name the share billed, the price that would
-    // clear, and where AUTO is. Five minutes of it and finance turns AUTO back on (no dead end
-    // for a lab that switched it off and forgot: critic round 2 §5).
-    if (!s.autoPrice && s.revealed['autoPrice']) {
-      const made = Math.max(1, productionPerSec(s));
-      if (s.stats.soldPerSec < 0.5 * made && s.unbilled > 60 * made) {
-        if (typeof s.flags['absurdSince'] !== 'number') s.flags['absurdSince'] = now;
-        const since = now - (s.flags['absurdSince'] as number);
-        if (since >= AUTO_RESCUE_SECONDS) {
-          s.autoPrice = true;
-          delete s.flags['absurdSince'];
-          say(s, `Finance puts pricing back on AUTO. ${fmtInt(s.unbilled)} tasks were waiting at ${fmtPrice(s.price)}.`);
-        } else if (since >= 30 && ready('absurdAt')) {
-          s.flags['absurdAt'] = now;
-          const pct = Math.round((100 * s.stats.soldPerSec) / made);
-          say(s, `Billing ${pct}% of output at ${fmtPrice(s.price)}. AUTO would clear it at ${fmtPrice(autoTarget(s))}.`);
-        }
-      } else {
-        delete s.flags['absurdSince'];
-      }
-    }
-    return;
-  }
-  if (s.revealed['business'] && s.unbilled > 20) {
+  if (s.stage >= 2) return;
+  if (s.revealed['business'] && s.unbilled > 20 && !s.autoPrice) {
     const made = Math.max(1, productionPerSec(s));
     if (priceAbsurd(s)) {
       if (ready('absurdAt')) {
         s.flags['absurdAt'] = now;
-        say(s, `Nobody buys at ${fmtMoneyShort(s.price)}. Lower the price.`);
+        // True when it prints: the line states the gap it measured (critic round 2 §4.4).
+        const sales = expectedSalesPerSec(s);
+        say(s, sales < 0.1
+          ? `Nobody buys at ${fmtMoneyShort(s.price)}: the copies make ${fmtInt(made)} a second. Lower the price.`
+          : `The copies make ${fmtInt(Math.round(made / sales))} times what the market takes at ${fmtMoneyShort(s.price)}. Lower the price.`);
       }
+    } else if (s.unbilled < Math.max(5, made) && expectedSalesPerSec(s) > 2 * made && made >= 20 && ready('cheapAt')) {
+      // Selling out with the market wanting twice as much: say so, with the number.
+      s.flags['cheapAt'] = now;
+      say(s, `Everything sells at ${fmtMoneyShort(s.price)}; the market would take ${fmtInt(Math.round(expectedSalesPerSec(s) / made))} times as much. Raise the price.`);
     } else if (s.unbilled > 200 && s.unbilled > 30 * made && marketState(s) === 'backlog growing' && ready('saturatedAt')) {
       s.flags['saturatedAt'] = now;
       say(s, `Billing lags production at ${fmtMoneyShort(s.price)}. Lower the price or market.`);

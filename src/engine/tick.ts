@@ -179,33 +179,43 @@ function capFix(s: GameState): string {
   return s.revealed['expandLab'] ? 'Expand Lab with the next Trust.' : 'More room comes with Trust.';
 }
 
+/** Seconds between two wall lines while research stays pinned under something it cannot hold. */
+export const WALL_REPEAT_SECONDS = 120;
+
 /**
- * Research at its cap, once per cap value: name the wall and the fix when something on screen
- * needs more than the lab holds (the Research Plateau when it is the next training run).
+ * Research at its cap: name the wall and the fix when something on screen needs more than the lab
+ * holds (the Research Plateau when it is the next training run), and say it again every 2 minutes
+ * while it lasts. A wall is only marked as told when a line prints (critic round 2 §4.1: a cap reached
+ * before the Projects panel had nothing to say, was marked, and never spoke again).
  */
 function researchWall(s: GameState): void {
   if (!s.revealed['research'] || s.stage >= 3) return;
   const cap = researchCap(s);
   if (s.research < cap) return;
-  const key = `wall:${cap}`;
-  if (s.flags[key]) return;
-  s.flags[key] = true;
+  const now = s.stats.timePlayed;
   const want = researchWanted(s);
-  const fix = capFix(s);
   if (want.amount > cap) {
+    if (now - ((s.flags['wallSaidAt'] as number) ?? -999) < WALL_REPEAT_SECONDS) return;
+    s.flags['wallSaidAt'] = now;
+    const fix = capFix(s);
     if (want.what === 'the next run') {
       say(s, `The Research Plateau — the next run needs ${fmtInt(want.amount)} research. The lab holds ${fmtInt(cap)}. ${fix}`);
     } else {
       say(s, `Research at capacity. ${want.what} needs ${fmtInt(want.amount)}. ${fix}`);
     }
-  } else if (s.insightUnlocked) {
-    if (s.stage < 2) {
-      say(s, 'Research at capacity — insight accrues.');
-    } else if (s.stats.timePlayed - ((s.flags['capLineAt'] as number) ?? -999) >= 120) {
-      // Stage 2: the cap moves with every room; the line carries its number, at most every 2 minutes.
-      s.flags['capLineAt'] = s.stats.timePlayed;
-      say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
-    }
+    return;
+  }
+  if (!s.insightUnlocked) return;
+  const key = `wall:${cap}`;
+  if (s.flags[key]) return;
+  if (s.stage < 2) {
+    s.flags[key] = true;
+    say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
+  } else if (now - ((s.flags['capLineAt'] as number) ?? -999) >= 120) {
+    // Stage 2: the cap moves with every room; the line carries its number, at most every 2 minutes.
+    s.flags[key] = true;
+    s.flags['capLineAt'] = now;
+    say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
   }
 }
 

@@ -1,6 +1,6 @@
 import { GameState, say } from './state.js';
 import { fmtMoneyShort } from './format.js';
-import { effectsDemandMult, marketingMult, productionPerSec } from './economy.js';
+import { effectsDemandMult, marketingMult, productionPerSec, autoTarget1 } from './economy.js';
 
 /**
  * The Stage 2 market (stage2.md §2.3). Deterministic: customers take `market × (0.25 / p)²`
@@ -48,7 +48,8 @@ export function autoTarget(s: GameState): number {
 
 export function updateAutoPrice(s: GameState, dt: number): void {
   if (!s.autoPrice) return;
-  const target = autoTarget(s);
+  // Stage 1's Dynamic pricing clears the Stage 1 market; Stage 2 and on, this one.
+  const target = s.stage < 2 ? autoTarget1(s) : autoTarget(s);
   s.price += (target - s.price) * Math.min(1, AUTO_RATE * dt);
   s.price = Math.max(S2_MIN_PRICE, s.price);
 }
@@ -57,8 +58,9 @@ export function updateAutoPrice(s: GameState, dt: number): void {
  * Calibrated once on arrival from what Stage 1 was selling, so revenue does not fall across the
  * boundary: `clamp(S × (price / 0.25)² / X, 30, 54)`.
  */
-export function calibrateMarket(s: GameState): void {
-  const S = Math.max(s.stats.soldPerSec, s.stats.tasksPerSec, 1);
+export function calibrateMarket(s: GameState, contractShare = 0): void {
+  // Stage 1's contract customers keep paying a frozen rate in Stage 2: the market is the rest.
+  const S = Math.max(s.stats.soldPerSec, s.stats.tasksPerSec, 1) * (1 - contractShare);
   const X = s.capability * s.capability * marketingMult(s) * s.demandMult * qualityMultS2(s) * s.hypeBoost;
   const raw = (S * Math.pow(s.price / 0.25, 2)) / Math.max(1e-9, X);
   s.marketBase = Math.min(MARKET_BASE_MAX, Math.max(MARKET_BASE_MIN, raw));

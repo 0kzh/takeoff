@@ -1,11 +1,10 @@
 import { GameState, isBought, canPay } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
-  gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, researchRate, perCopyRate,
-  potentialTasksPerSec, powerBlockCost,
+  gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
 } from '../engine/economy.js';
 import {
-  trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, computeYield, trainingCompute, requiredCompute,
+  trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, trainingCompute, requiredCompute,
   trainSlotFree, evalRun,
 } from '../engine/training.js';
 import {
@@ -18,16 +17,6 @@ import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js
 import type { ProjectDef } from '../data/projects.js';
 
 export type PolicyName = 'bot' | 'naive' | 'greedy';
-
-/** Order in which the bot buys visible projects. The Abilene ladder sits after the revenue boosts. */
-export const PROJECT_PRIORITY = [
-  'p_beg_power', 'p_seed', 'p_series_a', 'p_training', 'p_grid', 'p_prompting', 'p_insight', 'p_blogpost',
-  'p_demo', 'p_workshop', 'p_keynote', 'p_press', 'p_api', 'p_lab_cluster', 'p_prompting2', 'p_prompting3',
-  'p_eval_team', 'p_compute_deal', 'p_pricing', 'p_enterprise', 'p_distributed', 'p_batch', 'p_moe', 'p_agents', 'p_floor',
-  'p_dogfood', 'p_site', 'p_abatement', 'p_interconnect', 'p_expedite', 'p_substation', 'p_contractor', 'p_datacenter',
-  'p_ppa', 'p_cooling', 'p_soundwall', 'p_renewals', 'p_recruiter',
-  'p_alignment_team', 'p_safety_framework', 'p_contract',
-];
 
 /** The stage goal: the Abilene site ladder, rung by rung. */
 export const LADDER = ['p_site', 'p_interconnect', 'p_substation', 'p_datacenter'];
@@ -48,11 +37,11 @@ export interface BotMemory {
   choiceKey: string;
   choiceSince: number;
   /**
-   * Stage 2 decision variants (critic round 2 §5): `modals-best`, `modals-worst`, `redteam-never`,
-   * `slider-0|20|50`, `safety-0|2`, `gulf-sign`, `gulf-domestic`, `auto-off`. Empty: the plain bot.
+   * Decision variants (critic round 2 §5). Both stages: `modals-best`, `modals-worst`, `modals-last`,
+   * `modals-ignore`, `redteam-never`. Stage 1: `price-never`, `focus-efficiency`, `focus-safety`.
+   * Stage 2: `slider-N`, `safety-0|2`, `gulf-sign`, `gulf-domestic`. Empty: the plain policy.
    */
   variant: string;
-  autoOffDone?: boolean;
   /** Leave the stage-ending purchase (Break ground) to the player (the browser smoke test clicks it). */
   holdTransition: boolean;
 }
@@ -96,21 +85,75 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     else botStepS2(s, a, mem);
     return;
   }
-  if (mem.policy === 'naive' || mem.policy === 'greedy') naiveStep(s, a, mem);
-  else botStep(s, a, mem);
+  stage1Step(s, a, mem);
 }
 
-/** Fixed answers to every modal (bot policy). */
+// ---------- Stage 1 decision variants (the critic's explorer, tools/critic/explore.mjs) ----------
+
+/** The critic's "worst-looking" answers: lose Trust, lose researchers, cut the price, gamble, ship. */
+const WORST_LABELS = [/take the bridge/, /cut the price/, /no comment/, /publish a rebuttal/, /let them go/, /submit Sage/, /let her try/, /release anyway/];
+/** The critic's "best-looking" answers; a greyed one is waited for (the timer decides). */
+const BEST_LABELS = [/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep red-teaming/];
+
+/**
+ * A variant's answer to the open modal: true when the variant decided (answered, or chose to wait).
+ * Stage 2's best/worst tables are answerChoiceS2's; this is Stage 1's (and both stages' last/ignore).
+ */
+function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
+  const active = s.activeChoice;
+  const def = active ? choiceById(active.id) : undefined;
+  if (!active || !def) return false;
+  const enabled = def.options.map((_, i) => i).filter((i) => choiceOptionEnabled(s, def, i));
+  if (mem.variant === 'modals-ignore') return true;
+  if (mem.variant === 'modals-last') {
+    if (enabled.length) a.resolveChoice(s, enabled[enabled.length - 1]!);
+    return true;
+  }
+  if (mem.variant === 'redteam-never' && active.id === 'c_ship_issues') {
+    a.resolveChoice(s, 0);
+    return true;
+  }
+  if (s.stage !== 1 || (mem.variant !== 'modals-best' && mem.variant !== 'modals-worst')) return false;
+  // As the explorer's byLabel: the first enabled option whose label matches; the best-looking player
+  // waits while a matching option is greyed (the timer decides); otherwise the first enabled one.
+  const wanted = mem.variant === 'modals-best' ? BEST_LABELS : WORST_LABELS;
+  const matches = (i: number) => wanted.some((re) => re.test(def.options[i]!.label));
+  const hit = enabled.find(matches);
+  if (hit !== undefined) {
+    a.resolveChoice(s, hit);
+    return true;
+  }
+  if (mem.variant === 'modals-best' && def.options.some((_, i) => !enabled.includes(i) && matches(i))) return true;
+  if (enabled.length) a.resolveChoice(s, enabled[0]!);
+  return true;
+}
+
+/** Variant `redteam-never`: release the moment Release works, open issues or not. */
+function releaseAtOnce(s: GameState, a: Actions, mem: BotMemory): boolean {
+  if (mem.variant !== 'redteam-never') return false;
+  const run = s.training.run;
+  if (run?.phase === 'redteam' && canReleasePublic(s)) a.release(s);
+  return true;
+}
+
+/** Variants `focus-efficiency` / `focus-safety`: every run trains with that Focus. */
+function variantFocus(s: GameState, a: Actions, mem: BotMemory): boolean {
+  if (mem.variant === 'focus-efficiency') return a.setFocus(s, 'efficiency') || true;
+  if (mem.variant === 'focus-safety') return a.setFocus(s, 'safety') || true;
+  return false;
+}
+
+/** Fixed answers to every modal (bot policy): the careful answer, paid for when it can be. */
 const CHOICE_POLICY: Record<string, number[]> = {
-  c_gamble: [0, 1],
+  c_gamble: [1],
   c_sage2: [0],
-  c_rival: [2],
+  c_rival: [0],
   c_journalist: [0, 1],
   c_customer_email: [0],
   c_ship_issues: [1],
   c_poach: [1, 0, 2],
   c_bridge: [1],
-  c_letter: [2],
+  c_letter: [0],
   c_leaderboard: [0],
 };
 
@@ -124,57 +167,18 @@ export function currentRung(s: GameState): ProjectDef | undefined {
 }
 
 /**
- * A "reasonable player", one decision pass per 100 ms tick, acting only through `actions`.
- * Clicks until the first GPU, keeps a power reserve, prices to keep demand in a sane band,
- * spends Trust on researchers and lab space, buys projects in priority order, trains
- * Capability first and then alternates with Efficiency, red-teams to zero, releases, and
- * saves for the Abilene ladder once it is on screen.
+ * Stage 1 modals whose careful answer costs research, money or Trust: hold the modal open for up
+ * to 45 s while that resource comes in (Trust is held back for it meanwhile, see spendTrust).
  */
-export function botStep(s: GameState, a: Actions, mem: BotMemory): void {
-  mem.ticks += 1;
-  mem.bought = [];
-  if (s.ending) return;
+const WAIT_FOR: Record<string, number[]> = { c_poach: [1, 0], c_journalist: [0] };
 
-  if (s.activeChoice && readModal(s, mem)) answerChoice(s, a, CHOICE_POLICY);
-
-  if (s.gpus === 0 && mem.ticks % 2 === 0) a.clickTask(s);
-
-  const drawPerSec = potentialTasksPerSec(s);
-  const powerLow = s.stage < 2 && !s.gridAuto && s.power < Math.max(300, drawPerSec * 20);
-  // Keep a block's price in hand when power is getting low (the Grid Contract buys with it too),
-  // and, when the player will click Break ground, its price.
-  const reserve = Math.max(
-    s.stage < 2 && s.power < Math.max(600, drawPerSec * 60) ? powerBlockCost(s) : 0,
-    heldGoalPrice(s, mem),
-  );
-  if (powerLow && s.revealed['buyPower']) a.buyPower(s);
-
-  nudgePrice(s, a, mem);
-  buyProjects(s, a, mem, reserve);
-  trainingLoop(s, a);
-  spendTrust(s, a, mem);
-
-  const rung = currentRung(s);
-  const saving = !!rung && (!rung.canAfford(s) || heldGoalPrice(s, mem) > 0);
-  const rungFunds = rung?.cost(s).funds ?? 0;
-  if (s.stage < 2 && s.revealed['compute']) {
-    let guard = 0;
-    while (gpuWorthIt(s, saving, rungFunds) && s.funds - gpuCost(s) >= reserve && guard++ < 5) a.rentGpu(s);
-  }
-  if (s.revealed['marketing'] && s.stats.publicReleases >= 1) {
-    const cost = marketingCost(s);
-    const sensible = cost <= Math.max(400, s.stats.revPerSec * 240) && (!saving || cost <= rungFunds * 0.1);
-    if (s.funds - cost >= reserve && (sensible || cost <= s.funds * 0.15)) a.buyMarketing(s);
-  }
-}
-
-/** A GPU is worth renting while it pays for itself within a few minutes (or it is one of the first 25). */
-function gpuWorthIt(s: GameState, saving: boolean, rungFunds: number): boolean {
-  const cost = gpuCost(s);
-  if (s.gpus < 25) return true;
-  if (cost <= s.funds * 0.02 && (!saving || cost <= rungFunds * 0.01)) return true;
-  const marginal = 0.6 * s.price * perCopyRate(s) * s.copiesPerGPU;
-  return cost <= marginal * (saving ? 60 : 300);
+function waitForCarefulAnswer(s: GameState, mem: BotMemory): boolean {
+  const active = s.activeChoice!;
+  const wanted = WAIT_FOR[active.id];
+  const def = choiceById(active.id);
+  if (!wanted || !def) return false;
+  if (wanted.some((i) => choiceOptionEnabled(s, def, i))) return false;
+  return s.stats.timePlayed - mem.choiceSince < 45;
 }
 
 function answerChoice(s: GameState, a: Actions, table: Record<string, number[]>): void {
@@ -209,95 +213,7 @@ function nudgePrice(s: GameState, a: Actions, mem: BotMemory): void {
   else if (sales > supply * 1.25 + backlog / 10 && backlog < supply * 3) a.raisePrice(s);
 }
 
-function researchNeeded(s: GameState): number {
-  let need = s.revealed['training'] ? (trainCost(s).research ?? 0) : 0;
-  for (const p of visibleProjects(s)) need = Math.max(need, p.cost(s).research ?? 0);
-  return need;
-}
-
-function buyProjects(s: GameState, a: Actions, mem: BotMemory, reserve: number): void {
-  const trainingIdle = s.revealed['training'] && !s.training.run;
-  const trainResearch = trainCost(s).research ?? 0;
-  const savingResearch = trainingIdle && trainResearch <= researchCap(s);
-  const rung = currentRung(s);
-  const rungFunds = rung && !rung.canAfford(s) ? (rung.cost(s).funds ?? 0) : 0;
-  const holdResearch = revenueResearchWaiting(s);
-  for (const id of PROJECT_PRIORITY) {
-    const def = projectById(id);
-    if (!def || !isVisible(s, id) || !def.canAfford(s)) continue;
-    const cost = def.cost(s);
-    const ladder = LADDER.includes(id);
-    if (cost.funds && s.funds - cost.funds < reserve && !ladder) continue;
-    // While saving for a rung, only cheap or revenue-raising purchases go ahead.
-    if (cost.funds && rungFunds && !ladder && cost.funds > 0.25 * rungFunds && !REVENUE.includes(id)) continue;
-    const revenue = REVENUE.includes(id);
-    if (cost.research && savingResearch && !ladder && !revenue && s.research - cost.research < trainResearch) continue;
-    if (cost.research && holdResearch && !revenue && !ladder) continue;
-    if (id === 'p_beg_power' && s.funds >= powerBlockCost(s)) continue;
-    if (id === TRANSITION && mem.holdTransition) continue;
-    if (a.buyProject(s, id)) mem.bought.push(id);
-  }
-}
-
-/** Projects that pay for themselves within minutes; the bot buys them even while saving. */
-const REVENUE = [
-  'p_enterprise', 'p_batch', 'p_pricing', 'p_api', 'p_floor', 'p_agents', 'p_prompting', 'p_prompting2',
-  'p_prompting3', 'p_training', 'p_grid', 'p_distributed',
-];
-
-/**
- * A revenue project on screen that only lacks research and will have it within ~45 s:
- * training (and research-for-revenue swaps like contracts) wait for it.
- */
-function revenueResearchWaiting(s: GameState): boolean {
-  return visibleProjects(s).some((p) => {
-    if (!REVENUE.includes(p.id) || p.canAfford(s)) return false;
-    const r = p.cost(s).research ?? 0;
-    const soon = (r - s.research) / Math.max(1, researchRate(s)) <= 45;
-    return r > s.research && r <= researchCap(s) && soon && s.funds >= (p.cost(s).funds ?? 0);
-  });
-}
-
-function trainingLoop(s: GameState, a: Actions): void {
-  if (!s.revealed['training']) return;
-  const run = s.training.run;
-  if (!run) {
-    // Capability while the rented fleet can still teach the model something, then Efficiency.
-    a.setFocus(s, computeYield(s) >= 0.15 ? 'capability' : 'efficiency');
-    if (revenueResearchWaiting(s)) return;
-    const rung = currentRung(s);
-    // Saving for a rung: skip runs that would cost over 15% of it (late runs keep 30% of a small gain).
-    if (rung && !rung.canAfford(s) && (trainCost(s).funds ?? 0) > 0.15 * (rung.cost(s).funds ?? 0)) return;
-    const rungResearch = rung?.cost(s).research ?? 0;
-    if (rungResearch && s.research - (trainCost(s).research ?? 0) < rungResearch && rung!.canAfford(s)) return;
-    a.startTraining(s);
-    return;
-  }
-  if (run.phase !== 'redteam') return;
-  if (canRedTeam(s)) a.redTeam(s);
-  if (run.issues === 0 && canRelease(s)) a.release(s);
-}
-
-function spendTrust(s: GameState, a: Actions, mem: BotMemory): void {
-  if (!s.revealed['research'] || !s.revealed['hireResearcher']) return;
-  let guard = 0;
-  while (s.trust >= 1 && guard++ < 10) {
-    // Let research reach the cap (insight accrues there) before adding lab space.
-    const need = researchNeeded(s);
-    const cap = researchCap(s);
-    const fillTime = (cap - s.research) / Math.max(1, researchRate(s));
-    let pick = s.revealed['expandLab'] ? mem.hireNext : 'researcher';
-    if (s.revealed['expandLab']) {
-      if (cap < need) pick = fillTime < 20 ? 'lab' : 'researcher';
-      else if (fillTime > 90) pick = 'researcher';
-    }
-    const ok = pick === 'lab' ? a.expandLab(s) : a.hireResearcher(s);
-    if (!ok) break;
-    mem.hireNext = pick === 'lab' ? 'researcher' : 'lab';
-  }
-}
-
-// ---------- the naive first-timer (the critic's scripted player) ----------
+// ---------- Stage 1: the first-timer, the greedy player, the bot ----------
 
 /** Seconds between the naive player's purchase passes and price checks (the critic's 2-s snapshots). */
 const NAIVE_BUY_EVERY = 10;
@@ -305,9 +221,10 @@ const NAIVE_PRICE_EVERY = 20;
 const NAIVE_PRICE_COOLDOWN = 8;
 
 /**
- * `naive` plays like the critic's scripted first-timer (critic report §1 "Policy"); `greedy` is the
- * same player without restraint — it rents a GPU whenever one is affordable, buys everything else
- * the moment it can, and never saves (no power reserve, no big-ticket pause). The naive player:
+ * Stage 1, all three policies on one purchase loop (in this economy the first-timer's greed is the
+ * efficient way to spend; what separates the players is judgement).
+ *
+ * `naive` plays like the critic's scripted first-timer (critic report §1 "Policy"):
  *   - mashes Complete Task at 4 clicks/s until the copies out-produce the hand (≥ 8 tasks/s);
  *   - buys any affordable upgrade, project or automation while keeping one power block in reserve;
  *   - prices only by watching the backlog: lower when it exceeds 30 s of production and is growing,
@@ -315,14 +232,22 @@ const NAIVE_PRICE_COOLDOWN = 8;
  *   - answers every modal with its first enabled option; never touches the Focus buttons;
  *   - red-teams to zero open issues, then releases;
  *   - once a big-ticket goal (an Abilene rung) is on screen, stops the GPU and marketing drip and saves.
+ * `greedy` is the same player without restraint: it rents a GPU whenever one is affordable and never
+ * saves. `bot`, the reasonable player, buys the same way but prices to clear production every second
+ * and answers each modal with the careful option, holding it open up to 45 s while its price comes in.
  */
-export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
+function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
   if (s.ending) return;
   const now = s.stats.timePlayed;
 
-  if (s.activeChoice && readModal(s, mem)) answerFirst(s, a);
+  const careful = mem.policy === 'bot';
+  if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) {
+    if (!careful) answerFirst(s, a);
+    else if (s.activeChoice.id === 'c_leaderboard') a.resolveChoice(s, s.capability >= s.rivalCapability ? 0 : 1);
+    else if (!waitForCarefulAnswer(s, mem)) answerChoice(s, a, CHOICE_POLICY);
+  }
 
   const copyRate = potentialTasksPerSec(s);
   if (copyRate < 8) {
@@ -339,10 +264,12 @@ export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
   // The consumable: buy power when it is about to run out (or has), unless the grid does it.
   if (s.stage < 2 && s.revealed['buyPower'] && !s.gridAuto && s.power < Math.max(50, copyRate * 5)) a.buyPower(s);
 
-  if (mem.ticks % NAIVE_PRICE_EVERY === 0) naivePrice(s, a, mem, now);
+  if (careful) {
+    if (mem.variant !== 'price-never') nudgePrice(s, a, mem);
+  } else if (mem.ticks % NAIVE_PRICE_EVERY === 0 && mem.variant !== 'price-never') naivePrice(s, a, mem, now);
 
   const run = s.training.run;
-  if (run?.phase === 'redteam') {
+  if (run?.phase === 'redteam' && !releaseAtOnce(s, a, mem)) {
     if (canRedTeam(s)) a.redTeam(s);
     if (run.issues === 0 && canRelease(s)) a.release(s);
   }
@@ -364,13 +291,17 @@ export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
     if (!p.canAfford(s)) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
     if (p.id === TRANSITION && mem.holdTransition) continue;
+    if (careful && patient(s, p)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
   // Training is an upgrade like any other.
-  if (!s.training.run && canStartTraining(s) && keepsReserve(trainCost(s).funds)) a.startTraining(s);
+  if (!s.training.run && canStartTraining(s) && keepsReserve(trainCost(s).funds)) {
+    variantFocus(s, a, mem);
+    a.startTraining(s);
+  }
   // Trust: lab space when the research on screen does not fit in the lab (the cheapest price, or
-  // anything while research sits full), else researchers.
-  if (s.revealed['research']) {
+  // anything while research sits full), else researchers. The bot keeps one for an open Better Offer.
+  if (s.revealed['research'] && !(careful && s.activeChoice?.id === 'c_poach')) {
     let guard = 0;
     while (s.trust >= 1 && guard++ < 10) {
       const cap = researchCap(s);
@@ -387,6 +318,24 @@ export function naiveStep(s: GameState, a: Actions, mem: BotMemory): void {
     }
   }
   if (!bigTicket && s.revealed['marketing'] && s.funds - marketingCost(s) >= reserve) a.buyMarketing(s);
+}
+
+/**
+ * The bot's patience: a side offer waits until there is twice its price in the bank, and a research
+ * card waits while the next training run has its money and more than half its research (the run
+ * comes first).
+ */
+function patient(s: GameState, p: ProjectDef): boolean {
+  if (p.pinned || p.rescue) return false;
+  const c = p.cost(s);
+  if (p.sideline && (c.funds ?? 0) > 0 && s.funds < 2 * (c.funds ?? 0)) return true;
+  if (c.research && s.revealed['training'] && !s.training.run) {
+    const cost = trainCost(s);
+    const run = cost.research ?? 0;
+    // Only for a run whose money is already there (else the card would wait on nothing).
+    if (s.funds >= (cost.funds ?? 0) && run <= researchCap(s) && s.research >= 0.5 * run && s.research - c.research < run) return true;
+  }
+  return false;
 }
 
 function answerFirst(s: GameState, a: Actions): void {
@@ -596,8 +545,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.ending) return;
   if (s.activeChoice && readModal(s, mem)) answerChoiceS2(s, a, mem);
   redTeamAndRelease(s, a, mem);
-  // Variant: AUTO off on arrival, and the price never touched again.
-  if (mem.variant === 'auto-off' && !mem.autoOffDone && s.autoPrice && a.toggleAutoPrice(s)) mem.autoOffDone = true;
   if (mem.ticks % 2 !== 0) return;
 
   const cost = trainCost(s);
@@ -765,8 +712,8 @@ export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
   if (s.ending) return;
-  if (s.activeChoice && readModal(s, mem)) answerFirst(s, a);
-  redTeamAndRelease(s, a);
+  if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) answerFirst(s, a);
+  redTeamAndRelease(s, a, mem);
   if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
   const greedy = mem.policy === 'greedy';
 

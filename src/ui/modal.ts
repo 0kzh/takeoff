@@ -30,7 +30,8 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
     lastKey = '';
     return;
   }
-  const lines = s.stage >= 2;
+  // Effect and cost under each label (critic round 2 §5), wherever the modal's options carry them.
+  const lines = def.options.some((o) => o.line !== undefined);
   const key = `${active.id}|${JSON.stringify(active.context)}`;
   if (key !== lastKey) {
     const opening = lastKey === '';

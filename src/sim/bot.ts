@@ -9,7 +9,7 @@ import { policyStep, newBotMemory, PolicyName } from './policy.js';
 import { noveltyKeys, isRescueKey, PLAYER_MODALS } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import {
-  researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost,
+  researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
 } from '../engine/economy.js';
 import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
 import { trainCost, canStartTraining, trainingCompute, requiredCompute } from '../engine/training.js';
@@ -95,8 +95,37 @@ export interface Summary {
   research: number | null;
   projects: number | null;
   grid: number | null;
+  /** Reveal → purchase per Stage 1 project bought (critic round 2 §6.2). */
+  latencyMedian: number | null;
+  latencyWithin10Pct: number;
+  latencies: [string, number][];
+  /** Most first-time reveals in any six minutes of Stage 1 (critic round 2 §6.1: ≤ 16). */
+  maxReveals6min: number;
+  maxReveals6minAt: number;
+  /** The state on the last Stage 1 tick (the decision variants' exit state). */
+  exitState1: ExitState1 | null;
+  /** Stage 1 modal answers, `id:option`. */
+  choices1: string[];
   /** Stage 2 block (null when the run never reached Stage 2). */
   s2: Stage2Summary | null;
+}
+
+export interface ExitState1 {
+  capability: number;
+  alignTrue: number;
+  alignApparent: number;
+  trust: number;
+  researchers: number;
+  labSpace: number;
+  hypeLevel: number;
+  contracts: number;
+  contractRate: number;
+  revPerSec: number;
+  price: number;
+  gpus: number;
+  incidents: number;
+  gov: number;
+  lead: number;
 }
 
 export interface Mark {
@@ -317,6 +346,13 @@ export function simulate(args: Args): SimResult {
   let prevRunIds = new Set<number>();
   let transition: number | null = null;
   let capAtTransition: number | null = null;
+
+  // Stage 1 bookkeeping: reveal → purchase, the exit state, the modal answers.
+  const s1ShownAt = new Map<string, number>();
+  const s1BoughtSeen = new Set<string>();
+  const s1Latency: [string, number][] = [];
+  let s1Snap: ExitState1 | null = null;
+  const s1Choices: string[] = [];
 
   // Stage 2 bookkeeping.
   let s2Start: number | null = s.stage === 2 ? t0 : null;
@@ -554,6 +590,7 @@ export function simulate(args: Args): SimResult {
     if (s.stats.choices > prevChoices) {
       const c = s.choicesMade[s.choicesMade.length - 1]!;
       if (s.stage === 2) s2Choices.push(`${c.id}:${c.option}`);
+      if (s.stage === 1) s1Choices.push(`${c.id}:${c.option}`);
       out(t, `CHOICE ${c.id} → ${c.option}`);
       prevChoices = s.stats.choices;
     }
@@ -581,6 +618,34 @@ export function simulate(args: Args): SimResult {
       }
     }
 
+    if (s.stage === 1) {
+      for (const p of visible) if (!s1ShownAt.has(p.id)) s1ShownAt.set(p.id, t);
+      for (const [id, at] of s1ShownAt) {
+        if (s1BoughtSeen.has(id) || !s.projects[id]?.bought) continue;
+        s1BoughtSeen.add(id);
+        const def = projectById(id);
+        if (def && !def.rescue) s1Latency.push([id, Math.round(t - at)]);
+      }
+      if (i % 10 === 0) {
+        s1Snap = {
+          capability: Math.round(s.capability * 1000) / 1000,
+          alignTrue: Math.round(s.alignmentTrue * 10) / 10,
+          alignApparent: Math.round(s.alignmentApparent * 10) / 10,
+          trust: s.trust,
+          researchers: s.researchers,
+          labSpace: s.labSpace,
+          hypeLevel: s.hypeLevel,
+          contracts: s.projects['p_contract']?.bought ?? 0,
+          contractRate: Math.round(contractRate(s)),
+          revPerSec: Math.round(s.stats.revPerSec),
+          price: Math.round(s.price * 100) / 100,
+          gpus: s.gpus,
+          incidents: s.stats.incidents,
+          gov: Math.round(s.govRelations),
+          lead: Math.round(s.lead * 100) / 100,
+        };
+      }
+    }
     if (s.stage === 2) {
       for (const p of visible) if (!s2ShownAt.has(p.id)) s2ShownAt.set(p.id, t);
       for (const [id, at] of s2ShownAt) {
@@ -752,6 +817,17 @@ export function simulate(args: Args): SimResult {
     void s2LogStart;
   }
 
+  // The densest six minutes of first-time reveals in Stage 1.
+  const s1Reveals = revealTimes.filter((x) => x <= horizon).sort((x, y) => x - y);
+  let maxReveals6min = 0;
+  let maxReveals6minAt = 0;
+  for (let a = 0, b = 0; b < s1Reveals.length; b++) {
+    while (s1Reveals[b]! - s1Reveals[a]! > 360) a++;
+    if (b - a + 1 > maxReveals6min) {
+      maxReveals6min = b - a + 1;
+      maxReveals6minAt = Math.round(s1Reveals[a]! - t0);
+    }
+  }
   const summary: Summary = {
     seed: args.seed,
     policy: args.policy,
@@ -781,6 +857,13 @@ export function simulate(args: Args): SimResult {
       const at = milestones[`buy:${id}`];
       return at === undefined ? null : Math.round(at);
     }),
+    latencyMedian: s1Latency.length ? median(s1Latency.map(([, v]) => v)) : null,
+    latencyWithin10Pct: s1Latency.length ? Math.round((100 * s1Latency.filter(([, v]) => v <= 10).length) / s1Latency.length) : 0,
+    latencies: s1Latency,
+    maxReveals6min,
+    maxReveals6minAt,
+    exitState1: s1Snap,
+    choices1: s1Choices,
     s2,
   };
   return { state: s, milestones, idleGaps, lines, summary };
@@ -886,6 +969,11 @@ function main(): void {
     console.log(`Abilene ladder           ${sum.ladder.map(clock).join(' → ')}   (Substation → Break ground target 2–4 min)`);
     console.log(`training runs            ${sum.runs} (min yield ${sum.minYield ?? '—'})   (target: no run under 0.3)`);
     console.log(`modals                   ${sum.modals} (min spacing ${sum.minModalSpacing ?? '—'} s)   (target 7–9, ≥ 150 s apart)`);
+    console.log(`reveal → purchase        median ${sum.latencyMedian ?? '—'} s, ${sum.latencyWithin10Pct}% within 10 s (${sum.latencies.length} projects)   (target bot ≥ 90, naive ≥ 60; ≤ 10 %)`);
+    console.log(`densest six minutes      ${sum.maxReveals6min} first-time reveals from ${fmtClock(sum.maxReveals6minAt)}   (target ≤ 16)`);
+    const x = sum.exitState1;
+    if (x) console.log(`exit state               capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, Trust ${x.trust}, ${x.researchers} researchers, lab ${x.labSpace}, marketing ${x.hypeLevel}, ${x.contracts} contracts ($${x.contractRate}/s of $${x.revPerSec}/s), price $${x.price}, ${x.gpus} GPUs, ${x.incidents} incidents`);
+    if (sum.choices1.length) console.log(`modal answers            ${sum.choices1.join(', ')}`);
   }
   if (sum.s2) printStage2(sum.s2);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);

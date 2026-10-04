@@ -75,12 +75,12 @@
         <span data-reveal="contracts">Contracts: <span id="contractRate">$ 0.00</span> per sec<br></span>
         <span id="unbilledLine">Unbilled Tasks: <span id="unbilled">0</span><br></span>
         <br>
-        <span data-hide="takeoff">
-          <button class="button2" id="btn-lowerPrice" title="Lower the price by one cent. More tasks bill; each earns less.">lower</button>
-          <button class="button2" id="btn-raisePrice" title="Raise the price by one cent. Fewer tasks bill; each earns more.">raise</button>
+        <span data-hide="autoPrice">
+          <button class="button2" id="btn-lowerPrice" title="Lower the price. More tasks bill; each earns less.">lower</button>
+          <button class="button2" id="btn-raisePrice" title="Raise the price. Fewer tasks bill; each earns more.">raise</button>
         </span>
         <span data-hide="autoPrice">Price per Task: <span id="price">$ 0.25</span><br></span>
-        <span data-reveal="autoPrice" id="billingLine2">Billing <span id="billRate">0</span> tasks/s at <span id="billPrice" class="hasTip">$ 0.25</span> <button class="button2 toggle" id="btn-autoPrice" title="AUTO moves the price each second toward what clears supply.">AUTO</button><br></span>
+        <span data-reveal="autoPrice" id="billingLine2">Billing <span id="billRate">0</span> tasks/s at <span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
         <span data-hide="autoPrice"><span id="billingLine"><span id="billingOf">Billing </span><span id="billingOfPart"><span id="soldPerSec">0</span>/s of </span><span id="tasksPerSec">0</span>/s produced: <i id="marketState">idle</i></span><br></span>
         <span data-reveal="demandPct">Public Demand: <span id="demand">0</span>%<br></span>
         <span id="hypeLine">Release hype: <span id="hype">strong</span><br></span>
@@ -98,7 +98,7 @@
         <hr>
         <button class="button2" id="btn-gpu" title="Rent a GPU. It runs a copy of Sage that completes tasks on its own, using power.">Rent GPU</button>
         Cost: <span id="gpuCost">$ 6.00</span> <span id="gpuNote" class="warn"></span><br>
-        GPUs rented: <span id="gpus">0</span><br>
+        GPUs rented: <span id="gpus">0</span> / <span id="gpuQuota">80</span><br>
         <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
       </div>
 
@@ -177,9 +177,10 @@
         <span id="rivalLine" title="Anthrosoft's latest Cadence model"><span id="rivalStanding">Level with Anthrosoft</span><span class="hiddenIds"> (<span id="rivalCap">1.00</span>×)</span></span><br>
         <div id="focusRow" data-reveal="focus">
           Focus:
-          <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 12–18% more capable. Customers notice.">Capability</button>
+          <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 14–20% more capable. Customers notice.">Capability</button>
           <button class="button2 focusButton" id="btn-focus-efficiency" data-focus="efficiency" title="Efficiency: +5% capability, and 25% more copies on every GPU.">Efficiency</button>
           <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety" title="Safety: +5% capability, fewer red-team issues, better alignment.">Safety</button>
+          <div id="focusNote" class="note"></div>
         </div>
 
         <div id="train-eval">

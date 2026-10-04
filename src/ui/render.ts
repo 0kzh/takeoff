@@ -3,13 +3,13 @@ import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock,
   powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec, marketState, priceAbsurd,
-  humanShare, perCopyRate, MIN_PRICE,
+  humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM,
 } from '../engine/economy.js';
 import {
   lotSize, lotCost, shownLot, lotReason, gasCost, solarCost, nuclearCost, nextDatacenter, datacenterReason, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice,
 } from '../engine/infrastructure.js';
-import { marketBreakdown, autoTarget } from '../engine/market.js';
+import { marketBreakdown } from '../engine/market.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
   trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, trainBlocker, trainingRun, evalRun,
@@ -45,7 +45,6 @@ export function mount(p: Perform): void {
   bind('btn-grid', () => perform('toggleGrid'));
   bind('btn-lowerPrice', () => perform('lowerPrice'));
   bind('btn-raisePrice', () => perform('raisePrice'));
-  bind('btn-autoPrice', () => perform('toggleAutoPrice'));
   bind('btn-marketing', () => perform('buyMarketing'));
   bind('btn-gpu', () => perform('rentGpu'));
   bind('btn-datacenter', () => perform('buildDatacenter'));
@@ -131,7 +130,7 @@ function renderPower(s: GameState): void {
     `Buy ${fmtInt(powerBlock(s))} kWh. Each task a copy completes uses 1 kWh; clicks use none.${s.gridAuto ? ' The Grid Contract tops up on its own.' : ''}`,
   );
   setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
-  setText('gridStatus', s.gridAuto ? 'buys power when it runs low' : 'idle');
+  setText('gridStatus', s.gridAuto ? 'buys as needed' : 'idle');
 }
 
 function renderBusiness(s: GameState): void {
@@ -141,24 +140,23 @@ function renderBusiness(s: GameState): void {
   setText('unbilled', fmtInt(s.unbilled));
   setText('price', fmtMoney(s.price));
   const unbilledLine = byId('unbilledLine');
-  if (s.stage >= 2) {
+  if (s.autoPrice) {
+    // Priced automatically (Dynamic pricing in Stage 1; always from Stage 2): one read-only line.
     const made = Math.max(1, productionPerSec(s));
-    // Unbilled tasks only matter when AUTO is off or the backlog is over 30 s of production.
-    const showUnbilled = !s.autoPrice || s.unbilled > 30 * made;
+    // Unbilled tasks only matter when the backlog is over 30 s of production.
+    const showUnbilled = s.unbilled > 30 * made;
     if (unbilledLine.classList.contains('off') === showUnbilled) unbilledLine.classList.toggle('off', !showUnbilled);
     setText('billRate', fmtInt(s.stats.soldPerSec));
-    setText('billPrice', fmtTaskPrice(s.price));
-    setTitle('billPrice', marketBreakdown(s).map(([k, v]) => `${k} ×${fmtNum(v, v < 10 ? 2 : 1)}`).join(' · '));
-    setToggle('btn-autoPrice', s.autoPrice, s.autoPrice ? 'AUTO' : 'AUTO: off');
-    setDisabled('btn-lowerPrice', s.autoPrice);
-    setDisabled('btn-raisePrice', s.autoPrice);
-    const absurd = !s.autoPrice && s.price > 4 * autoTarget(s);
-    setTitle('btn-raisePrice', s.autoPrice ? 'Pricing is on AUTO.' : absurd ? 'nobody pays this' : 'Raise the price by 5%.');
-    setTitle('btn-lowerPrice', s.autoPrice ? 'Pricing is on AUTO.' : 'Lower the price by 5%.');
+    setText('billPrice', s.stage >= 2 ? fmtTaskPrice(s.price) : fmtMoney(s.price));
+    if (s.stage >= 2) setTitle('billPrice', marketBreakdown(s).map(([k, v]) => `${k} ×${fmtNum(v, v < 10 ? 2 : 1)}`).join(' · '));
+    setDisabled('btn-lowerPrice', true);
+    setDisabled('btn-raisePrice', true);
   } else {
-    if (unbilledLine.classList.contains('off')) unbilledLine.classList.remove('off');
     const billed = billingPerSec(s);
     const made = productionPerSec(s);
+    // The backlog is shown when it is worth a decision: ten seconds of output or more.
+    const showUnbilled = s.unbilled >= Math.max(10, 10 * made);
+    if (unbilledLine.classList.contains('off') === showUnbilled) unbilledLine.classList.toggle('off', !showUnbilled);
     setText('soldPerSec', fmtRate(billed));
     setText('tasksPerSec', fmtRate(made));
     // "Billing all 106/s produced" when nothing is left over: one number instead of two equal ones.
@@ -169,10 +167,12 @@ function renderBusiness(s: GameState): void {
     setText('demand', fmtInt(demandPercent(s)));
     setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
     setDisabled('btn-raisePrice', false);
+    const step = s.price < PRICE_STEP_FROM - 1e-9 ? 'one cent' : '5%';
     setTitle(
       'btn-raisePrice',
-      priceAbsurd(s) ? 'nobody pays this' : 'Raise the price by one cent. Fewer tasks bill; each earns more.',
+      priceAbsurd(s) ? 'nobody pays this' : `Raise the price by ${step}. Fewer tasks bill; each earns more.`,
     );
+    setTitle('btn-lowerPrice', `Lower the price by ${s.price <= PRICE_STEP_FROM + 1e-9 ? 'one cent' : '5%'}. More tasks bill; each earns less.`);
   }
   showId('hypeLine', s.hypeBoost > 1.05);
   setText('hype', s.hypeBoost > 1.5 ? 'strong' : 'fading');
@@ -190,6 +190,7 @@ function renderCompute(s: GameState): void {
   setDisabled('btn-gpu', s.funds < gpuCost(s) || quota);
   setText('gpuNote', quota ? 'quota reached — the provider has no more to rent' : '');
   setText('gpus', fmtInt(s.gpus));
+  setText('gpuQuota', fmtInt(rentQuota(s)));
   setText('copies', fmtInt(copies(s)));
   const note = copiesIdle(s) ? '(idle: no power)' : s.training.run?.phase === 'training' ? '(half the GPUs are training)' : '';
   setText('copiesNote', note);
@@ -250,9 +251,14 @@ function renderInfrastructure(s: GameState): void {
   setToggle('btn-standing', s.standingOrder, s.standingOrder ? 'ON' : 'OFF');
 }
 
+/** Trust on screen is never negative: what the lab owes is said in words (critic round 2 §4.3). */
+function fmtTrust(trust: number): string {
+  return trust >= 0 ? fmtInt(trust) : `0 (${fmtInt(-trust)} owed)`;
+}
+
 function renderResearch(s: GameState): void {
   if (!s.revealed['research']) return;
-  setText('trust', fmtInt(s.trust));
+  setText('trust', fmtTrust(s.trust));
   setText('nextTrust', fmtInt(s.nextTrust));
   setDisabled('btn-hireResearcher', s.trust < 1);
   setDisabled('btn-expandLab', s.trust < 1);
@@ -292,7 +298,7 @@ function renderProjects(s: GameState): void {
   visible.forEach((def, i) => {
     let b = projectButtons.get(def.id);
     if (!b) {
-      const cls = `projectButton${def.rescue ? ' rescue' : ''}${def.pinned ? ' pinned' : ''}`;
+      const cls = `projectButton${def.rescue ? ' rescue' : ''}${def.pinned ? ' pinned' : ''}${def.repeatable ? ' repeatable' : ''}`;
       b = make('button', { class: cls, id: `proj-${def.id}`, 'data-project': def.id });
       const title = make('b', { class: 'projectTitle' });
       b.append(title, make('br'), make('span', { class: 'projectDesc' }, def.description));
@@ -327,7 +333,11 @@ function renderTraining(s: GameState): void {
     setTitle('btn-focus-capability', 'Capability: the next model is 10–14% more capable. Customers notice.');
     setTitle('btn-focus-efficiency', 'Efficiency: +7% capability, and 25% more copies on every GPU.');
     setTitle('btn-focus-safety', 'Safety: +7% capability, measured alignment +8, and fewer issues on every later run.');
+  } else {
+    setTitle('btn-focus-safety', 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.');
   }
+  // The trade under the buttons, not only in their tooltips (critic round 2 §5).
+  setText('focusNote', focusNote(s, t.focus));
 
   const slotRun = evalRun(s);
   const running = trainingRun(s);
@@ -341,6 +351,14 @@ function renderTraining(s: GameState): void {
   if (idle) renderIdle(s);
   if (running) renderRunning(s, running);
   if (slotRun) renderEval(s, slotRun);
+}
+
+/** The selected Focus's trade, one short line with at most one number (the exact figures are in the tooltips). */
+function focusNote(s: GameState, focus: Focus): string {
+  const s2 = s.stage >= 2;
+  if (focus === 'capability') return s2 ? 'The most capable next model (about +12%).' : 'The most capable next model (about +17%).';
+  if (focus === 'efficiency') return 'Copies per GPU ×1.25; a smaller capability gain.';
+  return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
 }
 
 function renderIdle(s: GameState): void {

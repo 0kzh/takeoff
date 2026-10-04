@@ -4,7 +4,7 @@ import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
-import { gpuCost, marketingCost, qualityMult, powerBlockCost } from './economy.js';
+import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate } from './economy.js';
 import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
 } from './infrastructure.js';
@@ -90,6 +90,19 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
   if (log) logNews(s, source && incident ? `${log} It traces back to ${source}.` : log);
   if (incident) {
     s.stats.incidents += 1;
+    // Stage 1: the contract customers stop buying for a minute (critic round 2 §5: a shipped issue
+    // costs the income that matters).
+    // Stage 1: the board loses a little confidence with every incident.
+    if (s.stage === 1) {
+      s.trust -= 1;
+      say(s, 'The board asks what happened. Trust −1.');
+    }
+    if (s.stage === 1 && (s.projects['p_contract']?.bought ?? 0) > 0) {
+      // Pauses queue up: a second incident during a pause adds its own 1:30.
+      const until = typeof s.flags['contractsPausedUntil'] === 'number' ? (s.flags['contractsPausedUntil'] as number) : 0;
+      s.flags['contractsPausedUntil'] = Math.max(until, s.stats.timePlayed) + CONTRACT_PAUSE_SECONDS;
+      say(s, 'The bank pauses its pilot. Contract customers stop buying for 1:30.');
+    }
     if (s.stage >= 2) {
       // Each incident: measured alignment −2, and approval remembers it for five minutes.
       s.alignmentApparent = Math.max(0, s.alignmentApparent - 2);
@@ -220,11 +233,11 @@ export function drainChoiceQueue(s: GameState): void {
 
 /** An option's price now (some scale with the stage, or change after a delay). */
 export function optionCost(s: GameState, opt: ChoiceOption): Cost | undefined {
-  return typeof opt.cost === 'function' ? opt.cost(s) : opt.cost;
+  return typeof opt.cost === 'function' ? opt.cost(s, s.activeChoice?.context ?? {}) : opt.cost;
 }
 
 export function optionTooltip(s: GameState, opt: ChoiceOption): string {
-  return (typeof opt.tooltip === 'function' ? opt.tooltip(s) : opt.tooltip) ?? '';
+  return (typeof opt.tooltip === 'function' ? opt.tooltip(s, s.activeChoice?.context ?? {}) : opt.tooltip) ?? '';
 }
 
 export function choiceOptionEnabled(s: GameState, def: ChoiceDef, index: number): boolean {
@@ -358,11 +371,17 @@ function namedWait(s: GameState): boolean {
   );
 }
 
+/** Most idle rescues of each kind per stage: a press release, a customer's prepayment. */
+export const MAX_PRESS_PER_STAGE = 3;
+export const MAX_EMAILS_PER_STAGE = 3;
+
 /**
  * Anti-soft-lock valve (design.md §8). Every tick. After 60 s with nothing newly affordable or
- * newly revealed, surface `Press release (5 insight)` or a `Customer email` that pays funds. It
- * only watches a player who has started (a task done, the Business panel up), and the clock stops
- * while a choice is open or a named wait is counting down.
+ * newly revealed, it first names what is wrong when it can (critic round 2 §6.6: a lab with more
+ * rooms than researchers, research pinned under a card it cannot hold); only when money is the
+ * wall does it surface `Press release (5 insight)` or a `Customer email` big enough to buy the
+ * cheapest thing on screen — at most three of each per stage. It only watches a player who has
+ * started, and the clock stops while a choice is open or a named wait is counting down.
  */
 export function idleGuard(s: GameState, dt: number): void {
   // Stage 3's build brings its own content and valve; the shell does not send customers' emails.
@@ -380,15 +399,44 @@ export function idleGuard(s: GameState, dt: number): void {
   s.idle.quiet += dt;
   if (s.idle.quiet < 60) return;
   s.idle.quiet = 0;
-  if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress']) {
+  if (diagnoseStall(s)) return;
+  const presses = (s.flags['pressReleases'] as number) || 0;
+  const emails = (s.flags['emailsThisStage'] as number) || 0;
+  const amount = customerEmailAmount(s);
+  if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress'] && presses < MAX_PRESS_PER_STAGE) {
     s.flags['idlePress'] = true;
-  } else if (!s.choiceQueue.some((c) => c.id === 'c_customer_email')) {
-    openChoice(s, 'c_customer_email', { amount: customerEmailAmount(s) });
+    s.flags['pressReleases'] = presses + 1;
+  } else if (amount > 0 && emails < MAX_EMAILS_PER_STAGE && !s.choiceQueue.some((c) => c.id === 'c_customer_email')) {
+    s.flags['emailsThisStage'] = emails + 1;
+    openChoice(s, 'c_customer_email', { amount });
   } else {
     return;
   }
   s.stats.idleRescues += 1;
 }
+
+/**
+ * A stall the console can name (at most once per 3 minutes each): more rooms than the researchers
+ * can fill; research pinned under something that costs more than the lab holds. True when it spoke.
+ */
+function diagnoseStall(s: GameState): boolean {
+  if (!s.revealed['research'] || s.stage >= 3) return false;
+  const now = s.stats.timePlayed;
+  const ready = (k: string) => now - ((s.flags[k] as number) ?? -999) >= 180;
+  const cap = researchCap(s);
+  const rate = researchRate(s);
+  // Expand-only: the lab is far bigger than the people in it.
+  if (s.research < cap && s.revealed['hireResearcher'] && s.labSpace >= 3 * s.researchers && (cap - s.research) / Math.max(1, rate) > 300) {
+    if (!ready('roomsSaidAt')) return false;
+    s.flags['roomsSaidAt'] = now;
+    const people = s.researchers === 1 ? 'One researcher' : `${WORDS_UP[s.researchers] ?? s.researchers} researchers`;
+    say(s, `${people} cannot fill ${s.labSpace} rooms. Hire a researcher with the next Trust.`);
+    return true;
+  }
+  return false;
+}
+
+const WORDS_UP = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
 
 /** Funds prices of things on screen the player cannot afford yet. */
 function unaffordableFundsCosts(s: GameState): number[] {
@@ -412,12 +460,19 @@ function unaffordableFundsCosts(s: GameState): number[] {
   return out;
 }
 
-/** `min(max($25, 10 × revenue/s), 10 % of the cheapest thing on screen the player can't afford)`. */
+/**
+ * A prepayment that buys the cheapest thing on screen the player cannot afford (critic round 2
+ * §6.6: never a dollar against a $6 GPU). 0 — no email — when money is not what is missing (nothing
+ * on screen waits for funds) or the gap is more than two minutes of revenue (the wall is elsewhere).
+ */
 export function customerEmailAmount(s: GameState): number {
-  const base = Math.max(25, Math.round(10 * s.stats.revPerSec));
   const costs = unaffordableFundsCosts(s);
-  if (costs.length === 0) return base;
-  return Math.max(1, Math.min(base, Math.round(0.1 * Math.min(...costs))));
+  if (costs.length === 0) return 0;
+  const gap = Math.min(...costs) - s.funds;
+  if (gap > Math.max(50, 120 * s.stats.revPerSec)) return 0;
+  const raw = Math.max(25, gap);
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+  return Math.ceil(raw / unit) * unit;
 }
 
 // ---------- dev: fire anything by id ----------
@@ -447,7 +502,7 @@ export function fireEvent(s: GameState, id: string): boolean {
   const choice = choiceById(id);
   if (choice) {
     const run = s.training.run;
-    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s), issues: run?.issues ?? 1 }, { force: true });
+    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s) || 25, issues: run?.issues ?? 1 }, { force: true });
   }
   return false;
 }

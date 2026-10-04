@@ -1,7 +1,8 @@
 import { GameState, Cost, canPay, isBought, addFunds, say, counter } from '../engine/state.js';
 import { enterStage, STUCK } from '../engine/stages.js';
 import {
-  researchCap, gpuCost, fleetPowerBlock, atRentQuota, bestCapability, INTERCONNECT_SECONDS, CONTRACT_BASE, CONTRACT_GROWTH,
+  researchCap, gpuCost, fleetPowerBlock, atRentQuota, bestCapability, INTERCONNECT_SECONDS, researchRate, nextContractWeight,
+  rentQuota,
 } from '../engine/economy.js';
 import { atPlateau, plateauSeconds, trainCost, researchFor, startCapability } from '../engine/training.js';
 import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
@@ -52,6 +53,10 @@ export interface ProjectDef {
   onShow?: (s: GameState) => void;
   /** Funds of at least this many seconds of revenue, fixed when the card first shows. */
   revealFunds?: number;
+  /** Research of at least this many seconds of the research rate, fixed when the card first shows. */
+  revealResearch?: number;
+  /** A standing offer bought again and again (the contract): drawn with a double border. */
+  repeatable?: boolean;
   consoleMsg?: string;
   logMsg?: string;
 }
@@ -63,15 +68,20 @@ type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> &
 function project(def: ProjectInput): ProjectDef {
   const base = typeof def.cost === 'function' ? def.cost : ((c: Cost) => () => c)(def.cost);
   const secs = def.revealFunds;
-  // A card with `revealFunds` costs at least that many seconds of the revenue at the moment it
-  // first shows, fixed then (critic round 2 §6.2: a card is a goal for a minute or two, not a
-  // conveyor belt). Before it shows, the hover-free preview uses today's revenue.
-  const cost = secs === undefined ? base : (s: GameState): Cost => {
+  const rsecs = def.revealResearch;
+  // A card with `revealFunds` / `revealResearch` costs at least that many seconds of the revenue
+  // (research rate) at the moment it first shows, fixed then (critic round 2 §6.2: a card is a goal
+  // for a minute or two, not a conveyor belt). Before it shows, the preview uses today's rates.
+  const cost = secs === undefined && rsecs === undefined ? base : (s: GameState): Cost => {
     const c = base(s);
-    return { ...c, funds: Math.max(c.funds ?? 0, revealPrice(s, def.id, secs)) };
+    const out: Cost = { ...c };
+    if (secs !== undefined) out.funds = Math.max(c.funds ?? 0, revealPrice(s, def.id, secs));
+    if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
+    return out;
   };
-  const onShow = secs === undefined ? def.onShow : (s: GameState) => {
-    s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
+  const onShow = secs === undefined && rsecs === undefined ? def.onShow : (s: GameState) => {
+    if (secs !== undefined) s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
+    if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
     def.onShow?.(s);
   };
   return {
@@ -88,8 +98,21 @@ function project(def: ProjectInput): ProjectDef {
 export function revealPrice(s: GameState, id: string, seconds: number): number {
   const fixed = s.flags[`price:${id}`];
   if (typeof fixed === 'number') return fixed;
-  const raw = seconds * Math.max(1, s.stats.revPerSec);
-  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+  return twoFigures(seconds * Math.max(1, s.stats.revPerSec));
+}
+
+/**
+ * `seconds` of the research rate, to two significant figures; fixed at the reveal. Never more than
+ * 85 % of what the lab holds then: a price alone never builds a research wall.
+ */
+export function revealResearchPrice(s: GameState, id: string, seconds: number): number {
+  const fixed = s.flags[`rprice:${id}`];
+  if (typeof fixed === 'number') return fixed;
+  return Math.min(twoFigures(seconds * Math.max(1, researchRate(s))), Math.floor((0.85 * researchCap(s)) / 100) * 100);
+}
+
+function twoFigures(raw: number): number {
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
   return Math.round(raw / unit) * unit;
 }
 
@@ -109,6 +132,30 @@ export function substationCost(s: GameState): Cost {
   return { funds: isBought(s, 'p_abatement') || s.flags['abatement'] === true ? 100000 : 120000, research: 8000 };
 }
 
+/** What turning the bridge round down adds to the Series A. */
+export function seriesABonus(s: GameState): number {
+  return typeof s.flags['seriesABonus'] === 'number' ? (s.flags['seriesABonus'] as number) : 0;
+}
+
+/** Dynamic pricing: offered after 20 price moves once tasks pass 90,000 (≈ 15 min), or at 400,000 tasks to anyone. */
+export const AUTO_PRICING_MOVES = 20;
+export const AUTO_PRICING_TASKS = 90000;
+export const AUTO_PRICING_LATE = 400000;
+
+/** Break ground: $185,000, or $145,000 with a general contractor. */
+export function breakGroundPrice(s: GameState): number {
+  return isBought(s, 'p_contractor') ? 145000 : 185000;
+}
+
+/** The general contractor's crew takes a minute to arrive; Break ground waits for it. */
+export const CREW_SECONDS = 60;
+
+/** Seconds until the contractor's crew is on site (0 without one, or once it is there). */
+export function crewWait(s: GameState): number {
+  const at = s.flags['crewAt'];
+  return typeof at === 'number' ? Math.max(0, at - s.stats.timePlayed) : 0;
+}
+
 /** Each desk lease costs twice the last: $1,000, $2,000, $4,000 … */
 export function deskCost(s: GameState): number {
   return 1000 * Math.pow(2, bought(s, 'p_desks'));
@@ -119,9 +166,9 @@ export function contractCost(s: GameState): number {
   return Math.round(3000 * Math.pow(1.35, bought(s, 'p_contract')));
 }
 
-/** Dollars per second the next contract adds. */
-export function nextContractRate(s: GameState): number {
-  return CONTRACT_BASE * Math.pow(CONTRACT_GROWTH, bought(s, 'p_contract'));
+/** `+12%`: the demand the next contract adds. */
+export function nextContractPct(s: GameState): string {
+  return `+${Math.round(100 * nextContractWeight(s))}%`;
 }
 
 /** Stage 1 projects (design.md §5.1), in the order they typically appear. */
@@ -133,7 +180,7 @@ export const PROJECTS: ProjectDef[] = [
     // UP's Beg for More Wire: offered when stuck and always affordable. The Trust is taken in
     // `buy`, not as a cost, because it may go negative.
     cost: {},
-    description: 'Admit the bill is a problem. One block of power, on credit.',
+    description: 'One block of power, on credit.',
     trigger: (s) => s.stage === 1 && STUCK(s),
     buy: (s) => {
       s.trust -= 1;
@@ -150,7 +197,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_press',
     title: 'Press release',
     cost: { insight: 5 },
-    description: 'Say something about the roadmap. Marketing level +1.',
+    description: 'Marketing level +1.',
     trigger: (s) => s.flags['idlePress'] === true && s.insight >= 5,
     buy: (s) => {
       s.flags['idlePress'] = false;
@@ -167,7 +214,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Rent desks across the street',
     priceTag: (s) => `($${deskCost(s).toLocaleString('en-US')})`,
     cost: (s) => ({ funds: deskCost(s) }),
-    description: 'Two more lab spaces, a short walk away. Each lease costs twice the last.',
+    description: 'Two more lab spaces. Each lease costs twice the last.',
     // The plateau's last-resort fix: no Trust for Expand Lab and nothing else on screen raises the cap.
     trigger: (s) => s.stage === 1 && plateauSeconds(s) >= 45 && s.trust < 1,
     buy: (s) => {
@@ -182,7 +229,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_prompting',
     title: 'Better Prompting',
     cost: { research: 750 },
-    description: 'Rewrite the prompt templates. Copies 25% faster.',
+    description: 'Rewrite the prompts. Copies 25% faster.',
     trigger: (s) => s.gpus >= 1,
     buy: (s) => {
       s.copyBoost += 0.25;
@@ -194,20 +241,19 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_insight',
     title: 'Blue-sky Research',
     cost: { research: 1000 },
-    description: 'Use idle capacity to find new problems. Insight accrues while research is full.',
+    description: 'Insight accrues while research is full.',
     trigger: (s) => s.research >= Math.min(researchCap(s), 1000) || s.labSpace >= 2,
     buy: (s) => {
       s.insightUnlocked = true;
-      s.revealed['insight'] = true;
     },
-    consoleMsg: 'Insight unlocked. It accrues while research is at capacity.',
+    consoleMsg: 'Insight unlocked. It accrues while research is full, and with every release.',
     stages: [1, 2],
   }),
   project({
     id: 'p_grid',
     title: 'Grid Contract',
     cost: { research: 2000 },
-    description: 'The utility bills monthly. Power is bought automatically when it runs low.',
+    description: 'Power is bought when it runs low.',
     trigger: (s) => s.powerBought >= 1 || s.gpus >= 12,
     buy: (s) => {
       s.gridAuto = true;
@@ -220,7 +266,7 @@ export const PROJECTS: ProjectDef[] = [
     chain: true,
     title: 'Chain-of-thought',
     cost: { research: 2500 },
-    description: 'Let the copies think before they answer. 50% faster.',
+    description: 'Copies think before they answer. 50% faster.',
     trigger: (s) => isBought(s, 'p_prompting'),
     buy: (s) => {
       s.copyBoost += 0.5;
@@ -232,7 +278,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_training',
     title: 'Training Pipeline',
     cost: { research: 2000 },
-    description: 'Build the infrastructure to train the next Sage.',
+    description: 'Train the next Sage.',
     trigger: (s) => s.tasks >= 7000,
     buy: (s) => {
       s.revealed['training'] = true;
@@ -243,7 +289,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_seed',
     title: 'Seed round',
     cost: {},
-    description: 'Investors want in. +$5,000, +2 Trust.',
+    description: '+$5,000, +2 Trust.',
     trigger: (s) => s.tasks >= 10000,
     buy: (s) => {
       addFunds(s, 5000);
@@ -257,7 +303,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Research blog post',
     cost: { insight: 10 },
     description: 'Mostly charts. +1 Trust.',
-    trigger: (s) => s.insightUnlocked,
+    trigger: (s) => s.insightUnlocked && s.insight >= 1,
     buy: (s) => {
       s.trust += 1;
     },
@@ -268,9 +314,9 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_lab_cluster',
     title: 'Experiment tracker',
     cost: { research: 3000 },
-    description: 'Every result logged once. Lab space holds twice as much research.',
-    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || atPlateau(s),
-    urgent: atPlateau,
+    description: 'Research capacity ×2.',
+    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || plateauSeconds(s) >= 30,
+    urgent: (s) => plateauSeconds(s) >= 30,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -282,7 +328,7 @@ export const PROJECTS: ProjectDef[] = [
     chain: true,
     title: 'Tool use',
     cost: { research: 5000 },
-    description: 'Give the copies a terminal and a browser. 75% faster.',
+    description: 'A terminal and a browser. Copies 75% faster.',
     trigger: (s) => isBought(s, 'p_prompting2'),
     buy: (s) => {
       s.copyBoost += 0.75;
@@ -292,9 +338,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_eval_team',
+    revealResearch: 100,
     title: 'Hire an evals team',
     cost: { research: 2500 },
-    description: 'Professional red-teamers. Each red-team pass takes a third less time.',
+    description: 'Red-team passes take a third less time.',
     trigger: (s) => s.flags['redTeamed'] === true,
     buy: () => undefined,
     stages: [1, 2],
@@ -302,9 +349,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_api',
+    revealResearch: 100,
     title: 'Public API',
     cost: { research: 3000 },
-    description: 'Let developers build on Sage. Demand ×2.',
+    description: 'Developers build on Sage. Demand ×2.',
     trigger: (s) => sinceFlag(s, 'firstReleaseAt') >= 30,
     buy: (s) => {
       s.demandMult *= 2;
@@ -314,11 +362,11 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_demo',
-    chain: true,
     title: 'Launch demo video',
     cost: { insight: 25 },
     description: 'Three minutes, no cuts. Marketing level +2.',
-    trigger: (s) => isBought(s, 'p_blogpost'),
+    // A launch video needs a launch: after the post, once a model has shipped.
+    trigger: (s) => isBought(s, 'p_blogpost') && releases(s) >= 1,
     buy: (s) => {
       s.hypeLevel += 2;
     },
@@ -326,10 +374,50 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'The demo has three million views. Most stopped after a minute.',
   }),
   project({
+    id: 'p_auto_pricing',
+    revealResearch: 100,
+    title: 'Dynamic pricing',
+    cost: { research: 6000 },
+    description: 'Finance prices to clear what the copies make. Pricing goes AUTO.',
+    // Like the Grid Contract after the first Buy Power: offered to a lab that has priced by hand,
+    // once there is a market worth automating; to anyone, late (critic round 2 §6.4).
+    trigger: (s) => (counter(s, 'priceMoves') >= AUTO_PRICING_MOVES && s.tasks >= AUTO_PRICING_TASKS) || s.tasks >= AUTO_PRICING_LATE,
+    buy: (s) => {
+      s.autoPrice = true;
+      s.revealed['autoPrice'] = true;
+    },
+    consoleMsg: 'Dynamic pricing live. Finance moves the price every second.',
+  }),
+  project({
+    id: 'p_region',
+    revealResearch: 100,
+    title: 'Second cloud region',
+    cost: { research: 9000 },
+    description: 'Twenty more GPUs on the quota; prices rise more slowly.',
+    trigger: (s) => isBought(s, 'p_compute_deal') && s.gpus >= rentQuota(s) - 5,
+    buy: (s) => {
+      s.gpuCostGrowth = 1.07;
+    },
+    consoleMsg: 'A second region opens. Twenty more GPUs to rent.',
+  }),
+  project({
+    id: 'p_reserved',
+    revealResearch: 100,
+    title: 'Reserved capacity',
+    cost: { research: 14000 },
+    description: 'Twenty more GPUs on the quota, booked for the year.',
+    trigger: (s) => isBought(s, 'p_region') && s.gpus >= rentQuota(s) - 5,
+    buy: (s) => {
+      s.gpuCostGrowth = 1.06;
+    },
+    consoleMsg: 'Capacity reserved through December. Twenty more GPUs to rent.',
+  }),
+  project({
     id: 'p_compute_deal',
+    revealResearch: 100,
     title: 'Bulk GPU lease',
     cost: { research: 5000 },
-    description: 'A three-year commitment: twenty more GPUs on the quota, and prices rise more slowly.',
+    description: 'Twenty more GPUs on the quota; prices rise more slowly.',
     trigger: (s) => s.gpus >= 45 || gpuCost(s) >= 1000,
     buy: (s) => {
       s.gpuCostGrowth = 1.08;
@@ -338,11 +426,12 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_pricing',
+    revealResearch: 100,
     title: 'Usage-based pricing',
     cost: { research: 9000 },
-    description: 'Bill per token, not per seat. Demand +50% at any price.',
+    description: 'Bill per token. Demand +50% at any price.',
     // API customers want to pay per call; it follows the Public API (or a long backlog after a release).
-    trigger: (s) => isBought(s, 'p_api') || sinceFlag(s, 'firstReleaseAt') >= 120,
+    trigger: (s) => (isBought(s, 'p_api') && releases(s) >= 2) || sinceFlag(s, 'firstReleaseAt') >= 300,
     buy: (s) => {
       s.demandMult *= 1.5;
     },
@@ -353,10 +442,11 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_series_a',
     title: 'Series A',
     cost: {},
-    description: 'A real round. +$20,000, +2 Trust, marketing level +2.',
+    description: '+$20,000, +2 Trust, marketing level +2.',
     trigger: (s) => s.tasks >= 60000 && releases(s) >= 1,
     buy: (s) => {
-      addFunds(s, 20000);
+      // A lab that waited for a real round (A Bridge Round) is paid for the patience.
+      addFunds(s, 20000 + seriesABonus(s));
       s.trust += 2;
       s.hypeLevel += 2;
     },
@@ -391,7 +481,7 @@ export const PROJECTS: ProjectDef[] = [
       s.flags['interconnectAt'] = s.stats.timePlayed;
     },
     pinned: true,
-    consoleMsg: 'The Interconnect Queue — 3:30 until the utility signs off.',
+    consoleMsg: 'The Interconnect Queue — 4:00 until the utility signs off.',
     logMsg: 'OpenMind joins the ERCOT interconnect queue. It is not near the front.',
   }),
   project({
@@ -417,9 +507,15 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_datacenter',
     title: 'Break ground',
-    cost: (s) => ({ funds: isBought(s, 'p_contractor') ? 125000 : 165000 }),
+    cost: (s) => ({ funds: breakGroundPrice(s) }),
+    priceTag: (s) => {
+      const funds = `$${breakGroundPrice(s).toLocaleString('en-US')}`;
+      const crew = crewWait(s);
+      return crew > 0 ? `(${funds}, crew in 0:${String(Math.ceil(crew)).padStart(2, '0')})` : `(${funds})`;
+    },
     description: 'Pour the slab, rack the first thousand GPUs. Stop renting.',
     trigger: (s) => isBought(s, 'p_substation'),
+    canAfford: (s) => crewWait(s) <= 0 && canPay(s, { funds: breakGroundPrice(s) }),
     buy: (s) => {
       enterStage(s, 2);
     },
@@ -427,10 +523,11 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_cooling',
+    revealFunds: 90,
     sideline: true,
     title: 'Closed-loop cooling',
     cost: { funds: 10000 },
-    description: 'Abilene is dry most of the year. Cool the halls without the town\'s water. +1 Trust.',
+    description: 'Spare the town\'s water. +1 Trust.',
     trigger: (s) => sinceFlag(s, 'siteAt') >= 30,
     buy: (s) => {
       s.trust += 1;
@@ -443,7 +540,7 @@ export const PROJECTS: ProjectDef[] = [
     sideline: true,
     title: 'Pay to expedite the interconnect',
     cost: { funds: 15000 },
-    description: 'The utility has a fast lane. It is called a deposit. One minute off the queue.',
+    description: 'One minute off the interconnect queue.',
     trigger: (s) => s.interconnectLeft > 5 && sinceFlag(s, 'interconnectAt') >= 25,
     canAfford: (s) => s.interconnectLeft > 5 && canPay(s, { funds: 15000 }),
     expires: (s) => s.interconnectLeft <= 5,
@@ -454,10 +551,11 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_soundwall',
+    revealFunds: 90,
     sideline: true,
     title: 'Build a sound wall',
     cost: { funds: 5000 },
-    description: 'Painted the colour of the sky, so the rancher next door can sleep. +1 Trust.',
+    description: 'So the rancher next door can sleep. +1 Trust.',
     trigger: (s) => sinceFlag(s, 'substationAt') >= 100,
     buy: (s) => {
       s.trust += 1;
@@ -468,7 +566,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_abatement',
     sideline: true,
     title: 'Take the county\'s tax abatement',
-    cost: {},
+    cost: { trust: 1 },
     description: 'Promise Abilene two hundred jobs. The substation costs $20,000 less.',
     trigger: (s) => s.flags['interconnectDone'] === true && !isBought(s, 'p_substation'),
     expires: (s) => isBought(s, 'p_substation'),
@@ -481,19 +579,22 @@ export const PROJECTS: ProjectDef[] = [
     sideline: true,
     title: 'Hire a general contractor',
     cost: { funds: 25000 },
-    description: 'Ex-military, on schedule, not cheap. Break ground costs $40,000 less.',
+    description: 'Break ground costs $40,000 less. The crew needs 1:00 to arrive.',
     trigger: (s) => sinceFlag(s, 'substationAt') >= 45,
-    buy: () => undefined,
-    consoleMsg: 'General contractor hired. The schedule now has a colour code.',
+    buy: (s) => {
+      s.flags['crewAt'] = s.stats.timePlayed + CREW_SECONDS;
+    },
+    consoleMsg: 'General contractor hired. The crew arrives in 1:00.',
   }),
   // ---- Late Stage 1: each one changes a number on screen. ----
   project({
     id: 'p_contract',
     chain: true,
     title: 'Custom model contract',
-    priceTag: (s) => `(${contractCost(s).toLocaleString('en-US')} research)`,
+    priceTag: (s) => `(${contractCost(s).toLocaleString('en-US')} research · repeatable)`,
     cost: (s) => ({ research: contractCost(s) }),
-    description: 'A bank wants its own Sage. Research becomes recurring revenue.',
+    description: 'A bank that buys at your price. Demand +12%.',
+    repeatable: true,
     // The sales team brings the custom deals in.
     trigger: (s) => isBought(s, 'p_enterprise'),
     uses: Infinity,
@@ -502,13 +603,14 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.revealed['contracts'] = true;
     },
-    consoleMsg: 'Contract signed. It pays every second from now on.',
+    consoleMsg: 'Contract signed. The bank buys at your price, every second.',
   }),
   project({
     id: 'p_enterprise',
+    revealFunds: 100,
     title: 'Enterprise sales team',
     cost: { funds: 20000, research: 6000 },
-    description: 'People who answer procurement questionnaires. Demand ×2.',
+    description: 'Procurement questionnaires, answered. Demand ×2.',
     trigger: (s) => isBought(s, 'p_series_a'),
     buy: (s) => {
       s.demandMult *= 2;
@@ -519,9 +621,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_distributed',
+    revealResearch: 100,
     title: 'Distributed training',
     cost: { research: 8000 },
-    description: 'Train across every rented GPU at once. Training compute ×1.5.',
+    description: 'Training compute ×1.5.',
     trigger: (s) => s.training.runIndex >= 3 || (s.training.run?.computeYield ?? 1) < 1,
     buy: (s) => {
       s.flags['trainingCompute'] = 1.5;
@@ -530,9 +633,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_alignment_team',
+    revealResearch: 100,
     title: 'Alignment team',
     cost: { research: 6000 },
-    description: 'Four people whose job is to ask why. Fewer red-team issues.',
+    description: 'Four people who ask why. Fewer red-team issues.',
     trigger: (s) => s.stats.incidents >= 1 || s.training.runIndex >= 3,
     buy: (s) => {
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 5);
@@ -543,9 +647,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_dogfood',
+    revealResearch: 100,
     title: 'Sage writes Sage',
     cost: { research: 4000 },
-    description: 'OpenMind\'s engineers use Sage on OpenMind\'s own code. Research +25%.',
+    description: 'Sage writes OpenMind\'s code. Research +25%.',
     trigger: (s) => dateAtLeast(s, 2025, 9.3) || s.capability >= 1.3,
     buy: (s) => {
       s.researchMult *= 1.25;
@@ -556,10 +661,11 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_ppa',
+    revealResearch: 100,
     sideline: true,
     title: 'Power purchase agreement',
     cost: { research: 7000 },
-    description: 'Ten years of wind from a farm near Abilene, at a fixed price. Power costs 30% less.',
+    description: 'Ten years of West Texas wind. Power 30% cheaper.',
     trigger: (s) => sinceFlag(s, 'interconnectAt') >= 60,
     buy: (s) => {
       s.powerBase *= 0.7;
@@ -571,9 +677,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_renewals',
+    revealResearch: 100,
     title: 'Renewal season',
     cost: { research: 6000 },
-    description: 'Every contract comes up for renewal in December, at a higher price. Contracts pay 25% more.',
+    description: 'Every contract renews bigger. Contract demand +25%.',
     trigger: (s) => s.revealed['contracts'] === true && (dateAtLeast(s, 2025, 12.1) || bought(s, 'p_contract') >= 6),
     buy: (s) => {
       s.flags['contractMult'] = 1.25;
@@ -582,9 +689,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_batch',
+    revealResearch: 100,
     title: 'Batch inference',
     cost: { research: 8000 },
-    description: 'Queue the requests and run them together. Copies per GPU ×1.25.',
+    description: 'Run requests together. Copies per GPU ×1.25.',
     trigger: (s) => s.gpus >= 100 || dateAtLeast(s, 2025, 10),
     buy: (s) => {
       s.copiesPerGPU *= 1.25;
@@ -594,12 +702,13 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_floor',
+    revealFunds: 100,
     title: 'Lease the floor upstairs',
     cost: { funds: 15000 },
-    description: 'More desks, more whiteboards. Research capacity ×2.',
+    description: 'More desks. Research capacity ×2.',
     // The Research Plateau's named fix (or, late in the stage, room for the runs to come).
-    trigger: (s) => s.training.runIndex >= 4 || atPlateau(s),
-    urgent: atPlateau,
+    trigger: (s) => s.training.runIndex >= 4 || plateauSeconds(s) >= 30,
+    urgent: (s) => plateauSeconds(s) >= 30,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -609,9 +718,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_recruiter',
+    revealFunds: 100,
     title: 'Hire a recruiter',
     cost: { funds: 12000 },
-    description: 'She knows everyone at the larger labs. Three researchers.',
+    description: 'She knows everyone. Three researchers.',
     trigger: (s) => s.researchers >= 22 || dateAtLeast(s, 2025, 10.5),
     buy: (s) => {
       s.researchers += 3;
@@ -621,9 +731,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_agents',
+    revealResearch: 100,
     title: 'Agent mode',
     cost: { research: 12000 },
-    description: 'Sage gets a browser and a credit card. Copies 20% faster.',
+    description: 'Sage gets a credit card. Copies 20% faster.',
     trigger: (s) => dateAtLeast(s, 2025, 11) || s.capability >= 1.6,
     buy: (s) => {
       s.copyBoost *= 1.2;
@@ -634,9 +745,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_safety_framework',
+    revealResearch: 100,
     title: 'Publish a safety framework',
     cost: { research: 6000 },
-    description: 'Thresholds, evals, commitments. Some are binding. +1 Trust.',
+    description: 'Thresholds and commitments. +1 Trust.',
     trigger: (s) => s.stats.incidents >= 1 || ((s.flags['safetyRuns'] as number) || 0) >= 1 || dateAtLeast(s, 2025, 11.5),
     buy: (s) => {
       s.trust += 1;
@@ -649,11 +761,10 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_workshop',
-    chain: true,
     title: 'Workshop paper',
     cost: { insight: 50 },
     description: 'Eight pages, one good idea. +1 Trust.',
-    trigger: (s) => isBought(s, 'p_demo'),
+    trigger: (s) => isBought(s, 'p_demo') && releases(s) >= 3,
     buy: (s) => {
       s.trust += 1;
     },
@@ -662,11 +773,11 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_keynote',
-    chain: true,
     title: 'Conference keynote',
     cost: { insight: 100 },
     description: 'The big room. Marketing level +3, +1 Trust.',
-    trigger: (s) => isBought(s, 'p_workshop'),
+    // The big room wants a lab with a Series A behind it.
+    trigger: (s) => isBought(s, 'p_workshop') && isBought(s, 'p_series_a'),
     buy: (s) => {
       s.trust += 1;
       s.hypeLevel += 3;
@@ -678,8 +789,8 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_moe',
     title: 'Mixture of experts',
     cost: { insight: 150 },
-    description: 'Only part of the model wakes up for each task. Copies per GPU ×1.5.',
-    trigger: (s) => isBought(s, 'p_keynote') || s.insight >= 90,
+    description: 'Only part of the model wakes. Copies per GPU ×1.5.',
+    trigger: (s) => isBought(s, 'p_keynote') || (s.insight >= 90 && releases(s) >= 3),
     buy: (s) => {
       s.copiesPerGPU *= 1.5;
     },

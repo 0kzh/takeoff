@@ -82,7 +82,8 @@ const SNAPSHOT = () => {
     .map((el) => el.innerText)
     .join('\n');
   const tokens = text.match(/\d+(?:[.,:]\d+)*/g) ?? [];
-  const buttons = [...document.querySelectorAll('button')].filter((b) => !b.closest('#dev') && vis(b));
+  const words = text.split(/\s+/).filter((w) => /[A-Za-z]/.test(w)).length;
+  const buttons = [...document.querySelectorAll('button, input')].filter((b) => !b.closest('#dev') && vis(b));
   const panels = [...document.querySelectorAll('.panel')].filter((p) => vis(p) && p.querySelector(':scope > b'));
   const modal = document.getElementById('modalOverlay');
   const s = window.__game.state;
@@ -91,6 +92,7 @@ const SNAPSHOT = () => {
     stage: s.stage,
     numbers: tokens.length,
     interactive: buttons.length,
+    words,
     panels: panels.map((p) => p.id),
     buttons: buttons.map((b) => ({ id: b.id, enabled: !b.disabled, label: b.innerText.trim().split('\n')[0] })),
     visibleIds: [...document.querySelectorAll('[id]')].filter((el) => !el.closest('#dev') && vis(el)).map((el) => el.id),
@@ -174,7 +176,7 @@ try {
   const countAt = [0, 1, 3, 5, 10, 20];
   const beats = []; // per-snapshot newly visible interactive elements and numbers
   let prev = await page.evaluate(SNAPSHOT);
-  counts['0'] = { numbers: prev.numbers, interactive: prev.interactive, panels: prev.panels.length };
+  counts['0'] = { numbers: prev.numbers, interactive: prev.interactive, words: prev.words, panels: prev.panels.length };
   for (const id of prev.visibleIds) first.set(id, 0);
   let reloadDone = false;
   let reloadInfo = null;
@@ -197,7 +199,7 @@ try {
 
     for (const m of countAt) {
       if (m > 0 && counts[String(m)] === undefined && snap.t >= m * 60) {
-        counts[String(m)] = { numbers: snap.numbers, interactive: snap.interactive, panels: snap.panels.length };
+        counts[String(m)] = { numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length };
         if (shotsAt[m]) await shot(page, shotsAt[m]);
       }
     }
@@ -243,7 +245,7 @@ try {
     // anyone spends the new Trust or money.
     if (snap.stage === 1 && !snap.modal && snap.buttons.some((b) => b.id === 'proj-p_datacenter' && b.enabled)) {
       await page.evaluate(() => window.__game.setAutoplay(false));
-      counts['end'] = { numbers: snap.numbers, interactive: snap.interactive, panels: snap.panels.length };
+      counts['end'] = { numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length };
       await shot(page, '07b-before-break-ground');
       const consoleBefore = snap.console;
       await page.click('#proj-p_datacenter');
@@ -321,7 +323,12 @@ try {
   const keys = ['0', '1', '3', '5', '10', '20', 'end'];
   const row = keys.map((k) => (counts[k] ? counts[k].numbers : '—')).join(' / ');
   const irow = keys.map((k) => (counts[k] ? counts[k].interactive : '—')).join(' / ');
-  check('numeric tokens recorded at 0/1/3/5/10/20/end', keys.every((k) => counts[k]), `numbers ${row}; interactive ${irow}`);
+  const wrow = keys.map((k) => (counts[k] ? counts[k].words : '—')).join(' / ');
+  check('numeric tokens recorded at 0/1/3/5/10/20/end', keys.every((k) => counts[k]), `numbers ${row}; controls ${irow}; words ${wrow}`);
+  // Critic round 2 §6.1 targets at minute 10: ≤ 38 numbers, ≤ 15 controls, ≤ 230 words.
+  const m10 = counts['10'];
+  check('minute 10: ≤ 38 numbers, ≤ 15 controls, ≤ 230 words', !!m10 && m10.numbers <= 38 && m10.interactive <= 15 && m10.words <= 230,
+    m10 ? `${m10.numbers} numbers, ${m10.interactive} controls, ${m10.words} words` : 'no minute-10 snapshot');
   const paperclips = { 0: 10, 1: 12, 3: 15, 5: 30, 10: 26, 20: 29, end: 49 };
   const over = keys.filter((k) => counts[k] && counts[k].numbers > paperclips[k] * 1.6 + 6);
   check('numeric tokens stay near the Paperclips curve (≤ 1.6× + 6)', over.length === 0, over.length ? `over at ${over.join(', ')}` : 'Paperclips 10 / 12 / 15 / 30 / 26 / 29 / 49');

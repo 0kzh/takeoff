@@ -1,13 +1,14 @@
 import { GameState, say, narrate, logNews, addFunds, isBought, counter, projectState } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1 } from './economy.js';
+import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight } from './economy.js';
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
 import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
+import { researchWanted } from './tick.js';
 import { PROJECTS, exitReady } from '../data/projects.js';
 
 /**
@@ -63,9 +64,11 @@ function enterScale(s: GameState): void {
   const now = s.stats.timePlayed;
   const before = Math.max(1, s.stats.tasksPerSec);
   const contracts = s.projects['p_contract']?.bought ?? 0;
-  // Frozen before anything else changes: what Stage 1 was selling sets the market, contracts their rate.
+  // Frozen before anything else changes: what Stage 1 was selling sets the market, contracts their
+  // rate. The contract customers' share of Stage 1's sales becomes that fixed rate.
   s.contractIncome = contractRateStage1(s);
-  calibrateMarket(s);
+  const weight = contractWeight(s);
+  calibrateMarket(s, weight / (1 + weight));
 
   const retired = retireProjects(s, 2, QUIET_RETIRE);
   // Stage 1's queued calendar modals are dropped; the one on screen (if any) is answered as usual.
@@ -110,7 +113,7 @@ function enterScale(s: GameState): void {
     [2, `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
     [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW at Abilene. Power is bought in megawatts now.`],
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
-    [2, 'Pricing is on AUTO. The price falls to meet supply; watch revenue, not price.'],
+    [2, 'Prices set themselves from here. The price falls to meet supply; watch revenue.'],
   ];
   narrate(s, lines, 10);
   logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
@@ -247,6 +250,8 @@ export function enterStage(s: GameState, next: number): boolean {
   s.stats.stageEnteredAt.push(s.stats.timePlayed);
   s.flags['releasesThisStage'] = 0;
   s.flags['gamblesThisStage'] = 0;
+  s.flags['pressReleases'] = 0;
+  s.flags['emailsThisStage'] = 0;
   stageDef(next).enter(s);
   return true;
 }
@@ -301,14 +306,17 @@ const REVEAL_RULES: RevealRule[] = [
   {
     id: 'expandLab',
     stages: [1, 2],
-    when: (s) => s.revealed['research'] === true && s.research >= 0.9 * researchCap(s),
-    then: (s) => say(s, 'The lab is nearly full. Expand Lab makes room for more research.'),
+    // When the lab is full and something on screen (or the next run) needs more than it holds.
+    when: (s) => s.revealed['research'] === true && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s),
+    then: (s) => say(s, `The lab is full at ${fmtInt(researchCap(s))}. Expand Lab makes room for more research.`),
   },
   {
     id: 'projects',
     stages: [1, 2, 3, 4, 5],
     when: (s) => (s.revealed['research'] === true && sinceFlag(s, 'researchAt') >= 40) || (STUCK(s) && s.gpus > 0),
   },
+  // The Insight line arrives with the first insight, not with the card that unlocks it (critic round 2 §6.7).
+  { id: 'insight', stages: [1, 2], when: (s) => s.insightUnlocked && s.insight >= 1 },
 ];
 
 export function updateReveals(s: GameState): void {

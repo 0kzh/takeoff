@@ -14,9 +14,13 @@ const BENCH_WEIGHT = [0.9, 0.6, 0.5, 0.55, 0.3, 0.35];
 /** Crossing each tier bumps the major version: Sage-2 at 2×, Sage-3 at 4×, … */
 export const MAJOR_TIERS = [2, 4, 8, 16, 32, 64];
 export const FRONTIER_SCORE = 32;
+/** Insight each public release brings the lab (critic round 2 §6.7: insight was dead UI for an efficient player). */
+export const RELEASE_INSIGHT = 6;
+/** A run this close below a named tier is called the tier (Stage 2). */
+export const NEAR_MISS = 0.98;
 export const LEADERBOARD_SCORE = 36;
-export const RED_TEAM_SECONDS = 12;
-export const RED_TEAM_SECONDS_EVALS = 8;
+export const RED_TEAM_SECONDS = 8;
+export const RED_TEAM_SECONDS_EVALS = 5;
 /** Stage 2: 8 s per issue, 4 s once Automated evals exist. */
 export const RED_TEAM_SECONDS_S2 = 8;
 export const RED_TEAM_SECONDS_AUTO = 4;
@@ -268,8 +272,9 @@ export function startTraining(s: GameState): boolean {
   else t.run = run;
   t.runIndex += 1;
   s.stats.trainings += 1;
-  // Copies now differ from GPUs: the Copies line appears with the first run that diverts compute.
-  s.revealed['copies'] = true;
+  // Copies now differ from GPUs: the Copies line appears with the first run that diverts compute
+  // (from Stage 2; in Stage 1 the Training panel's own line says half the GPUs are training).
+  if (s.stage >= 2) s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
   say(s, `Training ${run.name}. Half the compute is diverted.`);
   if (yieldNow < 0.999) say(s, `Not enough compute. ${run.name} trains to ${Math.round(yieldNow * 100)}%.`);
@@ -323,8 +328,7 @@ export function updateTraining(s: GameState, dt: number): void {
       const r = t.run;
       if (r && r.phase === 'redteam' && r.issues > 0) {
         r.issues -= 1;
-        say(s, r.issues === 0 ? 'Red team signs off. Ready to release.'
-          : s.stage >= 2 ? `${pick(s, REDTEAM_LINES)} ${r.issues} open.` : pick(s, REDTEAM_LINES));
+        say(s, r.issues === 0 ? 'Red team signs off. Ready to release.' : `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
       }
     }
   }
@@ -335,11 +339,11 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
   if (run.elapsed < run.duration) {
     run.elapsed += dt;
     const progress = run.elapsed / run.duration;
-    // Stage 1: a flavour line at each quarter. Stage 2 on: one per run, at the halfway mark.
-    const flavorCount = s.stage >= 2 ? 1 : 3;
-    while (run.flavorShown < flavorCount && progress >= (s.stage >= 2 ? 0.5 : (run.flavorShown + 1) * 0.25)) {
-      const pool = TRAINING_FLAVOR[s.stage >= 2 ? 1 : run.flavorShown] ?? [];
-      run.flavorShown += 1;
+    // One flavour line per run, at the halfway mark (critic round 2 §6.1: the console is for
+    // lines that carry a number or an instruction).
+    if (run.flavorShown < 1 && progress >= 0.5) {
+      const pool = TRAINING_FLAVOR[1] ?? [];
+      run.flavorShown = 1;
       if (pool.length) say(s, pick(s, pool));
     }
     if (run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
@@ -366,9 +370,15 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
 export const GAMBLES_PER_STAGE = 3;
 
 function offerGamble(s: GameState, run: TrainingRun): void {
+  // Stage 3 brings its own events; nothing from Stage 2 opens a modal there (critic follow-up B6).
+  if (s.stage >= 3) {
+    run.gamble = 'declined';
+    return;
+  }
   const last = s.flags['lastGambleRun'];
   const count = (s.flags['gamblesThisStage'] as number) || 0;
-  let rested = typeof last !== 'number' || run.id - last >= 2;
+  // Stage 1: never on the first run (it is the tutorial run), then every other run.
+  let rested = s.stage === 1 && run.id <= 1 ? false : typeof last !== 'number' || run.id - last >= 2;
   let allowed = count < GAMBLES_PER_STAGE;
   if (s.stage >= 2) {
     // Stage 2 budget (stage2.md §5.2): at most one, on the first Capability run from ≥ 2.2×.
@@ -409,12 +419,12 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
       run.gainBonus += 0.01;
       break;
   }
-  // Stage 2 on: a console line carries its number (critic round 2: a number or an instruction).
-  const s2Line: Record<string, string> = {
+  // A console line carries its number (critic round 2: a number or an instruction).
+  const numbered: Record<string, string> = {
     contamination: 'Data contamination found in the eval set. The run gains a quarter less.',
     emergent: `Emergent ability: ${BENCHMARKS[bench] ?? 'a benchmark'} up a tier.`,
   };
-  say(s, s.stage >= 2 ? (s2Line[ev.id] ?? ev.line) : ev.line);
+  say(s, numbered[ev.id] ?? ev.line);
 }
 
 /**
@@ -424,14 +434,20 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
  */
 export function focusBase(s: GameState, run: TrainingRun): number {
   if (s.stage >= 2) return run.focus === 'capability' ? 0.10 + 0.02 * (rng(s) + rng(s)) : 0.07;
-  // Triangular on 12–18 %: the same range, less swing between seeds.
-  return run.focus === 'capability' ? 0.12 + 0.03 * (rng(s) + rng(s)) : 0.05;
+  // Triangular on 14–20 %: the same swing as before, two points higher (a fast lab still reaches 1.5×).
+  return run.focus === 'capability' ? 0.14 + 0.03 * (rng(s) + rng(s)) : 0.05;
 }
 
 function computeResults(s: GameState, run: TrainingRun): void {
   // Everything a run gains — focus, lucky events, the frontier bonus — scales with its compute.
   const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.computeYield * run.capMult;
   run.capAfter = run.capBefore * (1 + gain);
+  // Within 2 % below a named tier, the evaluators call it the tier (Stage 2: no 4-minute run for a
+  // hair at 3.97×). The rename below prints "good enough to be called Sage-N".
+  if (s.stage === 2) {
+    const tier = MAJOR_TIERS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
+    if (tier) run.capAfter = tier;
+  }
   run.benchmarks = BENCHMARKS.map((_, i) => {
     const base = 10 * (1 - Math.exp(-run.capAfter * BENCH_WEIGHT[i]! * 0.8));
     const noisy = base + rand(s, -0.4, 0.4) + run.benchBonus[i]!;
@@ -453,10 +469,10 @@ function computeResults(s: GameState, run: TrainingRun): void {
 
 function safetyInvestment(s: GameState, run: TrainingRun): number {
   let v = (run.focus === 'safety' ? 1.5 : 0) + (isBought(s, 'p_eval_team') ? 0.5 : 0) + (isBought(s, 'p_alignment_team') ? 1 : 0);
-  if (s.stage >= 2) {
-    // Stage 2: every Safety run released, and Automated evals, take 0.5 off the issue rate for good.
-    v += 0.5 * counter(s, 'safetyReleasesS2') + (isBought(s, 'p_auto_evals') ? 0.5 : 0);
-  }
+  // Every Safety run released takes 0.5 off the issue rate of every later run (critic round 2 §5:
+  // Safety removes the incident risk that shipped issues carry). Stage 2 adds Automated evals.
+  v += 0.5 * counter(s, 'safetyReleases');
+  if (s.stage >= 2 && isBought(s, 'p_auto_evals')) v += 0.5;
   return v;
 }
 
@@ -601,15 +617,23 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   // The first release is when the second run becomes possible: the Focus row appears now.
   s.revealed['focus'] = true;
   if (s.stage >= 2) releasedInStage2(s, run, isPublic);
+  if (run.focus === 'safety' && s.stage < 3) bump(s, 'safetyReleases');
   if (isPublic) {
     t.deployedName = run.name;
     s.capability = run.capAfter;
     s.hypeBoost = Math.max(s.hypeBoost, 2.0);
     s.stats.publicReleases += 1;
     if (s.flags['firstReleaseAt'] === undefined) s.flags['firstReleaseAt'] = s.stats.timePlayed;
-    // Every public release earns Trust, so Hire Researcher and Expand Lab keep coming back.
-    s.trust += 1;
-    say(s, `${pick(s, RELEASE_LINES).replace('{name}', run.name)} +1 Trust.`);
+    // A clean release earns Trust; one that ships open issues earns none (critic round 2 §5).
+    const line = pick(s, RELEASE_LINES).replace('{name}', run.name);
+    if (run.issues === 0) {
+      s.trust += 1;
+      say(s, `${line} +1 Trust.`);
+    } else {
+      say(s, `${line} No Trust: ${run.issues} open issue${run.issues === 1 ? '' : 's'} shipped.`);
+    }
+    // What a release teaches the lab: insight for the cards that need it (Stage 1–2).
+    if (s.stage < 3 && s.insightUnlocked) s.insight += RELEASE_INSIGHT;
     logNews(s, `OpenMind releases ${run.name}. ${pick(s, RELEASE_HEADLINES)}`);
     if (run.issues > 0) scheduleIncidents(s, run.issues, run.name);
   } else if (s.stage >= 2) {

@@ -157,7 +157,7 @@ try {
     'rented GPUs go back',
     'Power is bought in megawatts now.',
     'Tasks per second',
-    'Pricing is on AUTO.',
+    'Prices set themselves from here.',
   ];
   let wholeAt = null;
   let heldUntil = null;

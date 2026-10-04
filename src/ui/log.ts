@@ -8,7 +8,7 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 /** Entries drawn in the column; older ones have faded out of view anyway (ADR). */
-export const LOG_SHOWN = 6;
+export const LOG_SHOWN = 5;
 
 let lastKey = '';
 let lastLength = -1;

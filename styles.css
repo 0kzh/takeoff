@@ -419,6 +419,9 @@ div.storeRow[data-reveal].shown { display: flex; }
   transition: opacity 1s;
   pointer-events: none;
 }
+/* A repeatable offer (the custom contract) reads as a standing offer, not one more card. */
+.projectButton.repeatable { border: 3px double #000; }
+#focusNote { margin-top: 2px; }
 #toast.visible { opacity: 1; transition: opacity 0.2s; }
 
 /* ---------- dev overlay ---------- */
@@ -494,4 +497,9 @@ div.storeRow[data-reveal].shown { display: flex; }
   #graphCanvas { width: 100%; height: auto; aspect-ratio: 310 / 190; }
   #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
   #dev { width: auto; left: 8px; }
+  /* Touch targets nearer 44 px (critic round 2 §6.8). The "saved." toast has no free corner on a
+     phone, so it stays silent there rather than cover the last line of text. */
+  .button2 { min-height: 36px; padding: 6px 10px; font-size: 13px; margin: 2px 0; }
+  .modalButton { min-height: 44px; }
+  #toast { display: none; }
 }

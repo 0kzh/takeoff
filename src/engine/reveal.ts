@@ -19,6 +19,12 @@ import { visibleProjects } from './projects.js';
  * `GOVERNOR_SECONDS`.
  */
 export const DRIP_SECONDS = 15;
+/** Stage 1 once the Training panel is up. */
+export const STAGE1_DRIP_SECONDS = 30;
+/** Stage 1 until the Training panel is on screen: one card per 60 s (critic round 2 §6.1: minutes 3–10). */
+/** Stage 1: a card waits for room at most this long after the last first-time reveal (no long holes while saving). */
+export const STAGE1_GOVERNOR_SECONDS = 140;
+export const EARLY_DRIP_SECONDS = 60;
 export const LATE_SECONDS = 75;
 export const GOVERNOR_SECONDS = 150;
 /** No new panel or mechanic for this long: the governor pulls the next mechanic row (arc G2). */
@@ -26,7 +32,36 @@ export const MECHANIC_GOVERNOR_SECONDS = 240;
 
 /** Projects on screen at once (rescues, urgent fixes and the stage goal not counted). */
 export function maxVisible(s: GameState): number {
-  return s.stage === 1 ? 4 : 7;
+  return s.stage === 1 ? 4 : 6;
+}
+
+/**
+ * Stage 1 slows the drip while the early systems arrive: one card a minute until the Training panel,
+ * then one every 30 s (critic round 2 §6.1: no more than 16 new things in any six minutes); Stage 2, 15 s.
+ */
+function dripSeconds(s: GameState): number {
+  if (s.stage !== 1) return DRIP_SECONDS;
+  if (!s.revealed['training']) return EARLY_DRIP_SECONDS;
+  return STAGE1_DRIP_SECONDS;
+}
+
+/**
+ * Stage 1's governor, for an empty queue: after 140 s with nothing new, the first of these
+ * standalone cards that is not out yet comes out, its trigger aside (arc G1; Stage 2 has its own).
+ */
+const STAGE1_GOVERNED = ['p_dogfood', 'p_batch', 'p_agents', 'p_recruiter', 'p_alignment_team', 'p_safety_framework', 'p_distributed'];
+
+function stage1Governor(s: GameState): void {
+  if (s.stage !== 1 || !s.revealed['training'] || s.activeChoice) return;
+  if (s.stats.timePlayed - s.cadence.lastRevealAt < STAGE1_GOVERNOR_SECONDS) return;
+  for (const id of STAGE1_GOVERNED) {
+    const def = projectDef(id);
+    const st = s.projects[id];
+    if (!def || st?.shown || (st?.bought ?? 0) > 0 || !eligible(s, def)) continue;
+    show(s, def);
+    s.cadence.governed.push(`${Math.round(s.stats.timePlayed)}:${id}`);
+    return;
+  }
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {
@@ -111,8 +146,10 @@ export function updateProjects(s: GameState): void {
       if (approach) enqueueLate(s, def.id);
       continue;
     }
+    // Until the Training panel is up, a chained card waits for the drip like any other (critic round 2 §6.1).
+    const early = s.stage === 1 && !s.revealed['training'];
     if (exempt(s, def)) show(s, def);
-    else if (def.chain && free > 0 && !s.cadence.queue.includes(def.id)) {
+    else if (def.chain && !early && free > 0 && !s.cadence.queue.includes(def.id)) {
       show(s, def);
       free--;
     } else enqueue(s, def.id);
@@ -127,11 +164,13 @@ export function updateProjects(s: GameState): void {
     return !!def && !s.projects[id]?.shown && eligible(s, def);
   });
 
-  if (s.cadence.queue.length && now - s.cadence.lastDripAt >= DRIP_SECONDS) {
-    // The first queued project that fits: side-offers never wait for room.
+  if (s.cadence.queue.length && now - s.cadence.lastDripAt >= dripSeconds(s)) {
+    // The first queued project that fits: side-offers never wait for room. Stage 1: after 140 s
+    // with nothing new on screen, the next one comes out over the cap (Stage 2 has its governor).
+    const overdue = s.stage === 1 && s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS;
     const id = s.cadence.queue.find((q) => {
       const def = projectDef(q);
-      return !!def && (free > 0 || uncapped(s, def));
+      return !!def && (free > 0 || uncapped(s, def) || overdue);
     });
     const def = id ? projectDef(id) : undefined;
     if (def) {
@@ -139,6 +178,7 @@ export function updateProjects(s: GameState): void {
       s.cadence.lastDripAt = now;
     }
   }
+  if (s.cadence.queue.length === 0) stage1Governor(s);
 }
 
 /** Takes a project off the screen and out of the queue (it stopped making sense). */

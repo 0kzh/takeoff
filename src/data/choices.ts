@@ -12,13 +12,13 @@ export interface ChoiceOption {
   label: string;
   /** Short id recorded in the choice history and shown on the end screen. */
   record: string;
-  /** A function when it names a price that scales with the stage. */
-  tooltip?: string | ((s: GameState) => string);
+  /** A function when it names a price that scales with the stage (or was fixed when the modal opened). */
+  tooltip?: string | ((s: GameState, ctx: Ctx) => string);
   /** Stage 2 on: effect and cost in a few words, printed on the button under the label. */
   line?: string | ((s: GameState, ctx: Ctx) => string);
   /** What a greyed option is waiting for, when it is not simply its price. */
   needs?: string | ((s: GameState, ctx: Ctx) => string);
-  cost?: Cost | ((s: GameState) => Cost);
+  cost?: Cost | ((s: GameState, ctx: Ctx) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
   effect: (s: GameState, ctx: Ctx) => void;
   /** Logged in italics in the Developments column. */
@@ -46,9 +46,31 @@ function runFor(s: GameState, ctx: Ctx): TrainingRun | undefined {
 
 const clamp100 = (v: number) => Math.min(100, Math.max(0, v));
 
-/** The gamble in Stage 2 costs a minute of the lab's research (Stage 1: 500), rounded to 1,000. */
+/** The gamble costs a minute of the lab's research, to two figures (at least 500). */
 function gambleCost(s: GameState): number {
-  return s.stage >= 2 ? Math.max(1000, Math.round((60 * researchRate(s)) / 1000) * 1000) : 500;
+  return Math.max(500, twoFigures(60 * researchRate(s)));
+}
+
+/** To two significant figures, rounded up. */
+function twoFigures(raw: number): number {
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
+  return Math.ceil(raw / unit) * unit;
+}
+
+/** The first unbought rung of the Abilene ladder, and its price. */
+function nextRungPrice(s: GameState): number {
+  for (const [id, price] of [['p_site', 40000], ['p_interconnect', 80000], ['p_substation', 120000], ['p_datacenter', 185000]] as const) {
+    if (!(s.projects[id]?.bought ?? 0)) return price;
+  }
+  return 185000;
+}
+
+const ctxNum = (ctx: Ctx, k: string, d = 0) => (typeof ctx[k] === 'number' ? (ctx[k] as number) : Number(ctx[k] ?? d));
+
+/** A lasting multiplier on the contract customers (a board observer, a price cut). */
+function scaleContracts(s: GameState, m: number): void {
+  const now = typeof s.flags['contractTermsMult'] === 'number' ? (s.flags['contractTermsMult'] as number) : 1;
+  s.flags['contractTermsMult'] = now * m;
 }
 
 function gambleOdds(s: GameState): number {
@@ -94,7 +116,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'let her try',
         record: 'gamble',
         tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss adds red-team issues.`,
-        line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else 4–6 more issues · ${fmtNum(gambleCost(s), 0)} research`,
+        line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else more issues · ${fmtNum(gambleCost(s), 0)} research`,
         cost: (s) => ({ research: gambleCost(s) }),
         enabled: (s, ctx) => runFor(s, ctx)?.phase === 'training',
         effect: (s, ctx) => {
@@ -177,7 +199,8 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'release anyway',
         record: 'shipped issues',
-        tooltip: 'incidents follow in 2–4 minutes; each cuts demand for a minute',
+        tooltip: 'Incidents follow in 2–4 minutes: each cuts demand by 40% and pauses the contract customers for 1:30, and costs 1 Trust. No Trust for this release.',
+        line: 'incidents in 2–4 min: each pauses the contracts 1:30 · no Trust',
         effect: (s, ctx) => {
           s.flags['shipIssuesAsked'] = true;
           const run = runFor(s, ctx);
@@ -187,6 +210,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'keep red-teaming',
         record: 'red-teamed',
+        line: 'a clean release: +1 Trust',
         effect: (s) => {
           s.flags['shipIssuesAsked'] = true;
         },
@@ -196,9 +220,13 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_bridge',
     title: 'A Bridge Round',
-    text: () => [
-      'A fund offers $8,000 now, ahead of a proper round.',
-      'It wants a board observer, and the observer wants a seat at every meeting.',
+    // A quarter of the next Abilene rung, fixed when the offer arrives (critic round 2 §5).
+    onOpen: (s, ctx) => {
+      if (!ctx['amount']) ctx['amount'] = Math.round(0.25 * nextRungPrice(s));
+    },
+    text: (_s, ctx) => [
+      `A fund offers ${fmtMoney(ctxNum(ctx, 'amount', 10000))} now, ahead of a proper round.`,
+      'It wants a board observer, and the observer wants a say in which banks sign with OpenMind.',
     ],
     timer: 60,
     defaultOption: 1,
@@ -206,18 +234,24 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'take the bridge',
         record: 'bridge',
-        tooltip: '+$8,000, −1 Trust',
-        effect: (s) => {
-          addFunds(s, 8000);
+        tooltip: (_s, ctx) => `+${fmtMoney(ctxNum(ctx, 'amount', 10000))} now. −1 Trust. The observer steers deals to the fund's portfolio: contract customers buy 30% less, for good.`,
+        line: (_s, ctx) => `+${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} now · −1 Trust · contracts 30% smaller`,
+        effect: (s, ctx) => {
+          addFunds(s, ctxNum(ctx, 'amount', 10000));
           s.trust -= 1;
-          say(s, 'Bridge closed. $8,000 and a new face at board meetings.');
+          scaleContracts(s, 0.7);
+          say(s, `Bridge closed. ${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} and a new face at board meetings.`);
         },
         log: 'OpenMind takes a bridge round. The observer takes notes on everything.',
       },
       {
         label: 'wait for a real round',
         record: 'no bridge',
-        effect: () => undefined,
+        tooltip: (_s, ctx) => `The Series A pays ${fmtMoney(ctxNum(ctx, 'amount', 10000))} more when it comes.`,
+        line: (_s, ctx) => `the Series A pays ${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} more`,
+        effect: (s, ctx) => {
+          s.flags['seriesABonus'] = ctxNum(ctx, 'amount', 10000);
+        },
         log: 'OpenMind turns down a bridge round. The fund calls twice more.',
       },
     ],
@@ -235,10 +269,11 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'sign it',
         record: 'signed',
-        tooltip: '+1 Trust, marketing level −1',
+        tooltip: '+2 Trust: the eleven stay, and say so. Customers trust a lab that signs: demand +5% for good. True alignment +1.',
+        line: '+2 Trust · demand +5% for good',
         effect: (s) => {
-          s.trust += 1;
-          s.hypeLevel = Math.max(1, s.hypeLevel - 1);
+          s.trust += 2;
+          s.demandMult *= 1.05;
           s.alignmentTrue = Math.min(100, s.alignmentTrue + 1);
         },
         log: 'OpenMind signs the letter. Its training runs continue on schedule.',
@@ -246,16 +281,20 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'publish a rebuttal',
         record: 'rebuttal',
-        tooltip: 'marketing level +1, −1 Trust',
+        tooltip: 'Marketing level +1. Three of the eleven resign: −3 researchers.',
+        line: 'marketing level +1 · −3 researchers',
         effect: (s) => {
           s.hypeLevel += 1;
-          s.trust -= 1;
+          s.researchers = Math.max(1, s.researchers - 3);
+          say(s, 'Three of the signatories resign. Researchers −3.');
         },
-        log: 'OpenMind publishes a rebuttal: "the safest lab should be at the frontier." It is widely shared.',
+        log: 'OpenMind publishes a rebuttal: "the safest lab should be at the frontier." Three signatories resign.',
       },
       {
         label: 'say nothing',
         record: 'silence',
+        tooltip: 'Nothing changes.',
+        line: 'nothing changes',
         effect: () => undefined,
         log: 'OpenMind does not comment on the letter. The eleven signatories are asked to lunch.',
       },
@@ -264,9 +303,13 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_poach',
     title: 'A Better Offer',
+    // A minute of revenue, fixed when the offer arrives.
+    onOpen: (s, ctx) => {
+      if (!ctx['price']) ctx['price'] = Math.max(2000, twoFigures(60 * s.stats.revPerSec));
+    },
     text: () => [
       'A larger lab has offered two of your researchers twice their salary.',
-      'They would rather stay. They would also rather be paid.',
+      'They built the contract models. Their bank would follow them.',
     ],
     timer: 60,
     defaultOption: 2,
@@ -274,15 +317,17 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'match the offer',
         record: 'matched',
-        tooltip: 'both stay',
-        cost: { funds: 12000 },
+        tooltip: (_s, ctx) => `${fmtMoney(ctxNum(ctx, 'price', 12000))}. Both stay.`,
+        line: (_s, ctx) => `both stay · ${fmtMoneyShort(ctxNum(ctx, 'price', 12000))}`,
+        cost: (_s, ctx) => ({ funds: ctxNum(ctx, 'price', 12000) }),
         effect: () => undefined,
         log: 'OpenMind matches an offer for two researchers. Salaries come up at lunch.',
       },
       {
         label: 'offer equity',
         record: 'equity',
-        tooltip: 'both stay',
+        tooltip: '1 Trust. Both stay.',
+        line: 'both stay · 1 Trust',
         cost: { trust: 1 },
         effect: () => undefined,
         log: 'Two OpenMind researchers take equity instead of a raise. They check the valuation daily.',
@@ -290,12 +335,19 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'let them go',
         record: 'let go',
-        tooltip: '−2 researchers',
+        tooltip: '−2 researchers, and the newest contract leaves with them.',
+        line: (s) => ((s.projects['p_contract']?.bought ?? 0) > 0 ? '−2 researchers · the newest contract leaves with them' : '−2 researchers'),
         effect: (s) => {
           s.researchers = Math.max(1, s.researchers - 2);
-          say(s, 'Two researchers leave for a larger lab.');
+          const st = s.projects['p_contract'];
+          if (st && st.bought > 0) {
+            st.bought -= 1;
+            say(s, 'Two researchers leave for a larger lab. Their bank follows them: one contract fewer.');
+          } else {
+            say(s, 'Two researchers leave for a larger lab.');
+          }
         },
-        log: 'Two OpenMind researchers leave for a larger lab. They take a whiteboard.',
+        log: 'Two OpenMind researchers leave for a larger lab. They take a whiteboard, and a bank.',
       },
     ],
   },
@@ -312,16 +364,17 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'submit Sage',
         record: 'submitted',
-        tooltip: 'ahead of Anthrosoft: marketing level +1. Behind: −1 Trust',
+        tooltip: 'Ahead of Anthrosoft: marketing level +2. Behind: marketing level −2.',
+        line: 'ahead of Cadence: marketing +2 · behind: marketing −2',
         effect: (s) => {
           const won = s.capability >= s.rivalCapability;
           s.flags['leaderboardWon'] = won;
           if (won) {
-            s.hypeLevel += 1;
-            say(s, `${s.training.deployedName} tops the year-end board. Marketing level +1.`);
+            s.hypeLevel += 2;
+            say(s, `${s.training.deployedName} tops the year-end board. Marketing level +2.`);
           } else {
-            s.trust -= 1;
-            say(s, `${s.training.deployedName} places second, behind Cadence. Trust −1.`);
+            s.hypeLevel = Math.max(1, s.hypeLevel - 2);
+            say(s, `${s.training.deployedName} places second, behind Cadence. Marketing level −2.`);
           }
         },
         log: (s) => (s.flags['leaderboardWon']
@@ -331,6 +384,8 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'decline',
         record: 'declined',
+        tooltip: 'Nothing changes.',
+        line: 'nothing changes',
         effect: () => undefined,
         log: 'OpenMind declines the year-end leaderboard. Its row reads "declined to participate".',
       },
@@ -349,10 +404,11 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'open-source Sage-1',
         record: 'open-sourced',
-        tooltip: '+1 Trust, marketing level +1, lead −1 month',
+        tooltip: '+1 Trust. Developers build on the open model: demand +10% for good. The lead over Baiwen shrinks by a month.',
+        line: '+1 Trust · demand +10% for good',
         effect: (s) => {
           s.trust += 1;
-          s.hypeLevel += 1;
+          s.demandMult *= 1.1;
           s.lead = Math.max(0, s.lead - 1);
         },
         log: 'OpenMind releases the weights of Sage-1. Downloads crash the mirror.',
@@ -360,22 +416,32 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'cut the price',
         record: 'price cut',
-        tooltip: 'price −20%',
+        tooltip: 'Price −20% now. Every contract renews at the lower price: contract customers pay 30% less, for good.',
+        line: 'price −20% · contracts 30% smaller for good',
         effect: (s) => {
-          s.price = Math.max(0.01, Math.round(s.price * 0.8 * 100) / 100);
+          if (!s.autoPrice) s.price = Math.max(0.01, Math.round(s.price * 0.8 * 100) / 100);
+          scaleContracts(s, 0.7);
         },
-        log: 'OpenMind cuts prices by a fifth.',
+        log: 'OpenMind cuts prices by a fifth. Its banks ask for the same.',
       },
       {
         label: 'say nothing',
         record: 'silence',
-        effect: () => undefined,
+        tooltip: 'Customers try the free model: demand −15% for 3:00.',
+        line: 'demand −15% for 3:00',
+        effect: (s) => {
+          s.effects.push({ id: 'freeModel', remaining: 180, demandMult: 0.85 });
+        },
       },
     ],
   },
   {
     id: 'c_journalist',
     title: 'A Reporter Calls',
+    // A minute of research, fixed when she calls.
+    onOpen: (s, ctx) => {
+      if (!ctx['research']) ctx['research'] = Math.max(1500, twoFigures(30 * researchRate(s)));
+    },
     text: (s) => [
       `The piece is about how ${s.training.deployedName} was tested.`,
       'She has a source on the red team.',
@@ -386,10 +452,12 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'publish the system card',
         record: 'system card',
-        tooltip: '1,500 research. +1 Trust, apparent alignment +2, government relations +2',
-        cost: { research: 1500 },
+        tooltip: (_s, ctx) => `${fmtNum(ctxNum(ctx, 'research', 1500), 0)} research. +1 Trust. Customers trust what they can read: demand +10% for good.`,
+        line: (_s, ctx) => `+1 Trust · demand +10% · ${fmtNum(ctxNum(ctx, 'research', 1500), 0)} research`,
+        cost: (_s, ctx) => ({ research: ctxNum(ctx, 'research', 1500) }),
         effect: (s) => {
           s.trust += 1;
+          s.demandMult *= 1.1;
           s.alignmentApparent = Math.min(100, s.alignmentApparent + 2);
           s.govRelations = Math.min(100, s.govRelations + 2);
         },
@@ -398,12 +466,13 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'no comment',
         record: 'no comment',
-        tooltip: 'marketing level +1, government relations −2',
+        tooltip: 'The piece runs without OpenMind: demand −30% for 3:00. Government relations −2.',
+        line: 'the piece runs: demand −30% for 3:00',
         effect: (s) => {
-          s.hypeLevel += 1;
+          s.effects.push({ id: 'thePiece', remaining: 180, demandMult: 0.7 });
           s.govRelations = Math.max(0, s.govRelations - 2);
         },
-        log: '"OpenMind declined to comment." The piece is shared widely.',
+        log: '"OpenMind did not respond to a request for comment." The piece is shared widely.',
       },
     ],
   },
