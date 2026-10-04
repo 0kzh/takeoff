@@ -5,11 +5,12 @@ An incremental browser game about an AI lab racing to superintelligence, in the 
 modals). You run OpenMind from July 2025: complete tasks, bill them, rent GPUs, hire researchers,
 train and release Sage models, and watch the world react in the margin.
 
-Built so far: the full architecture, **Stage 1 — The Startup** (about 27–31 minutes) and
-**Stage 2 — Scale** (about 37–41 minutes). Stage 1's last third is the Abilene site ladder;
-breaking ground opens Stage 2, where OpenMind owns its datacenters: GPU lots, power plants and an
-interconnect queue, an AUTO-priced market, data, two training pipelines, rivals, government,
-public approval, security and an alignment number nobody can see. `Let Sage-3 write the code`
+Built so far: the full architecture, **Stage 1 — The Startup** (about 26–34 minutes) and
+**Stage 2 — Scale** (about 36–42 minutes). Stage 1's last third is the Abilene site ladder;
+breaking ground opens Stage 2, where OpenMind owns its datacenters: GPU lots in three sizes,
+datacenters that take time to build, power plants and an interconnect queue, an AUTO-priced
+market, data, two training pipelines, rivals, government, public approval, security and an
+alignment number nobody can see. `Let Sage-3 write the code`
 ends it and opens the Stage 3 shell (narrated arrival; Stage 3's content is not built yet). The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the
 two differ, `docs/stages.md` and the code win).
 
@@ -148,7 +149,8 @@ Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 
 * **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at Break ground
   (bot, seeds 1–5; seed 2's records), run through the arrival; Stage 3 is the median Stage 2 exit
-  (bot from the Stage 2 preset, seeds 1–5; seed 3's records) run through the Stage 3 arrival; 4–5
+  (bot from the Stage 2 preset, seeds 1–5, rebuilt after the Stage 2 critic's round-1 fixes; seed
+  1's records, 37:14) run through the Stage 3 arrival; 4–5
   load the Stage 3 preset and say `preset pending`.
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save.
@@ -191,6 +193,7 @@ npm run sim -- --minutes 45 --seed 1                    # full timeline, bot pol
 npm run sim -- --minutes 45 --seed 3 --quiet            # minute lines and the summary
 npm run sim -- --minutes 45 --seed 2 --policy naive     # the critic's scripted first-timer
 npm run sim -- --minutes 45 --seed 2 --policy greedy    # the same, renting whenever it can and never saving
+npm run sim -- --minutes 45 --seed 2 --policy trainfirst  # the same, training whenever Train is enabled before saving
 npm run sim -- --minutes 45 --seed 1 --json             # one machine-readable summary line
 npm run sim -- --minutes 60 --stop-at-stage 2
 npm run sim -- --minutes 60 --preset 2 --stop-at-stage 3   # Stage 2 from its preset
@@ -201,11 +204,12 @@ npm run sim -- --minutes 60 --preset 2 --variant modals-worst --json
 3: the Stage 2 median exit). `--variant` plays the policy with one decision fixed. Both stages:
 `modals-best` / `modals-worst` (the most careful- or reckless-looking answer to every modal, waiting
 for a greyed careful one), `modals-last`, `modals-ignore` (alias `ignore-modals`: every event runs
-out its timer to the default), `redteam-never`. Stage 1: `price-never` (the opening price is never
-touched), `focus-efficiency` / `focus-safety`. Stage 2: `slider-N` (copies on research fixed at
-N %), `safety-0` / `safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`, `auto-off`.
+out its timer to the default), `redteam-never`, `focus-efficiency` / `focus-safety` (every run).
+Stage 1: `price-never` (the opening price is never touched). Stage 2: `slider-N` (copies on research
+fixed at N %), `safety-0` / `safety-2` (Safety runs), `full-runs` (never Train now),
+`gulf-sign` / `gulf-domestic`.
 
-Three policies play through `actions` only:
+Four policies play through `actions` only:
 
 * **bot** (default) — a reasonable player: the first-timer's purchase loop with judgment on top.
   It prices every second (Dynamic pricing once offered), answers each modal with the careful
@@ -219,6 +223,12 @@ Three policies play through `actions` only:
   to zero, and stops the GPU and marketing drip once an Abilene rung is on screen.
 * **greedy** — the naive player without restraint: rents a GPU whenever one is affordable, buys
   everything else the moment it can, and never saves (the rental quota is what stops it).
+* **trainfirst** — the naive player who presses Train (and, in Stage 2, Train now) whenever it is
+  enabled before saving for anything else: the critic harness's first-timer, in the sim. From the
+  Stage 2 arrival naive, greedy and trainfirst all play this way (greedy pressing the
+  Infrastructure buttons up to fifteen times a check); its Infrastructure follows the main lot's
+  reason (a lot when it is enabled, the cheapest power per MW at "no power", a hall at "no
+  room"), as the harness does.
 
 Both read a modal for 2.5 s before answering. The output contains one line per minute, one line
 per event (BUY, REVEAL, PROJECT shown, MODAL, TRAIN, RELEASE, STAGE, LOG, CHOICE, IDLE RESCUE),
@@ -232,19 +242,27 @@ worst 5-minute window, Stage 1 idle rescues (and any at 0 tasks), and soft-lock 
 without production in Stage 1). `--json` prints the summary only, as one line.
 
 In Stage 2 the bot follows `stage2.md` §9.1 (modals; free and cheap cards; the binding wall —
-power, then room, with turbines when a reactor is out of reach and the next hall built once the
-last one is 80 % full; training once the cluster gives 60 % of the compute wanted; a wider market
-first; other cards in table order, the next run's money lent for 30 s of revenue at most; GPU lots
-until the Standing order; Trust; the slider at 20 %), naive and greedy §9.2 (every affordable card,
-every enabled Infrastructure button top to bottom, greedy five times over). The Stage 1 summary
+power when under a thousand GPUs' worth is left, then room, with turbines when a reactor is out of
+reach and the next hall built once the last one is 70 % full; training once the cluster gives 49 %
+of the compute wanted, the game's own run hold; Train now when the full run is more than 45 s
+away; a wider market first; other cards in table order, the next run's money lent for 30 s of
+revenue at most; the largest GPU lot that fits, the main lot's hundreds when none does; Trust; the
+slider at 20 %). The Stage 1 summary
 adds the reveal → purchase latency, the densest six minutes of first-time reveals and the exit
 state (capability, alignment, Trust, staff, marketing, contracts, revenue, price, GPUs,
 incidents). The Stage 2 summary block adds the A1–A19 acceptance numbers
 (duration, reveal and mechanic gaps, training intervals, governor pulls, modals, visible cards and
 queue waits, first power / datacenter / AI assistants, GPU presses before the Standing order,
 5-minute marks), the reveal → purchase latency per card (median and the share bought within 10 s),
-the modal answers, and the exit state (capability, alignment true / apparent, government,
-approval, lead, funds, security level).
+the modal answers, the exit state (capability, alignment true / apparent, government, approval,
+lead, funds, security level), and the critic's hands-and-eyes measures from 3:00 on (G24–G26): the
+share of 2-s checks with no enabled purchase and with two or more distinct ones (lot sizes count
+once), the share of the stage after 10:00 spent inside gaps of 30 s or more between the player's
+actions, and the longest interval between two model releases (from the arrival).
+
+Stage 2 targets (critic round 1; the harness's first-timer and the bot): 36:00–44:00; no enabled
+purchase in at most half of the checks; two or more affordable in at least a quarter; at most 35 %
+of the stage after 10:00 in click gaps of 30 s or more; no release interval over 5:30.
 
 Stage 1 targets (seeds 1–5): transition 25:00–35:00 (bot) / 26:00–40:00 (naive and greedy),
 longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes, capability
@@ -279,5 +297,7 @@ backlog), no Stage 1 diagnosis line, the Stores rows and a hover breakdown, the 
 drawn, every Stage 2 panel appearing, the event panel (an effect line on every option, keyboard
 focus inside it, the page behind still clickable, Escape taking a timed default), save → reload
 mid-run, mid-interconnect-queue and mid-cooldown, numbers / controls / words on screen at each
-5-minute mark against `stage2.md` §6.3, the Stage 3 narration and dev overlay, the Stage 3 preset,
+5-minute mark (numbers ≤ 60 at 5:00, ≤ 70 at 10:00, ≤ 80 after, set against Paperclips' Stage 2:
+39 and 54 at 5:00 and 10:00 with a nearly empty early stage, 66–83 at the marks from 15:00;
+controls ≤ 30), the Stage 3 narration and dev overlay, the Stage 3 preset,
 and 390 px without horizontal overflow. Screenshots go to `agent-tools/shots/stage2/`.
