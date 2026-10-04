@@ -76,6 +76,16 @@ function enterScale(s: GameState): void {
   calibrateMarket(s, weight / (1 + weight));
 
   const retired = retireProjects(s, 2, QUIET_RETIRE);
+  // Priced cards carried over wait for the first run like Stage 2's own (stage2-round2-fixes.md item 1):
+  // they leave the screen here and come back, at the price they had, once it starts. On screen they
+  // took the arrival's research before the first model (a first-timer's run 1 at 2:49, not 1:30).
+  for (const def of PROJECTS) {
+    const st = s.projects[def.id];
+    if (!st?.shown || st.bought >= def.uses || !def.stages.includes(2)) continue;
+    if (def.pinned || def.rescue || def.urgent?.(s) === true) continue;
+    const c = def.cost(s);
+    if ((c.research ?? 0) > 0 || (c.funds ?? 0) > 0) withdrawProject(s, def.id);
+  }
   // Stage 1's queued calendar modals are dropped; the one on screen (if any) is answered as usual.
   s.choiceQueue = [];
 
