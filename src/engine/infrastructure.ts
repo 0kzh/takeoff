@@ -1,7 +1,8 @@
 import { GameState, PowerOrder, say, logNews, addFunds, press, isBought } from './state.js';
-import { fmtInt, fmtNum, fmtClock } from './format.js';
+import { fmtInt, fmtClock } from './format.js';
 import { trainCost, trainSlotFree, computeYield } from './training.js';
 import { visibleProjects } from './projects.js';
+import { choiceById, optionCost } from './events.js';
 
 /**
  * Stage 2 infrastructure (stage2.md §2.1): datacenters give room, plants give power, GPUs arrive
@@ -14,7 +15,7 @@ import { visibleProjects } from './projects.js';
  * arrival revenue: `R0 / 650`, where R0 is task revenue (contracts excluded) 30 s after arrival from
  * the Stage 2 preset, median of seeds 1–5 (stage2.md "How to read the numbers", §9.4).
  */
-export const S2_FUNDS_SCALE = 1.9;
+export const S2_FUNDS_SCALE = 2.4;
 
 /** A Stage 2 funds price: scale-1 dollars → dollars on screen. */
 export function s2(amount: number): number {
@@ -158,11 +159,26 @@ export function lotCost(s: GameState): number {
 }
 
 /** Why the lot button is greyed for a reason other than money ('' when it is not). */
-export function lotReason(s: GameState): '' | 'no room' | 'no power' | 'standing order' {
-  if (standingOrderOn(s)) return 'standing order';
+/** What stops the next lot: room or power (the standing order never locks the button). */
+export function lotReason(s: GameState): '' | 'no room' | 'no power' {
   if (lotSize(s) >= 1000) return '';
   if (freeSlots(s) < 1000 && freeSlots(s) <= freePowerGpus(s)) return 'no room';
   return 'no power';
+}
+
+/**
+ * With the standing order on and room and power free: when it will buy the next lot, as progress
+ * (`standing order: next lot in about 0:40`; the lot's price is beside it); '' when it buys this second.
+ */
+export function lotNote(s: GameState): string {
+  if (!standingOrderOn(s) || lotReason(s)) return '';
+  const lot = lotSize(s);
+  const cost = Math.round(lot * gpuUnitPrice(s));
+  const need = cost + standingReserve(s);
+  if (s.funds >= need) return '';
+  const eta = (need - s.funds) / Math.max(1, s.stats.revPerSec);
+  if (eta < 1) return '';
+  return eta < 600 ? `standing order: next lot in about ${fmtClock(eta)}` : 'standing order: saving for the next lot';
 }
 
 export function standingOrderOn(s: GameState): boolean {
@@ -179,8 +195,9 @@ function addLot(s: GameState, lot: number, cost: number): void {
  * The player's Buy GPUs. While the standing order is on, it buys the lots (keeping the next run's
  * money in reserve) and the button waits on it: no verb is pressed by hand once it is automated.
  */
+/** Buy a lot by hand (also with the standing order on: the order never takes the button away). */
 export function buyGpuBatch(s: GameState): boolean {
-  if (s.stage < 2 || !s.revealed['infrastructure'] || standingOrderOn(s)) return false;
+  if (s.stage < 2 || !s.revealed['infrastructure']) return false;
   const lot = lotSize(s);
   if (lot < 1000) return false;
   const cost = Math.round(lot * gpuUnitPrice(s));
@@ -211,7 +228,22 @@ export function standingReserve(s: GameState): number {
     const f = p.cost(s).funds ?? 0;
     if (f > 0 && (fix === 0 || f < fix)) fix = f;
   }
-  return Math.max(run, fix);
+  return Math.max(run, fix, offerOnTable(s));
+}
+
+/**
+ * An open event with a priced answer the lab cannot pay yet (the publishers' licence): the order
+ * leaves that much in hand while the event waits, so a lot is not what decides it.
+ */
+function offerOnTable(s: GameState): number {
+  const def = s.activeChoice ? choiceById(s.activeChoice.id) : undefined;
+  if (!def) return 0;
+  let price = 0;
+  for (const opt of def.options) {
+    const f = optionCost(s, opt)?.funds ?? 0;
+    if (f > s.funds && (price === 0 || f < price)) price = f;
+  }
+  return price;
 }
 
 export function runStandingOrder(s: GameState): void {
@@ -270,7 +302,7 @@ export function buildDatacenter(s: GameState): boolean {
   addFunds(s, -next.cost);
   s.datacenters = next.n;
   press(s, 'datacenter');
-  say(s, `Datacenter ${next.n} complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
+  say(s, `Datacenter complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
   return true;
 }
 
@@ -325,7 +357,7 @@ export function buyTurbines(s: GameState): boolean {
     logNews(s, 'Gas turbines arrive at Abilene on forty trucks. The county schedules a hearing.');
     s.flags['firstGasAt'] = s.stats.timePlayed;
   } else {
-    say(s, `Gas turbines online. +20 MW, ${fmtInt(s.powerCapacityMW)} MW in all.`);
+    say(s, 'Gas turbines online. +20 MW.');
   }
   return true;
 }
@@ -345,11 +377,11 @@ export function buySolar(s: GameState): boolean {
   if (s.funds < cost) return false;
   addFunds(s, -cost);
   const n = s.solarFarms + queued(s, 'solar').length + 1;
-  s.powerQueue.push({ kind: 'solar', mw: SOLAR_MW, remaining: solarSeconds(s), label: `Solar farm ${n}` });
+  s.powerQueue.push({ kind: 'solar', mw: SOLAR_MW, remaining: solarSeconds(s), label: 'Solar farm' });
   s.revealed['queue'] = true;
   press(s, 'solar');
   const eta = solarEta(s, queued(s, 'solar').length - 1);
-  say(s, `The Interconnect Queue — ${fmtClock(eta)} until Solar farm ${n} is connected.`);
+  say(s, `The Interconnect Queue — ${fmtClock(eta)} until the farm is connected.`);
   if (n === 1) logNews(s, 'The grid interconnect queue in Texas is 36 months. OpenMind\'s lawyers find a shorter line.');
   return true;
 }
@@ -404,7 +436,7 @@ export function updatePowerQueue(s: GameState, dt: number): void {
     s.powerCapacityMW += o.mw;
     if (o.kind === 'solar') {
       s.solarFarms += 1;
-      say(s, `${o.label} connected. +${o.mw} MW.`);
+      say(s, `Solar farm connected. +${o.mw} MW.`);
     } else if (o.kind === 'nuclear') {
       s.reactors += 1;
       say(s, `The Nuclear PPA delivers. +${fmtInt(o.mw)} MW.`);
@@ -416,13 +448,13 @@ export function updatePowerQueue(s: GameState, dt: number): void {
   }
 }
 
-/** The panel's queue line: `Interconnect queue: Solar farm 2 — 2:41 · 1 waiting`; '' when empty. */
+/** The panel's queue line: `Interconnect queue: solar farm — 2:41 · 1 waiting`; '' when empty. */
 export function queueLine(s: GameState): string {
   const parts: string[] = [];
   const solar = queued(s, 'solar');
   if (solar.length) {
     const waiting = solar.length - 1;
-    parts.push(`Interconnect queue: ${solar[0]!.label} — ${fmtClock(Math.ceil(solar[0]!.remaining))}${waiting ? ` · ${waiting} waiting` : ''}`);
+    parts.push(`Interconnect queue: solar farm — ${fmtClock(Math.ceil(solar[0]!.remaining))}${waiting ? ` · ${waiting} waiting` : ''}`);
   }
   for (const o of s.powerQueue) {
     if (o.kind === 'nuclear') parts.push(`Reactor restart — ${fmtClock(Math.ceil(o.remaining))}`);
@@ -448,13 +480,13 @@ export function infrastructureMessages(s: GameState): void {
     if (!s.flags[key]) {
       s.flags[key] = true;
       const fix = s.revealed['solarButton'] ? 'Gas is fast; solar is cheap.' : 'Gas turbines are fast.';
-      say(s, `No power for more GPUs — ${fmtNum(powerDrawMW(s), 1)} of ${fmtInt(s.powerCapacityMW)} MW in use. ${fix}`);
+      say(s, `No power for more GPUs — all ${fmtInt(s.powerCapacityMW)} MW in use. ${fix}`);
     }
   } else if (reason === 'no room') {
     const key = `noRoom:${s.datacenters}`;
     if (!s.flags[key]) {
       s.flags[key] = true;
-      say(s, `No room for more GPUs — ${fmtInt(gpuCapacity(s))} slots, all full. Build Datacenter ${s.datacenters + 1}.`);
+      say(s, `No room for more GPUs — all ${fmtInt(gpuCapacity(s))} slots full. Build another datacenter.`);
     }
   }
 }

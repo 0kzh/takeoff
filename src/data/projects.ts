@@ -42,6 +42,8 @@ export interface ProjectDef {
   expires?: (s: GameState) => boolean;
   /** A side-offer of the stage goal (the Abilene extras): drips in, but never fills the cap. */
   sideline?: boolean;
+  /** Stage 2: appears on its trigger even when six cards are up (the approach's last new row, G6). */
+  ignoresCap?: boolean;
   /**
    * Stage 2 approach items (stage2.md §4.1): cannot appear before the best model reaches 3×, and
    * the late drip releases at most one every 75 s, so the tail of the stage cannot run dry.
@@ -868,7 +870,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_research_cluster',
       title: 'Research cluster',
       cost: () => ({ funds: s2(60000) }),
-      description: 'Experiment servers: research capacity ×4, and insight trickles in below it.',
+      description: 'Experiment servers: four times the research capacity, and insight trickles in below it.',
       trigger: (s) => capWall(s) || ts(s) >= 60,
       urgent: atPlateau,
       buy: (s) => {
@@ -950,7 +952,7 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 90,
       title: 'Agent scaffolding',
       cost: { research: 90000 },
-      description: 'Planners, checkers and retries: copies finish 25% more tasks.',
+      description: 'Planners, checkers and retries: copies finish a quarter more tasks.',
       trigger: (s) => s2Releases(s) >= 2,
       buy: (s) => {
         s.copyBoost *= 1.25;
@@ -963,14 +965,14 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 90,
       title: 'Experiment scheduler',
       cost: () => ({ funds: s2(400000) }),
-      description: 'Experiments queue themselves overnight: research capacity ×4.',
+      description: 'Experiments queue themselves overnight: four times the research capacity.',
       trigger: (s) => isBought(s, 'p_research_cluster') && capWall(s),
       prereq: (s) => isBought(s, 'p_research_cluster'),
       urgent: (s) => isBought(s, 'p_research_cluster') && atPlateau(s),
       buy: (s) => {
         s.labMult *= 4;
       },
-      consoleMsg: 'Experiments queue themselves overnight. Research capacity ×4.',
+      consoleMsg: 'Experiments queue themselves overnight. The lab holds four times as much.',
     }),
     s2project({
       id: 'p_spec',
@@ -1092,7 +1094,7 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 90,
       title: 'Long-horizon memory',
       cost: { research: 250000 },
-      description: 'Copies remember yesterday: they finish 25% more tasks.',
+      description: 'Copies remember yesterday: they finish a quarter more tasks.',
       trigger: (s) => s2Releases(s) >= 5 || best(s) >= 2.6,
       buy: (s) => {
         s.copyBoost *= 1.25;
@@ -1102,16 +1104,17 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_international',
-      revealFunds: 60,
       title: 'International launch',
-      cost: () => ({ funds: s2(600000), research: 100000 }),
+      // Priced to be bought when it shows (minutes 13–15): the market widens before the sag (B5).
+      cost: () => ({ funds: s2(500000), research: 50000 }),
       description: 'Forty countries on the same day: market ×1.6.',
-      trigger: (s) => (counter(s, 'r0') > 0 && s.stats.revPerSec >= 28 * counter(s, 'r0')) || s.date >= monthOf(2026, 6),
+      // Minutes 13–15 (May): the market widens before the mid-stage data wall (critic follow-up B5).
+      trigger: (s) => (counter(s, 'r0') > 0 && s.stats.revPerSec >= 12 * counter(s, 'r0')) || s.date >= monthOf(2026, 5),
       buy: (s) => {
         s.demandMult *= 1.6;
       },
       stages: [2, 3],
-      consoleMsg: 'Sage launches in 40 countries. Market ×1.6.',
+      consoleMsg: 'Sage launches in forty countries. Market ×1.6.',
       logMsg: 'Sage launches in forty countries on the same day. Two ban it by Friday.',
     }),
     s2project({
@@ -1144,7 +1147,7 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 90,
       title: 'Distillation: Sage-mini',
       cost: { research: 350000, insight: 150 },
-      description: 'A small model taught by the big one: copies per GPU ×2, market ×1.3.',
+      description: 'A small model taught by the big one: twice the copies per GPU, and a wider market.',
       trigger: (s) => best(s) >= 2.6 || s.date >= monthOf(2026, 9),
       buy: (s) => {
         s.copiesPerGPU *= 2;
@@ -1201,14 +1204,14 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 60,
       title: 'Checkpoint farm',
       cost: () => ({ funds: s2(12000000) }),
-      description: 'Every run keeps every checkpoint: research capacity ×4.',
+      description: 'Every run keeps every checkpoint: four times the research capacity.',
       trigger: (s) => isBought(s, 'p_exp_scheduler') && capWall(s),
       prereq: (s) => isBought(s, 'p_exp_scheduler'),
       urgent: (s) => isBought(s, 'p_exp_scheduler') && atPlateau(s),
       buy: (s) => {
         s.labMult *= 4;
       },
-      consoleMsg: 'Checkpoint farm online. Research capacity ×4.',
+      consoleMsg: 'Checkpoint farm online. The lab holds four times as much.',
     }),
     s2project({
       id: 'p_series_c',
@@ -1304,11 +1307,13 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_g6_preorder',
+      ignoresCap: true,
       late: true,
       title: 'Nimbus G6 pre-order',
       cost: () => ({ funds: s2(40000000) }),
       description: '2027\'s wafers paid for now: 100,000 G6s when Formosa Fab can ship them.',
-      trigger: (s) => best(s) >= LATE_AT(3.8),
+      // The approach's last new row: the release before the exit, or a month after the pact (A4's tail).
+      trigger: (s) => best(s) >= LATE_AT(3.7) || (s.revealed['shareEvals'] === true && s.date >= monthOf(2026, 11)),
       onShow: (s) => {
         s.revealed['chipsRow'] = true;
       },

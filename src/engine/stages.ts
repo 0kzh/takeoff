@@ -157,6 +157,8 @@ function enterTakeoff(s: GameState): void {
     }
   }
   const retired = retireProjects(s, 3, []);
+  // Stage 2's approach cards leave quietly with the stage (they are Stage 2's beats, not Stage 3's).
+  for (const p of PROJECTS) if (p.late && s.projects[p.id]?.shown && !(s.projects[p.id]?.bought ?? 0)) withdrawProject(s, p.id);
   s.choiceQueue = [];
   s.autoPrice = true;
   hide(s, STAGE2_ONLY_FLAGS);

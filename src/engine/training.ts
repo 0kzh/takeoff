@@ -1,11 +1,12 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { activeGpus, effGpus, S2_FUNDS_SCALE } from './infrastructure.js';
-import { researchCap } from './economy.js';
+import { researchCap, researchRate } from './economy.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
-import { fmtNum } from './format.js';
+import { fmtNum, fmtClock, fmtMoneyShort } from './format.js';
+import { crawlRate, synthRate, flywheelRate, moveGov } from './world.js';
 
 export const EVAL_SECONDS = 5;
 export const BENCHMARKS = ['Coding', 'Research', 'Persuasion', 'Agency', 'Bio', 'Cyber'] as const;
@@ -191,7 +192,7 @@ function nextVersion(s: GameState): { major: number; minor: number } {
   return { major: s.training.major, minor: s.training.minor + 1 };
 }
 
-/** Why Train is greyed ('' when it can start or only money is short): the reason line under it. */
+/** The wall that binds the next run, for the sim and the walls' console lines ('' when none does). */
 export function trainBlocker(s: GameState): string {
   const t = s.training;
   if (t.cooldown > 0) return `evaluation month — ${Math.ceil(t.cooldown)} s`;
@@ -199,6 +200,36 @@ export function trainBlocker(s: GameState): string {
   if ((cost.research ?? 0) > researchCap(s)) return `lab holds ${fmtNum(researchCap(s), 0)}`;
   if (cost.data && s.data + 1e-9 < cost.data) return `needs ${fmtNum(cost.data, 1)} T data`;
   return '';
+}
+
+/**
+ * Why Train is grey, and roughly for how long (arc G6: every wait is named): the evaluation
+ * month, the pipeline, the lab's size, or the shortfall that will take longest to fill —
+ * `short 41,000 research — about 1:20`, `short 5.6 T data — about 2:10`, `short $1.2M — about 0:45`.
+ */
+export function trainWait(s: GameState): string {
+  const t = s.training;
+  if (!s.revealed['training']) return '';
+  if (t.cooldown > 0) return `evaluation month — ${fmtClock(t.cooldown)}`;
+  if (!trainSlotFree(s)) return 'waiting for the pipeline';
+  const cost = trainCost(s);
+  const cap = researchCap(s);
+  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}`;
+  const waits: [number, string][] = [];
+  // Stage 1 names the resource and the time only (`research — about 0:45`: its cost line is right
+  // above, and minute 10 stays at 38 numbers); from Stage 2 the shortfall too (critic follow-up B8).
+  const amounts = s.stage >= 2;
+  const add = (short: number, rate: number, label: string, word: string) => {
+    if (short <= 1e-9) return;
+    const eta = rate > 0 ? short / rate : Infinity;
+    const what = amounts ? `short ${label}` : word;
+    waits.push([eta, `${what}${Number.isFinite(eta) && eta < 3600 ? ` — about ${fmtClock(eta)}` : ''}`]);
+  };
+  add((cost.research ?? 0) - s.research, researchRate(s), `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
+  if (cost.data) add(cost.data - s.data, crawlRate(s) + synthRate(s) + flywheelRate(s), `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
+  add((cost.funds ?? 0) - s.funds, s.stats.revPerSec, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
+  waits.sort((x, y) => y[0] - x[0]);
+  return waits[0]?.[1] ?? '';
 }
 
 /** A slot is free for a new run: none training, and the release slot empty (or a second pipeline). */
@@ -277,7 +308,7 @@ export function startTraining(s: GameState): boolean {
   if (s.stage >= 2) s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
   say(s, `Training ${run.name}. Half the compute is diverted.`);
-  if (yieldNow < 0.999) say(s, `Not enough compute. ${run.name} trains to ${Math.round(yieldNow * 100)}%.`);
+  if (yieldNow < 0.999) say(s, `Not enough compute: this run trains to ${Math.round(yieldNow * 100)}%.`);
   if (s.stage >= 2) startedInStage2(s, run);
   return true;
 }
@@ -681,7 +712,7 @@ function releasedInStage2(s: GameState, run: TrainingRun, isPublic: boolean): vo
     s.lead -= 0.15;
     if (run.issues > 0) s.alignmentTrue = clamp100(s.alignmentTrue - run.issues);
     if (s.shareEvals) {
-      s.govRelations = clamp100(s.govRelations + 1);
+      moveGov(s, 1);
       s.alignmentApparent = clamp100(s.alignmentApparent + 1);
       s.lead -= 0.1;
     }

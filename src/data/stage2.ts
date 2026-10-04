@@ -4,6 +4,7 @@ import { monthOf } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { gpuCapacity, queuedMW } from '../engine/infrastructure.js';
 import { dataShort } from '../engine/world.js';
+import { trainingRun } from '../engine/training.js';
 import { openChoice, fireDevelopment, modalCanOpen } from '../engine/events.js';
 import { LATE_AT } from './projects.js';
 
@@ -146,12 +147,12 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_memory'),
   project('p_international'),
   project('p_g5'),
-  flagRow('panel-public', 'public', { mechanic: true, trigger: (s) => s.jobsDisplaced >= 0.1 || s.date >= monthOf(2026, 8) }),
+  flagRow('panel-public', 'public', { mechanic: true, trigger: (s) => s.jobsDisplaced >= 0.07 || s.date >= monthOf(2026, 8) }),
   project('p_free_tier'),
   choiceRow('c_evals_month', { trigger: (s) => s.flags['evalsMonthDue'] === true, prereq: (s) => s.flags['evalsMonthDue'] === true }),
   devChoiceRow('c_gulf', 'd_gulf', { prereq: (s) => s.gasPlants >= 1 }),
   flagRow('btn-nuclear', 'nuclearButton', { mechanic: true,
-    trigger: (s) => s.flags['gulfDeclined'] === true || s.powerCapacityMW + queuedMW(s) >= 150 || s.date >= monthOf(2026, 9),
+    trigger: (s) => s.flags['gulfDeclined'] === true || s.powerCapacityMW + queuedMW(s) >= 110 || s.date >= monthOf(2026, 9),
     prereq: (s) => s.revealed['solarButton'] === true,
   }),
   project('p_distill'),
@@ -172,7 +173,8 @@ export const STAGE2_TABLE: ContentRow[] = [
   choiceRow('c_theft_warning', {
     late: true,
     mechanic: true,
-    trigger: (s) => bestCapability(s) >= LATE_AT(3.2),
+    // The release that crosses ~3× (minutes 21–24): the approach's first mechanic arrives with it.
+    trigger: (s) => bestCapability(s) >= LATE_AT(3.15),
     open: (s) => {
       if (s.securityLevel >= 3) {
         // Nothing to warn about: the intrusion stops at the air gap.
@@ -185,13 +187,17 @@ export const STAGE2_TABLE: ContentRow[] = [
   flagRow('btn-sl3', 'sl3Button', {
     late: true,
     mechanic: true,
-    trigger: (s) => bestCapability(s) >= LATE_AT(3.2) && s.securityLevel < 3,
+    // A release after the theft warning (~25 min), unless the warning already put it on screen.
+    trigger: (s) => bestCapability(s) >= LATE_AT(3.4) && s.securityLevel < 3,
     prereq: (s) => s.securityLevel < 3,
   }),
   flagRow('btn-alignShare', 'alignShare', {
     late: true,
     mechanic: true,
-    trigger: (s) => bestCapability(s) >= LATE_AT(3.3),
+    // The last new control before the exit: the run that should cross 4× is training (or it is December).
+    trigger: (s) =>
+      (bestCapability(s) >= LATE_AT(3.7) && trainingRun(s) !== null) ||
+      (s.revealed['shareEvals'] === true && s.date >= monthOf(2026, 12)),
     onReveal: (s) => say(s, 'Alignment compute: a share of the copies can check the others. It is 1% now.'),
   }),
   project('p_honesty_evals'),

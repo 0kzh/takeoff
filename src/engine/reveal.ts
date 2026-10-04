@@ -26,11 +26,12 @@ export const STAGE1_DRIP_SECONDS = 30;
 export const STAGE1_GOVERNOR_SECONDS = 140;
 export const EARLY_DRIP_SECONDS = 60;
 export const LATE_SECONDS = 75;
-export const GOVERNOR_SECONDS = 150;
+/** A hole in first-time reveals the governor fills (A2 allows 180 s; natural triggers get the first 170). */
+export const GOVERNOR_SECONDS = 170;
 /** No new panel or mechanic for this long: the governor pulls the next mechanic row (arc G2). */
 export const MECHANIC_GOVERNOR_SECONDS = 240;
 
-/** Projects on screen at once (rescues, urgent fixes and the stage goal not counted). */
+/** Projects on screen at once (Stage 1: rescues, urgent fixes, the stage goal and side-offers not counted; Stage 2: only rescues and G6). */
 export function maxVisible(s: GameState): number {
   return s.stage === 1 ? 4 : 6;
 }
@@ -74,15 +75,21 @@ function exempt(s: GameState, def: ProjectDef): boolean {
 }
 
 /**
- * Not counted against the cap (and never blocked by it): side-offers, and from Stage 2 the
- * leftovers carried from an earlier stage, so a shelf of old offers never holds back new content.
+ * Never blocked by the cap: rescues, urgent fixes and the stage goal; in Stage 1 also side-offers.
+ * Stage 2 holds every other card to six on screen, side-offers and Stage 1 leftovers included
+ * (critic B4) except the G6 pre-order (`ignoresCap`); after a quiet spell one or two more may join them
+ * (`overdue`). Stage 3 still lets old offers ride along.
  */
 function uncapped(s: GameState, def: ProjectDef): boolean {
-  return exempt(s, def) || def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
+  if (exempt(s, def)) return true;
+  if (s.stage === 2) return def.ignoresCap === true;
+  return def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
+  // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6).
+  if (s.stage >= 3 && def.late) return false;
   // Before the Research panel, only rescues can appear (their prices are not in research).
   return def.rescue === true || s.revealed['research'] === true;
 }
@@ -129,8 +136,19 @@ function enqueueLate(s: GameState, id: string): void {
   else q.splice(at, 0, id);
 }
 
+/**
+ * Stage 2: nothing new for 160 s, so a triggered card may come out over the cap (before the governor's
+ * 170 s), up to `OVERFLOW` cards past it: a shelf of offers nobody can afford yet never stalls the stage.
+ */
+const OVERFLOW = 2;
+function overdue(s: GameState): boolean {
+  return s.stage === 2 && s.stats.timePlayed - s.cadence.lastRevealAt >= GOVERNOR_SECONDS - 10;
+}
+
+/** Free places under the cap. Stage 2 counts the stage goal and urgent fixes too (only rescues ride free). */
 function room(s: GameState): number {
-  return maxVisible(s) - visibleProjects(s).filter((p) => !uncapped(s, p)).length;
+  const counted = s.stage === 2 ? visibleProjects(s).filter((p) => !p.rescue) : visibleProjects(s).filter((p) => !uncapped(s, p));
+  return maxVisible(s) - counted.length;
 }
 
 /** Every tick: triggers feed the queue; the drip releases from it. */
@@ -165,12 +183,14 @@ export function updateProjects(s: GameState): void {
   });
 
   if (s.cadence.queue.length && now - s.cadence.lastDripAt >= dripSeconds(s)) {
-    // The first queued project that fits: side-offers never wait for room. Stage 1: after 140 s
-    // with nothing new on screen, the next one comes out over the cap (Stage 2 has its governor).
-    const overdue = s.stage === 1 && s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS;
+    // The first queued project that fits: side-offers never wait for room. After a quiet spell
+    // (Stage 1: 140 s; Stage 2: 160 s) the next one comes out over the cap (Stage 2: eight cards at most).
+    const quiet = s.stage === 1
+      ? s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS
+      : overdue(s) && free > -OVERFLOW;
     const id = s.cadence.queue.find((q) => {
       const def = projectDef(q);
-      return !!def && (free > 0 || uncapped(s, def) || overdue);
+      return !!def && (free > 0 || uncapped(s, def) || quiet);
     });
     const def = id ? projectDef(id) : undefined;
     if (def) {
@@ -212,12 +232,12 @@ function rowLate(row: ContentRow): boolean {
   return row.late === true;
 }
 
-/** Reveals a row now if it can appear now (a project needs room unless it skips the cap). */
-function revealRow(s: GameState, row: ContentRow): boolean {
+/** Reveals a row now if it can appear now (a project needs room unless it skips the cap, or `overCap` past it). */
+function revealRow(s: GameState, row: ContentRow, overCap = 0): boolean {
   if (row.kind === 'project') {
     const def = projectDef(row.id);
     if (!def || !eligible(s, def)) return false;
-    if (!uncapped(s, def) && room(s) <= 0) return false;
+    if (!uncapped(s, def) && room(s) <= -overCap) return false;
     show(s, def);
     return true;
   }
@@ -254,10 +274,12 @@ function lateDrip(s: GameState, approach: boolean): void {
   if (s.stats.timePlayed - c.lastLateAt < LATE_SECONDS) return;
   // The stage goal (pinned) leads the approach: it is the carrot for the rest of the stage.
   const pinnedFirst = [...c.lateQueue].sort((x, y) => Number(projectDef(y)?.pinned === true) - Number(projectDef(x)?.pinned === true));
+  // A full shelf holds the approach back until the stage has been quiet for a while.
+  const over = overdue(s) ? OVERFLOW : 0;
   for (const id of pinnedFirst) {
     const row = rowById(id);
     if (!row || !rowPrereq(s, row)) continue;
-    if (revealRow(s, row)) {
+    if (revealRow(s, row, over)) {
       c.lastLateAt = s.stats.timePlayed;
       c.lateQueue = c.lateQueue.filter((q) => q !== id);
       return;
@@ -284,9 +306,11 @@ function governor(s: GameState, approach: boolean): void {
     const late = rowLate(row);
     if (late && !approach) continue;
     if (!rowPrereq(s, row)) continue;
-    if (!revealRow(s, row)) continue;
+    if (!revealRow(s, row, OVERFLOW)) continue;
     c.governed.push(`${Math.round(now)}:${row.id}`);
     c.lastRevealAt = now;
+    // A mechanic row (a modal that opens a panel) counts as the mechanic now, not when it resolves.
+    if (row.mechanic) c.lastMechanicAt = now;
     if (late) {
       c.lastLateAt = now;
       c.lateQueue = c.lateQueue.filter((q) => q !== row.id);

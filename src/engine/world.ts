@@ -125,14 +125,14 @@ export function rivalReleaseS2(s: GameState): void {
   recordRival(s, name);
   logNews(s, pick(s, [...RIVAL_LINES, ...RIVAL_LINES_S2]).replace('{name}', name));
   const after = qualityMult(s);
-  const deployed = s.training.deployedName;
+  // One number per line: the rival's version (the Developments column names both models).
   if (s.rivalCapability > s.capability && after < before - 1e-6) {
     const pct = Math.max(1, Math.round((1 - after / before) * 100));
-    say(s, `Anthrosoft ${name} beats ${deployed}. Market down ${pct}%.`);
+    say(s, `Anthrosoft's ${name} beats Sage. Market down ${pct}%.`);
   } else if (s.rivalCapability > s.capability) {
-    say(s, `Anthrosoft ships ${name}. It is level with ${deployed}.`);
+    say(s, `Anthrosoft ships ${name}, level with Sage.`);
   } else {
-    say(s, `Anthrosoft ships ${name}. ${deployed} is still ahead.`);
+    say(s, `Anthrosoft ships ${name}. Sage is still ahead.`);
   }
   s.flags['graphDirty'] = true;
 }
@@ -165,8 +165,14 @@ export function moveLead(s: GameState, by: number): void {
 
 // ---------- government relations (§2.8) ----------
 
+/**
+ * Gains taper as relations rise (a gain is worth `(100 − relations) / 80` of itself, so +10 at 60
+ * is +5 and at 80 is +2.5); losses land in full. A lab that does every favour settles near 75–80,
+ * not at 100 (critic follow-up B3).
+ */
 export function moveGov(s: GameState, by: number): void {
-  s.govRelations = clamp(s.govRelations + by, 0, 100);
+  const eff = by > 0 ? by * Math.min(1, (100 - s.govRelations) / 80) : by;
+  s.govRelations = clamp(s.govRelations + eff, 0, 100);
 }
 
 export function govMood(s: GameState): string {
@@ -241,6 +247,7 @@ export function updateWorld(s: GameState): void {
   } else if (s.capability >= 2.5) {
     moveGov(s, -0.5 * perMonth);
   }
+
   if (s.date >= monthOf(2026, 7) && s.securityLevel < 3) moveLead(s, -0.1 * perMonth);
 
   if (s.govRelations < 30 && !s.flags['subpoenaFired']) {

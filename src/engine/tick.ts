@@ -143,10 +143,11 @@ function trackPlateau(s: GameState): void {
   }
 }
 
-/** UP-style report: `10,000 tasks completed in 7 minutes 12 seconds`. */
+/** UP-style report: `10,000 tasks completed in 7 minutes 12 seconds` (whole minutes from ten minutes on). */
 function taskMilestones(s: GameState): void {
   while (s.tasks >= s.stats.nextTaskMilestone) {
-    say(s, `${fmtInt(s.stats.nextTaskMilestone)} tasks completed in ${fmtDuration(s.stats.timePlayed)}.`);
+    const t = s.stats.timePlayed;
+    say(s, `${fmtInt(s.stats.nextTaskMilestone)} tasks completed in ${fmtDuration(t >= 600 ? Math.floor(t / 60) * 60 : t)}.`);
     s.stats.nextTaskMilestone *= 10;
   }
 }

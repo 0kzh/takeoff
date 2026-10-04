@@ -100,6 +100,9 @@ function runName(s: GameState, ctx: Ctx): string {
   return runFor(s, ctx)?.name ?? 'the model';
 }
 
+/** The publishers' licence (scale-1 dollars): about 20 s of revenue when the crawl runs out (critic follow-up B5). */
+const publishersLicence = (): number => s2(150000);
+
 export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_gamble',
@@ -151,6 +154,9 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_sage2',
     title: 'Release Sage-2',
+    // Every event carries a timer with a harmless default (critic follow-up B7): unanswered, it ships.
+    timer: 90,
+    defaultOption: 0,
     text: (s, ctx) => [
       `${runName(s, ctx)} is twice the model Sage-1 was. It can hold a job for a day.`,
       'Public: customers get it, the market grows, the press reads every transcript.',
@@ -188,6 +194,8 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_ship_issues',
     title: 'Ship With Open Issues?',
+    timer: 60,
+    defaultOption: 1,
     text: (s, ctx) => {
       const n = Number(ctx['issues'] ?? 1);
       return [
@@ -402,7 +410,7 @@ export const CHOICES: ChoiceDef[] = [
     defaultOption: 2,
     options: [
       {
-        label: 'open-source Sage-1',
+        label: 'open-source the first Sage',
         record: 'open-sourced',
         tooltip: '+1 Trust. Developers build on the open model: demand +10% for good. The lead over Baiwen shrinks by a month.',
         line: '+1 Trust · demand +10% for good',
@@ -459,7 +467,7 @@ export const CHOICES: ChoiceDef[] = [
           s.trust += 1;
           s.demandMult *= 1.1;
           s.alignmentApparent = Math.min(100, s.alignmentApparent + 2);
-          s.govRelations = Math.min(100, s.govRelations + 2);
+          moveGov(s, 2);
         },
         log: 'OpenMind publishes a long system card. The piece runs anyway, shorter.',
       },
@@ -470,7 +478,7 @@ export const CHOICES: ChoiceDef[] = [
         line: 'the piece runs: demand −30% for 3:00',
         effect: (s) => {
           s.effects.push({ id: 'thePiece', remaining: 180, demandMult: 0.7 });
-          s.govRelations = Math.max(0, s.govRelations - 2);
+          moveGov(s, -2);
         },
         log: '"OpenMind did not respond to a request for comment." The piece is shared widely.',
       },
@@ -479,6 +487,8 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_customer_email',
     title: 'A Customer Writes',
+    timer: 60,
+    defaultOption: 0,
     text: (_s, ctx) => {
       const amount = Number(ctx['amount'] ?? 25);
       return amount >= 25
@@ -561,6 +571,8 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_publishers',
     title: 'The Publishers',
+    timer: 90,
+    defaultOption: 2,
     text: () => [
       'The crawl is finished. There is no more public internet to read.',
       'Forty publishers have noticed where their archives went. They would like to talk.',
@@ -570,9 +582,9 @@ export const CHOICES: ChoiceDef[] = [
         label: 'license the archives',
         record: 'licensed',
         // stage2.md: $400,000 at scale 1; $250,000 is in reach when the crawl runs out.
-        tooltip: () => `${fmtMoneyShort(s2(250000))}. +10 T of data now. Approval +2.`,
-        line: () => `+10 T data now · approval +2 · ${fmtMoneyShort(s2(250000))}`,
-        cost: () => ({ funds: s2(250000) }),
+        tooltip: () => `${fmtMoneyShort(publishersLicence())}. +10 T of data now. Approval +2.`,
+        line: () => `+10 T data now · approval +2 · ${fmtMoneyShort(publishersLicence())}`,
+        cost: () => ({ funds: publishersLicence() }),
         effect: (s) => {
           s.data += 10;
           s.flags['licensedPublishers'] = true;
@@ -723,12 +735,12 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'sign the contract',
         record: 'signed',
-        tooltip: 'Revenue +12 % for good. Government relations +15, lead +0.5 months, approval −8. The government becomes a customer it will not want to lose.',
-        line: 'revenue +12% for good · government +15 · lead +0.5 months · approval −8',
+        tooltip: 'Revenue +12 % for good. Government relations +8, lead +0.5 months, approval −8. The government becomes a customer it will not want to lose.',
+        line: 'revenue +12% for good · government +8 · approval −8',
         effect: (s) => {
           s.flags['defenseContract'] = true;
           s.revenueMult *= 1.12;
-          moveGov(s, 15);
+          moveGov(s, 8);
           moveLead(s, 0.5);
         },
         log: 'OpenMind signs a ten-year contract with the Pentagon. Two researchers resign by email.',
@@ -736,10 +748,10 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'decline',
         record: 'declined',
-        tooltip: 'Government relations −5, approval +3.',
-        line: 'government −5 · approval +3',
+        tooltip: 'Government relations −2, approval +3.',
+        line: 'government −2 · approval +3',
         effect: (s) => {
-          moveGov(s, -5);
+          moveGov(s, -2);
           s.flags['declinedDefense'] = true;
         },
         log: 'OpenMind declines defense work. The Pentagon calls Anthrosoft.',
@@ -785,10 +797,11 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'review it quietly',
         record: 'reviewed quietly',
-        tooltip: 'Nothing changes today. Lead −0.5 months.',
-        line: 'nothing changes today · lead −0.5 months',
+        tooltip: 'Nothing changes today. Lead −0.5 months; government relations −3 when the Bureau hears of it.',
+        line: 'lead −0.5 months · government −3',
         effect: (s) => {
           moveLead(s, -0.5);
+          moveGov(s, -3);
           s.flags['theftIgnored'] = true;
           s.revealed['sl3Button'] = true;
         },

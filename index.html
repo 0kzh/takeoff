@@ -49,7 +49,7 @@
         <div class="storeRow" id="row-insight" data-store="insight"><span class="storeKey">insight</span><span class="storeVal" data-slot="insight"></span></div>
         <div class="storeRow" id="row-trust" data-store="trust" data-hide="takeoff"><span class="storeKey">trust</span><span class="storeVal" data-slot="trust"></span></div>
         <div class="storeRow" id="row-gpus" data-store="gpus"><span class="storeKey">GPUs</span><span class="storeVal"><span data-slot="infraGpus"></span> / <span data-slot="gpuCapacity"></span></span></div>
-        <div class="storeRow" id="row-power" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span data-slot="powerMW"></span> / <span data-slot="powerCapMW"></span> MW</span></div>
+        <div class="storeRow" id="row-power" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span id="powerFull" class="note"></span><span data-slot="powerCapMW"></span> MW</span></div>
         <div class="storeRow" id="row-copies" data-store="copies"><span class="storeKey">copies</span><span class="storeVal" data-slot="infraCopies"></span></div>
         <div class="storeRow" id="row-data" data-store="data" data-reveal="dataRow"><span class="storeKey">data</span><span class="storeVal"><span id="data">0</span> T</span></div>
         <div class="storeRow" id="row-chips" data-store="chips" data-reveal="chipsRow"><span class="storeKey">chips on order</span><span class="storeVal" id="chipsOnOrder">0</span></div>
@@ -80,7 +80,7 @@
           <button class="button2" id="btn-raisePrice" title="Raise the price. Fewer tasks bill; each earns more.">raise</button>
         </span>
         <span data-hide="autoPrice">Price per Task: <span id="price">$ 0.25</span><br></span>
-        <span data-reveal="autoPrice" id="billingLine2">Billing <span id="billRate">0</span> tasks/s at <span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
+        <span data-reveal="autoPrice" id="billingLine2"><span data-hide="stores">Billing <span id="billRate">0</span> tasks/s at </span><span data-reveal="stores">Price per task: </span><span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
         <span data-hide="autoPrice"><span id="billingLine"><span id="billingOf">Billing </span><span id="billingOfPart"><span id="soldPerSec">0</span>/s of </span><span id="tasksPerSec">0</span>/s produced: <i id="marketState">idle</i></span><br></span>
         <span data-reveal="demandPct">Public Demand: <span id="demand">0</span>%<br></span>
         <span id="hypeLine">Release hype: <span id="hype">strong</span><br></span>
@@ -106,10 +106,10 @@
         <b>Infrastructure</b>
         <hr>
         <div class="infraRow"><button class="button2" id="btn-gpuBatch">Buy GPUs (<span id="gpuLotSize">1,000</span>)</button> <span id="gpuBatchCost">$ 75,000</span> <span id="gpuReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="dcButton"><button class="button2" id="btn-datacenter">Build Datacenter <span id="dcNumber">2</span> (+<span id="dcSlots">15,000</span> slots)</button> <span id="datacenterCost">$ 250,000</span> <span id="dcReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="gasButton"><button class="button2" id="btn-turbines" title="Gas turbines: +20 MW at once. The county notices each one.">Gas turbines (+20 MW)</button> <span id="turbineCost">$ 90,000</span> <span id="gasReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="solarButton"><button class="button2" id="btn-solar" title="Solar + storage: +50 MW, cheaper, but it waits in the interconnect queue. Rides through curtailment.">Solar + storage (+50 MW)</button> <span id="solarCost">$ 300,000</span> <span id="solarReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="nuclearButton"><button class="button2" id="btn-nuclear" title="A shuttered reactor, restarted for OpenMind: +500 MW after a two-minute restart.">Nuclear PPA (+500 MW)</button> <span id="nuclearCost">$ 15.0M</span> <span id="nuclearReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="dcButton"><button class="button2" id="btn-datacenter">Build Datacenter<span class="hiddenIds"> <span id="dcNumber">2</span></span> (+<span id="dcSlots">15,000</span> slots)</button> <span id="datacenterCost">$ 250,000</span> <span id="dcReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="gasButton"><button class="button2" id="btn-turbines" title="Gas turbines: +20 MW at once. The county notices each one.">Gas turbines<span id="gasMW"> (+20 MW)</span></button> <span id="turbineCost">$ 90,000</span> <span id="gasReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="solarButton"><button class="button2" id="btn-solar" title="Solar + storage: +50 MW, cheaper, but it waits in the interconnect queue. Rides through curtailment.">Solar + storage<span id="solarMW"> (+50 MW)</span></button> <span id="solarCost">$ 300,000</span> <span id="solarReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="nuclearButton"><button class="button2" id="btn-nuclear" title="A shuttered reactor, restarted for OpenMind: +500 MW after a two-minute restart.">Nuclear PPA<span id="nuclearMW"> (+500 MW)</span></button> <span id="nuclearCost">$ 15.0M</span> <span id="nuclearReason" class="reason"></span></div>
         <div id="interconnectLine" class="note"></div>
         <div data-reveal="standingOrder">Standing order: <button class="button2 toggle" id="btn-standing" title="Buys a GPU lot whenever there is room, power and money, keeping the next run's cost in hand. It never buys plants or datacenters.">ON</button></div>
         <span data-hide="stores">GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>Copies running: <span id="infraCopies">0</span><br></span>
@@ -135,7 +135,7 @@
         <b>Research</b>
         <hr>
         <span data-hide="stores">Trust: <span id="trust">2</span><br></span>
-        <span data-hide="takeoff">+1 Trust at: <span id="nextTrust">3,000</span> tasks<br>
+        <span data-hide="takeoff">Next Trust at <span id="nextTrust">3,000</span> tasks<br>
         <span data-reveal="hireResearcher"><button class="button2" id="btn-hireResearcher" title="1 Trust: one more researcher, +10 research per second.">Hire Researcher</button></span>
         <span data-reveal="expandLab"><button class="button2" id="btn-expandLab" title="1 Trust: room for more research.">Expand Lab</button></span>
         <span class="note" id="trustCostNote">(costs Trust)</span><br>
@@ -214,13 +214,13 @@
         <div id="train-idle">
           <button class="button2" id="btn-train" title="Train the next model. Half the compute is diverted while it trains.">Train <span id="nextRunName">Sage-1.1</span></button>
           Cost: <span id="trainCost">2,000 research, $290</span><span id="trainData"></span><br>
-          <span id="trainComputeLine" title="More GPUs train a better model.">Compute: <span id="trainComputeOf"><span id="trainCompute">0</span> of <span id="trainRequired">9</span> GPUs wanted</span><span id="trainEnough">enough</span> · <span id="trainEta">est. 60 s</span></span><br>
+          <span id="trainComputeLine" title="More GPUs train a better model.">Compute: <span id="trainComputeOf"><span data-hide="stores"><span id="trainCompute">0</span> of </span><span id="trainRequired">9</span> GPUs wanted</span><span id="trainEnough">enough</span> · <span id="trainEta">est. 60 s</span></span><br>
           <span id="trainReason" class="reason"></span>
           <span id="trainShort" class="note"></span>
         </div>
 
         <div id="train-running">
-          Training <span id="runName">Sage-1.1</span> (<span id="runFocus">capability</span>): <span id="runPct">0</span>%
+          Training <span id="runName">Sage-1.1</span> (<span id="runFocus">capability</span>)<span class="hiddenIds">: <span id="runPct">0</span>%</span>
           <div class="progress"><div class="progressFill" id="runBar"></div></div>
           <span id="runRemaining">60 s</span> remaining<span class="hiddenIds"> · <span id="runShare">50</span>% of compute diverted</span>
         </div>
@@ -249,7 +249,7 @@
         <b>Security</b>
         <hr>
         Security level: <span id="securityNote">SL1</span><span class="hiddenIds"> (SL<span id="securityLevel">1</span>)</span><br>
-        <div data-reveal="sl3Button"><button class="button2" id="btn-sl3" title="Weights air-gapped: two people and two keys to move a checkpoint.">Security level 3</button> <span id="sl3Cost">$ 20.0M, 3 Trust</span></div>
+        <div data-reveal="sl3Button"><button class="button2" id="btn-sl3" title="Security level 3: the weights air-gapped, two people and two keys to move a checkpoint.">Air-gap the weights</button> <span id="sl3Cost">$ 20.0M, 3 Trust</span></div>
       </div>
 
       <div id="panel-government" class="panel" data-panel="government" data-reveal="government">
@@ -270,7 +270,7 @@
       <div id="panel-stats" class="panel" data-panel="stats" data-reveal="stats">
         <b>Stats</b>
         <hr>
-        Copies thinking: <span id="statCopies">0</span> at <span id="statSpeed">1</span>× human speed<br>
+        Copies think at <span id="statSpeed">1</span>× human speed<span class="hiddenIds"> (<span id="statCopies">0</span>)</span><br>
         Revenue run-rate: <span id="statRunRate">$ 0</span> / yr<br>
         Lead over Baiwen: <span id="statLead">3</span> months<br>
         Alignment (as measured): <span id="statAlignment">50</span>

@@ -6,13 +6,13 @@ import {
   humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM,
 } from '../engine/economy.js';
 import {
-  lotSize, lotCost, shownLot, lotReason, gasCost, solarCost, nuclearCost, nextDatacenter, datacenterReason, plantReason,
+  lotSize, lotCost, shownLot, lotReason, lotNote, gasCost, solarCost, nuclearCost, nextDatacenter, datacenterReason, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice,
 } from '../engine/infrastructure.js';
 import { marketBreakdown } from '../engine/market.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
-  trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, trainBlocker, trainingRun, evalRun,
+  trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
 } from '../engine/training.js';
 import { govMood, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
@@ -205,24 +205,25 @@ function renderInfrastructure(s: GameState): void {
   setText('gpuCapacity', fmtInt(gpuCapacity(s)));
   setText('powerMW', fmtNum(powerDrawMW(s), 1));
   setText('powerCapMW', fmtInt(s.powerCapacityMW));
+  // The Stores show capacity only (the draw is the GPU count again); a word when all of it is in use.
+  setText('powerFull', powerDrawMW(s) >= s.powerCapacityMW - 0.05 ? 'all in use: ' : '');
   setText('infraCopies', fmtInt(copies(s)));
   setText('datacenters', fmtInt(s.datacenters));
   setText('chipPrice', fmtMoney(gpuUnitPrice(s)));
   setText('activeGpus', fmtInt(activeGpus(s)));
   setText('infraTasksPerSec', fmtInt(s.stats.tasksPerSec));
   setText('data', fmtNum(s.data, 1));
-  setText('chipsOnOrder', fmtInt(chipsOnOrder(s)));
+  setText('chipsOnOrder', chipsOnOrder(s) > 0 ? fmtInt(chipsOnOrder(s)) : 'none yet');
 
   setText('gpuLotSize', fmtInt(shownLot(s)));
   setText('gpuBatchCost', fmtMoneyShort(lotCost(s)));
   const reason = lotReason(s);
-  setText('gpuReason', reason);
+  // Room and power are walls; the standing order is progress (its next purchase), never a lock.
+  setText('gpuReason', reason || lotNote(s));
   setDisabled('btn-gpuBatch', !!reason || s.funds < lotCost(s) || lotSize(s) < 1000);
   setTitle(
     'btn-gpuBatch',
-    standingOrderOn(s)
-      ? 'The standing order buys GPU lots. Turn it off to buy by hand.'
-      : `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each. A lot fits the room and power there is.`,
+    `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each. A lot fits the room and power there is.${standingOrderOn(s) ? ' The standing order also buys them.' : ''}`,
   );
 
   const dc = nextDatacenter(s);
@@ -237,13 +238,17 @@ function renderInfrastructure(s: GameState): void {
   const plant = (id: string, costId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
-    const note = why || (kind === 'solar' ? 'joins the queue' : kind === 'nuclear' && s.govRelations >= 60 ? '25% off: relations' : '');
+    const note = why || (kind === 'solar' ? 'joins the queue' : kind === 'nuclear' && s.govRelations >= 60 ? 'cheaper: good relations' : '');
     setText(reasonId, note);
     setDisabled(id, !!why || s.funds < cost);
   };
   plant('btn-turbines', 'turbineCost', 'gasReason', 'gas', gasCost(s));
   plant('btn-solar', 'solarCost', 'solarReason', 'solar', solarCost(s));
   plant('btn-nuclear', 'nuclearCost', 'nuclearReason', 'nuclear', nuclearCost(s));
+  // A plant's size is on its button until the first one is built (then in its tooltip and the Stores).
+  showId('gasMW', s.gasPlants === 0);
+  showId('solarMW', s.solarFarms + s.powerQueue.filter((o) => o.kind === 'solar').length === 0);
+  showId('nuclearMW', s.reactors + s.powerQueue.filter((o) => o.kind === 'nuclear').length === 0);
 
   const q = queueLine(s);
   setText('interconnectLine', q);
@@ -353,11 +358,14 @@ function renderTraining(s: GameState): void {
   if (slotRun) renderEval(s, slotRun);
 }
 
-/** The selected Focus's trade, one short line with at most one number (the exact figures are in the tooltips). */
+/**
+ * The selected Focus's trade, one short line (the exact figures are in the tooltips). Stage 1 carries
+ * one number; Stage 2, with five more panels on screen, says it in words (critic follow-up B4).
+ */
 function focusNote(s: GameState, focus: Focus): string {
   const s2 = s.stage >= 2;
-  if (focus === 'capability') return s2 ? 'The most capable next model (about +12%).' : 'The most capable next model (about +17%).';
-  if (focus === 'efficiency') return 'Copies per GPU ×1.25; a smaller capability gain.';
+  if (focus === 'capability') return s2 ? 'The most capable next model.' : 'The most capable next model (about +17%).';
+  if (focus === 'efficiency') return s2 ? 'More copies on every GPU; a smaller capability gain.' : 'Copies per GPU ×1.25; a smaller capability gain.';
   return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
 }
 
@@ -383,7 +391,7 @@ function renderIdle(s: GameState): void {
       ? `${fmtInt(have)} GPUs of the ${fmtInt(Math.max(1, Math.round(want)))} it wants: the run keeps its whole gain and takes ${Math.round(trainingDuration(s))} s.`
       : `More GPUs train a better model. This run would keep ${Math.round(y * 100)}% of its gain and take ${Math.round(trainingDuration(s))} s.`,
   );
-  setText('trainReason', s.stage >= 2 ? trainBlocker(s) : '');
+  setText('trainReason', canStartTraining(s) ? '' : trainWait(s));
   // Once the run wants far more than any rented fleet, say what fixes it: owning compute.
   const owned = needsOwnedCompute(s);
   showId('trainShort', owned);

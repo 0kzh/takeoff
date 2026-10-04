@@ -95,7 +95,9 @@ export function renderGraph(s: GameState): void {
   if (!s.revealed['graph']) return;
   mount();
   const rung = nextRung(s);
-  setText('nextTier', `Next: ${rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`);
+  // The stage goal's card names the number once it is on screen; the line under the graph names the rung.
+  const goalUp = s.projects['p_superhuman_coder']?.shown === true && !(s.projects['p_superhuman_coder']?.bought ?? 0);
+  setText('nextTier', goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`);
   setText('leadLine', `Baiwen: ${leadWords(s)}`);
   // The Stats panel takes the lead over once it exists; the line under the graph goes.
   showId('leadLine', s.revealed['stats'] !== true);
