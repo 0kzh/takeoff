@@ -79,7 +79,7 @@ export function updateEvents3(s: GameState): void {
     }
     if (s.approval <= -45 && now - counter(s, 'sabotageWarnAt') >= 180 && s.approval > -55) {
       s.flags['sabotageWarnAt'] = now;
-      say(s, `Approval ${fmtInt(Math.round(s.approval))}. Below −55 somebody will bring bolt cutters.`);
+      say(s, `Approval ${fmtInt(Math.round(s.approval))}. Below −55 somebody will bring bolt cutters. Payments and clinics answer it.`);
     }
     if (s.approval <= -40 && now - counter(s, 'riots3At') >= 300) {
       s.flags['riots3At'] = now;

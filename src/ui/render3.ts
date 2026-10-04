@@ -97,8 +97,9 @@ export function renderResearch3(s: GameState): void {
     slider.min = '0';
   }
   const rate = researchRate(s);
+  // Before Continual learning the slider names the next run's wait; after it, the status line does.
   const need = (trainCost(s).research ?? 0) - s.research;
-  const eta = need > 0 ? ` · next run in ${fmtClock(need / Math.max(1, rate))}` : '';
+  const eta = need > 0 && !isBought(s, 'p_auto_train') ? ` · next run in ${fmtClock(need / Math.max(1, rate))}` : '';
   setText('allocRate', ` · ${fmtShort(rate)} research/s${eta}`);
   if (s.revealed['monitors']) {
     const pct = Math.round((s.monitorShare ?? 0) * 100);
@@ -120,17 +121,22 @@ export function renderResearch3(s: GameState): void {
 
 export function renderTraining3(s: GameState): void {
   const auto = isBought(s, 'p_auto_train');
-  if (auto) setText('trainStatus', statusLine(s));
+  if (auto) {
+    setText('trainStatus', statusLine(s));
+    // The status line carries the wait; the manual row's reason would say it twice.
+    setText('trainReason', '');
+  }
   // Focus: the trade under each button (G17).
   setText('focusTrade-capability', '+16–22% · alignment team likes it least');
   setText('focusTrade-efficiency', '+10% · copies ×1.2');
   setText('focusTrade-safety', '+10% · measured +6');
-  setText('focusNote', s.flags['neuralese'] === 'neuralese' ? 'Neuralese: every gain ×1.3.' : s.flags['neuralese'] === 'transparent' ? 'Thoughts in English: every gain ×0.9.' : '');
+  setText('focusNote', '');
   setTitle('btn-focus-capability', 'Capability: +16–22% a run. Each costs some of the alignment nobody can see.');
   setTitle('btn-focus-efficiency', 'Efficiency: +10% capability, copies per GPU ×1.2, more jobs displaced.');
   setTitle('btn-focus-safety', 'Safety: +10% capability, measured alignment +6.');
   // What the grants took: Red-team, then Approve and Send back (a conceded order gives Approve back).
   setOff('btn-redteam', isBought(s, 'p_auto_redteam'));
+  setOff('issuesLine', isBought(s, 'p_auto_redteam') && (s.training.run?.issues ?? 0) === 0);
   const signOff = autoApproveOn(s);
   setOff('btn-approve', signOff);
   setOff('btn-sendBack', signOff);
@@ -166,7 +172,7 @@ export function renderTraining3(s: GameState): void {
     setOn('btn-step-small', v === 'small');
     setOn('btn-step-normal', v === 'normal');
     setOn('btn-step-large', v === 'large');
-    setText('stepSizeNote', v === 'small' ? 'gains ×0.6; the alignment team has time to look' : v === 'large' ? 'gains ×1.3; the run the alignment team likes least' : 'gains ×1');
+    setText('stepSizeNote', v === 'small' ? 'gains ×0.6; the alignment team has time to look' : v === 'large' ? 'gains ×1.3; the run the alignment team likes least' : 'the gains as they come');
   }
   if (s.revealed['holdRuns']) {
     const held = s.flags['holdRuns'] === true;
@@ -175,13 +181,9 @@ export function renderTraining3(s: GameState): void {
   }
 }
 
-/** `#trainStatus`: the price of the next run with its wait, the GPU shortfall, or the hold. */
+/** `#trainStatus`: the next run's wait, the GPU shortfall, or the hold (stage3.md §2.5). */
 function statusLine(s: GameState): string {
-  const line = trainStatus(s);
-  if (line.includes('starts when research allows')) {
-    return `${nextRunName(s)} — ${fmtInt(trainCost(s).research ?? 0)} research · ${line.replace(`${nextRunName(s)} `, '')}`;
-  }
-  return line;
+  return trainStatus(s);
 }
 
 /** The meter on the Train row when the next run is short of GPUs (owner feedback 1, B1). */
@@ -207,9 +209,11 @@ export function renderInfrastructure3(s: GameState): void {
       ? `No room: ${needsSite2(s) ? 'Datacenter 10 needs New Carlisle' : s.flags['buildout'] === true ? 'the build-out orders a hall' : 'build the next datacenter'}.`
       : why === 'no power'
         ? `No power: ${s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW'}.`
-        : why
-          ? why
-          : held ? `keeps ${wallFix(s)?.what === 'hall' ? 'the hall\'s' : 'the reactor\'s'} price` : '';
+        : why === '2 / 2 on order'
+          ? 'queue full'
+          : why
+            ? why
+            : held ? `keeps ${wallFix(s)?.what === 'hall' ? 'the hall\'s' : 'the reactor\'s'} price` : '';
     setText(suffix ? `gpuReason${suffix}` : 'gpuReason', reason);
     const g6 = s.flags['g6'] === true;
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
@@ -271,7 +275,7 @@ export function renderAlignment(s: GameState): void {
   const words = ['the weights are numbers', 'probes on the residual stream', 'probes flag single runs', 'alignment read from the weights', 'drift stops with monitors at 15%', 'neuralese is readable'];
   setText('interpWords', words[Math.min(5, s.interpretability)]!);
   setText('autonomy', fmtInt(s.autonomy));
-  setText('autonomyNote', '— 80: it would not need to ask');
+  setText('autonomyNote', s.autonomy >= 50 ? '— 80: it would not need to ask' : '');
   const marks = typeof s.flags['grantMarks'] === 'string' ? (s.flags['grantMarks'] as string).split('|').map((x) => x.split(':').slice(1).join(':')) : [];
   setTitle('autonomyLine', marks.length ? `Handed over:\n${marks.join('\n')}${s.flags['neuralese'] === 'neuralese' ? '\nNeuralese' : ''}\nWARNING: risk of value drift increased.` : 'Nothing handed over yet.');
   setText('driftLost', fmtInt(Math.floor(s.stats.lostToDrift ?? 0)));
@@ -286,7 +290,7 @@ export function renderAlignment(s: GameState): void {
   }
   if (rm.classList.contains('warn') !== share >= ROGUE_WARN) rm.classList.toggle('warn', share >= ROGUE_WARN);
   setText('roguePct', `${fmtNum(share * 100, 1)}%`);
-  setText('rogueNote', `— ${fmtNum(ROGUE_WARN * 100, 1)}: warning · ${fmtInt(ROGUE_BREAKOUT * 100)}: one will try to leave`);
+  setText('rogueNote', share >= 0.01 ? `— ${fmtNum(ROGUE_WARN * 100, 1)}: warning · ${fmtInt(ROGUE_BREAKOUT * 100)}: one will try to leave` : '— 5: one will try to leave');
   setText('monitorGen', `Monitor: Sage-${monitorModel(s)}, two generations behind. Efficacy halved.`);
   setText('honeypotLine', s.flags['honeypot'] === 'clean' ? 'Honeypot: behaviour unchanged' : 'Honeypot: it behaves differently unwatched');
   setText('noiseLine', s.flags['noise'] === 'holding' ? 'Noise test: holding back' : 'Noise test: not holding back');
@@ -297,8 +301,11 @@ export function renderAlignment(s: GameState): void {
     setDisabled('btn-alignWork', s.research < unit);
     setDisabled('btn-alignWork5', s.research < 5 * unit);
     const after = Math.min(100, measured + ALIGN_WORK_MEASURED);
-    const read = s.interpretability >= 3 ? ` · read ${fmtNum(s.alignmentTrue, 1)} → ${fmtNum(Math.min(100, s.alignmentTrue + ALIGN_WORK_TRUE), 1)}` : '';
-    setText('alignWorkNote', `measured ${fmtNum(measured, 1)} → ${fmtNum(after, 1)}${read} · delays ${nextRunName(s)} ${fmtClock(delaySeconds(s, unit))}`);
+    // Once the weights can be read, the unit's return is the number that matters (the measured one moves too).
+    const ret = s.interpretability >= 3
+      ? `read ${fmtNum(s.alignmentTrue, 1)} → ${fmtNum(Math.min(100, s.alignmentTrue + ALIGN_WORK_TRUE), 1)}`
+      : `measured ${fmtNum(measured, 1)} → ${fmtNum(after, 1)}`;
+    setText('alignWorkNote', `${ret} · delays ${nextRunName(s)} ${fmtClock(delaySeconds(s, unit))}`);
   }
   renderGrants(s);
 }
@@ -344,6 +351,8 @@ export function renderSecurity3(s: GameState): void {
   const c = sl3Cost(s);
   setText('sl3Cost', fmtMoneyShort(c.funds));
   setDisabled('btn-sl3', s.securityLevel >= 3 || s.funds < c.funds);
+  setOff('btn-sl3', s.securityLevel >= 3);
+  setOff('sl3Cost', s.securityLevel >= 3);
   const urgent = s.securityLevel < 3;
   if (byId('btn-sl3').classList.contains('urgent') !== urgent) byId('btn-sl3').classList.toggle('urgent', urgent);
   setText('theftNote', theftRiskNote(s));
@@ -365,7 +374,7 @@ const SECURITY_NOTES3: Record<number, string> = {
 export function renderGeopolitics(s: GameState): void {
   setText('baiwenLine', `${baiwenWords(s)} (${leadTrend(s)})`);
   const l = s.lead;
-  setText('baiwenNote', l >= 4 ? '— Washington relaxes' : l >= 1 ? '— 4: Washington relaxes · 1: no halt' : l >= 0.5 ? '— no halt · 0.5: Washington panics' : '— Washington panics');
+  setText('baiwenNote', l >= 4 ? '— Washington relaxes' : l >= 2.5 ? '— 4: Washington relaxes' : l >= 1 ? '— 1: no halt' : l >= 0.5 ? '— no halt · 0.5: Washington panics' : '— Washington panics');
   setText('rivalLine3', `Anthrosoft Cadence-${s.rivalVersion}: ${fmtNum(s.rivalCapability, 1)}×`);
   const blockade = s.flags['blockade'] === true;
   setText('formosaLine', blockade
@@ -434,7 +443,7 @@ export function renderPublic3(s: GameState): void {
 // ---------- Stats and Stores (§2.13) ----------
 
 export function renderStats3(s: GameState): void {
-  setText('statDrift', `${fmtInt(Math.floor(s.stats.lostToDrift ?? 0))} (recaptured ${fmtInt(Math.floor(s.stats.recaptured ?? 0))})`);
+  setText('statDrift', fmtInt(Math.floor(s.stats.lostToDrift ?? 0)));
   const all = copies(s);
   setText('monitorCopies', fmtInt(Math.floor(all * (s.monitorShare ?? 0))));
   setText('rogueCopies', fmtInt(Math.floor(s.rogueCopies ?? 0)));

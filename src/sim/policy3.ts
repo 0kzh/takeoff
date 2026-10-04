@@ -29,6 +29,7 @@ import { canPay } from '../engine/state.js';
 /** Per-stage bookkeeping the Stage 3 policies keep (on BotMemory). */
 export interface S3Memory {
   paymentsPressed?: boolean;
+  warnSeen?: number;
   trainings0: number;
   alignBudget: number;
   readyRun: number;
@@ -380,10 +381,17 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
   if (hallUrgent(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
   if (reactorUrgent(s) && s.funds >= nuclearCost(s)) a.buyNuclear(s);
-  // A new button is pressed once, as a new card is bought: Payments goes up a level when it appears.
-  if (s.revealed['payments'] && mem3(s, mem).paymentsPressed !== true) {
-    mem3(s, mem).paymentsPressed = true;
+  // A new button is pressed once, as a new card is bought: Payments goes up a level when it appears,
+  // and again when an approval warning names it (the console's advice, to level 3 at most).
+  const m3 = mem3(s, mem);
+  if (s.revealed['payments'] && m3.paymentsPressed !== true) {
+    m3.paymentsPressed = true;
     a.stepPayments(s, true);
+  }
+  const warned = Math.max(counter(s, 'riotWarnAt'), counter(s, 'sabotageWarnAt'));
+  if (s.revealed['payments'] && warned > (m3.warnSeen ?? 0)) {
+    m3.warnSeen = warned;
+    if (paymentsLevel(s) < 3) a.stepPayments(s, true);
   }
   if (greedy || trainfirst) {
     for (const n of [...LOT_SIZES_S3].reverse()) a.buyGpuBatch(s, n);

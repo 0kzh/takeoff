@@ -544,6 +544,14 @@ div.storeRow[data-reveal].shown { display: flex; }
 #btn-sl3.urgent, #btn-datacenter.urgent, #btn-nuclear.urgent { border: 2px solid #000; font-weight: bold; }
 #btn-sl3.urgent::after, #btn-datacenter.urgent::after, #btn-nuclear.urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
 #endingBox p { margin-top: 18px; }
+#endingCounter { font-size: 28px; font-weight: bold; margin: 6px 0 2px; }
+#endingCounter.classified { color: #999; }
+#endingSentence { margin-bottom: 10px; font-style: italic; }
+#endingTask { display: none; margin-bottom: 10px; }
+#endingTask.shown { display: block; }
+#endingText p { margin: 0 0 8px; }
+#endingChoices { margin-top: 14px; font-size: 14px; }
+#endingChoices div { margin-bottom: 2px; }
 #btn-newGame { font-size: 14px; }
 
 /* The capacity meter (owner feedback 1, B3): halfwidth glyphs keep one width in the page's font; the

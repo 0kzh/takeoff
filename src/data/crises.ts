@@ -309,7 +309,10 @@ export const CRISES: CrisisDef[] = [
     demandMult: 1,
     effect: (s) => {
       s.flags['nationalized'] = true;
+      s.flags['nationalizedAt'] = s.stats.timePlayed;
       s.flags['nationalizedDate'] = s.date;
+      // The ending's second line (stage3.md §7.4); the end screen follows.
+      s.consoleQueue.push({ delay: 2, text: 'OpenMind is a government program. The building is the same. The badges are not.' });
     },
   },
 ];

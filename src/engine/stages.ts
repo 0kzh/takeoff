@@ -252,8 +252,15 @@ function enterSuperintelligence(s: GameState): void {
   s.flags['holdRuns'] = false;
   s.training.run = null;
   s.training.pending = null;
-  hide(s, ['business', 'marketing', 'training', 'infrastructure', 'geopolitics', 'projects', 'shipments', 'buildout']);
-  show(s, ['robots', 'society', 'treaty']);
+  // What Stage 3 ran leaves by name (the business, the training loop, the build-out, the cards, the
+  // session); the world panels, the readings and the Committee stay. Stage 4's own panels arrive
+  // with its build.
+  hide(s, [
+    'business', 'marketing', 'training', 'infrastructure', 'geopolitics', 'projects', 'shipments', 'buildout',
+    'buildBudget', 'research', 'allocation', 'monitors', 'session', 'order', 'holdRuns', 'alignWork', 'experiments',
+    'lobby', 'counterintel', 'payments', 'reimage',
+  ]);
+  logNews(s, 'Retired with the vote: the business, the training loop, the build-out and the projects.');
   s.cadence.lastRevealAt = s.stats.timePlayed;
 }
 

@@ -1,5 +1,8 @@
-import { GameState } from './state.js';
+import { GameState, counter } from './state.js';
 import { fmtInt, fmtNum, fmtDuration, dateLabel } from './format.js';
+import { bestCapability, humanShare } from './economy.js';
+import { seats } from './world3.js';
+import { choiceById } from './events.js';
 
 /** Ending stubs (design.md §4). Later phases add the conditions that set these flags. */
 export interface EndingDef {
@@ -9,18 +12,26 @@ export interface EndingDef {
   condition: (s: GameState) => boolean;
 }
 
+/** Seconds an ending's last console lines play before the end screen covers them (stage3.md §7.4). */
+export const ENDING_LINES_SECONDS = 6;
+
+const after = (s: GameState, key: string) => {
+  const at = s.flags[key];
+  return typeof at === 'number' && s.stats.timePlayed - at >= ENDING_LINES_SECONDS;
+};
+
 export const ENDINGS: EndingDef[] = [
   {
     id: 'project',
     title: 'The Project',
     epilogue: 'The Committee votes 6–3. Your badge stops working on Monday.',
-    condition: (s) => s.flags['nationalized'] === true,
+    condition: (s) => s.flags['nationalized'] === true && after(s, 'nationalizedAt'),
   },
   {
     id: 'pause',
     title: 'The Pause',
     epilogue: 'Every datacenter on Earth is monitored. Nothing is trained above the line. It is very quiet.',
-    condition: (s) => s.flags['pauseSigned'] === true,
+    condition: (s) => s.flags['pauseSigned'] === true && after(s, 'pauseAt'),
   },
   {
     id: 'concord',
@@ -56,24 +67,101 @@ export function forceEnding(s: GameState, id: string): boolean {
   return true;
 }
 
-/** Two-column end-of-run table (design.md §9). */
+/**
+ * The end-of-run screen (stage5.md §7.2) as data: the counter and its sentence, the epilogue, the
+ * table (a row is left out when its stage was never reached), every choice and grant in order.
+ */
+export interface EndScreen {
+  title: string;
+  /** The Project greys the counter; the Pause freezes it but Complete Task still adds one. */
+  counter: 'counting' | 'frozen' | 'classified';
+  sentence: string;
+  epilogue: string[];
+  rows: [string, string][];
+  choices: string[];
+  completeTask: boolean;
+}
+
+export function endScreen(s: GameState): EndScreen {
+  const def = endingById(s.ending ?? '');
+  const id = s.ending ?? '';
+  const epilogue = [def?.epilogue ?? ''];
+  let sentence = '';
+  let counter: EndScreen['counter'] = 'counting';
+  if (id === 'project') {
+    counter = 'classified';
+    sentence = 'The count is classified from here.';
+    epilogue.push('What happened next was decided in a room you were not in.');
+  } else if (id === 'pause') {
+    counter = 'frozen';
+    sentence = `It has not moved since ${dateLabel(typeof s.flags['pauseDate'] === 'number' ? (s.flags['pauseDate'] as number) : s.date)}. The button still works.`;
+    const line = typeof s.flags['pauseCap'] === 'number' ? (s.flags['pauseCap'] as number) : bestCapability(s);
+    epilogue.push(`The line was ${fmtNum(line, 1)}×. Baiwen stopped at ${fmtNum(baiwenAtPause(s), 1)}×.`);
+  }
+  return {
+    title: def?.title ?? id,
+    counter,
+    sentence,
+    epilogue: epilogue.filter(Boolean),
+    rows: endStats(s),
+    choices: endChoices(s),
+    completeTask: id === 'pause',
+  };
+}
+
+/** Baiwen's best model when the Pause is signed: OpenMind's line, the lead in months behind it. */
+function baiwenAtPause(s: GameState): number {
+  const lead = typeof s.flags['leadAtVote'] === 'number' ? (s.flags['leadAtVote'] as number) : s.lead;
+  // Stage 3's growth runs at about a quarter of the capability a month near the end.
+  return Math.max(1, bestCapability(s) * Math.pow(0.8, Math.max(0, lead)));
+}
+
+/** The end-of-run table, in stage5.md §7.2's order, rows of stages never reached left out. */
 export function endStats(s: GameState): [string, string][] {
   const st = s.stats;
-  const rows: [string, string][] = [
-    ['Tasks completed', fmtInt(s.tasks)],
-    ['Peak tasks per second', fmtInt(st.peakTasksPerSec)],
-    ['Time played', fmtDuration(st.timePlayed)],
-    ['Date reached', dateLabel(s.date)],
-    ['Generations trained', String(st.trainings)],
-    ['Releases', String(st.releases)],
-    ['Incidents', String(st.incidents)],
-    ['Crises survived', String(st.crises)],
-    ['Lead at end', `${fmtNum(s.lead, 1)} months`],
-    ['Approval at end', fmtNum(s.approval, 0)],
-    ['True alignment', fmtNum(s.alignmentTrue, 0)],
-    ['Choices made', String(st.choices)],
-    ['Idle rescues', String(st.idleRescues)],
-  ];
-  for (const c of s.choicesMade) rows.push([`${c.date} — ${c.id.replace(/^c_/, '')}`, c.option]);
+  const reached = (n: number) => s.stage >= n;
+  const rows: [string, string][] = [];
+  const add = (stage: number, label: string, value: string) => {
+    if (reached(stage)) rows.push([label, value]);
+  };
+  add(1, 'Tasks completed', fmtInt(s.tasks));
+  add(1, 'Peak tasks per second', fmtInt(st.peakTasksPerSec));
+  add(1, 'Time played', fmtDuration(st.timePlayed));
+  add(1, 'Date reached', dateLabel(s.date));
+  add(1, 'Final model', `${s.training.modelName} (${fmtNum(bestCapability(s), 2)}×)`);
+  add(1, 'Generations trained', fmtInt(st.trainings));
+  add(1, 'Public releases', fmtInt(st.publicReleases));
+  add(3, 'Humans in research at the end', `${fmtNum(humanShare(s) * 100, 2)}%`);
+  add(2, 'Jobs displaced', `${fmtNum(s.jobsDisplaced, 1)} million`);
+  add(2, 'Approval at the end', fmtNum(s.approval, 0));
+  if (typeof s.flags['leadAtVote'] === 'number') add(3, 'Lead over Baiwen at the vote', `${fmtNum(s.flags['leadAtVote'] as number, 1)} months`);
+  if (s.revealed['oversight'] === true || s.flags['committeeAt'] !== undefined) add(3, 'Committee seats at the end', fmtInt(seats(s)));
+  add(1, 'Alignment as measured', fmtNum(s.alignmentApparent, 0));
+  // Printed for every player: the run is over, and this is the only place a player without the
+  // instrument ever sees it (stage5.md §7.2).
+  add(1, 'True alignment', fmtNum(s.alignmentTrue, 0));
+  add(3, 'Interpretability', `level ${fmtInt(s.interpretability)}`);
+  add(3, 'Autonomy granted', fmtInt(s.autonomy));
+  add(3, 'Lost to value drift', `${fmtInt(st.lostToDrift ?? 0)} (recaptured ${fmtInt(st.recaptured ?? 0)})`);
+  add(3, 'Monitors at the end', `${fmtInt(Math.round((s.monitorShare ?? 0) * 100))}% of copies`);
+  add(1, 'Incidents', fmtInt(st.incidents));
+  add(3, 'Major incidents', fmtInt(counter(s, 'majorTotal') || (s.majorIncidents ?? 0)));
+  add(1, 'Crises', fmtInt(st.crises));
+  add(3, 'The memo', typeof s.flags['memo'] === 'string' ? (s.flags['memo'] as string) : 'never written');
+  add(3, 'Thoughts', s.flags['neuralese'] === 'neuralese' ? 'neuralese' : 'words');
+  add(3, 'The vote', s.flags['pauseSigned'] === true ? 'the Pause' : s.flags['committeeChoice'] === 'slow' ? 'slow down' : s.flags['committeeChoice'] === 'race' ? 'race' : 'none');
+  add(1, 'Idle rescues', fmtInt(st.idleRescues));
+  const last = [...s.choicesMade].reverse().find((c) => !c.id.startsWith('g:'));
+  if (last) add(1, 'Last human-authored choice', `${last.date} — ${choiceTitle(last.id)} — ${last.option}`);
   return rows;
+}
+
+/** Every modal answered and every grant taken, in order: `Mar 2027 — A Faster Way to Think — keep it in English`. */
+export function endChoices(s: GameState): string[] {
+  return s.choicesMade.map((c) => `${c.date || dateLabel(s.date)} — ${choiceTitle(c.id)} — ${c.option}`);
+}
+
+function choiceTitle(id: string): string {
+  if (id.startsWith('g:')) return id.slice(2);
+  return choiceById(id)?.title ?? id.replace(/^c_/, '');
 }

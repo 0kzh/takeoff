@@ -1,6 +1,6 @@
 import type { GameState } from '../engine/state.js';
-import { say, logNews, counter, isBought } from '../engine/state.js';
-import { fmtMoneyShort, fmtNum, fmtInt } from '../engine/format.js';
+import { say, logNews, counter, isBought, narrate } from '../engine/state.js';
+import { fmtMoneyShort, fmtNum, fmtInt, dateLabel } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { moveGov } from '../engine/world.js';
 import { seats, moveLead3 } from '../engine/world3.js';
@@ -29,6 +29,10 @@ function stake(s: GameState, ctx: Ctx, key: string, list: number, seconds = 90):
   return Math.max(list, secondsOfRevenue(s, seconds));
 }
 
+function adoptNeuraleseRecord(s: GameState): void {
+  s.choicesMade.push({ id: 'g:Neuralese', option: 'granted', date: dateLabel(s.date) });
+}
+
 function adoptNeuralese(s: GameState): void {
   s.flags['neuralese'] = 'neuralese';
   s.flags['neuraleseAt'] = Math.round(s.date * 100) / 100;
@@ -39,7 +43,7 @@ function adoptNeuralese(s: GameState): void {
   s.alignmentTrue = clamp100(s.alignmentTrue - 15);
   syncInterpretability(s);
   say(s, 'WARNING: risk of value drift increased.');
-  s.choicesMade.push({ id: 'g:Neuralese', option: 'granted', date: '' });
+  adoptNeuraleseRecord(s);
   fireDevelopmentOnce(s, 'd_neuralese');
 }
 
@@ -87,9 +91,17 @@ function bringMotion(s: GameState, ctx: Ctx): void {
   if (m === 'pause') {
     s.flags['pauseVoteLines'] = hostile ? 1 : 0;
     s.flags['pauseSigned'] = true;
+    s.flags['pauseAt'] = s.stats.timePlayed;
     s.flags['pauseCap'] = Math.round(bestCapability(s) * 10) / 10;
     s.flags['pauseDate'] = s.date;
-    say(s, 'The Pause is signed in Geneva. Nothing above 25× is trained anywhere.');
+    s.flags['leadAtVote'] = Math.round(s.lead * 10) / 10;
+    // The ending's last lines (stage3.md §7.4), then the end screen.
+    narrate(s, [
+      [0.1, `The Pause is signed in Geneva. Nothing above 25× is trained anywhere.${hostile ? ' Two of the six want your job.' : ''}`],
+      [2, 'Inspectors arrive at Abilene on Monday. They are polite.'],
+      [2, `${s.training.modelName} is asked to stop. It stops.`],
+    ]);
+    logNews(s, 'OpenMind and Baiwen accept a mutual halt. Nothing above the line is trained anywhere.');
     return;
   }
   if (m === 'race') {

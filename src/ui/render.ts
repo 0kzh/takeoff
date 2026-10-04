@@ -20,7 +20,7 @@ import {
 import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
 import { chipsOnOrder } from '../engine/stores.js';
 import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
-import { endingById, endStats } from '../engine/endings.js';
+import { endScreen } from '../engine/endings.js';
 import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setShown, showId, setDisabled, setWidth, setTitle, make } from './dom.js';
 import { meter, MeterMode, useBlockMeter } from './meter.js';
@@ -49,6 +49,8 @@ export function mount(p: Perform): void {
   hideEls = Array.from(document.querySelectorAll<HTMLElement>('[data-hide]'));
   const bind = (id: string, fn: () => void) => byId(id).addEventListener('click', fn);
   bind('btn-task', () => perform('clickTask'));
+  // The Pause's end screen keeps the first button: it still adds one.
+  bind('btn-endingTask', () => perform('clickTask'));
   bind('btn-buyPower', () => perform('buyPower'));
   bind('btn-grid', () => perform('toggleGrid'));
   bind('btn-lowerPrice', () => perform('lowerPrice'));
@@ -278,7 +280,7 @@ function renderInfrastructure(s: GameState): void {
   const powerFull = freePowerGpus(s) < 100;
   setText('powerFull', dark > 0
     ? `${fmtInt(dark)} GPUs dark${powerScale(s) < 1 ? ': a crisis holds power back' : ': add power'}`
-    : powerFull ? `full · ${s.stage >= 3 ? (s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW') : cheapestPlantFix(s)}` : `runs ${fmtInt(poweredGpus(s))} GPUs`);
+    : powerFull ? `full · ${s.stage >= 3 ? (s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW') : cheapestPlantFix(s)}` : s.stage >= 3 ? '' : `runs ${fmtInt(poweredGpus(s))} GPUs`);
   setText('infraCopies', fmtInt(copies(s)));
   setText('datacenters', fmtInt(s.datacenters));
   setText('chipPrice', fmtMoney(gpuUnitPrice(s)));
@@ -580,7 +582,7 @@ function renderEval(s: GameState, run: TrainingRun): void {
       'evalLine',
       done
         // In red team, `Open issues: 1` is the line below; the count is said once.
-        ? `${run.name} … ${totalScore(run)}/40 · ${fmtNum(run.capAfter, 2)}×${run.phase === 'redteam' ? '' : ` · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`}`
+        ? `${run.name} … ${s.stage >= 3 ? '' : `${totalScore(run)}/40 · `}${fmtNum(run.capAfter, 2)}×${run.phase === 'redteam' ? '' : ` · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`}`
         : `Evaluating ${run.name} …`,
     );
     setTitle(
@@ -709,22 +711,33 @@ function renderLater(s: GameState): void {
 
 let endingShown = '';
 
+/**
+ * The end screen (stage5.md §7.2): the title; Tasks Completed alone and its sentence (the Pause
+ * leaves Complete Task under it, which still adds one); the epilogue; the table; every choice and
+ * grant; New game.
+ */
 function renderEnding(s: GameState): void {
   const screen = byId('endingScreen');
   setShown(screen, !!s.ending);
-  if (!s.ending || endingShown === s.ending) {
-    if (!s.ending) endingShown = '';
+  if (!s.ending) {
+    endingShown = '';
     return;
   }
+  setText('endingTasks', fmtInt(s.tasks));
+  if (endingShown === s.ending) return;
   endingShown = s.ending;
-  const def = endingById(s.ending);
-  setText('endingTitle', def?.title ?? s.ending);
-  setText('endingText', def?.epilogue ?? '');
+  const end = endScreen(s);
+  setText('endingTitle', end.title);
+  byId('endingCounter').classList.toggle('classified', end.counter === 'classified');
+  setText('endingSentence', end.sentence);
+  showId('endingTask', end.completeTask);
+  byId('endingText').replaceChildren(...end.epilogue.map((line) => make('p', {}, line)));
   byId('endingStats').replaceChildren(
-    ...endStats(s).map(([k, v]) => {
+    ...end.rows.map(([k, v]) => {
       const tr = make('tr');
       tr.append(make('td', {}, k), make('td', {}, v));
       return tr;
     }),
   );
+  byId('endingChoices').replaceChildren(make('b', {}, 'Choices'), ...end.choices.map((c) => make('div', {}, c)));
 }

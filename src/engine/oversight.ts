@@ -32,6 +32,7 @@ export function addMajorIncident(s: GameState, what: string): void {
   if (now - last < MAJOR_SPACING) return;
   s.flags['lastMajorAt'] = now;
   s.majorIncidents = Math.min(3, (s.majorIncidents ?? 0) + 1);
+  s.flags['majorTotal'] = counter(s, 'majorTotal') + 1;
   s.flags['lastMajorWhat'] = what;
   if (s.majorIncidents === 2) say(s, 'Two major incidents. A third and the Committee drafts an order.');
 }

@@ -97,13 +97,17 @@ export function renderGraph(s: GameState): void {
   const rung = nextRung(s);
   // The stage goal's card names the number once it is on screen; the line under the graph names the rung.
   const goalUp = s.projects['p_superhuman_coder']?.shown === true && !(s.projects['p_superhuman_coder']?.bought ?? 0);
-  setText('nextTier', goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`);
+  // Stage 3 (stage3.md §3): a country of geniuses at 10×, a superhuman AI researcher at 25×, then the vote.
+  const next = s.stage === 3 && bestCapability(s) >= 25 - 1e-9
+    ? 'The Committee votes'
+    : goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label === 'country of geniuses' ? 'a country of geniuses' : rung.label === 'superhuman AI researcher' ? 'superhuman AI researcher' : rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`;
+  setText('nextTier', next);
   setText('leadLine', `Baiwen: ${leadWords(s)}`);
   // The Stats panel takes the lead over once it exists; the line under the graph goes.
   showId('leadLine', s.revealed['stats'] !== true);
 
   const models = s.training.models;
-  const key = `${models.length}|${s.rivalHistory.length}|${Math.round(s.lead * 4)}|${Math.floor(s.date)}|${window.devicePixelRatio}`;
+  const key = `${models.length}|${s.rivalHistory.length}|${Math.round(s.lead * 4)}|${Math.floor(s.date * (s.stage >= 3 ? 4 : 1))}|${window.devicePixelRatio}|${s.flags['grantMarks'] ?? ''}|${s.flags['neuraleseAt'] ?? ''}|${s.flags['weightsStolen'] ?? ''}`;
   if (key === lastKey) return;
   lastKey = key;
   draw(s);
@@ -128,9 +132,11 @@ function draw(s: GameState): void {
   const best = bestCapability(s);
   const plottedMax = Math.max(best, s.rivalCapability, ...models.map((m) => m.capability), ...rivals.map((r) => r.capability));
   const above = RUNGS.find((r) => r.at > plottedMax + 1e-9) ?? RUNGS[RUNGS.length - 1]!;
-  const top = above.at * 1.25;
-  const t0 = 0;
+  // Stage 3's axis tops (stage3.md §3): 12.5× until 10× is passed, then 31×, then 60×.
+  const top = s.stage === 3 ? (plottedMax < 10 ? 12.5 : plottedMax < 25 ? 31 : 60) : above.at * 1.25;
+  // From Jan 2027 the window is the last 18 months, so the 2027 curve is not squeezed.
   const t1 = Math.max(12, s.date + 3);
+  const t0 = s.stage >= 3 ? Math.max(0, t1 - 21) : 0;
   const x = (t: number) => PAD_L + ((t - t0) / (t1 - t0)) * (W - PAD_L - PAD_R);
   const y = (c: number) => {
     const f = (Math.log(Math.max(BOTTOM, c)) - Math.log(BOTTOM)) / (Math.log(top) - Math.log(BOTTOM));
@@ -145,7 +151,7 @@ function draw(s: GameState): void {
   ctx.lineTo(W - PAD_R, H - PAD_B + 0.5);
   ctx.stroke();
   ctx.fillStyle = '#000';
-  for (let m = 0; m <= t1; m += 6) {
+  for (let m = Math.ceil(t0 / 6) * 6; m <= t1; m += 6) {
     const px = Math.round(x(m)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(px, H - PAD_B);
@@ -160,7 +166,9 @@ function draw(s: GameState): void {
   // Their labels are drawn last, on a white ground, so the series never overdraws them (critic C10).
   const labels: { text: string; x: number; y: number; color: string }[] = [];
   for (const r of RUNGS) {
-    if (r.at > above.at) break;
+    if (r.at > above.at || r.at > top) break;
+    // Stage 3 keeps 4× (crossed, grey), 10× and 25×; the low rungs leave the window.
+    if (s.stage >= 3 && r.at < 4) continue;
     const py = Math.round(y(r.at)) + 0.5;
     const isNext = r === above;
     ctx.strokeStyle = r.at === 1 ? '#2a623d' : isNext ? '#000' : '#aaa';
@@ -188,9 +196,9 @@ function draw(s: GameState): void {
     let started = false;
     let prev = floor;
     for (const [t, c] of points) {
-      const tx = x(Math.min(t1, t + shift));
+      const tx = x(Math.max(t0, Math.min(t1, t + shift)));
       if (!started) {
-        ctx.moveTo(x(Math.min(t1, shift)), y(Math.max(floor, c)));
+        ctx.moveTo(x(Math.max(t0, Math.min(t1, shift))), y(Math.max(floor, c)));
         started = true;
       } else {
         ctx.lineTo(tx, y(prev));
@@ -202,10 +210,18 @@ function draw(s: GameState): void {
     ctx.stroke();
   };
 
-  // Baiwen first (dotted), so Sage draws over it.
+  // Baiwen first (dotted), so Sage draws over it: Sage's own line `lead` months later; after a theft
+  // it jumps to the stolen model and is drawn from there (stage3.md §3).
   ctx.strokeStyle = '#555';
   ctx.setLineDash([1, 2]);
-  stepPath(steps, s.lead, BOTTOM);
+  const stolenAt = typeof s.flags['stolenDate'] === 'number' ? (s.flags['stolenDate'] as number) : null;
+  if (stolenAt !== null && s.stage >= 3) {
+    const before = steps.filter(([d]) => d + s.lead < stolenAt);
+    const jump = Math.max(s.baiwenCapability ?? 0, ...steps.filter(([d]) => d <= stolenAt).map(([, c]) => 0.97 * c));
+    stepPath([...before, [stolenAt - s.lead, jump], ...steps.filter(([d]) => d + s.lead >= stolenAt && d > stolenAt)], s.lead, BOTTOM);
+  } else {
+    stepPath(steps, s.lead, BOTTOM);
+  }
   ctx.setLineDash([]);
 
   // Anthrosoft: dashed grey, a dot per Cadence release.
@@ -240,7 +256,41 @@ function draw(s: GameState): void {
       ctx.fillStyle = '#000';
       ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
     }
-    dots.push({ x: px, y: py, text: `${m.name} · ${dateLabel(m.date)} · ${fmtNum(m.capability, 2)}× · roughly IQ ${iq(m.capability)}${m.public ? '' : ' · internal'}` });
+    // The IQ gloss stops at 10× (stage3.md §3): past it no human is a useful comparison.
+    const gloss = m.capability >= 10 ? 'no human is a useful comparison' : `roughly IQ ${iq(m.capability)}`;
+    dots.push({ x: px, y: py, text: `${m.name} · ${dateLabel(m.date)} · ${fmtNum(m.capability, 2)}× · ${gloss}${m.public ? '' : ' · internal'}` });
+  }
+  // Stage 3: a small × on the Sage line at each autonomy grant, and a dotted line at the neuralese decision.
+  if (s.stage >= 3) {
+    const marks = typeof s.flags['grantMarks'] === 'string' ? (s.flags['grantMarks'] as string).split('|') : [];
+    ctx.strokeStyle = '#000';
+    for (const mark of marks) {
+      const [d, ...title] = mark.split(':');
+      const date = Number(d);
+      if (!(date >= t0)) continue;
+      const level2 = Math.max(BOTTOM, ...steps.filter(([t]) => t <= date).map(([, c]) => c));
+      const px = x(date);
+      const py = y(level2);
+      ctx.beginPath();
+      ctx.moveTo(px - 3, py - 3 - 6);
+      ctx.lineTo(px + 3, py + 3 - 6);
+      ctx.moveTo(px + 3, py - 3 - 6);
+      ctx.lineTo(px - 3, py + 3 - 6);
+      ctx.stroke();
+      dots.push({ x: px, y: py - 6, text: `${title.join(':')} · ${dateLabel(date)} · granted` });
+    }
+    const nAt = s.flags['neuraleseAt'];
+    if (typeof nAt === 'number' && nAt >= t0) {
+      const px = Math.round(x(nAt)) + 0.5;
+      ctx.setLineDash([1, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px, PAD_T);
+      ctx.lineTo(px, H - PAD_B);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const label = s.flags['neuralese'] === 'neuralese' ? 'neuralese' : 'transparent';
+      labels.push({ text: label, x: Math.min(W - PAD_R - ctx.measureText(label).width, px + 2), y: H - PAD_B - 3, color: '#555' });
+    }
   }
   for (const l of labels) {
     const w = ctx.measureText(l.text).width;

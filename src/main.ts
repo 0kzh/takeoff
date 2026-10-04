@@ -45,6 +45,7 @@ const perform = ((name: keyof typeof actions, ...args: unknown[]) => {
 mount(perform);
 // The end screen's way back (stage5.md §7.2): a fresh game, the old save gone.
 document.getElementById('btn-newGame')?.addEventListener('click', () => {
+  if (!confirm('Start again in July 2025?')) return;
   saver.clear();
   replaceState(state, newGame(Date.now()));
   resetGraph();

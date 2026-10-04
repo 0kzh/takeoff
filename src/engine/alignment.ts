@@ -135,6 +135,16 @@ export function driftWatch(s: GameState): void {
   }
   if (!s.revealed['rogueRow'] && (s.rogueCopies ?? 0) >= 1) s.revealed['rogueRow'] = true;
   const share = rogueShare(s);
+  // A conceded order put a kill switch in the Committee's hands (stage3.md §5.2): past the warning
+  // line they use it, at most every five minutes, before a copy can try to leave.
+  if (s.flags['conceded'] === true && share >= ROGUE_WARN && now - counter(s, 'govReimageAt') >= REIMAGE_COOLDOWN) {
+    s.flags['govReimageAt'] = now;
+    s.stats.recaptured = (s.stats.recaptured ?? 0) + (s.rogueCopies ?? 0);
+    s.rogueCopies = 0;
+    s.effects.push({ id: 'reimage', remaining: 20, demandMult: 1, copiesMult: 0 });
+    say(s, 'The Committee uses its kill switch: every machine re-imaged. 20 s offline. Rogue copies: 0.');
+    return;
+  }
   if (share >= ROGUE_WARN && now - counter(s, 'rogueWarnAt') >= 180) {
     s.flags['rogueWarnAt'] = now;
     say(s, `Rogue copies: ${(Math.floor(share * 1000) / 10).toFixed(1)}% of the fleet. Above 5% one of them will try to leave. Monitors catch them.`);
