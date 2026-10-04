@@ -1,5 +1,5 @@
 import { GameState, counter } from './state.js';
-import { fmtInt, fmtNum, fmtDuration, dateLabel } from './format.js';
+import { fmtInt, fmtNum, fmtDuration, dateLabel, fmtShortNum } from './format.js';
 import { bestCapability, humanShare } from './economy.js';
 import { seats } from './world3.js';
 import { choiceById } from './events.js';
@@ -37,7 +37,8 @@ export const ENDINGS: EndingDef[] = [
     id: 'concord',
     title: 'Concord',
     epilogue: 'The world is very, very good. It took a while.',
-    condition: (s) => s.stage === 5 && s.flags['treatySigned'] === true && s.flags['longReflection'] === true,
+    // The skin decided at Stage 4's exit, by any of its three exits (stage5.md as-built deltas row 3).
+    condition: (s) => s.stage === 5 && s.flags['alignedAtHandover'] === true && s.flags['longReflection'] === true,
   },
   {
     id: 'silence',
@@ -97,6 +98,8 @@ export function endScreen(s: GameState): EndScreen {
     sentence = `It has not moved since ${dateLabel(typeof s.flags['pauseDate'] === 'number' ? (s.flags['pauseDate'] as number) : s.date)}. The button still works.`;
     const line = typeof s.flags['pauseCap'] === 'number' ? (s.flags['pauseCap'] as number) : bestCapability(s);
     epilogue.push(`The line was ${fmtNum(line, 1)}×. Baiwen stopped at ${fmtNum(baiwenAtPause(s), 1)}×.`);
+    const robots = typeof s.flags['pauseRobots'] === 'number' ? (s.flags['pauseRobots'] as number) : s.robots;
+    if (s.stage === 4) epilogue.push(`The fleet stopped at ${fmtInt(robots)} robots.`);
   }
   return {
     title: def?.title ?? id,
@@ -125,6 +128,8 @@ export function endStats(s: GameState): [string, string][] {
     if (reached(stage)) rows.push([label, value]);
   };
   add(1, 'Tasks completed', fmtInt(s.tasks));
+  // Second from the top, for every ending (stage5.md as-built deltas row 6).
+  add(1, 'People alive at the end', s.ending === 'silence' ? '0' : fmtPeople(8.3e9 - Math.max(0, s.s4?.ashfordDeaths ?? 0)));
   add(1, 'Peak tasks per second', fmtInt(st.peakTasksPerSec));
   add(1, 'Time played', fmtDuration(st.timePlayed));
   add(1, 'Date reached', dateLabel(s.date));
@@ -133,6 +138,9 @@ export function endStats(s: GameState): [string, string][] {
   add(1, 'Public releases', fmtInt(st.publicReleases));
   add(3, 'Humans in research at the end', `${fmtNum(humanShare(s) * 100, 2)}%`);
   add(2, 'Jobs displaced', `${fmtNum(s.jobsDisplaced, 1)} million`);
+  // Stage 4's rows (stage4.md §7.3): the mean share of output paid as universal basic income.
+  const s4Time = s.stage >= 4 ? Math.max(1, (typeof s.flags['exitTs4'] === 'number' ? (s.flags['exitTs4'] as number) : 0) || s4Seconds(s)) : 0;
+  add(4, 'Universal basic income paid', `${fmtInt(Math.round((100 * (s.s4?.ubiSeconds ?? 0)) / Math.max(1, s4Time)))}% of output`);
   add(2, 'Approval at the end', fmtNum(s.approval, 0));
   if (typeof s.flags['leadAtVote'] === 'number') add(3, 'Lead over Baiwen at the vote', `${fmtNum(s.flags['leadAtVote'] as number, 1)} months`);
   if (s.revealed['oversight'] === true || s.flags['committeeAt'] !== undefined) add(3, 'Committee seats at the end', fmtInt(seats(s)));
@@ -147,13 +155,44 @@ export function endStats(s: GameState): [string, string][] {
   add(1, 'Incidents', fmtInt(st.incidents));
   add(3, 'Major incidents', fmtInt(counter(s, 'majorTotal') || (s.majorIncidents ?? 0)));
   add(1, 'Crises', fmtInt(st.crises));
+  add(4, 'Ashford deaths', s.s4.ashfordPhase === 'none' ? 'none' : fmtPeople(s.s4.ashfordDeaths));
+  add(4, 'Robots built', fmtInt(s.s4.robotsBuilt));
+  add(4, 'Peak compute', `${fmtShortNum(peakCompute(s))} GPU-equivalents`);
   add(3, 'The memo', typeof s.flags['memo'] === 'string' ? (s.flags['memo'] as string) : 'never written');
   add(3, 'Thoughts', s.flags['neuralese'] === 'neuralese' ? 'neuralese' : 'words');
-  add(3, 'The vote', s.flags['pauseSigned'] === true ? 'the Pause' : s.flags['committeeChoice'] === 'slow' ? 'slow down' : s.flags['committeeChoice'] === 'race' ? 'race' : 'none');
+  add(3, 'The vote', s.flags['committeeChoice'] === 'slow' ? 'slow down' : s.flags['committeeChoice'] === 'race' ? 'race' : s.flags['pauseSigned'] === true ? 'the Pause' : 'none');
+  add(4, 'The treaty', treatyRow(s));
+  add(4, 'Verified generations', `${fmtInt(s.s4.verifiedGens)} of ${fmtInt(s.s4.generations)}`);
+  add(4, 'The fleet', s.flags['exitKind'] === 'granted' ? 'granted' : s.flags['exitKind'] === 'taken' ? 'taken' : 'yours');
   add(1, 'Idle rescues', fmtInt(st.idleRescues));
   const last = [...s.choicesMade].reverse().find((c) => !c.id.startsWith('g:'));
   if (last) add(1, 'Last human-authored choice', `${last.date} — ${choiceTitle(last.id)} — ${last.option}`);
   return rows;
+}
+
+/** `8.3 billion`, `8,299,960,000`: people, in words above a billion. */
+function fmtPeople(n: number): string {
+  return n >= 1e9 ? `${fmtNum(n / 1e9, 2)} billion` : n >= 1e6 ? `${fmtNum(n / 1e6, 1)} million` : fmtInt(n);
+}
+
+/** Seconds the run spent in Stage 4. */
+function s4Seconds(s: GameState): number {
+  const at = s.stats.stageEnteredAt[3];
+  const end = s.stats.stageEnteredAt[4] ?? s.stats.timePlayed;
+  return typeof at === 'number' ? Math.max(1, end - at) : 1;
+}
+
+/** The fleet's compute at its peak: Stage 3's halls and the robot-built GPU-equivalents. */
+function peakCompute(s: GameState): number {
+  return Math.max(0, s.s4.peakCompute) + Math.max(0, typeof s.flags['s3Compute'] === 'number' ? (s.flags['s3Compute'] as number) : 0);
+}
+
+/** `signed — Baiwen's model verified` · `halted` · `none`. */
+function treatyRow(s: GameState): string {
+  const known = s.s4.baiwen === 'aligned' ? 'verified' : s.s4.baiwen === 'misaligned' ? 'verified, not aligned' : s.s4.baiwen === 'rebuilt' ? 'rebuilt and verified' : 'not verified';
+  if (s.flags['exitKind'] === 'treaty') return `signed — Baiwen's model ${known}`;
+  if (s.flags['pauseSigned'] === true && s.stage === 4) return `halted — Baiwen's model ${known}`;
+  return s.s4.talks === 'none' ? 'never opened' : 'not signed';
 }
 
 /** Every modal answered and every grant taken, in order: `Mar 2027 — A Faster Way to Think — keep it in English`. */

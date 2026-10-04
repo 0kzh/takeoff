@@ -21,6 +21,11 @@ export interface ChoiceOption {
   needs?: string | ((s: GameState, ctx: Ctx) => string);
   cost?: Cost | ((s: GameState, ctx: Ctx) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
+  /**
+   * Stage 4's single-button cards (stage4.md §5.2): an option given away by a grant is drawn, greyed,
+   * only while `Revoke a grant` is on screen; otherwise it is not drawn and the card's text names it.
+   */
+  visible?: (s: GameState, ctx: Ctx) => boolean;
   effect: (s: GameState, ctx: Ctx) => void;
   /** Logged in italics in the Developments column. */
   log?: string | ((s: GameState, ctx: Ctx) => string);
@@ -99,6 +104,7 @@ function runName(s: GameState, ctx: Ctx): string {
 const publishersLicence = (s: GameState): number => s2(s, 150000);
 
 import { CHOICES3 } from './choices3.js';
+import { CHOICES4 } from './choices4.js';
 
 export const CHOICES: ChoiceDef[] = [
   {
@@ -854,4 +860,4 @@ function hearingDone(s: GameState): void {
 
 
 // Stage 3's modals live in data/choices3.ts (it imports only this file's types).
-CHOICES.push(...CHOICES3);
+CHOICES.push(...CHOICES3, ...CHOICES4);

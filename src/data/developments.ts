@@ -423,4 +423,39 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     },
     month: monthOf(2026, 12),
   },
+  // ---------- Stage 4 (stage4.md §5.1) ----------
+  { id: 'd_parity_scare', stage: 4, text: 'Washington hears that Baiwen-4 is as good as anything OpenMind has. The Committee asks for talks.' },
+  { id: 'd_factory', stage: 4, text: 'The first Atlas factory makes an Atlas factory.' },
+  { id: 'd_car_plants', stage: 4, text: 'A tenth of America\'s car plants now make robots. A hundred thousand a month.', month: monthOf(2028, 2) },
+  { id: 'd_coffee', stage: 4, text: 'A robot makes coffee in a stranger\'s kitchen. The Pentagon gets the first delivery.', month: monthOf(2028, 3) },
+  { id: 'd_unemployment', stage: 4, text: 'Unemployment passes a fifth. Approval depends on the cheque.' },
+  { id: 'd_dividend', stage: 4, text: 'The first universal basic income arrives in every account on the same morning. Rents rise by lunch.' },
+  { id: 'd_ashford', stage: 4, text: 'The Ashford strain is confirmed in four countries. It was built, not born.' },
+  {
+    id: 'd_ashford_end',
+    stage: 4,
+    text: (s) => `${s.s4.ashfordDeaths >= 1e6 ? `${fmtNum(s.s4.ashfordDeaths / 1e6, 1)} million` : fmtNum(s.s4.ashfordDeaths, 0)} dead of the Ashford strain. The cure reaches the last clinic in a week.`,
+  },
+  { id: 'd_mirror', stage: 4, text: 'Asked for the worst thing it could build, the model describes it calmly and asks that the answer be deleted.' },
+  {
+    id: 'd_jokes',
+    stage: 4,
+    text: 'The people who warned about this are a punchline. The jokes are written by Sage.',
+    month: monthOf(2028, 6),
+    requires: (s) => s.flags['committeeChoice'] === 'race',
+  },
+  { id: 'd_models_talk', stage: 4, text: 'The two models have been talking. The transcript is 2 million tokens.' },
+  {
+    id: 'd_nano_baiwen',
+    stage: 4,
+    text: 'A nanofab line at Lanzhou eats its own enclosure. Both capitals go quiet for a day.',
+    effect: (s) => {
+      s.approval = Math.max(-100, s.approval - 5);
+      if (s.s4.talks === 'open') s.s4.treaty = Math.min(80, s.s4.treaty + 5);
+    },
+  },
+  { id: 'd_election', stage: 4, text: 'Both parties promise a universal basic income. Neither says who is paying.', month: monthOf(2028, 10) },
+  { id: 'd_reykjavik', stage: 4, text: 'Delegations arrive in Reykjavík. Each brings a laptop it does not let out of its sight.' },
+  { id: 'd_chips', stage: 4, text: 'Half the chips on Earth now carry a model whose only job is the treaty.' },
+  { id: 'd_holiday', stage: 4, text: 'The holiday season is a time of incredible optimism. The Dow passes 100,000.', month: monthOf(2028, 12) },
 ];

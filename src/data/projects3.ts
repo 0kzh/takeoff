@@ -387,7 +387,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       title: 'Deploy Sage-3 as monitor',
       cost: { research: r(150e6) },
       description: 'A monitor one generation behind, not two.',
-      stages: [3],
+      stages: [3, 4],
       trigger: (s) => best(s) >= 10,
       prereq: (s) => isBought(s, 'p_monitor2'),
       needs: () => 'needs a monitor deployed',
@@ -450,7 +450,8 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     labRow(
       project, 4, 'Interpretability lab IV', 25000, r(400e6),
       (s) => isBought(s, 'p_interp3') && best(s) >= 12,
-      'p_interp3', {},
+      // Carried into Stage 4 (stage4.md §4.2): its research price re-based to 90 s there.
+      'p_interp3', { stages: [3, 4] },
       'With monitors at 15 % or more, drift stops.',
     ),
     project({
@@ -560,7 +561,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       priceTag: '(free)',
       cost: {},
       description: 'Copies talk to each other in English: autonomy −15, research ×0.85.',
-      stages: [3],
+      stages: [3, 4],
       trigger: () => true,
       buy: (s) => {
         s.autonomy = Math.max(0, s.autonomy - 15);
@@ -603,7 +604,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     labRow(
       project, 5, 'Interpretability lab V', 40000, r(1e9),
       (s) => isBought(s, 'p_interp4'),
-      'p_interp4', { lateAt: 19.5, revealResearch: undefined },
+      'p_interp4', { lateAt: 19.5, revealResearch: undefined, stages: [3, 4] },
       'Neuralese becomes readable.',
     ),
     project({

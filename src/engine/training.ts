@@ -216,7 +216,76 @@ function twoSig(raw: number): number {
   return Math.round(raw / unit) * unit;
 }
 
+// ---------- Stage 4: generations (stage4.md §2.4, as-built deltas row 3) ----------
+
+/** Stage 4: the shares of research that never reach the pool (Alignment work, Draft clauses). */
+export function researchDiverted(s: GameState): number {
+  const align = typeof s.flags['alignWorkShare'] === 'number' ? (s.flags['alignWorkShare'] as number) : 0;
+  return Math.min(0.9, align + (s.stage === 4 ? s.s4.draftShare : 0));
+}
+
+/** A generation trains for 50 s; with Verify on the last one reads it for 40 s (20 s at measured ≥ 80; 10 s after the last sign-off). */
+export const GEN_SECONDS = 50;
+export const VERIFY_SECONDS = 40;
+export const VERIFY_SECONDS_TRUSTED = 20;
+export const VERIFY_SECONDS_LAST = 10;
+/** `G(c) = G₀ × (c / c₀)^2.25`, G₀ = 110 s of the arrival's research potential, c₀ the arriving frontier. */
+export const GEN_EXPONENT = 2.25;
+export const GEN_BASE_SECONDS = 110;
+/** The rungs a generation is rounded up to within 3 % (G33), and where the major version steps. */
+export const S4_RUNGS = [100, 250, 1000];
+
+export function slowBranch(s: GameState): boolean {
+  return s.flags['committeeChoice'] === 'slow';
+}
+
+/** The research the next generation costs, three significant figures. */
+export function generationCost(s: GameState): number {
+  const c = Math.max(1, s.capability);
+  const raw = Math.max(1, s.s4.genBase) * Math.pow(c / Math.max(1, s.s4.genCap0), GEN_EXPONENT);
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 2));
+  return Math.round(raw / unit) * unit;
+}
+
+/** +44 % a generation on the slow branch, +42 % on the race branch. */
+export function generationGain(s: GameState): number {
+  return slowBranch(s) ? 0.44 : 0.42;
+}
+
+/** What the next generation will be: within 3 % under a rung it is called the rung (G33). */
+export function nextGenCap(s: GameState): number {
+  const raw = s.capability * (1 + generationGain(s));
+  const rung = S4_RUNGS.find((x) => raw < x && raw >= NEAR_MISS * x && s.capability < x);
+  return rung ?? raw;
+}
+
+/** The next generation's name: the minor version steps, the major one at 100×, 250× and 1,000× (the race's first is Sage-5). */
+export function nextGenVersion(s: GameState): { line: string; major: number; minor: number } {
+  const line = typeof s.flags['genLine'] === 'string' ? (s.flags['genLine'] as string) : 'Sage';
+  const after = nextGenCap(s);
+  const crosses = S4_RUNGS.some((x) => s.capability < x - 1e-9 && after >= x - 1e-9);
+  if (line === 'Sage' && s.s4.generations === 0) return { line, major: 5, minor: 0 };
+  if (crosses) return { line, major: s.training.major + 1, minor: 0 };
+  return { line, major: s.training.major, minor: s.training.minor + 1 };
+}
+
+export function genName(v: { line: string; major: number; minor: number }): string {
+  return v.minor === 0 ? `${v.line}-${v.major}` : `${v.line}-${v.major}.${v.minor}`;
+}
+
+export function nextGenName(s: GameState): string {
+  return s.s4.gen ? s.s4.gen.name : genName(nextGenVersion(s));
+}
+
+/** Seconds the last generation spends reading the next (Verify on). */
+export function verifySeconds(s: GameState): number {
+  if (s.flags['lastSignoff'] === true) return VERIFY_SECONDS_LAST;
+  return s.alignmentApparent >= 80 ? VERIFY_SECONDS_TRUSTED : VERIFY_SECONDS;
+}
+
 export function trainCost(s: GameState): Cost {
+  // Stage 4: a generation is research and nothing else; it starts itself once research suffices.
+  if (s.stage >= 4) return { research: generationCost(s) };
   const c = startCapability(s);
   // Stage 1: money and GPUs; research buys cards only. From the knee a run is priced as Stage 2 prices
   // it (a fifth run that lands past 1.6× still rents; the wall run is quoted at what the click charges).
@@ -324,6 +393,7 @@ export function needsDatacenter(s: GameState): boolean {
 
 /** `Sage-2.4`: the next version after the latest model, counting one waiting in the release slot. */
 export function nextRunName(s: GameState): string {
+  if (s.stage >= 4) return nextGenName(s);
   const v = nextVersion(s);
   return `Sage-${v.major}.${v.minor}`;
 }
@@ -574,6 +644,15 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
     if (!Number.isFinite(after)) return Number.isFinite(before) ? Infinity : 0;
     return Math.max(0, after - before);
   }
+  if (s.stage === 4) {
+    // Stage 4: research spent now pushes the next generation back while it waits for research.
+    if (!cost.research || s.s4.gen) return 0;
+    const need = generationCost(s);
+    const rate = Math.max(1, researchRate(s) * (1 - researchDiverted(s)));
+    const before = Math.max(0, need - s.research) / rate;
+    const after = Math.max(0, need - (s.research - cost.research)) / rate;
+    return Math.max(0, after - before);
+  }
   if (!s.revealed['training'] || s.stage >= 4 || !trainSlotFree(s) || s.training.cooldown > 0) return 0;
   if (s.stage >= 3 && s.flags['holdRuns'] === true) return 0;
   const before = runPaidIn(s);
@@ -589,6 +668,8 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
 export function delayNote(s: GameState, cost: Cost): string {
   const d = runDelaySeconds(s, cost);
   if (d < 10) return '';
+  // Stage 4 (stage4.md §2.4): `delays Steward-3 by 1:30`.
+  if (s.stage === 4) return ` · delays ${nextGenName(s)} by ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'}`;
   // Stage 3 names the run once, on the Train row (one home per fact): a card says `next run 1:10 later`.
   const name = s.stage === 1 ? waitingGoalS1(s)?.name ?? nextRunName(s) : s.stage >= 3 ? 'next run' : nextRunName(s);
   return ` · ${name} ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'} later`;

@@ -1,5 +1,5 @@
 import type { GameState } from '../engine/state.js';
-import { choiceById, choiceOptionEnabled, optionCost, optionTooltip, optionLine, optionNeeds } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, choiceOptionVisible, optionCost, optionTooltip, optionLine, optionNeeds } from '../engine/events.js';
 import { costLabel } from '../engine/projects.js';
 import { byId, make, setShown, setText } from './dom.js';
 
@@ -63,6 +63,8 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
   def.options.forEach((opt, i) => {
     const b = document.getElementById(`choice-${def.id}-${i}`) as HTMLButtonElement | null;
     if (!b) return;
+    const hidden = !choiceOptionVisible(s, def, i);
+    if (b.classList.contains('off') !== hidden) b.classList.toggle('off', hidden);
     const disabled = !choiceOptionEnabled(s, def, i);
     if (b.disabled !== disabled) b.disabled = disabled;
     if (lines) {

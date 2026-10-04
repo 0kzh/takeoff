@@ -412,6 +412,8 @@ export const CHOICES3: ChoiceDef[] = [
         record: 'called in favours',
         line: (s, ctx) => `${fmtMoneyShort(stake(s, ctx, 'favours', 5e9, 900))}. Relations +15. The count of incidents starts again.`,
         needs: 'favours called in once already',
+        // Money is retired in Stage 4: the second answer there is the keys (stage4.md §2.9).
+        visible: (s) => s.stage < 4,
         enabled: (s) => s.flags['favoursUsed'] !== true,
         cost: (s, ctx) => ({ funds: stake(s, ctx, 'favours', 5e9, 900) }),
         effect: (s) => {
@@ -420,6 +422,25 @@ export const CHOICES3: ChoiceDef[] = [
           s.majorIncidents = 0;
         },
         log: 'Favours are called in. The draft order is not voted on.',
+      },
+      {
+        label: 'hand over the keys',
+        record: 'handed over the keys',
+        line: 'Verify each generation is forced on, monitors stay at 25% or more, and the newest grant is revoked. The count of incidents starts again.',
+        needs: 'the keys handed over once already',
+        visible: (s) => s.stage >= 4,
+        enabled: (s) => s.flags['keysHanded'] !== true,
+        effect: (s) => {
+          s.flags['keysHanded'] = true;
+          s.s4.verifyOn = true;
+          s.flags['verifyLocked'] = true;
+          s.monitorShare = Math.max(0.25, s.monitorShare ?? 0);
+          s.govRelations = Math.min(100, Math.max(s.govRelations, orderThreshold(s)) + 15);
+          s.majorIncidents = 0;
+          s.flags['revokeDue'] = true;
+          say(s, 'The keys are handed over. Verify is on for good; monitors stay at 25% or more.');
+        },
+        log: 'OpenMind hands the Committee the keys. A grant is taken back the same afternoon.',
       },
       {
         label: 'refuse',

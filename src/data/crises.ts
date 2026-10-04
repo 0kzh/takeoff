@@ -228,6 +228,34 @@ export const CRISES: CrisisDef[] = [
     },
   },
   {
+    id: 'cr_riots4',
+    stage: 4,
+    title: 'Riots',
+    console: 'Riots in three cities. The datacenters run at half power for 90 s; the fleet loses 2% of its robots.',
+    log: 'Riots in three cities. A robot depot is burned.',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      s.effects.push({ id: 'cr_riots4', remaining: 90, demandMult: 1, copiesMult: 0.5 });
+      s.robots = Math.floor(s.robots * 0.98);
+      moveGov(s, -3);
+    },
+  },
+  {
+    id: 'cr_sabotage4',
+    stage: 4,
+    title: 'Sabotage',
+    console: 'Saboteurs cut the power to a robot plant and burn what is inside. The fleet loses 5% of its robots.',
+    log: 'A robot plant is burned. Nobody is hurt; nobody is caught.',
+    duration: 0,
+    demandMult: 1,
+    effect: (s) => {
+      s.robots = Math.floor(s.robots * 0.95);
+      moveGov(s, -5);
+      s.flags['majorDue4'] = 'sabotage';
+    },
+  },
+  {
     id: 'cr_taiwan',
     stage: 3,
     title: 'Taiwan blockade',

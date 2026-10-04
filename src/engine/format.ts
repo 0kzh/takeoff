@@ -86,3 +86,18 @@ export function fmtClock(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** Compact counts for Stage 4's big numbers: `212,000`, `4.8M`, `3.5B`, `1.2T`. */
+export function fmtShortNum(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1e15) return fmtInt(n);
+  if (a >= 1e12) return `${fmtNum(n / 1e12, 1)}T`;
+  if (a >= 1e9) return `${fmtNum(n / 1e9, 1)}B`;
+  if (a >= 1e6) return `${fmtNum(n / 1e6, 1)}M`;
+  return fmtInt(Math.round(n));
+}
+
+/** Tonnes of materials: `40,000 t`, `2.0M t`. */
+export function fmtTonnes(n: number): string {
+  return `${fmtShortNum(n)} t`;
+}

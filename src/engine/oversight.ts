@@ -46,11 +46,21 @@ export function orderThreshold(s: GameState): number {
   let t = s.flags['defenseContract'] === true ? 35 : 20;
   if (s.securityLevel >= 5) t -= 10;
   if (s.flags['dpa'] === true) t += 10;
+  // Stage 4: Nationalisation-proofing takes ten off (stage4.md §2.9).
+  if (s.flags['proofing'] === true) t -= 10;
   return t;
 }
 
 /** Why the Committee would draft an order now ('' when it would not): §2.11. */
-export function orderCause(s: GameState): '' | 'relations' | 'incidents' | 'leak' {
+export function orderCause(s: GameState): '' | 'relations' | 'incidents' | 'leak' | 'consolidation' {
+  if (s.stage === 4) {
+    // Stage 4 (§2.9): relations under the threshold (not once oversight is conceded), three major
+    // incidents, or consolidation refused with relations under 40.
+    if (s.flags['refusedConsolidation'] === true && s.govRelations < 40 && s.flags['consolidationOrderUsed'] !== true) return 'consolidation';
+    if (s.govRelations < orderThreshold(s) && s.flags['conceded'] !== true) return 'relations';
+    if ((s.majorIncidents ?? 0) >= 3) return 'incidents';
+    return '';
+  }
   if (s.stage !== 3 || bestCapability(s) < 10) return '';
   if (s.flags['leaked'] === true && s.flags['memo'] === 'leaked' && s.govRelations < 50 && s.flags['leakOrderUsed'] !== true) return 'leak';
   const shownAt = s.flags['incidentsShownAt'];
@@ -81,6 +91,7 @@ export function orderLine(s: GameState): string {
 /** The order condition still holds (for the 1:30 after a refusal). */
 export function orderStands(s: GameState): boolean {
   if ((s.majorIncidents ?? 0) >= 3) return true;
+  if (s.stage === 4 && s.flags['refusedConsolidation'] === true && s.govRelations < 40) return true;
   return s.govRelations < orderThreshold(s) && s.flags['conceded'] !== true;
 }
 
@@ -121,16 +132,25 @@ export function rollLeak(s: GameState): void {
  * refusal); the session and its beats; the leak's roll; the reminders that the Committee waits.
  */
 export function updateOversight(s: GameState): void {
-  if (s.stage !== 3) return;
+  if (s.stage !== 3 && s.stage !== 4) return;
   const now = s.stats.timePlayed;
   const best = bestCapability(s);
+  if (s.stage === 4) {
+    updateOrder(s);
+    return;
+  }
   if (committeeSeated(s) && !s.revealed['incidents'] && best >= 9) {
     s.revealed['incidents'] = true;
     s.flags['incidentsShownAt'] = now;
     say(s, 'The Committee has started counting incidents. Three, and it drafts an order.');
   }
 
-  // The order: its 1:30 after a refusal.
+  updateOrder(s);
+  updateSession(s, now, best);
+}
+
+/** The order (Stages 3 and 4): drafted when its cause stands; its 1:30 after a refusal. */
+function updateOrder(s: GameState): void {
   if (orderLeft(s) > 0) {
     s.flags['orderLeft'] = Math.max(0, orderLeft(s) - 1);
     if (orderLeft(s) <= 0) {
@@ -147,11 +167,15 @@ export function updateOversight(s: GameState): void {
     const queued = s.choiceQueue.some((c) => c.id === 'c_order');
     if (cause && !queued) {
       if (cause === 'leak') s.flags['leakOrderUsed'] = true;
+      if (cause === 'consolidation') s.flags['consolidationOrderUsed'] = true;
       s.flags['orders'] = ordersDrafted(s) + 1;
       openChoice(s, 'c_order', { cause, threshold: orderThreshold(s), gov: Math.round(s.govRelations) });
     }
   }
+}
 
+/** Stage 3's session, the leak and their reminders. */
+function updateSession(s: GameState, now: number, best: number): void {
   // The leak: at the later of October 2027 and 180 s after burying, or 30 s into the session.
   if (s.flags['memo'] === 'buried' && s.flags['leakRolled'] !== true) {
     const buriedAt = counter(s, 'memoAt');

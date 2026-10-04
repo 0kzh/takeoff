@@ -12,6 +12,8 @@ import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.js';
 import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall, dataNotInHand } from '../engine/world.js';
 import { stage3Projects, granted } from './projects3.js';
+import { stage4Projects } from './projects4.js';
+import { minedPerSec } from '../engine/fleet.js';
 
 /**
  * One row of the project table. `trigger` decides when the button appears (always before it is
@@ -61,6 +63,8 @@ export interface ProjectDef {
   revealFunds?: number;
   /** Research of at least this many seconds of the research rate, fixed when the card first shows. */
   revealResearch?: number;
+  /** Stage 4: materials of at least this many seconds of mining, fixed when the card first shows. */
+  revealMaterials?: number;
   /** A standing offer bought again and again (the contract): drawn with a double border. */
   repeatable?: boolean;
   consoleMsg?: string;
@@ -89,15 +93,17 @@ export function project(def: ProjectInput): ProjectDef {
   const base = typeof def.cost === 'function' ? def.cost : ((c: Cost) => () => c)(def.cost);
   const secs = def.revealFunds;
   const rsecs = def.revealResearch;
+  const msecs = def.revealMaterials;
   // A card with `revealFunds` / `revealResearch` costs at least that many seconds of the revenue
   // (research rate) at the moment it first shows, fixed then (critic round 2 §6.2: a card is a goal
   // for a minute or two, not a conveyor belt). Before it shows, the preview uses today's rates.
   // A Stage 1 card's floor never passes four times its list price: a card that returns a researcher or
   // a doubling of the lab must not out-price First Datacenter (a $340,000 recruiter was a trap).
   const stage1 = (def.stages ?? [1]).includes(1);
-  const cost = secs === undefined && rsecs === undefined ? base : (s: GameState): Cost => {
+  const cost = secs === undefined && rsecs === undefined && msecs === undefined ? base : (s: GameState): Cost => {
     const c = base(s);
     const out: Cost = { ...c };
+    if (msecs !== undefined) out.materials = Math.max(c.materials ?? 0, revealMaterialsPrice(s, def.id, msecs));
     if (secs !== undefined) {
       const floor = revealPrice(s, def.id, secs);
       // The cap is Stage 1's: a card carried into Stage 2 keeps Stage 2's floor.
@@ -106,13 +112,14 @@ export function project(def: ProjectInput): ProjectDef {
     if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
     return out;
   };
-  const onShow = secs === undefined && rsecs === undefined ? def.onShow : (s: GameState) => {
+  const onShow = secs === undefined && rsecs === undefined && msecs === undefined ? def.onShow : (s: GameState) => {
     if (secs !== undefined) s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
     if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
+    if (msecs !== undefined) s.flags[`mprice:${def.id}`] = revealMaterialsPrice(s, def.id, msecs);
     def.onShow?.(s);
   };
   // Stage 3 (stage3.md §4.1 item 7): a prerequisite gates the purchase, not the appearance.
-  const gated = !!def.prereq && (def.stages ?? [1]).includes(3);
+  const gated = !!def.prereq && (def.stages ?? [1]).some((x) => x >= 3);
   return {
     stages: [1],
     uses: 1,
@@ -151,6 +158,13 @@ export function revealResearchPrice(s: GameState, id: string, seconds: number): 
   const fixed = s.flags[`rprice:${id}`];
   if (typeof fixed === 'number') return fixed;
   return Math.min(twoFigures(seconds * Math.max(1, researchRate(s))), Math.floor((0.85 * researchCap(s)) / 100) * 100);
+}
+
+/** Stage 4 (stage4.md §4.1): `seconds` of mining at the current rate, two figures; fixed at the reveal. */
+export function revealMaterialsPrice(s: GameState, id: string, seconds: number): number {
+  const fixed = s.flags[`mprice:${id}`];
+  if (typeof fixed === 'number') return fixed;
+  return twoFigures(seconds * Math.max(1, minedPerSec(s)));
 }
 
 function twoFigures(raw: number): number {
@@ -865,6 +879,7 @@ export const PROJECTS: ProjectDef[] = [
   }),
   ...stage2Projects(),
   ...stage3Projects(project),
+  ...stage4Projects(project),
 ];
 
 // ---------- Stage 2 (stage2.md §4.2): rows in table order; funds at scale 1 through s2() ----------

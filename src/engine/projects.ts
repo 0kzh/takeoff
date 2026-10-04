@@ -1,6 +1,6 @@
 import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
-import { fmtInt, fmtMoneyShort } from './format.js';
+import { fmtInt, fmtMoneyShort, fmtTonnes } from './format.js';
 
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
@@ -12,6 +12,7 @@ export function costLabel(c: Cost): string {
   if (c.research) parts.push(`${fmtInt(c.research)} research`);
   if (c.insight) parts.push(`${fmtInt(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
+  if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
   return parts.length ? parts.join(', ') : 'free';
 }
 

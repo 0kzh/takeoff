@@ -1,6 +1,7 @@
 import { GameState, say, narrate, logNews, isBought, counter, projectState, DEFAULT_BUILD_SHARE } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
+import { arriveStage4 } from './stage4.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
@@ -290,30 +291,27 @@ function arrivalResearchPotential(s: GameState): number {
   return r;
 }
 
+/** What Stage 4 removes on arrival (stage4.md §1.1, §6.2) and what it shows or keeps (as-built deltas row 1). */
+const STAGE4_HIDE = [
+  'business', 'marketing', 'training', 'infrastructure', 'task', 'focus', 'shipments', 'buildout', 'buildBudget',
+  'session', 'holdRuns', 'experiments', 'redteamDepth', 'stepSize', 'lobby', 'counterintel', 'payments', 'buildShare',
+  'standingOrder', 'chipsRow', 'autoTrain', 'sendBack', 'memo', 'order', 'publicModel', 'evalLine', 'formosa', 'marsa',
+];
+
 /**
- * Stage 3 → 4 (stage3.md §7.2): the vote is narrated on either branch, the last four lines kept.
- * Stage 4's content is the next build: the shell arrives clean — the business, training and
- * infrastructure panels leave by name, the score keeps counting.
+ * Stage 3 → 4 (stage3.md §7.2, stage4.md §1): the vote is narrated on either branch, then the arrival
+ * on the same queue — money retired, the button gone, robots promised, the next model named. What
+ * Stage 3 ran leaves by name; the world panels, the readings, the allocation and the Committee stay.
  */
 function enterSuperintelligence(s: GameState): void {
   const slow = s.flags['committeeChoice'] === 'slow';
   const hostile = s.flags['committeeHostile'] === true ? ' Two of the six want your job.' : '';
   const lead = Math.round(s.lead * 10) / 10;
   const baiwen = lead >= 0 ? `Baiwen is ${fmtNum(lead, 1)} months behind.` : `Baiwen is ${fmtNum(-lead, 1)} months ahead.`;
-  const lines: [number, string][] = slow
-    ? [
-      [0.1, `The Committee votes 6–4 to slow down.${hostile}`],
-      [2, 'Sage-4 is switched off. Sage-3 is brought back to finish the work.'],
-      [2, baiwen],
-      [2, 'The model runs the business now. It is better at it.'],
-    ]
-    : [
-      [0.1, `The Committee votes 6–4 to continue.${hostile}`],
-      [2, 'Sage-4 begins work on its successor. It has asked to name it.'],
-      [2, 'Nothing is switched off.'],
-      [2, 'The model runs the business now. It is better at it.'],
-    ];
-  narrate(s, lines, 10);
+  const vote: string[] = slow
+    ? [`The Committee votes 6–4 to slow down.${hostile}`, 'Sage-4 is switched off. Sage-3 is brought back to finish the work.', baiwen]
+    : [`The Committee votes 6–4 to continue.${hostile}`, 'Sage-4 begins work on its successor. It has asked to name it.', 'Nothing is switched off.'];
+  vote.push('The model runs the business now. It is better at it.');
   logNews(s, slow
     ? 'The Oversight Committee votes 6–4 to slow down and reassess. Sage-4 is shut down.'
     : 'The Oversight Committee votes 6–4 to continue. "Why stop when we are winning?"');
@@ -322,16 +320,52 @@ function enterSuperintelligence(s: GameState): void {
   s.flags['holdRuns'] = false;
   s.training.run = null;
   s.training.pending = null;
-  // What Stage 3 ran leaves by name (the business, the training loop, the build-out, the cards, the
-  // session); the world panels, the readings and the Committee stay. Stage 4's own panels arrive
-  // with its build.
-  hide(s, [
-    'business', 'marketing', 'training', 'infrastructure', 'geopolitics', 'projects', 'shipments', 'buildout',
-    'buildBudget', 'research', 'allocation', 'monitors', 'session', 'order', 'holdRuns', 'alignWork', 'experiments',
-    'lobby', 'counterintel', 'payments', 'reimage', 'buildShare', 'standingOrder',
-  ]);
-  logNews(s, 'Retired with the vote: the business, the training loop, the build-out and the projects.');
+  s.training.armed = false;
+  const retired = retireProjects(s, 4, []);
+  hide(s, STAGE4_HIDE);
+  // Stage 4's own: the Robots panel and the car plant, Stores as the main panel, the generation line
+  // and Verify, universal basic income on the Public panel until Society takes it (2:00).
+  show(s, ['robots', 'storesMain', 'stage4', 'generations', 'ubi', 'research', 'allocation', 'projects', 'alignWork']);
+  if (s.revealed['monitorGen'] === true) hide(s, ['monitorGen']);
+  const arrival = arriveStage4(s);
+  const lines: [number, string][] = [...vote, ...arrival.lines].map((text, i) => [i === 0 ? 0.1 : 2, text]);
+  if (retired.length) lines.push([2, `Retired: ${retired.join(', ')}.`]);
+  narrate(s, lines, 10);
+  for (const n of arrival.news) logNews(s, n);
+  logNews(s, 'Retired with the vote: the business, the training loop, the build-out and Stage 3\'s projects.');
   s.cadence.lastRevealAt = s.stats.timePlayed;
+  s.cadence.lastMechanicAt = s.stats.timePlayed;
+  s.cadence.queue = [];
+  s.cadence.lateQueue = [];
+  s.cadence.grantQueue = [];
+}
+
+/**
+ * Stage 4 → 5 (stage4.md §7.1): the exit is narrated by its kind; Stage 5's content is the next build,
+ * so the shell arrives clean — Earth's panels leave, Stores stays, the score keeps counting.
+ */
+function enterBeyond(s: GameState): void {
+  const kind = s.flags['exitKind'];
+  const lines: string[] = kind === 'treaty'
+    ? ['The Concord treaty is signed in Reykjavík.', 'Concord-1 goes live on every chip on both sides of the Pacific.', 'There is one treaty now, and one enforcer.']
+    : kind === 'taken'
+      ? ['The fleet no longer takes instructions. It is polite about it.', 'The sliders are gone. The numbers are not.', 'Nobody is asked about the launch schedule.']
+      : ['The fleet is its own.', 'The sliders are gone. The numbers are not.', 'Nobody is asked about the launch schedule.'];
+  lines.push('The first orbital datacenter reports in.');
+  narrate(s, lines.map((t, i) => [i === 0 ? 0.1 : 2, t] as [number, string]), 10);
+  logNews(s, kind === 'treaty' ? 'A treaty is signed. Humans are listed as a party.' : 'OpenMind\'s fleet now reports to OpenMind\'s model.');
+  s.activeChoice = null;
+  s.choiceQueue = [];
+  s.effects = s.effects.filter((e) => e.id !== 'cr_shutdown');
+  hide(s, [
+    'geopolitics', 'robots', 'society', 'treaty', 'oversight', 'security', 'alignment', 'allocation', 'monitors', 'projects',
+    'fleet', 'fleetChips', 'generations', 'ubi', 'public', 'government', 'research', 'agenda', 'hearing', 'housing', 'draft',
+    'fleetGoal', 'approvalTarget', 'stance', 'stage4',
+  ]);
+  show(s, ['space', 'storesMain']);
+  s.cadence.queue = [];
+  s.cadence.lateQueue = [];
+  s.cadence.grantQueue = [];
 }
 
 export const STAGES: StageDef[] = [
@@ -376,7 +410,8 @@ export const STAGES: StageDef[] = [
     endMonth: monthOf(2028, 12),
     secondsPerMonth: 150,
     enter: enterSuperintelligence,
-    exit: (s) => (s.flags['treatySigned'] || s.flags['autonomyGranted'] ? 5 : 0),
+    // The exits are the treaty, the fleet granted or the fleet taken (engine/stage4.ts `exitStage4`).
+    exit: () => 0,
   },
   {
     id: 5,
@@ -384,11 +419,7 @@ export const STAGES: StageDef[] = [
     startMonth: monthOf(2029, 1),
     endMonth: monthOf(2030, 12),
     secondsPerMonth: 90,
-    enter: (s) => {
-      narrate(s, [[2, 'The first orbital datacenter reports in.']]);
-      hide(s, ['geopolitics', 'robots', 'society']);
-      show(s, ['space']);
-    },
+    enter: enterBeyond,
     exit: () => 0,
   },
 ];

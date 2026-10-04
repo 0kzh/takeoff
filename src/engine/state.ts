@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -20,6 +20,8 @@ export interface Cost {
   trust?: number;
   /** Trillions of tokens (Stage 2 training runs). */
   data?: number;
+  /** Stage 4: tonnes of materials, the stage's currency. */
+  materials?: number;
 }
 
 /** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
@@ -266,6 +268,149 @@ export interface Stats {
   logLines?: number;
 }
 
+/** A generation in progress (stage4.md §2.4): it trains, then (with Verify on) the last one reads it. */
+export interface Generation {
+  name: string;
+  phase: 'training' | 'reading';
+  remaining: number;
+  total: number;
+  capAfter: number;
+  /** Verify was on when it started reading (stage4.md §2.4's trade is taken then). */
+  verified: boolean;
+}
+
+/** An item on the Committee's agenda (stage4.md §2.9): 90 s of its time each, one at a time. */
+export interface AgendaItem {
+  id: string;
+  remaining: number;
+  total: number;
+}
+
+/**
+ * Stage 4 (stage4.md, appendix): the fleet, materials and permits; the generations and Verify; the
+ * universal basic income and housing; the treaty, its agenda and Baiwen-4; the three crises; the
+ * selectors the grants hand over. Shares are 0–1; timers are remaining seconds.
+ */
+export interface Stage4State {
+  /** Tonnes in hand (the stage's currency). */
+  materials: number;
+  /** Robots the permits allow (no cap with open zones: Infinity is stored as 0 and read as none). */
+  permitCap: number;
+  /** The fleet's jobs, shares of the robots (the sliders, 0–1 in steps of 0.05). */
+  mine: number;
+  replicate: number;
+  build: number;
+  chips: number;
+  techMine: number;
+  techRep: number;
+  techBuild: number;
+  /** Zones: all three jobs ×2 (open), ×1.5 (with a dividend), ×1 (none). */
+  zoneMult: number;
+  /** G4-equivalents the fleet has built (each with its kilowatt). */
+  builtCompute: number;
+  robotsBuilt: number;
+  peakCompute: number;
+  /** Universal basic income: 0, 0.05, 0.10 or 0.20 of output. */
+  ubiShare: number;
+  /** Output paid out as universal basic income, as a running sum of share × seconds (the end screen's mean). */
+  ubiSeconds: number;
+  housingUnits: number;
+  housingHeat: number;
+  housingAt: number;
+  /** The approval formula's base (stage4.md §1.1: the formula starts where Stage 3 ended). */
+  approvalBase: number;
+  /** Treaty progress, 0–100. */
+  treaty: number;
+  treatyOpening: number;
+  talks: 'none' | 'open' | 'closed';
+  /** Treaty chips installed, 0–1. */
+  chipsInstalled: number;
+  /** `Draft clauses`: a share of research, 0 / 0.1 / 0.2 / 0.3. */
+  draftShare: number;
+  agenda: AgendaItem[];
+  verifyOn: boolean;
+  gen: Generation | null;
+  generations: number;
+  verifiedGens: number;
+  /** Research a generation costs is priced from these, fixed on arrival (as-built deltas row 3). */
+  genBase: number;
+  genCap0: number;
+  /** Baiwen-4: aligned (rolled once), and what the lab knows. */
+  baiwenAligned: boolean;
+  baiwen: 'unknown' | 'verifying' | 'aligned' | 'misaligned' | 'rebuilding' | 'rebuilt';
+  baiwenLeft: number;
+  /** Seconds of no treaty progress (a rebuild under joint monitors). */
+  treatyFrozen: number;
+  ashfordPhase: 'none' | 'spreading' | 'cured';
+  ashfordLeft: number;
+  ashfordDeaths: number;
+  ashfordBand: number;
+  /** Seconds until the nanofab line fails (counted once Nanofabrication is bought), then its silent drain. */
+  nanoLeft: number;
+  nanoDrain: number;
+  outageLeft: number;
+  fleetGoal: 'growth' | 'people' | 'treaty';
+  /** `Approval to hold` (the transition grant's selector): −25, 0 or +25. */
+  approvalHold: number;
+  stance: 'hold' | 'balanced' | 'concede';
+  /** Seconds until the fleet asks again after `not yet`. */
+  askLeft: number;
+  /** Stage 4 grants in the order bought (Revoke takes the newest back). */
+  grants: string[];
+}
+
+export function newStage4(): Stage4State {
+  return {
+    materials: 0,
+    permitCap: 400000,
+    mine: 0.35,
+    replicate: 0.4,
+    build: 0.25,
+    chips: 0,
+    techMine: 1,
+    techRep: 1,
+    techBuild: 1,
+    zoneMult: 1,
+    builtCompute: 0,
+    robotsBuilt: 0,
+    peakCompute: 0,
+    ubiShare: 0,
+    ubiSeconds: 0,
+    housingUnits: 0,
+    housingHeat: 0,
+    housingAt: 0,
+    approvalBase: 0,
+    treaty: 0,
+    treatyOpening: 0,
+    talks: 'none',
+    chipsInstalled: 0,
+    draftShare: 0,
+    agenda: [],
+    verifyOn: true,
+    gen: null,
+    generations: 0,
+    verifiedGens: 0,
+    genBase: 0,
+    genCap0: 1,
+    baiwenAligned: false,
+    baiwen: 'unknown',
+    baiwenLeft: 0,
+    treatyFrozen: 0,
+    ashfordPhase: 'none',
+    ashfordLeft: 0,
+    ashfordDeaths: 0,
+    ashfordBand: 0,
+    nanoLeft: 0,
+    nanoDrain: 0,
+    outageLeft: 0,
+    fleetGoal: 'growth',
+    approvalHold: 0,
+    stance: 'balanced',
+    askLeft: 0,
+    grants: [],
+  };
+}
+
 export interface GameState {
   version: number;
   seed: number;
@@ -406,6 +551,8 @@ export interface GameState {
   robots: number;
   launchCapacity: number;
   orbitalCompute: number;
+  /** Stage 4's systems (stage4.md); defaults until the stage begins. */
+  s4: Stage4State;
 
   training: TrainingState;
   effects: TimedEffect[];
@@ -590,6 +737,7 @@ export function newGame(seed: number = Date.now()): GameState {
     robots: 0,
     launchCapacity: 0,
     orbitalCompute: 0,
+    s4: newStage4(),
 
     training: newTraining(),
     effects: [],
@@ -684,7 +832,8 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.insight || s.insight >= c.insight) &&
     (!c.funds || s.funds >= c.funds) &&
     (!c.trust || s.trust >= c.trust) &&
-    (!c.data || s.data >= c.data - 1e-9)
+    (!c.data || s.data >= c.data - 1e-9) &&
+    (!c.materials || s.s4.materials >= c.materials)
   );
 }
 
@@ -695,6 +844,7 @@ export function pay(s: GameState, c: Cost): boolean {
   s.funds = Math.round((s.funds - (c.funds ?? 0)) * 100) / 100;
   s.trust -= c.trust ?? 0;
   if (c.data) spendData(s, c.data);
+  if (c.materials) s.s4.materials = Math.max(0, s.s4.materials - c.materials);
   return true;
 }
 
@@ -923,7 +1073,17 @@ function migrateV8(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, marketingBought: Math.max(0, Math.round(level - 1 - given)) };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8];
+/**
+ * v9 → v10 (stage4.md): Stage 4's systems. A save made in the old Stage 4 shell (the vote applied,
+ * nothing after it) is set up as an arrival when it next ticks (`flags.s4Pending`).
+ */
+function migrateV9(raw: Record<string, unknown>): Record<string, unknown> {
+  if (raw['stage'] !== 4 || raw['s4'] !== undefined) return raw;
+  const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}), s4Pending: true };
+  return { ...raw, flags };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {
@@ -937,7 +1097,7 @@ export function migrate(raw: Record<string, unknown>): GameState {
   }
   const base = newGame(typeof data['seed'] === 'number' ? (data['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged: Record<string, unknown> = { ...base, ...data };
-  for (const key of ['training', 'stats', 'idle', 'cadence'] as const) {
+  for (const key of ['training', 'stats', 'idle', 'cadence', 's4'] as const) {
     merged[key] = { ...(base[key] as object), ...((data[key] as object) ?? {}) };
   }
   return merged as unknown as GameState;

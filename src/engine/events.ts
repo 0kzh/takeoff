@@ -232,7 +232,7 @@ export function rivalRelease(s: GameState): void {
 /** Seconds between two modals opening on their own; a modal the player's click caused is exempt. */
 export const MODAL_SPACING = 150;
 /** Modals that answer the player's own click (a confirm), so they open at once. */
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote'];
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote', 'c_treaty', 'c_halt'];
 
 export interface OpenOptions {
   /** Open only if it can open right now; otherwise do nothing (a passing offer, like the gamble). */
@@ -308,9 +308,17 @@ export function optionTooltip(s: GameState, opt: ChoiceOption): string {
   return (typeof opt.tooltip === 'function' ? opt.tooltip(s, s.activeChoice?.context ?? {}) : opt.tooltip) ?? '';
 }
 
+/** An option drawn on the card right now (a single-button card hides the option a grant gave away). */
+export function choiceOptionVisible(s: GameState, def: ChoiceDef, index: number): boolean {
+  const opt = def.options[index];
+  if (!opt) return false;
+  return opt.visible ? opt.visible(s, s.activeChoice?.context ?? {}) : true;
+}
+
 export function choiceOptionEnabled(s: GameState, def: ChoiceDef, index: number): boolean {
   const opt = def.options[index];
   if (!opt || !s.activeChoice) return false;
+  if (!choiceOptionVisible(s, def, index)) return false;
   const cost = optionCost(s, opt);
   if (cost && !canPay(s, cost)) return false;
   return opt.enabled ? opt.enabled(s, s.activeChoice.context) : true;

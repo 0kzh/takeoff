@@ -6,6 +6,7 @@ import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
 import { sellS2 } from './market.js';
 import { alignWorkShare, alignWorkTick } from './alignment.js';
+import { draftTick } from './treaty.js';
 
 export {
   activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
@@ -246,7 +247,9 @@ export function taskShare(s: GameState): number {
 }
 
 export function potentialTasksPerSec(s: GameState): number {
-  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s);
+  // Stage 4: the universal basic income is paid in output (stage4.md §2.3).
+  const ubi = s.stage === 4 ? 1 - s.s4.ubiShare : 1;
+  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s) * ubi;
 }
 
 /** Stage 1: copies stop when the power runs out. */
@@ -380,7 +383,8 @@ export function produce(s: GameState, dt: number): void {
 
 function completeTasks(s: GameState, n: number): void {
   s.tasks += n;
-  s.unbilled += n;
+  // Stage 4 bills nothing: tasks are still counted (stage4.md §1.1).
+  if (s.stage < 4) s.unbilled += n;
 }
 
 /**
@@ -394,6 +398,7 @@ export const SMOOTH_SALES = 200;
  * unbilled (UP). Stage 2+: the deterministic market (engine/market.ts).
  */
 export function sell(s: GameState, dt: number = TICK_SECONDS): void {
+  if (s.stage >= 4) return;
   if (s.stage >= 2) {
     sellS2(s, dt);
     return;
@@ -475,6 +480,8 @@ export const JOB_FUND_SHARE = 0.02;
 
 /** Recurring income every tick: Stage 2's frozen contracts, less the job fund (Stage 1's contracts bill as tasks). */
 export function payContracts(s: GameState, dt: number): void {
+  // Money is retired in Stage 4 (stage4.md §1.1): nothing is billed or paid from here.
+  if (s.stage >= 4) return;
   const rate = s.stage >= 2 ? s.contractIncome : 0;
   if (rate > 0) {
     const amount = rate * dt;
@@ -582,12 +589,14 @@ export function researchTick(s: GameState, dt: number): void {
   const cap = researchCap(s);
   if (s.research < cap) {
     let gained = researchRate(s) * dt;
-    // Stage 3: `Alignment work` takes its share of research before it reaches the pool.
-    const share = s.stage === 3 && s.revealed['alignWork'] ? alignWorkShare(s) : 0;
-    if (share > 0) {
-      alignWorkTick(s, gained * share);
-      gained *= 1 - share;
-    }
+    // Stages 3–4: `Alignment work` takes its share of research before it reaches the pool; in Stage 4
+    // `Draft clauses` takes its own (stage4.md §2.11).
+    const share = s.stage >= 3 && s.stage <= 4 && s.revealed['alignWork'] ? alignWorkShare(s) : 0;
+    const draft = s.stage === 4 && s.revealed['draft'] ? s.s4.draftShare : 0;
+    const total = gained;
+    if (share > 0) alignWorkTick(s, total * share);
+    if (draft > 0) draftTick(s, total * draft);
+    gained = total * Math.max(0, 1 - share - draft);
     s.research = Math.min(cap, s.research + gained);
   }
   if (s.stage >= 3) {
@@ -766,6 +775,9 @@ export const MONITOR_SHARE_MAX = 40;
 
 /** The Monitors slider's floor: 15 % for good once an order has been conceded. */
 export function monitorFloor(s: GameState): number {
+  // Monitors at scale holds 40 % (stage4.md §2.6); the keys handed over in an order, 25 %.
+  if (isBought(s, 'p_monitors_scale')) return 40;
+  if (s.flags['keysHanded'] === true) return 25;
   return s.flags['conceded'] === true ? 15 : 0;
 }
 

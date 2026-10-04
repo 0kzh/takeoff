@@ -125,7 +125,7 @@ export const BREAKOUT_SPACING = 240;
  * repeats every 180 s while it holds; past 5 % at 8× and up, one copy tries to leave (once per 240 s).
  */
 export function driftWatch(s: GameState): void {
-  if (s.stage !== 3) return;
+  if (s.stage !== 3 && s.stage !== 4) return;
   const now = s.stats.timePlayed;
   const lost = s.stats.lostToDrift ?? 0;
   const granted = counter(s, 'grantsS3') > 0;

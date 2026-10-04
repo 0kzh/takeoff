@@ -18,6 +18,10 @@ import {
   approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun, cardWall,
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
+import { stage4Tick, stage4Slow, toggleVerify, setVerify } from './stage4.js';
+import { setFleetShare, setFleetGoal, buildHousing } from './fleet.js';
+import { cycleUbi, setUbiShare, setApprovalHold } from './society.js';
+import { cycleDraft, setDraftShare, holdHearing, setStance } from './treaty.js';
 import { alignWork, setAlignWork, reimage } from './alignment.js';
 import { lobby, counterintel, stepPayments } from './world3.js';
 import { buyProject, visibleProjects } from './projects.js';
@@ -89,6 +93,7 @@ export function step(s: GameState): void {
   updateTraining(s, dt);
   fireArmedRun(s);
   stage3Tick(s, dt);
+  stage4Tick(s, dt);
 
   updateReveals(s);
   updateProjects(s);
@@ -145,6 +150,7 @@ function slowStats(s: GameState): void {
   }
   if (s.stage === 3) infrastructureMessages(s);
   stage3Slow(s);
+  stage4Slow(s);
 }
 
 /**
@@ -356,6 +362,18 @@ export const actions = {
   setBuildBudget,
   cycleBuildShare,
   buyLotRow,
+  setFleetShare,
+  setFleetGoal,
+  buildHousing,
+  cycleUbi,
+  setUbiShare,
+  setApprovalHold,
+  cycleDraft,
+  setDraftShare,
+  holdHearing,
+  setStance,
+  toggleVerify,
+  setVerify,
   buyProject,
   resolveChoice,
   takeDefault,

@@ -192,7 +192,9 @@ export function activeGpus(s: GameState): number {
 /** Compute in G4-equivalents: a G5 counts one and a half, a G6 two and a half. */
 export function effGpus(s: GameState): number {
   if (s.stage < 2) return s.gpus;
-  return activeG4(s) + G5_COMPUTE * activeG5(s) + G6_COMPUTE * activeG6(s);
+  const owned = activeG4(s) + G5_COMPUTE * activeG5(s) + G6_COMPUTE * activeG6(s);
+  // Stage 4: the fleet builds GPU-equivalents with their power (stage4.md §2.2).
+  return s.stage >= 4 ? owned + Math.max(0, s.s4.builtCompute) : owned;
 }
 
 export function powerDrawMW(s: GameState): number {
