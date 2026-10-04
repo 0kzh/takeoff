@@ -110,14 +110,19 @@ project({
 
 Options: `stages` (default `[1]`; Stage-1-only projects still on screen at the transition are
 retired with a console line), `uses` (default 1; `Infinity` for repeatables, with `rehide: true`
-for rescues), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the screen). A
-triggered project joins the reveal queue (`engine/reveal.ts`) and appears 15 s after the previous
-one, in table order, while fewer than four are on screen. These skip the wait: `rescue` (also
-uncapped, drawn dashed), `pinned` (the stage goal, uncapped), `urgent(s)` (a wall's named fix,
-uncapped while it holds), `chain` (the next step of a ladder, at once when there is room);
-`sideline` offers drip in but never fill the cap. Stage 1 projects mostly cost research or insight,
-as Paperclips' cost operations; money is for compute, marketing, training and the ladder. If the
-bot should buy it, add the id to `PROJECT_PRIORITY` in `src/sim/policy.ts`.
+for rescues), `repeatable` (a standing offer such as the Custom model contract, drawn with a double
+border), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the screen),
+`revealFunds` / `revealResearch` (a price of at least that many seconds of revenue or research,
+fixed when the card first shows; research never above 85 % of the lab). A triggered project joins
+the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 one a minute until the
+Training panel, then every 30 s, at most four on screen (a card that has waited 140 s comes out
+anyway); Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
+160 s with nothing new, one or two more may join, eight at most). These skip the wait: `rescue`
+(also uncapped, drawn dashed), `pinned` (the stage goal), `urgent(s)` (a wall's named fix while it
+holds), `ignoresCap` (Stage 2's G6 pre-order), `chain` (the next step of a ladder, at once when
+there is room); Stage 1 `sideline` offers drip in but never fill the cap. Stage 1 projects mostly
+cost research or insight, as Paperclips' cost operations; money is for compute, marketing,
+training and the ladder.
 
 **A development** (Developments log): add to `src/data/developments.ts`. It fires on `month`
 (months since Jul 2025; use `monthOf(2025, 11)`) or on `trigger(s)`, whichever comes first. It can
@@ -131,18 +136,20 @@ dropped). Open it with `openChoice(s, id, context)` or from a development. Modal
 causes (`PLAYER_MODALS`: the open-issues confirm, Sage-2) opens at once. Stage 1's modals are a
 calendar of dated developments about 3¼ minutes apart, plus the training gamble when it fits. The
 game does not pause while a modal is open, and neither does the page: the event panel catches no
-clicks outside itself, takes keyboard focus when it opens, and Escape takes a timed modal's
-default (an untimed one ignores it). From Stage 2 each option prints its effect and cost under
-its label (`line` in `data/choices.ts`); a greyed option says what it needs (`needs`, or its
-price).
+clicks outside itself, takes keyboard focus when it opens, and Escape takes the default. Every
+event carries a timer with a harmless default, so an unanswered one never holds the stage up.
+Each option prints its effect and cost under its label (`line` in `data/choices.ts`; stakes are
+sized when the modal opens, in `onOpen`'s context); a greyed option says what it needs (`needs`,
+or its price).
 
 ## Dev overlay
 
 Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 
-* **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at Break ground,
-  run through the arrival; Stage 3 is the median Stage 2 exit (bot, seeds 1–5; seed 4's records)
-  run through the Stage 3 arrival; 4–5 load the Stage 3 preset and say `preset pending`.
+* **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at Break ground
+  (bot, seeds 1–5; seed 2's records), run through the arrival; Stage 3 is the median Stage 2 exit
+  (bot from the Stage 2 preset, seeds 1–5; seed 3's records) run through the Stage 3 arrival; 4–5
+  load the Stage 3 preset and say `preset pending`.
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save.
 * **+$, +Research, +Insight, +Compute, +Power, +Trust, Finish training, Fire event ▾**.
@@ -191,18 +198,20 @@ npm run sim -- --minutes 60 --preset 2 --variant modals-worst --json
 ```
 
 `--preset N` starts from the dev overlay's Stage N preset (2: the Stage 1 median at Break ground;
-3: the Stage 2 median exit). `--variant` plays the bot with one Stage 2 decision fixed:
-`modals-best` / `modals-worst` (the most careful- or reckless-looking answer to every modal),
-`redteam-never`, `slider-N` (copies on research fixed at N %), `safety-0` / `safety-2` (Safety
-runs), `gulf-sign` / `gulf-domestic`, `auto-off` (AUTO pricing off on arrival, price never
-touched).
+3: the Stage 2 median exit). `--variant` plays the policy with one decision fixed. Both stages:
+`modals-best` / `modals-worst` (the most careful- or reckless-looking answer to every modal, waiting
+for a greyed careful one), `modals-last`, `modals-ignore` (alias `ignore-modals`: every event runs
+out its timer to the default), `redteam-never`. Stage 1: `price-never` (the opening price is never
+touched), `focus-efficiency` / `focus-safety`. Stage 2: `slider-N` (copies on research fixed at
+N %), `safety-0` / `safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`, `auto-off`.
 
 Three policies play through `actions` only:
 
-* **bot** (default) — a reasonable player: clicks until the first GPU, keeps a power reserve,
-  prices to clear production, spends Trust on researchers or lab space by need, buys projects in
-  priority order (revenue first, then the Abilene ladder), trains Capability while rented compute
-  still teaches the model and Efficiency after, red-teams to zero, releases.
+* **bot** (default) — a reasonable player: the first-timer's purchase loop with judgment on top.
+  It prices every second (Dynamic pricing once offered), answers each modal with the careful
+  option (waiting for a greyed one it can afford soon), takes the leaderboard only when ahead, is
+  patient with side offers while the next run's money is there, trains Capability while rented
+  compute still teaches the model and Efficiency after, red-teams to zero, releases.
 * **naive** — the critic's first-timer: clicks at 4/s until the copies make 8 tasks/s, buys
   anything affordable while keeping one power block in reserve, lowers the price only when the
   backlog exceeds 30 s of production and grows (raises after four near-zero checks, 8 s
@@ -223,21 +232,26 @@ worst 5-minute window, Stage 1 idle rescues (and any at 0 tasks), and soft-lock 
 without production in Stage 1). `--json` prints the summary only, as one line.
 
 In Stage 2 the bot follows `stage2.md` §9.1 (modals; free and cheap cards; the binding wall —
-power, then room; training once the cluster gives 72 % of the compute wanted; cards in table
-order with the next run's money kept; GPU lots until the Standing order; Trust; the slider at
-20 %), naive and greedy §9.2 (every affordable card, every enabled Infrastructure button top to
-bottom, greedy five times over). The Stage 2 summary block adds the A1–A19 acceptance numbers
+power, then room, with turbines when a reactor is out of reach and the next hall built once the
+last one is 80 % full; training once the cluster gives 60 % of the compute wanted; a wider market
+first; other cards in table order, the next run's money lent for 30 s of revenue at most; GPU lots
+until the Standing order; Trust; the slider at 20 %), naive and greedy §9.2 (every affordable card,
+every enabled Infrastructure button top to bottom, greedy five times over). The Stage 1 summary
+adds the reveal → purchase latency, the densest six minutes of first-time reveals and the exit
+state (capability, alignment, Trust, staff, marketing, contracts, revenue, price, GPUs,
+incidents). The Stage 2 summary block adds the A1–A19 acceptance numbers
 (duration, reveal and mechanic gaps, training intervals, governor pulls, modals, visible cards and
 queue waits, first power / datacenter / AI assistants, GPU presses before the Standing order,
 5-minute marks), the reveal → purchase latency per card (median and the share bought within 10 s),
 the modal answers, and the exit state (capability, alignment true / apparent, government,
 approval, lead, funds, security level).
 
-Stage 1 targets (seeds 1–5): transition 25:00–35:00 (bot) / 26:00–40:00 (naive) / ≤ 40:00
-(greedy), longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes,
-capability 1.5–1.8× at the transition, no run below 0.3 yield, 7–9 modals and never two
-automatic ones within 150 s, Substation → Break ground in 2–4 min, ≤ 2 idle rescues and none at 0
-tasks, first GPU ≤ 0:20.
+Stage 1 targets (seeds 1–5): transition 25:00–35:00 (bot) / 26:00–40:00 (naive and greedy),
+longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes, capability
+1.5–1.8× at the transition, no run below 0.3 yield, at most 9 modals and never two automatic ones
+within 150 s, ≤ 2 idle rescues and none at 0 tasks, first GPU ≤ 0:20. Decision variants (naive,
+seeds 1–3): best vs worst modal answers ≥ 3 min apart, red-team to zero vs never ≥ 3 min, price
+tracked vs never ≥ 5 min.
 
 ## Browser smoke test
 
@@ -248,9 +262,11 @@ npm run build && (cd tools && npm install) && node tools/verify/smoke.mjs [--pol
 Starts its own static server on a free port and drives system Chrome headless (Playwright,
 `channel: 'chrome'`) with autoplay and `__game.tick`. It checks the minute-0 screen, the opening
 price decision (4 clicks/s at the opening price builds a backlog by 0:30; lowering the price clears
-it), the reveal order and staggering, numeric-token counts at minutes 0/1/3/5/10/20/end, a save →
-reload during a training run, the transition narration and arrival, no horizontal overflow at
-390 px, and no page or console errors through the Stage 2 arrival. Screenshots go to
+it), the reveal order and staggering (no beat adds more than 3 controls or ~8 numbers), numbers /
+controls / words at minutes 0/1/3/5/10/20/end and the minute-10 budget (≤ 38 numbers, ≤ 15
+controls, ≤ 230 words), a save → reload during a training run, the transition narration and
+arrival, no horizontal overflow at 390 px, and no page or console errors through the Stage 2
+arrival. Screenshots go to
 `agent-tools/shots/stage1/` (gitignored); it exits non-zero on any failure.
 
 ```sh

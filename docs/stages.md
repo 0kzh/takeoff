@@ -24,6 +24,15 @@ Total: ~2.5–3.5 hours for a reasonable player; 4 hours for a cautious one.
 
 The first stage is by far the simplest. OpenMind has a model, a cloud bill, and no customers. You manage **Funds** against the market for completed tasks, buy **Power** (kWh) in blocks whose price drifts, and rent **GPUs** so that copies of the model complete tasks without you clicking. Then you hire **Researchers**, who turn **Trust** into **Research** points, which buy the projects that lay the technical backbone of the later stages, and you run your first **training runs**. The last third of the stage is the **Abilene site**: reserve the land, wait out the interconnect queue, build the substation, break ground. If you run out of money with no power, the game lets you **Ask the cloud provider for credit** in exchange for Trust rather than losing the game, and the **Complete Task** button never needs power.
 
+*As built after critic round 2 (`docs/critic-stage1-round2.md`): the reasonable bot breaks ground at **26:34–27:32**, the first-timer at **28:39–31:44**, the greedy player at 30:59–36:56 (seeds 1–5). What changed from the plan below:*
+
+* *Contracts are customers.* Each **Custom model contract** (repeatable, double border) adds 25 % to demand at whatever price you set (×1.15 per contract), so price, hype, marketing and incidents reach most late income; an incident pauses every contract customer for 1:30 (stacking) and costs 1 Trust; a release earns +1 Trust only with no open issues. Stage 2 freezes the contracts' share of sales as a fixed rate.
+* *Decisions show their stakes.* Every modal option has a second line with its effect and cost, sized when the modal opens (a bridge worth a quarter of the next rung, a poach match worth a minute of revenue), and every modal has a timer with a harmless default. The selected **Focus** prints its trade under the buttons.
+* *Price.* Steps are a cent below $0.20 and 5 % above. **Dynamic pricing** (AUTO) is a card offered after 20 price moves once tasks pass 90,000, or to anyone at 400,000 tasks.
+* *Pacing.* Cards come one a minute until the Training panel, then every 30 s, four on screen (a card that has waited 140 s comes out anyway); mid and late research cards cost at least 100 s of the research rate, side offers 45–100 s of revenue, fixed when they appear. `GPUs rented: 66 / 80`; **Second cloud region** and **Reserved capacity** add 20 each. Break ground costs $185,000 ($145,000 with the contractor, whose crew needs 1:00); the interconnect queue is 4:00; the tax abatement costs 1 Trust.
+* *Fewer things at once.* One flavour line per run; console lines carry a number or an instruction; five Developments shown. Minute 10 holds 37–38 numbers, 14–15 controls and 212–229 words.
+* *Dead ends.* The research wall is re-said every 2 minutes while it lasts; the idle guard names an under-staffed lab before offering money; a prepayment buys the cheapest thing on screen; at most three press releases and three emails a stage. When Train is grey its reason names the resource and the time (`research — about 0:45`).
+
 ### What is on screen
 
 *Minute 0:* black console (`Welcome to OpenMind.`), `Tasks Completed: 0`, the date `Jul 2025`, one enabled button — **Complete Task** — and, greyed out with its price, `Power: 1,000 kWh` / **Buy Power — $20.00**.
@@ -33,8 +42,8 @@ The first stage is by far the simplest. OpenMind has a model, a cloud bill, and 
 1. **Business** after the first task, **Marketing** greyed at $100 from the first sale [0:00–0:01] — `Available Funds`, `Unbilled Tasks`, `lower / raise`, `Price per Task $0.25`, and the billing line `Billing 2.0/s of 4.0/s produced: backlog growing`. The market starts near Paperclips' size and grows with tasks completed (word of mouth, full at 1,500 tasks), and the first 200 tasks bill at their expected rate (no lucky or unlucky opening), so a player clicking at 4/s sees the backlog build and fixes it by lowering the price.
 2. **Compute** at $3 or 20 tasks [0:04] — **Rent GPU — $6.00** (UP's `5 + 1.1^n`); first GPU [0:09 / 0:12]. The provider rents at most 80 (100 after the Bulk GPU lease); at the quota the button greys with `quota reached — the provider has no more to rent` and the Abilene site appears as the way past it.
 3. `Avg. Rev. per sec` at 300 tasks sold [1:35]; the **Developments** column [1:40 / 1:29].
-4. **Research** at the first Trust milestone (2,000 tasks) [3:20 / 3:04] — `Trust`, `+1 Trust at`, **Hire Researcher**, `Researchers`, `Research x / 1,000`. **Expand Lab** when research first nears its cap [3:43 / 3:27].
-5. **Projects** 40 s after Research [4:00 / 3:44]. Triggered projects wait in a queue and arrive one every 15 s, in table order, four on screen at most (the next step of a ladder, e.g. Chain-of-thought after Better Prompting, appears at once; rescues, the stage goal, a wall's named fix and the Abilene side-offers do not wait for room).
+4. **Research** at the first Trust milestone (2,000 tasks) [3:20 / 3:04] — `Trust`, `Next Trust at`, **Hire Researcher**, `Researchers`, `Research x / 1,000`. **Expand Lab** when research first nears its cap [3:43 / 3:27].
+5. **Projects** 40 s after Research [4:00 / 3:44]. Triggered projects wait in a queue and arrive in table order (one a minute until the Training panel, then every 30 s), four on screen at most (the next step of a ladder, e.g. Chain-of-thought after Better Prompting, appears at once; rescues, the stage goal, a wall's named fix and the Abilene side-offers do not wait for room).
 6. **Grid Contract (2,000 research)** [shown 4:30, bought ≈ 5:00]: it tops power up whenever it falls below 60 % of a block. **Buy Power** stays on screen with its price as the manual fallback. Blocks grow with the fleet (10,000 kWh at 20 GPUs, 100,000 at 200; short of money, the button sells the biggest block you can afford).
 7. **Training Pipeline (2,000 research)** at 7,000 tasks [5:34 / 5:11] → **Training** panel: `Current model: Sage-1 · 1.00×`, `Level with Anthrosoft`, **Train Sage-1.1**, `Cost: …`, `Compute: enough · est. 64 s`. The first run trains with the default focus; **Copies running** appears when it diverts half the GPUs.
 8. First evaluation and red-team [~8:30], first release [9:09 / 9:38] → the **Focus** row (Capability / Efficiency / Safety, with tooltips). **Public API** 30 s later; **Usage-based pricing** after it.
@@ -43,9 +52,9 @@ The first stage is by far the simplest. OpenMind has a model, a cloud bill, and 
 11. October [15:00]: **Batch inference**; an API outage (console and Developments) [16:00]; **Hire a recruiter** [17:30]; **Lease the floor upstairs** when the next run needs more research than the lab holds.
 12. **Abilene site reserved** [18:36 / 22:19] → the **Abilene** panel and **Interconnect queue ($80,000)**; **Closed-loop cooling** 30 s later.
 13. November [20:00]: **Agent mode**; [22:30] **Publish a safety framework**; **Renewal season** (contracts pay 25 % more) once contracts exist.
-14. **Interconnect queue** bought [23:04 / 24:34] → a named wait (`The Interconnect Queue — 3:30 until the utility signs off.`, `Interconnect: 3:29` counting down) and **Substation ($120,000, 8,000 research)** greyed until it ends; **Pay to expedite** 25 s in; **Power purchase agreement** a minute in; **Take the county's tax abatement** (−$20,000 on the substation) when the queue clears.
-15. **Substation** [26:20 / 27:06] → `Substation: 5 MW` and **Break ground ($165,000)**; **Hire a general contractor** (−$40,000 on Break ground) 45 s later; **Build a sound wall** 100 s later.
-16. **Break ground** [29:48 / 29:32] → Stage 2.
+14. **Interconnect queue** bought [23:04 / 24:34] → a named wait (`The Interconnect Queue — 4:00 until the utility signs off.`, `Interconnect: 3:59` counting down) and **Substation ($120,000, 8,000 research)** greyed until it ends; **Pay to expedite** 25 s in; **Power purchase agreement** a minute in; **Take the county's tax abatement** (−$20,000 on the substation, 1 Trust) when the queue clears.
+15. **Substation** [26:20 / 27:06] → `Substation: 5 MW` and **Break ground ($185,000)**; **Hire a general contractor** (−$40,000 on Break ground, its crew on site after 1:00) 45 s later; **Build a sound wall** 100 s later.
+16. **Break ground** [~27:00 / ~29:45] → Stage 2.
 
 Every trust gain says what it is for (`Trust +1. Hire a researcher or expand the lab.`); every public release earns +1 Trust; the console names each wall and the fix on screen (`The Research Plateau — the next run needs 10,771 research. The lab holds 8,000. Rent desks across the street.`, `Nobody buys at $2.25. Lower the price.`). If the lab cannot hold the next run, the Experiment tracker or Lease the floor upstairs appears at once; with no Trust and neither available, **Rent desks across the street** (repeatable, $1,000 doubling) appears within 45 s.
 
@@ -71,7 +80,7 @@ Costs depend on the capability `c` the run starts from (the best model so far), 
 
 ### Projects (Stage 1)
 
-Better Prompting · Blue-sky Research · Grid Contract · Chain-of-thought · Training Pipeline · Seed round · Research blog post · Experiment tracker · Tool use · Hire an evals team · Public API · Launch demo video · Bulk GPU lease · Usage-based pricing · Sage writes Sage · Distributed training · Alignment team · Series A · Reserve the Abilene site · Enterprise sales team · Custom model contract · Batch inference · Lease the floor upstairs · Hire a recruiter · Closed-loop cooling · Interconnect queue · Pay to expedite the interconnect · Power purchase agreement · Agent mode · Publish a safety framework · Renewal season · Take the county's tax abatement · Substation · Hire a general contractor · Build a sound wall · Break ground · Workshop paper · Conference keynote · Mixture of experts · (rescues) Ask the cloud provider for credit · Rent desks across the street · Press release.
+Better Prompting · Blue-sky Research · Grid Contract · Chain-of-thought · Training Pipeline · Seed round · Research blog post · Experiment tracker · Tool use · Hire an evals team · Public API · Launch demo video · Bulk GPU lease · Second cloud region · Reserved capacity · Dynamic pricing · Usage-based pricing · Sage writes Sage · Distributed training · Alignment team · Series A · Reserve the Abilene site · Enterprise sales team · Custom model contract · Batch inference · Lease the floor upstairs · Hire a recruiter · Closed-loop cooling · Interconnect queue · Pay to expedite the interconnect · Power purchase agreement · Agent mode · Publish a safety framework · Renewal season · Take the county's tax abatement · Substation · Hire a general contractor · Build a sound wall · Break ground · Workshop paper · Conference keynote · Mixture of experts · (rescues) Ask the cloud provider for credit · Rent desks across the street · Press release.
 
 ### Choices (Stage 1)
 
@@ -94,26 +103,27 @@ when you buy **Break ground**. The console keeps its last four lines and prints,
 
 ## Stage 2 — Scale
 
-*As built (`docs/specs/stage2.md` is the spec; the code wins where they differ). Times are the reasonable bot's, seeds 1–5 from the Stage 2 preset: the stage runs **38:45–40:52**; the first-timer (`--policy naive`) takes 37:40–41:00.*
+*As built (`docs/specs/stage2.md` is the spec; the code wins where they differ). Times are the reasonable bot's, seeds 1–5 from the Stage 2 preset: the stage runs **36:12–38:39**; the first-timer (`--policy naive`) takes 37:19–44:08, and one who never answers an event (`--variant ignore-modals`) 43:43–46:25.*
 
 OpenMind owns its datacenters. Compute is bought in lots and needs **room** (datacenters) and **power** (plants, some of them behind an **interconnect queue**). The market is priced on **AUTO**: it falls to clear what the copies make, so revenue grows with the square root of supply until a better model or a wider market lifts it. From the second run, training wants **data** as well as research and money, and the public web runs out. Copies are split between tasks and research with a **slider**, and the human share of research falls toward nothing. The world arrives as meters: **Government**, **Public** (approval, jobs), **Security**, and an **alignment** number that is measured, not known.
 
 ### What changes on screen
 
-*Removed on arrival:* Buy Power (kWh), Rent GPU, Compute, the Abilene site ladder, Custom model contracts (the signed ones keep paying a fixed rate).
-*Added on arrival:* **Stores** (A Dark Room's box: funds, research, insight, Trust, GPUs, power, copies, data; hover any row for its sources and sinks per second), the rebuilt **Infrastructure** panel, **AUTO** pricing.
-*Added later, in this order (typical):* gas turbines 2:00 · capability graph 2:00 · datacenters 3:00 · solar 3:15 · the research slider 3:45 · keep-internal releases ~7:00 · Government 10:00 · Public 13:30 · Security 15:00 · nuclear and the interconnect queue ~19–21 · second pipeline ~20 · job-transition fund ~24 · Security level 3 ~26 · alignment compute ~27 · Stats ~28 · shared evaluations ~32 · the G6 pre-order ~36.
+*Removed on arrival:* Buy Power (kWh), Rent GPU, Compute, the Abilene site ladder, the price buttons and the AUTO toggle, Custom model contracts (the signed ones keep paying a fixed rate).
+*Added on arrival:* **Stores** (A Dark Room's box: funds, research, insight, Trust, GPUs, power capacity, copies, data; hover any row for its sources and sinks per second), the rebuilt **Infrastructure** panel, a read-only price line (`Price per task: $0.34 (auto)`).
+*Added later, in this order (typical):* gas turbines 2:00 · capability graph 2:00 · datacenters 2:40 · solar 3:10 · the research slider 3:20 · keep-internal releases ~6:00 · Government ~9:00 · Public ~12:30 · Security ~14:00 · nuclear and the interconnect queue ~18–21 · second pipeline ~18–22 · job-transition fund ~19 · the theft warning and Security level 3 ~22–25 · Stats ~26–29 · shared evaluations ~30–33 · the G6 pre-order at the release before the exit · alignment compute when the run that should cross 4× starts.
 
 ### The economy (as built)
 
-* **GPUs** in lots of 1,000 / 5,000 / 25,000 at $95 per G4 ($209 per G5 after the *Nimbus G5 order*), cut to the room and power left; the *Standing order* (shown after five lots) buys them automatically and keeps the next run's money. Each GPU draws 1 kW.
+* **GPUs** in lots of 1,000 / 5,000 / 25,000 at $120 per G4 (G5s after the *Nimbus G5 order*), cut to the room and power left; the *Standing order* buys them automatically and keeps the next run's money (and the price of an open offer the lab cannot pay yet). The button never locks for it: its note reads as progress (`standing order: next lot in about 0:26`), and it says `no room` or `no power` when that is the wall. Each GPU draws 1 kW. Prices are in units of the arrival revenue (`S2_FUNDS_SCALE` 2.4).
 * **Datacenters**: 10k, 15k, 25k, 50k … slots for $0 (Abilene), $285k, $1.5M, $3.8M … ; the button names its slots.
 * **Power**: gas +20 MW at once ($114k, ×1.7 each); solar +50 MW after 3:00 in the interconnect queue (0:30 behind the meter; two at a time); nuclear +500 MW in 2:00; Al-Marsa +1,000 MW in 2:00, priced at a minute of revenue when the offer opens.
 * **Market**: customers take `market × (0.25 / price)²` tasks a second; AUTO walks the price to clear output plus a thirtieth of the backlog. `Market flooded` names the fall; a manual price above the market prints the share billed and the clearing price, and finance puts AUTO back after five minutes.
 * **Research**: researchers (capped by capability) plus `10 × √(copies on research) × capability^1.5` from the copies; the slider runs 5–50 %. The lab's capacity grows with the Research cluster, Experiment scheduler and Checkpoint farm (×4 each); insight trickles in below capacity.
-* **Training**: research, funds and (from the second run) data, `1.5 T × (capability / 1.6)³`; the whole fleet trains; 45–120 s; a second pipeline after *Parallel pipelines*. Eleven or twelve runs, a start every ~3:25, capability 1.64× → 4.0–4.2×.
-* **Data**: the web crawl (15 T, once), the publishers (licence +10 T, fight +5 T and a lawsuit, or write your own), synthetic data from research copies, the code hosts (+20 T), the archives (+40 T), the flywheel (0.6 T per billion tasks). The data wall arrives around minute 13–20.
-* **Cards**: most cost at least a minute or a minute and a half of the revenue at the moment they appear (fixed then), so they stand as goals: the bot buys a card a median 6–8 minutes after it shows, the first-timer 3½–4½; up to seven cards on screen.
+* **Training**: research, funds and (from the second run) data, `1.5 T × (capability / 1.6)³`; the whole fleet trains; 45–120 s; a second pipeline after *Parallel pipelines*. Eleven or twelve runs, a start every ~3:25, capability 1.64× → 4.0–4.2×. When Train is grey its reason names the binding shortfall and the time (`short 41,000 research — about 1:20`, `short 5.6 T data — about 2:10`, `waiting for the pipeline`, `evaluation month — 0:40`). A run within 2 % below a tier (2×, 3×, 4×) is called the tier.
+* **Data**: the web crawl (15 T, once), the publishers (licence $360,000 for +10 T, fight +5 T and a lawsuit, or write your own — the default when the event runs out), synthetic data from research copies, the code hosts (+20 T), the archives (+40 T), the flywheel (0.6 T per billion tasks). The data wall arrives around minute 13–20; *International launch* (market ×1.6) shows at 12× the arrival revenue or in May, priced to be bought before it.
+* **Cards**: most cost at least a minute or a minute and a half of the revenue at the moment they appear (fixed then), so they stand as goals: the bot buys a card a median 4–5 minutes after it shows, the first-timer 3½–4. At most six are on screen, the stage goal and urgent fixes included (only rescues ride free); after 160 s with nothing new, one or two more may join (eight at most), and the G6 pre-order ignores the cap.
+* **Government relations** gains taper as relations rise (a gain is worth `(100 − relations) / 80` of itself); losses land in full. The careful lab ends near 68–73, the reckless one near 60.
 
 ### Developments (world)
 
@@ -125,16 +135,16 @@ Incidents from issues shipped un-red-teamed (approval and measured alignment dow
 
 ### Choices (8–9 per stage, ≥ 150 s apart)
 
-*Release Sage-2* (public or internal) · *A Senate Hearing* · *The Publishers* · *A Month of Evals* · *Al-Marsa* · *The Pentagon Calls* · *4 a.m.* (the theft warning) · *A Joint Statement* · the training gamble (once). Each option prints its effect and cost on the button. Measured over seeds 1–3: the careful answers end the stage with approval 15–20 points higher, the lead a month shorter and true alignment 5–8 higher than the reckless ones; never red-teaming costs 12 points of measured alignment and 4–5 incidents; no Safety runs cost 8 points of true alignment; copies at 50 % on research add 3–9 minutes; Al-Marsa costs 11 points of government relations.
+*Release Sage-2* (public or internal) · *A Senate Hearing* · *The Publishers* · *A Month of Evals* · *Al-Marsa* · *The Pentagon Calls* · *4 a.m.* (the theft warning) · *A Joint Statement* · the training gamble (once). Each option prints its effect and cost on the button, and each has a timer with a harmless default, so none holds the stage up. Measured over seeds 1–3: the careful answers end the stage with approval 12–15 points higher, government relations 7–8 higher (68 vs 60.5), the lead a month shorter and true alignment 5–6 higher than the reckless ones; never red-teaming costs 12–19 points of measured alignment and 3–4 incidents.
 
 ### Stage 2 ends
 
-with `Let Sage-3 write the code` — pinned from 2.8× (14–19 minutes before the end), bought once a released model reaches 4×. The console narrates the Stage 3 arrival (`Sage-3 writes better code than anyone at OpenMind.`); marketing, hiring, the price buttons, gas and solar leave; Alignment arrives.
+with `Let Sage-3 write the code` — pinned from 2.8× (14–24 minutes before the end), bought once a released model reaches 4×. The console narrates the Stage 3 arrival (`Sage-3 writes better code than anyone at OpenMind.`); marketing, hiring, gas and solar leave; Alignment arrives. Stage 2's approach cards still on screen leave with it, and no Stage 2 event opens after the arrival.
 
 ### Strategy
 
 * Power before GPUs, room before power runs out: the reason line under the GPU button says which wall is next.
-* Leave AUTO on. The price falls; watch revenue.
+* The price sets itself. It falls; watch revenue.
 * Put 10–20 % of copies on research once the assistants land; more starves revenue.
 * License the archives early if you can; the data wall decides the middle of the stage.
 * Red-team every release. Incidents cost approval and the alignment the world can see.
