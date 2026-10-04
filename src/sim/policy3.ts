@@ -18,9 +18,9 @@ import { visibleProjects } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled } from '../engine/events.js';
 import { canPay } from '../engine/state.js';
 
-
 /** `refuse` on the Committee's order: the fourth option since Stage 4 added `hand over the keys` third. */
 const ORDER_REFUSE = 3;
+
 /**
  * Stage 3's policies (stage3.md §9.1–§9.2). `bot` is the reasonable bot; `racer` and `cautious` are
  * the reasonable bot with one temperament changed; `naive` is the first-timer of §9.2; `greedy`
