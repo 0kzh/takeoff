@@ -1420,8 +1420,9 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_site2',
       late: true,
       title: 'Second campus: New Carlisle',
-      // From the build fund, which pays for halls (critic S3 round 1 §9 item 5: the fleet stood still
-      // with billions there behind a card priced in funds); the build-out buys it when it needs room.
+      // From the build fund, which pays for halls, or from funds when the fund is short (critic S3 round 1
+      // §9 item 5: the fleet stood still with billions in the fund behind a card priced in funds); the
+      // build-out buys it from the fund when it needs room.
       cost: (s) => ({ build: s2(s, 60000000) }),
       description: 'Land and a grid connection in Indiana, for when Abilene\'s slots run out.',
       trigger: (s) => gpuCapacity(s) >= 800000 || best(s) >= LATE_AT(3.85),

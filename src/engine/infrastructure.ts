@@ -765,7 +765,7 @@ export function queueLine(s: GameState): string {
  * a button the build-out took away): the campus, a hall going up, the build-out, or Build Datacenter.
  */
 export function roomFixS3(s: GameState): string {
-  if (needsSite2(s)) return 'Datacenter 10 needs the New Carlisle campus (from the build fund)';
+  if (needsSite2(s)) return 'Datacenter 10 needs the New Carlisle campus (build fund or funds)';
   const hall = s.powerQueue.find((o) => o.kind === 'datacenter');
   if (hall) return `${hall.label ?? 'a hall'} is going up — ${fmtClock(Math.ceil(hall.remaining))}`;
   return s.flags['buildout'] === true ? 'the build-out orders the next hall' : `Build Datacenter ${nextDatacenter(s).n}`;

@@ -22,7 +22,10 @@ export interface Cost {
   data?: number;
   /** Stage 4: tonnes of materials, the stage's currency. */
   materials?: number;
-  /** Dollars from the build fund (the second campus: what the fleet waits for is paid from the fleet's purse). */
+  /**
+   * Dollars from the build fund, or from funds when the fund is short (the second campus: what the fleet
+   * waits for is paid from the fleet's purse first).
+   */
   build?: number;
 }
 
@@ -836,7 +839,7 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.trust || s.trust >= c.trust) &&
     (!c.data || s.data >= c.data - 1e-9) &&
     (!c.materials || s.s4.materials >= c.materials) &&
-    (!c.build || s.buildFund >= c.build)
+    (!c.build || s.buildFund >= c.build || s.funds >= c.build)
   );
 }
 
@@ -848,7 +851,10 @@ export function pay(s: GameState, c: Cost): boolean {
   s.trust -= c.trust ?? 0;
   if (c.data) spendData(s, c.data);
   if (c.materials) s.s4.materials = Math.max(0, s.s4.materials - c.materials);
-  if (c.build) payBuild(s, c.build);
+  if (c.build) {
+    if (s.buildFund >= c.build) payBuild(s, c.build);
+    else s.funds = Math.round((s.funds - c.build) * 100) / 100;
+  }
   return true;
 }
 
@@ -859,6 +865,11 @@ export function spendData(s: GameState, amount: number): number {
   s.data = Math.max(0, s.data - take);
   s.dataSynthetic = Math.max(0, Math.min(s.data, s.dataSynthetic - take * share));
   return share;
+}
+
+/** The idle hold is on (engine/hold.ts): the Committee's count and the incident clocks wait. */
+export function heldForPlayer(s: GameState): boolean {
+  return s.flags['held'] === true;
 }
 
 /** Counts a player press of a verb (the sim's chore check). */

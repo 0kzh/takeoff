@@ -70,7 +70,8 @@ export function runBuildout(s: GameState): void {
   const roomShort = freeSlots(s) < big;
   const powerShort = freePowerGpus(s) < big;
   // Datacenter 10 needs the second campus: the build-out buys it from the fund it plans with.
-  if (needsSite2(s) && (ahead || roomShort) && visibleProjects(s).some((p) => p.id === 'p_site2' && p.canAfford(s))) buyProject(s, 'p_site2');
+  const campus = needsSite2(s) && (ahead || roomShort) ? visibleProjects(s).find((p) => p.id === 'p_site2') : undefined;
+  if (campus && s.buildFund >= (campus.cost(s).build ?? Infinity)) buyProject(s, 'p_site2');
   if (!datacenterBuilding(s) && !needsSite2(s) && (ahead || roomShort)) {
     const next = nextDatacenter(s);
     if (s.buildFund >= next.cost) {
@@ -124,7 +125,7 @@ function stage3Walls(s: GameState): void {
       s.flags['gpuWallSaidAt'] = now;
       // What actually stops the lots (critic S3 round 1 §9.9 item 6): the campus, the Standing order off, or nothing.
       const fix = needsSite2(s) && freeSlots(s) < LOT_SIZES_S3[0]
-        ? 'Datacenter 10 needs the New Carlisle campus, from the build fund.'
+        ? 'Datacenter 10 needs the New Carlisle campus, from the build fund or funds.'
         : !standingOrderOn(s)
           ? 'Buy GPUs, or switch the Standing order on.'
           : s.flags['buildout'] === true ? 'The lots and the build-out are on it.' : 'Buy GPUs; a hall or a reactor when the lots stop.';
@@ -140,7 +141,7 @@ function stage3Walls(s: GameState): void {
     const key = `noRoom3:${s.datacenters}`;
     if (!s.flags[key]) {
       s.flags[key] = true;
-      const fix = needsSite2(s) ? 'Datacenter 10 needs the New Carlisle campus, from the build fund.' : s.flags['buildout'] === true ? 'The build-out orders the next hall.' : `Build Datacenter ${nextDatacenter(s).n}: ${fmtClock(dcBuildSeconds(s))}.`;
+      const fix = needsSite2(s) ? 'Datacenter 10 needs the New Carlisle campus, from the build fund or funds.' : s.flags['buildout'] === true ? 'The build-out orders the next hall.' : `Build Datacenter ${nextDatacenter(s).n}: ${fmtClock(dcBuildSeconds(s))}.`;
       say(s, `No room for more GPUs — all ${fmtInt(gpuCapacity(s))} slots full. ${fix}`);
     }
   } else if (why === 'no power' && !s.powerQueue.some((o) => o.kind === 'nuclear')) {
