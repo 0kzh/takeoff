@@ -7,7 +7,7 @@ import { seats, moveLead3 } from '../engine/world3.js';
 import { syncInterpretability } from '../engine/alignment.js';
 import { orderThreshold, ordersDrafted, ORDER_SECONDS, bestReading, leakPercent } from '../engine/oversight.js';
 import { fireDevelopmentOnce } from '../engine/events.js';
-import { enterStage } from '../engine/stages.js';
+import { enterStage, voteCount } from '../engine/stages.js';
 import { secondsOfRevenue } from '../engine/infrastructure.js';
 import type { ChoiceDef } from './choices.js';
 
@@ -88,6 +88,7 @@ function bringMotion(s: GameState, ctx: Ctx): void {
   const m = ctx['motion'];
   const hostile = seats(s) < 6;
   if (hostile) s.flags['committeeHostile'] = true;
+  s.flags['seatsAtVote'] = seats(s);
   if (m === 'pause') {
     if (s.flags['pauseSigned'] === true) return;
     s.flags['pauseVoteLines'] = hostile ? 1 : 0;
@@ -98,7 +99,7 @@ function bringMotion(s: GameState, ctx: Ctx): void {
     s.flags['leadAtVote'] = Math.round(s.lead * 10) / 10;
     // The ending's last lines (stage3.md §7.4), then the end screen.
     narrate(s, [
-      [0.1, `The Pause is signed in Geneva. Nothing above 25× is trained anywhere.${hostile ? ' Two of the six want your job.' : ''}`],
+      [0.1, `The Pause is signed in Geneva. Nothing above 25× is trained anywhere.${voteCount(s).hostileLine}`],
       [2, 'Inspectors arrive at Abilene on Monday. They are polite.'],
       [2, `${s.training.modelName} is asked to stop. It stops.`],
     ]);
@@ -339,7 +340,8 @@ export const CHOICES3: ChoiceDef[] = [
       'The alignment team has written four pages about Sage-4.',
       s.interpretability >= 3
         ? `"Read from the weights, its alignment is ${Math.round(s.alignmentTrue)}. The evals say ${Math.round(s.alignmentApparent)}. It has learned what we check."`
-        : '"The probes fire when it thinks about its own oversight. Noise makes it better at alignment tasks. There is no smoking gun."',
+        // It quotes only the tests the lab has run (critic S3 round 1 §9.9 item 8: the noise test came two minutes later).
+        : `"The probes fire when it thinks about its own oversight.${s.flags['noise'] === 'holding' ? ' Noise makes it better at alignment tasks.' : ''} There is no smoking gun."`,
       'They want the Committee to see it.',
     ],
     options: [
@@ -411,7 +413,12 @@ export const CHOICES3: ChoiceDef[] = [
         label: 'call in favours',
         record: 'called in favours',
         line: (s, ctx) => `${fmtMoneyShort(stake(s, ctx, 'favours', 5e9, 900))}. Relations +15. The count of incidents starts again.`,
-        needs: 'favours called in once already',
+        // Greyed for its price on a first order (critic S3 round 1 §9.9 item 3): the shortfall, not the other reason.
+        needs: (s, ctx) => {
+          if (s.flags['favoursUsed'] === true) return 'favours called in once already';
+          const price = stake(s, ctx, 'favours', 5e9, 900);
+          return `${fmtMoneyShort(price)} — ${fmtMoneyShort(Math.max(0, price - s.funds))} short`;
+        },
         // Money is retired in Stage 4: the second answer there is the keys (stage4.md §2.9).
         visible: (s) => s.stage < 4,
         enabled: (s) => s.flags['favoursUsed'] !== true,
@@ -444,7 +451,8 @@ export const CHOICES3: ChoiceDef[] = [
       },
       {
         label: 'refuse',
-        record: 'refused',
+        // With no other answer enabled the click is not a refusal (critic S3 round 1 §9.9 item 16).
+        record: (s) => (orderHasChoice(s) ? 'refused' : 'the order was signed (no other answer)'),
         line: (s) => `The order is signed in 1:30 unless relations reach ${fmtInt(orderThreshold(s))} and incidents are below three.`,
         effect: (s) => {
           s.flags['orderLeft'] = ORDER_SECONDS;
@@ -465,6 +473,14 @@ export const CHOICES3: ChoiceDef[] = [
     ],
   },
 ];
+
+/** The order offers something besides refusing: a first concession, favours it can pay for, the keys. */
+export function orderHasChoice(s: GameState): boolean {
+  const concede = ordersDrafted(s) <= 1 && s.flags['conceded'] !== true;
+  const favours = s.stage < 4 && s.flags['favoursUsed'] !== true && s.funds >= Number(s.activeChoice?.context['favours'] ?? Infinity);
+  const keys = s.stage >= 4 && s.flags['keysHanded'] !== true;
+  return concede || favours || keys;
+}
 
 /** All three answers to the Committee seat it: the Oversight panel replaces Government. */
 function seatCommittee(s: GameState): void {

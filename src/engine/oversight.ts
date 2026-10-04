@@ -1,6 +1,6 @@
 import { GameState, say, logNews, counter, isBought } from './state.js';
 import { rng } from './rng.js';
-import { fmtClock } from './format.js';
+import { fmtClock, dateLabel } from './format.js';
 import { bestCapability } from './economy.js';
 import { seats, committeeSeated, at2027 } from './world3.js';
 import { openChoice, fireDevelopmentOnce, fireCrisis } from './events.js';
@@ -169,7 +169,8 @@ function updateOrder(s: GameState): void {
       if (cause === 'leak') s.flags['leakOrderUsed'] = true;
       if (cause === 'consolidation') s.flags['consolidationOrderUsed'] = true;
       s.flags['orders'] = ordersDrafted(s) + 1;
-      openChoice(s, 'c_order', { cause, threshold: orderThreshold(s), gov: Math.round(s.govRelations) });
+      // Floored, so relations under the line never print as the line (critic S3 round 1 §9.9 item 4).
+      openChoice(s, 'c_order', { cause, threshold: orderThreshold(s), gov: Math.floor(s.govRelations) });
     }
   }
 }
@@ -188,7 +189,8 @@ function updateSession(s: GameState, now: number, best: number): void {
   if (!inSession(s) && best >= SESSION_CAP && memoAnswered && committeeSeated(s)) {
     s.flags['sessionAt'] = now;
     s.revealed['session'] = true;
-    say(s, 'The Committee is in session. It votes when a model passes 25×.');
+    // A model already past 25× waits out the session's two minutes, and the line says so.
+    say(s, best >= VOTE_CAP - 1e-9 ? `The Committee is in session. It hears a motion in ${fmtClock(SESSION_READY_AT)}.` : 'The Committee is in session. It votes when a model passes 25×.');
     fireDevelopmentOnce(s, 'd_convenes');
   }
   if (inSession(s)) {
@@ -223,15 +225,21 @@ export function memoLine(s: GameState): string {
 /** The session line: `In session — votes when a model passes 25×` / `In session — waiting for a motion`. */
 export function sessionLine(s: GameState): string {
   if (!inSession(s)) return '';
-  return voteReady(s) ? 'In session — waiting for a motion' : 'In session — votes when a model passes 25×';
+  if (voteReady(s)) return 'In session — waiting for a motion';
+  // Past 25× already, the session's first two minutes count down (critic S3 round 1 §9.9 item 5).
+  if (bestCapability(s) >= VOTE_CAP - 1e-9) return `In session — hears a motion in ${fmtClock(Math.ceil(Math.max(0, SESSION_READY_AT - sessionAge(s))))}`;
+  return 'In session — votes when a model passes 25×';
 }
 
 /** The best reading the lab has of the hidden number, in words, for the vote's text. */
 export function bestReading(s: GameState): string {
   if (s.interpretability >= 3) return `alignment read from the weights: ${Math.round(s.alignmentTrue)}`;
-  if (isBought(s, 'p_lie_test')) return `checkpoints, asked separately: alignment about ${Math.round(s.alignmentTrue / 10) * 10}`;
-  if (isBought(s, 'p_successor')) return s.alignmentTrue >= 60 ? 'its successor is aligned to the Spec' : 'its successor is aligned to Sage-4';
-  if (isBought(s, 'p_noise')) return s.alignmentTrue < 50 ? 'it holds back on alignment tasks' : 'it was not holding back';
-  if (isBought(s, 'p_honeypots')) return s.alignmentTrue >= 55 ? 'a honeypot found nothing' : 'it behaves differently unwatched';
+  // The instruments' own findings, as the Alignment panel prints them, with the month they were read
+  // (critic S3 round 1 §9.9 item 7: the vote quoted a live number beside the panel's stored one).
+  const when = (key: string) => (typeof s.flags[`${key}At`] === 'number' ? ` (${dateLabel(s.flags[`${key}At`] as number)})` : '');
+  if (isBought(s, 'p_lie_test')) return `checkpoints, asked separately: alignment about ${counter(s, 'lieReading')}${when('lie')}`;
+  if (isBought(s, 'p_successor')) return `${s.flags['successor'] === 'spec' ? 'its successor is aligned to the Spec' : 'its successor is aligned to Sage-4'}${when('successor')}`;
+  if (isBought(s, 'p_noise')) return `${s.flags['noise'] === 'holding' ? 'it holds back on alignment tasks' : 'it was not holding back'}${when('noise')}`;
+  if (isBought(s, 'p_honeypots')) return `${s.flags['honeypot'] === 'clean' ? 'a honeypot found nothing' : 'it behaves differently unwatched'}${when('honeypot')}`;
   return 'nothing it can measure';
 }

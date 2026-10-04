@@ -11,7 +11,7 @@ import {
   lotReasonOf, lotCostOf, lotReturn, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, freeSlots, solarSeconds,
   freePowerGpus, powerScale, poweredGpus, KW_PER_GPU, GAS_MW, SOLAR_MW, NUCLEAR_MW,
-  buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits, fundsIncome,
+  buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits, fundsIncome, roomFixS3, powerFixS3,
 } from '../engine/infrastructure.js';
 import { marketBreakdown, qualityMultS2 } from '../engine/market.js';
 import {
@@ -292,14 +292,14 @@ function renderInfrastructure(s: GameState): void {
   const cap = gpuCapacity(s);
   setMeter('gpuMeter', s.gpus / Math.max(1, cap), 'use', `${fmtInt(s.gpus)} GPUs in ${fmtInt(cap)} slots`);
   // The words under the figure (their own line, so a long one never pushes the box wider).
-  setText('gpuFull', s.gpus >= cap ? (s.stage >= 3 && s.flags['buildout'] === true ? 'the halls are full · the build-out orders one' : 'the halls are full · Build Datacenter') : '');
+  setText('gpuFull', s.gpus >= cap ? (s.stage >= 3 ? `the halls are full · ${roomFixS3(s)}` : 'the halls are full · Build Datacenter') : '');
   const draw = powerDrawMW(s);
   setMeter('powerMeterS', draw / Math.max(1e-9, s.powerCapacityMW), 'use', `${fmtNum(draw, 1)} of ${fmtInt(s.powerCapacityMW)} MW in use`);
   const dark = Math.max(0, s.gpus - activeGpus(s));
   const powerFull = freePowerGpus(s) < 100;
   setText('powerFull', dark > 0
     ? `${fmtInt(dark)} GPUs dark${powerScale(s) < 1 ? ': a crisis holds power back' : ': add power'}`
-    : powerFull ? `full · ${s.stage >= 3 ? (s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW') : cheapestPlantFix(s)}` : s.stage >= 3 ? '' : `runs ${fmtInt(poweredGpus(s))} GPUs`);
+    : powerFull ? `full · ${s.stage >= 3 ? powerFixS3(s) : cheapestPlantFix(s)}` : s.stage >= 3 ? '' : `runs ${fmtInt(poweredGpus(s))} GPUs`);
   setText('infraCopies', fmtInt(copies(s)));
   setText('datacenters', fmtInt(s.datacenters));
   setText('chipPrice', fmtMoney(gpuUnitPrice(s)));
@@ -812,7 +812,7 @@ function renderWorld(s: GameState): void {
     setText('statCopies', fmtInt(copies(s)));
     setText('statSpeed', fmtNum(perCopyRate(s), 0));
     setText('statRunRate', fmtMoney(runRate(s)));
-    setText('statLead', fmtNum(Math.round(s.lead * 2) / 2, 1));
+    renderStatLead(s);
     setText('statAlignment', fmtInt(Math.round(s.alignmentApparent)));
   }
 }
@@ -835,10 +835,20 @@ function renderWorld3(s: GameState): void {
     setText('statCopies', fmtInt(copies(s)));
     setText('statSpeed', fmtNum(perCopyRate(s), 0));
     setText('statRunRate', fmtMoney(runRate(s)));
-    setText('statLead', fmtNum(Math.round(s.lead * 2) / 2, 1));
+    renderStatLead(s);
     setText('statAlignment', fmtInt(Math.round(s.alignmentApparent)));
   }
   renderStats3(s);
+}
+
+/**
+ * The lead in words: `Lead over Baiwen: 1.5 months`, or `Baiwen ahead by: 2.0 months` (critic S3 round 1
+ * §9.9 item 10: a negative lead with an ASCII hyphen under `Baiwen is 2.0 months ahead.`).
+ */
+function renderStatLead(s: GameState): void {
+  const half = Math.round(Math.abs(s.lead) * 2) / 2;
+  setText('statLeadLabel', s.lead < -0.05 ? 'Baiwen ahead by:' : 'Lead over Baiwen:');
+  setText('statLead', fmtNum(half, 1));
 }
 
 /** Later-stage panels are hidden but kept current so revealing one shows real values. */

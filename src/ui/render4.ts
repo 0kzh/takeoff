@@ -102,6 +102,8 @@ function layout(s: GameState): void {
 export function renderStage4(s: GameState): void {
   current = s;
   layout(s);
+  // Share evals acts on a run's sign-off, which Stage 4 has not got (critic S3 round 1 §9.9 item 11).
+  setOff('shareEvalsRow', s.stage >= 4);
   if (s.stage !== 4) return;
   renderStores4(s);
   renderFleet(s);

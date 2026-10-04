@@ -11,8 +11,8 @@ type Ctx = Record<string, number | string>;
 
 export interface ChoiceOption {
   label: string;
-  /** Short id recorded in the choice history and shown on the end screen. */
-  record: string;
+  /** Short id recorded in the choice history and shown on the end screen (a function when what was chosen depends on what else could be). */
+  record: string | ((s: GameState) => string);
   /** A function when it names a price that scales with the stage (or was fixed when the modal opened). */
   tooltip?: string | ((s: GameState, ctx: Ctx) => string);
   /** Stage 2 on: effect and cost in a few words, printed on the button under the label. */

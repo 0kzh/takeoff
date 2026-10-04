@@ -291,6 +291,19 @@ function arrivalResearchPotential(s: GameState): number {
   return r;
 }
 
+/**
+ * The Committee's vote, by its seats at the vote: the chairs with OpenMind carry it; below six, members
+ * who are not with OpenMind make up the six (`Two of the six want your job.`).
+ */
+export function voteCount(s: GameState): { yes: number; against: number; hostileLine: string } {
+  const seated = Math.max(0, Math.min(10, Math.round(Number(s.flags['seatsAtVote'] ?? 6))));
+  const yes = Math.max(6, seated);
+  const others = Math.max(0, 6 - seated);
+  const words = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
+  const hostileLine = others > 0 ? ` ${words[others]} of the six ${others === 1 ? 'wants' : 'want'} your job.` : '';
+  return { yes, against: 10 - yes, hostileLine };
+}
+
 /** What Stage 4 removes on arrival (stage4.md §1.1, §6.2) and what it shows or keeps (as-built deltas row 1). */
 const STAGE4_HIDE = [
   'business', 'marketing', 'training', 'infrastructure', 'task', 'focus', 'shipments', 'buildout', 'buildBudget',
@@ -308,16 +321,18 @@ const STAGE4_HIDE = [
  */
 function enterSuperintelligence(s: GameState): void {
   const slow = s.flags['committeeChoice'] === 'slow';
-  const hostile = s.flags['committeeHostile'] === true ? ' Two of the six want your job.' : '';
+  // The count follows the seats (critic S3 round 1 §9.9 item 15): the chairs with OpenMind, and below
+  // six the members who are not with it make up the six.
+  const { yes, against, hostileLine } = voteCount(s);
   const lead = Math.round(s.lead * 10) / 10;
   const baiwen = lead >= 0 ? `Baiwen is ${fmtNum(lead, 1)} months behind.` : `Baiwen is ${fmtNum(-lead, 1)} months ahead.`;
   const vote: string[] = slow
-    ? [`The Committee votes 6–4 to slow down.${hostile}`, 'Sage-4 is switched off. Sage-3 is brought back to finish the work.', baiwen]
-    : [`The Committee votes 6–4 to continue.${hostile}`, 'Sage-4 begins work on its successor. It has asked to name it.', 'Nothing is switched off.'];
+    ? [`The Committee votes ${yes}–${against} to slow down.${hostileLine}`, 'Sage-4 is switched off. Sage-3 is brought back to finish the work.', baiwen]
+    : [`The Committee votes ${yes}–${against} to continue.${hostileLine}`, 'Sage-4 begins work on its successor. It has asked to name it.', 'Nothing is switched off.'];
   vote.push('The model runs the business now. It is better at it.');
   logNews(s, slow
-    ? 'The Oversight Committee votes 6–4 to slow down and reassess. Sage-4 is shut down.'
-    : 'The Oversight Committee votes 6–4 to continue. "Why stop when we are winning?"');
+    ? `The Oversight Committee votes ${yes}–${against} to slow down and reassess. Sage-4 is shut down.`
+    : `The Oversight Committee votes ${yes}–${against} to continue. "Why stop when we are winning?"`);
   s.activeChoice = null;
   s.choiceQueue = [];
   s.flags['holdRuns'] = false;

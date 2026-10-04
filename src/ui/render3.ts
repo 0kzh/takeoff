@@ -5,12 +5,12 @@ import {
 } from '../engine/economy.js';
 import {
   trainStatus, nextRunName, trainCost, researchUnit, delaySeconds, nextGainPct, EXPERIMENTS_MAX, canApprove, delayNote,
-  canSendBack, autoApproveOn, redteamDepth, gpusNeeded, gpusAvailable, canRedTeam, THOROUGH_SECONDS,
+  canSendBack, autoApproveOn, redteamDepth, gpusNeeded, gpusAvailable, canRedTeam, THOROUGH_SECONDS, researchStopped, fmtWait,
 } from '../engine/training.js';
 import {
   LOT_SIZES_S3, lotCostOf, orderReasonS3, lotReturn, freeSlots, freePowerGpus, nextDatacenter, datacenterBuilding,
   dcBuildSeconds, needsSite2, nuclearCost, reactorQueueFull, REACTOR_MW_S3, KW_PER_GPU, standingOrderOn, inTransit,
-  buildShortLine, standingLine, buildEta,
+  buildShortLine, standingLine, buildEta, roomFixS3, powerFixS3,
 } from '../engine/infrastructure.js';
 import { shipmentLine, buildoutLine, buildBudget, hallUrgent, reactorUrgent } from '../engine/stage3.js';
 import {
@@ -27,7 +27,7 @@ import { theftRiskNote } from '../engine/events3.js';
 import { sl3Cost, SECURITY_NOTES } from '../engine/world.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import type { ProjectDef } from '../data/projects.js';
-import { fmtInt, fmtNum, fmtMoneyShort, fmtClock } from '../engine/format.js';
+import { fmtInt, fmtNum, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setDisabled, setTitle, setWidth, make, showId } from './dom.js';
 import { meter } from './meter.js';
 import type { Perform } from './render.js';
@@ -131,8 +131,10 @@ export function renderResearch3(s: GameState): void {
   }
   const rate = researchRate(s);
   // Before Continual learning the slider names the next run's wait; after it, the status line does.
+  // A wait over an hour, or research stopped, is said in words (critic S3 round 1 §9.9).
   const need = (trainCost(s).research ?? 0) - s.research;
-  const eta = need > 0 && !isBought(s, 'p_auto_train') ? ` · next run in ${fmtClock(need / Math.max(1, rate))}` : '';
+  const stopped = researchStopped(s);
+  const eta = need > 0 && !isBought(s, 'p_auto_train') ? (stopped ? ` · ${stopped}` : ` · next run in ${fmtWait(need / Math.max(1, rate))}`) : '';
   setText('allocRate', ` · ${fmtShort(rate)} research/s${eta}`);
   if (s.revealed['monitors']) {
     const pct = Math.round((s.monitorShare ?? 0) * 100);
@@ -198,10 +200,12 @@ export function renderTraining3(s: GameState): void {
     setOff('btn-experiments5', true);
     const name = s.training.pending?.name ?? (s.training.run?.phase === 'training' ? s.training.run.name : nextRunName(s));
     const gain = nextGainPct(s, 0.25) - nextGainPct(s);
-    // The delay a unit costs the waiting run prints from 10 s, as on every card (arc G34 rule 3).
+    // The delay a unit costs the waiting run prints from 10 s, as on every card (arc G34 rule 3); the
+    // gain to two decimals (the hover's +0.25), and the unit's price on the row.
     const delay = delaySeconds(s, unit);
+    const later = researchStopped(s) ? '' : delay >= 10 ? ` · ${fmtWait(delay)} later` : '';
     setText('experimentsNote', room
-      ? `+${fmtNum(gain, 1)} points${delay >= 10 ? ` · ${fmtClock(delay)} later` : ''}`
+      ? `+${fmtNum(gain, 2)} points · ${fmtShort(unit)} research${later}`
       : `${name} takes no more`);
   }
   if (s.revealed['redteamDepth']) {
@@ -249,9 +253,9 @@ export function renderInfrastructure3(s: GameState): void {
     // Grey only for the build fund's shortfall, power, room or the queue (arc G34): nothing is held.
     const short = why ? '' : buildShortLine(s, cost);
     const reason = why === 'no room'
-      ? `No room: ${needsSite2(s) ? 'Datacenter 10 needs New Carlisle' : s.flags['buildout'] === true ? 'the build-out orders a hall' : 'build the next datacenter'}.`
+      ? `No room: ${roomFixS3(s)}.`
       : why === 'no power'
-        ? `No power: ${s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW'}.`
+        ? `No power: ${powerFixS3(s)}.`
         : why === '2 / 2 on order'
           ? 'queue full'
           : why || short;
@@ -347,10 +351,13 @@ export function renderAlignment(s: GameState): void {
   setText('roguePct', share >= 0.0005 ? `${fmtNum(share * 100, 1)}% of the fleet` : 'none');
   setText('rogueNote', share >= ROGUE_WARN ? `— ${fmtInt(ROGUE_BREAKOUT * 100)}: one will try to leave` : share >= 0.01 ? `— ${fmtNum(ROGUE_WARN * 100, 1)}: warning` : '');
   setText('monitorGen', `Monitor: Sage-${monitorModel(s)}, two generations behind. Efficacy halved.`);
-  setText('honeypotLine', s.flags['honeypot'] === 'clean' ? 'Honeypot: behaviour unchanged' : 'Honeypot: it behaves differently unwatched');
-  setText('noiseLine', s.flags['noise'] === 'holding' ? 'Noise test: holding back' : 'Noise test: not holding back');
-  setText('successorLine', s.flags['successor'] === 'spec' ? 'Successor: aligned to the Spec' : 'Successor: aligned to Sage-4');
-  setText('lieLine', `Checkpoints: alignment about ${fmtInt(counter(s, 'lieReading'))}`);
+  // Each instrument's finding with the month it was read: readings from different months are not a
+  // contradiction (critic S3 round 1 §9.9 item 7).
+  const when = (key: string) => (typeof s.flags[`${key}At`] === 'number' ? ` (${dateLabel(s.flags[`${key}At`] as number)})` : '');
+  setText('honeypotLine', `Honeypot${when('honeypot')}: ${s.flags['honeypot'] === 'clean' ? 'behaviour unchanged' : 'it behaves differently unwatched'}`);
+  setText('noiseLine', `Noise test${when('noise')}: ${s.flags['noise'] === 'holding' ? 'holding back' : 'not holding back'}`);
+  setText('successorLine', `Successor${when('successor')}: ${s.flags['successor'] === 'spec' ? 'aligned to the Spec' : 'aligned to Sage-4'}`);
+  setText('lieLine', `Checkpoints${when('lie')}: alignment about ${fmtInt(counter(s, 'lieReading'))}`);
   if (s.revealed['alignWork']) {
     // A share of research (the wallet-rule addendum): `10% · measured +0.2 a minute · runs 11% later`.
     const share = alignWorkShare(s);
@@ -506,7 +513,9 @@ export function renderPublic3(s: GameState): void {
     setText('paymentsNote', `${fmtInt(level * PAYMENT_SHARE * 100)}% of revenue · next: approval ${signed(up)}`);
     setTitle('btn-payments', `Impact payments to displaced workers: 3% of revenue a level, approval target +7 a level, 0 to 5. The target is ${signed(target)} now; the next press makes it ${signed(target + up)}.`);
   }
-  foldNote(s, 'publicModel', `Public model: Sage-4-mini (${fmtNum(publicCap(s), 1)}×)`, 'panel-public');
+  // Only once there is a public model (critic S3 round 1 §9.9 item 9: the hover named Sage-4-mini at 0:02).
+  if (s.revealed['publicModel'] === true) foldNote(s, 'publicModel', `Public model: Sage-4-mini (${fmtNum(publicCap(s), 1)}×)`, 'panel-public');
+  else setTitle('panel-public', '');
 }
 
 // ---------- Stats and Stores (§2.13) ----------

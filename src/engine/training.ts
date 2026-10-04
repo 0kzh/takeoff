@@ -679,6 +679,8 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
  * in Stage 1 at the wall, ` · First Datacenter 0:55 later`.
  */
 export function delayNote(s: GameState, cost: Cost): string {
+  // While research is stopped a research price's delay is a division by nothing (critic S3 round 1 §9.9).
+  if (cost.research && researchStopped(s)) return '';
   const d = runDelaySeconds(s, cost);
   if (d < 10) return '';
   // Stage 4 (stage4.md §2.4): `delays Steward-3 by 1:30`.
@@ -1488,13 +1490,46 @@ export function updateTakeoffTraining(s: GameState, dt: number): void {
 export function trainStatus(s: GameState): string {
   const running = trainingRun(s);
   if (running && running.elapsed < running.duration) return `${running.name} training — ${fmtClock(Math.ceil(running.duration - running.elapsed))}`;
-  if (s.flags['holdRuns'] === true) return 'Training: held. No run starts.';
+  if (s.flags['holdRuns'] === true) return 'Training is held: no run starts until you release it.';
   if (!trainSlotFree(s)) return `${nextRunName(s)} waits for ${s.training.run?.name ?? 'the last run'} to deploy.`;
   if (gpusShort(s)) return trainGpuLine(s);
   const need = (trainCost(s).research ?? 0) - s.research;
   if (need > 0) {
+    // A wait divided by a rate near zero is not a clock: say what has stopped research instead.
+    const why = researchStopped(s);
+    if (why) return `${nextRunName(s)} waits: ${why}`;
     const eta = need / Math.max(1, researchRate(s));
-    return `${nextRunName(s)} starts when research allows — ${fmtClock(eta)}`;
+    return `${nextRunName(s)} starts when research allows — ${fmtWait(eta)}`;
   }
   return `${nextRunName(s)} starts now.`;
+}
+
+/** A clock past an hour reads as words (critic S3 round 1 §9.9: `— 3748853:43`). */
+export const WAIT_CAP_SECONDS = 3600;
+
+export function fmtWait(seconds: number): string {
+  return !Number.isFinite(seconds) || seconds >= WAIT_CAP_SECONDS ? 'more than an hour' : fmtClock(seconds);
+}
+
+/** What stops research for a while, by the effect that does it. */
+const RESEARCH_PAUSES: Record<string, string> = {
+  interviews: 'research is paused: the memo\'s interviews',
+  reimage: 'every copy is offline: the re-image',
+  lockdown: 'research is paused: the lockdown',
+  cr_subpoena: 'research is paused: the subpoena',
+  cr_shutdown: 'every copy is offline: the datacenters are off',
+};
+
+/**
+ * Why research is not coming in right now ('' when it is): an effect that stops it, with its clock,
+ * or no copies on research at all (Stages 2–3: the slider at its bottom).
+ */
+export function researchStopped(s: GameState): string {
+  for (const e of s.effects) {
+    const stops = (e.researchMult !== undefined && e.researchMult < 0.05) || (e.copiesMult !== undefined && e.copiesMult < 0.05);
+    const label = RESEARCH_PAUSES[e.id];
+    if (stops && label) return `${label} — ${fmtClock(Math.ceil(e.remaining))}`;
+  }
+  if (s.stage >= 2 && s.stage <= 3 && s.researchAlloc <= 1e-9 && researchRate(s) < 1) return 'no copies on research: move the slider up';
+  return '';
 }

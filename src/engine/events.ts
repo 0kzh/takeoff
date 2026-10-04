@@ -335,11 +335,13 @@ export function resolveChoice(s: GameState, index: number): boolean {
   if (!choiceOptionEnabled(s, def, index)) return false;
   const opt = def.options[index]!;
   const cost = optionCost(s, opt);
+  // The record is read before the effect changes what else could have been chosen.
+  const record = typeof opt.record === 'function' ? opt.record(s) : opt.record;
   if (cost) pay(s, cost);
   s.activeChoice = null;
   noteAnswered(s, def.id);
   opt.effect(s, active.context);
-  s.choicesMade.push({ id: def.id, option: opt.record, date: dateLabel(s.date) });
+  s.choicesMade.push({ id: def.id, option: record, date: dateLabel(s.date) });
   s.stats.choices += 1;
   if (opt.log) logNews(s, typeof opt.log === 'function' ? opt.log(s, active.context) : opt.log, 'choice');
   return true;

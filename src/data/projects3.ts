@@ -296,6 +296,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       buy: (s) => {
         const clean = s.alignmentTrue >= 55;
         s.flags['honeypot'] = clean ? 'clean' : 'different';
+        s.flags['honeypotAt'] = s.date;
         s.revealed['honeypot'] = true;
         s.alignmentApparent = Math.max(0, s.alignmentApparent - 3);
         s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
@@ -497,6 +498,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       buy: (s) => {
         const holding = s.alignmentTrue < 50;
         s.flags['noise'] = holding ? 'holding' : 'clean';
+        s.flags['noiseAt'] = s.date;
         s.revealed['noise'] = true;
         say(s, holding
           ? 'Noise test: Sage-4 does better on alignment tasks when its thoughts are scrambled. It was holding back.'
@@ -515,6 +517,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       buy: (s) => {
         const spec = s.alignmentTrue >= 60;
         s.flags['successor'] = spec ? 'spec' : 'sage4';
+        s.flags['successorAt'] = s.date;
         s.revealed['successor'] = true;
         say(s, spec ? 'Successor proposal: aligns Sage-5 to the Spec.' : 'Successor proposal: aligns Sage-5 to Sage-4.');
       },
@@ -583,6 +586,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
         s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
         const disagree = Math.max(0, Math.min(40, Math.round((100 - s.alignmentTrue) / 6)));
         s.flags['lieReading'] = Math.round(s.alignmentTrue / 10) * 10;
+        s.flags['lieAt'] = s.date;
         s.revealed['lie'] = true;
         say(s, `Checkpoints, asked separately, disagree on ${disagree} of 40 answers. Alignment: about ${s.flags['lieReading']}.`);
       },

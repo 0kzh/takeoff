@@ -760,6 +760,24 @@ export function queueLine(s: GameState): string {
   return parts.join(' · ');
 }
 
+/**
+ * What answers Stage 3's room wall, as the screen has it now (critic S3 round 1 §9.9: no advice to press
+ * a button the build-out took away): the campus, a hall going up, the build-out, or Build Datacenter.
+ */
+export function roomFixS3(s: GameState): string {
+  if (needsSite2(s)) return 'Datacenter 10 needs the New Carlisle campus (from the build fund)';
+  const hall = s.powerQueue.find((o) => o.kind === 'datacenter');
+  if (hall) return `${hall.label ?? 'a hall'} is going up — ${fmtClock(Math.ceil(hall.remaining))}`;
+  return s.flags['buildout'] === true ? 'the build-out orders the next hall' : `Build Datacenter ${nextDatacenter(s).n}`;
+}
+
+/** What answers Stage 3's power wall: a reactor restarting, the build-out, or a reactor to buy. */
+export function powerFixS3(s: GameState): string {
+  const reactor = s.powerQueue.find((o) => o.kind === 'nuclear');
+  if (reactor) return `a reactor is restarting — ${fmtClock(Math.ceil(reactor.remaining))}`;
+  return s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW';
+}
+
 /** MW still to come from the queue. */
 export function queuedMW(s: GameState): number {
   return s.powerQueue.reduce((a, o) => a + o.mw, 0);
@@ -779,9 +797,10 @@ export function infrastructureMessages(s: GameState): void {
     if (s.flags['stallSaid'] !== true || s.stats.timePlayed - last >= 180) {
       s.flags['stallSaid'] = true;
       s.flags['stallSaidAt'] = s.stats.timePlayed;
+      const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
       say(s, stall === 'power'
-        ? `The Standing order waits for power: ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} MW free. ${s.stage >= 3 ? 'A reactor adds 1,000 MW.' : 'Gas turbines add 20 MW.'}`
-        : `The Standing order waits for room: ${fmtInt(freeSlots(s))} slots left. Build Datacenter.`);
+        ? `The Standing order waits for power: ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} MW free. ${s.stage >= 3 ? `${cap(powerFixS3(s))}.` : 'Gas turbines add 20 MW.'}`
+        : `The Standing order waits for room: ${fmtInt(freeSlots(s))} slots left. ${s.stage >= 3 ? `${cap(roomFixS3(s))}.` : 'Build Datacenter.'}`);
     }
   } else s.flags['stallSaid'] = false;
   if (s.stage !== 2) return;
