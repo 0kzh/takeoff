@@ -86,9 +86,28 @@ export function researchFor(c: number, stage = 1): number {
   return Math.round(raw / unit) * unit;
 }
 
-/** Funds `$25,000 × (c/1.6)^8` from the knee up; exponent 9.5 below it: ≈ $290 at 1.0×, $13,500 at 1.5×. */
+/**
+ * Stage 1's run price (stage1-round3-fixes.md §1): dollars only, `$290 × c^13` to two significant
+ * figures — $290 / $1,300 / $5,300 / $23,000 / $100,000 at 1.00 / 1.12 / 1.25 / 1.40 / 1.57×. Research
+ * buys cards and nothing else. The exponent is the spec's knob (its 11.5 came from a paper model): at
+ * 11.5 the sim's bot ended at 18:20–20:20 and the first-timer at 21:30–22:20 (seeds 1–5), the late runs
+ * being paid from a revenue the paper did not foresee. Above about 13 the fifth run would cost more
+ * than the Stage 2 quote at the knee. With the Series A at $5,000 and First Datacenter at 200 s of the
+ * best revenue, seeds 1–10 end at 20:13–21:41 for the bot and 22:14–24:00 for the first-timers.
+ */
+export const S1_RUN_BASE = 290;
+export const S1_RUN_EXPONENT = 13;
+
 export function fundsFor(c: number): number {
-  return Math.round(25000 * Math.pow(c / COST_KNEE, c >= COST_KNEE ? 8 : 9.5));
+  return twoSig(S1_RUN_BASE * Math.pow(Math.max(1, c), S1_RUN_EXPONENT));
+}
+
+/**
+ * A Stage 2 run's dollar price, `fundsForS2` at the arrival's scale. From the knee (the wall run) the
+ * Stage 1 row quotes it, so the figure does not move when the datacenter opens.
+ */
+export function stage2RunFunds(s: GameState, c: number): number {
+  return Math.round(fundsForS2(c) * S2_FUNDS_SCALE * s2Scale(s));
 }
 
 /**
@@ -135,6 +154,18 @@ export const GPU_NEED_EXPONENT = 7;
 export function gpusFor(c: number): number {
   const raw = c < COST_KNEE ? GPU_NEED_BASE * Math.pow(Math.max(1, c), GPU_NEED_EXPONENT_S1) : GPU_NEED_DC * Math.pow(c / COST_KNEE, GPU_NEED_EXPONENT);
   return twoSig(raw);
+}
+
+/**
+ * Stage 1's wall (stage1-round3-fixes.md §1: five rented runs for every seed). Four Capability runs
+ * land at 1.46–1.69×; one that lands just past the knee still trains a fifth model on rented GPUs
+ * (85–105 of the 140 the leases allow) before the datacenter curve takes over here.
+ */
+export const S1_WALL = 1.68;
+
+/** The GPUs a Stage 1 run needs: the rented curve up to the wall, then `gpusFor`'s. */
+export function gpusForS1(c: number): number {
+  return c < S1_WALL ? twoSig(GPU_NEED_BASE * Math.pow(Math.max(1, c), GPU_NEED_EXPONENT_S1)) : gpusFor(c);
 }
 
 /** Stage 3's shell (stage3.md, provisional): `300,000 × (c/4)^1.3`. */
@@ -187,10 +218,12 @@ function twoSig(raw: number): number {
 
 export function trainCost(s: GameState): Cost {
   const c = startCapability(s);
-  if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
+  // Stage 1: money and GPUs; research buys cards only. From the knee a run is priced as Stage 2 prices
+  // it (a fifth run that lands past 1.6× still rents; the wall run is quoted at what the click charges).
+  if (s.stage < 2) return { funds: c < COST_KNEE ? fundsFor(c) : stage2RunFunds(s, c) };
   // Stage 3: a run is a research program and nothing else (stage3.md §2.5): no money, no data.
   if (s.stage >= 3) return { research: researchForS3(c, runScaleS3(s)) };
-  const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE * s2Scale(s)) };
+  const cost: Cost = { research: researchFor(c), funds: stage2RunFunds(s, c) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
 }
@@ -199,7 +232,7 @@ export function trainCost(s: GameState): Cost {
 export function gpusNeeded(s: GameState): number {
   if (s.stage >= 4) return 0;
   if (s.stage === 3) return gpusForS3(startCapability(s));
-  const n = gpusFor(startCapability(s));
+  const n = s.stage === 1 ? gpusForS1(startCapability(s)) : gpusFor(startCapability(s));
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
   return mult > 1 ? twoSig(n / mult) : n;
 }
@@ -238,10 +271,44 @@ export function trainingDuration(s: GameState): number {
   return Math.min(120, Math.max(70, 70 + 8 * Math.log2(n / 1000)));
 }
 
-/** The Research Plateau: the next run costs more research than the lab can hold. */
+/**
+ * The Research Plateau: the next run costs more research than the lab can hold. Never in Stage 1,
+ * where a run costs no research (the lab's size limits cards only: `cardWall`).
+ */
 export function atPlateau(s: GameState): boolean {
-  const idle = s.stage < 2 ? !s.training.run : trainSlotFree(s);
-  return s.revealed['training'] === true && idle && (trainCost(s).research ?? 0) > researchCap(s);
+  if (s.stage < 2) return false;
+  return s.revealed['training'] === true && trainSlotFree(s) && (trainCost(s).research ?? 0) > researchCap(s);
+}
+
+/**
+ * Stage 1's lab wall (stage1-round3-fixes.md §1): a card on screen costs more research than the lab
+ * holds. `Lease the floor upstairs`, `Rent desks` and the Experiment tracker key on it.
+ */
+export function cardWall(s: GameState): boolean {
+  if (s.stage !== 1 || !s.revealed['projects']) return false;
+  const cap = researchCap(s);
+  return visibleProjects(s).some((p) => !p.rescue && (p.cost(s).research ?? 0) > cap);
+}
+
+/** Seconds the card wall has stood (0 when there is none). */
+export function cardWallSeconds(s: GameState): number {
+  const at = s.flags['cardWallSince'];
+  return typeof at === 'number' ? s.stats.timePlayed - at : 0;
+}
+
+/** Cards that make the lab hold more (named under a card it cannot hold, when the lab can pay for them). */
+const LAB_CARDS = ['p_lab_cluster', 'p_floor', 'p_desks'];
+
+/**
+ * The reason under a Stage 1 card that costs more research than the lab holds (stage1-round3-fixes.md
+ * §3): `needs a lab that holds 2,000 — Expand Lab`, naming a fix on screen ('' when the card fits).
+ */
+export function labReason(s: GameState, research: number): string {
+  if (s.stage !== 1 || research <= researchCap(s)) return '';
+  const cap = researchCap(s);
+  const card = visibleProjects(s).find((p) => LAB_CARDS.includes(p.id) && (p.cost(s).research ?? 0) <= cap);
+  const fix = s.revealed['expandLab'] ? 'Expand Lab' : card?.title ?? '';
+  return `needs a lab that holds ${fmtInt(research)}${fix ? ` — ${fix}` : ''}`;
 }
 
 /** Seconds the plateau has lasted (0 when there is none). */
@@ -479,10 +546,34 @@ function runPaidIn(s: GameState, spent: Cost = {}): number {
 }
 
 /**
+ * What Stage 1's money is waiting for (arc G34 rule 3; stage1-round3-fixes.md §1): the next run while
+ * its slot is free, or, once the next run needs more GPUs than any cloud rents, First Datacenter.
+ */
+export function waitingGoalS1(s: GameState): { name: string; funds: number } | null {
+  if (s.stage !== 1 || !s.revealed['training']) return null;
+  if (needsDatacenter(s)) {
+    const dc = visibleProjects(s).find((p) => p.id === 'p_datacenter');
+    return dc ? { name: 'First Datacenter', funds: dc.cost(s).funds ?? 0 } : null;
+  }
+  if (!trainSlotFree(s) || s.training.cooldown > 0) return null;
+  return { name: nextRunName(s), funds: trainCost(s).funds ?? 0 };
+}
+
+/**
  * How much later the waiting run starts if `cost` is spent now (arc G34 rule 3): 0 unless a run waits
- * (its slot free, no evaluation month) and draws on a purse this purchase spends from.
+ * (its slot free, no evaluation month) and draws on a purse this purchase spends from. Stage 1 counts
+ * money only, and at the wall the wait is First Datacenter's.
  */
 export function runDelaySeconds(s: GameState, cost: Cost): number {
+  if (s.stage === 1) {
+    const goal = waitingGoalS1(s);
+    if (!goal || !cost.funds) return 0;
+    const rate = Math.max(0, s.stats.revPerSec);
+    const before = etaOf(goal.funds - s.funds, rate);
+    const after = etaOf(goal.funds - (s.funds - cost.funds), rate);
+    if (!Number.isFinite(after)) return Number.isFinite(before) ? Infinity : 0;
+    return Math.max(0, after - before);
+  }
   if (!s.revealed['training'] || s.stage >= 4 || !trainSlotFree(s) || s.training.cooldown > 0) return 0;
   if (s.stage >= 3 && s.flags['holdRuns'] === true) return 0;
   const before = runPaidIn(s);
@@ -491,11 +582,15 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
   return Math.max(0, after - before);
 }
 
-/** ` · Sage-2.5 0:41 later` beside a purchase that delays the waiting run by 10 s or more ('' otherwise). */
+/**
+ * ` · Sage-2.5 0:41 later` beside a purchase that delays the waiting run by 10 s or more ('' otherwise);
+ * in Stage 1 at the wall, ` · First Datacenter 0:55 later`.
+ */
 export function delayNote(s: GameState, cost: Cost): string {
   const d = runDelaySeconds(s, cost);
   if (d < 10) return '';
-  return ` · ${nextRunName(s)} ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'} later`;
+  const name = s.stage === 1 ? waitingGoalS1(s)?.name ?? nextRunName(s) : nextRunName(s);
+  return ` · ${name} ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'} later`;
 }
 
 function startRun(s: GameState, cost: Cost): boolean {
@@ -603,9 +698,12 @@ export function updateTraining(s: GameState, dt: number): void {
       const r = t.run;
       if (r && r.phase === 'redteam' && r.issues > 0) {
         r.issues -= 1;
-        // Stage 3: the button carries the count; the console hears only the sign-off.
-        if (r.issues === 0) say(s, `Red team signs off. Ready to ${s.stage >= 3 ? 'approve' : 'release'}.`);
-        else if (s.stage < 3) say(s, `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
+        // Stage 3: the button carries the count; the console hears only the sign-off. Stage 1: the
+        // count is on the panel, and the red team's flavour goes to Developments once a run (§3).
+        if (r.issues === 0) {
+          if (s.stage === 1) logNews(s, pick(s, REDTEAM_LINES));
+          say(s, `Red team signs off. Ready to ${s.stage >= 3 ? 'approve' : 'release'}.`);
+        } else if (s.stage === 2) say(s, `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
       }
     }
   }
@@ -641,7 +739,9 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
     // A run sent back is retrained for 20 s and keeps the results it was given (stage3.md §2.5).
     if (!(run.sentBack && run.capAfter > 0)) computeResults(s, run);
     // Stage 3 says one line per run when it is ready (readyInStage3): runs come every two minutes.
-    if (s.stage < 3) say(s, `Training complete. Evaluating ${run.name}.`);
+    // Stage 1's panel says `Evaluating Sage-1.1` for its five seconds; the console keeps the result
+    // (stage1-round3-fixes.md §3: at most four lines in any 26 s of the first cycle).
+    if (s.stage === 2) say(s, `Training complete. Evaluating ${run.name}.`);
   }
 }
 
@@ -703,7 +803,9 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
     contamination: 'Data contamination found in the eval set. The run gains a quarter less.',
     emergent: `Emergent ability: ${BENCHMARKS[bench] ?? 'a benchmark'} up a tier.`,
   };
-  say(s, numbered[ev.id] ?? ev.line);
+  // Stage 1: one flavour line a run in the console (the halfway line); the rest go to Developments (§3).
+  if (s.stage === 1) logNews(s, numbered[ev.id] ?? ev.line);
+  else say(s, numbered[ev.id] ?? ev.line);
 }
 
 /**
@@ -916,8 +1018,9 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   s.flags['releasedAt'] = s.stats.timePlayed;
   t.models.push({ name: run.name, capability: run.capAfter, date: s.date, public: isPublic });
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
-  // The first release is when the second run becomes possible: the Focus row appears now.
-  s.revealed['focus'] = true;
+  // The first release is when the second run becomes possible. Stage 1 shows the Focus row 30 s later,
+  // with its line (stages.ts: the first training cycle is not shared with another mechanic).
+  if (s.stage >= 2) s.revealed['focus'] = true;
   if (s.stage === 2) releasedInStage2(s, run, isPublic);
   if (run.focus === 'safety' && s.stage < 3) bump(s, 'safetyReleases');
   if (s.stage >= 3) {

@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -343,6 +343,11 @@ export interface GameState {
   gulfExposure: number;
 
   hypeLevel: number;
+  /**
+   * Marketing levels the player bought (stage1-round3-fixes.md §2): the price is `$100 × 2^bought`.
+   * Levels given by rounds, cards and events raise `hypeLevel`, not the price.
+   */
+  marketingBought: number;
   hypeBoost: number;
   demandMult: number;
 
@@ -537,6 +542,7 @@ export function newGame(seed: number = Date.now()): GameState {
     gulfExposure: 0,
 
     hypeLevel: 1,
+    marketingBought: 0,
     hypeBoost: 1,
     demandMult: 1,
 
@@ -897,7 +903,27 @@ function migrateV7(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, training, revealed, funds: funds - moved, buildFund: moved, buildShare: DEFAULT_BUILD_SHARE, standingPool: 0 };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7];
+/**
+ * v8 → v9 (stage1-round3-fixes.md §2): Marketing is priced on the levels the player bought. An older
+ * save counted every level, given or bought; the bought ones are what is left after the levels the
+ * rounds, cards and events gave, so the price on screen keeps to what was paid for.
+ */
+function migrateV8(raw: Record<string, unknown>): Record<string, unknown> {
+  if (typeof raw['marketingBought'] === 'number') return raw;
+  const projects = (raw['projects'] as Record<string, ProjectState>) ?? {};
+  const made = (raw['choicesMade'] as ChoiceRecord[]) ?? [];
+  const flags = (raw['flags'] as Record<string, unknown>) ?? {};
+  const level = typeof raw['hypeLevel'] === 'number' ? (raw['hypeLevel'] as number) : 1;
+  const times = (id: string) => projects[id]?.bought ?? 0;
+  let given = 2 * times('p_series_a') + 2 * times('p_demo') + 3 * times('p_keynote') + times('p_press');
+  for (const c of made) {
+    if ((c.id === 'c_letter' && c.option === 'rebuttal') || (c.id === 'c_customer_email' && c.option === 'case study')) given += 1;
+    if (c.id === 'c_leaderboard' && c.option === 'submitted') given += flags['leaderboardWon'] === false ? -2 : 2;
+  }
+  return { ...raw, marketingBought: Math.max(0, Math.round(level - 1 - given)) };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

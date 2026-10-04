@@ -18,7 +18,9 @@ import {
   trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, nextRunName, gpusNeeded, gpusAvailable,
   trainGpuLine, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS, canPressTrain, runPaidInSeconds, delayNote,
+  gpusShort, needsDatacenter, labReason,
 } from '../engine/training.js';
+import { datacenterStatus } from '../data/projects.js';
 import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
 import { chipsOnOrder } from '../engine/stores.js';
 import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
@@ -169,8 +171,12 @@ function renderPower(s: GameState): void {
   setText('power', fmtInt(s.power));
   // A store that drains: the scale is the block Buy Power sells right now (critic round 3 §10.2: it
   // was the block the fleet warrants, which the button did not sell yet). Red only when it is close
-  // to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up.
+  // to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up. After the
+  // opening the row prints the amount against that scale (`968 of 1,000 kWh`, stage2-round2-fixes.md
+  // item 6); above a block the meter is full and the amount stands alone.
   const block = powerBlock(s);
+  setText('powerScale', fmtInt(block));
+  setOff('powerOf', s.power > block);
   const left = powerSecondsLeft(s);
   const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
   setMeter('powerMeter', Math.min(1, s.power / block), 'drain', `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
@@ -244,6 +250,8 @@ function renderBusiness(s: GameState): void {
   setText('apiCustomers', fmtInt(s.apiCustomers));
   setText('hypeLevel', fmtInt(s.hypeLevel));
   setText('marketingCost', fmtMoney(marketingCost(s)));
+  // Lit while a run (or, at the wall, First Datacenter) waits for money: what it costs that wait (arc G34).
+  setText('marketingDelay', s.stage < 2 && s.funds >= marketingCost(s) ? delayNote(s, { funds: marketingCost(s) }) : '');
   setDisabled('btn-marketing', s.funds < marketingCost(s));
   setTitle('btn-marketing', `Marketing level ${fmtInt(s.hypeLevel)}. More demand at every price: ×1.1 per level.`);
   // The level appears with the first purchase (owner feedback 1, beat 7).
@@ -256,9 +264,12 @@ function renderCompute(s: GameState): void {
   const quota = atRentQuota(s);
   setDisabled('btn-gpu', s.funds < gpuCost(s) || quota);
   setText('gpuNote', quota ? 'the cloud rents no more' : '');
+  // What a GPU costs the waiting run (arc G34); none while the run is short of the GPUs it needs.
+  const needed = gpusShort(s) && !needsDatacenter(s);
+  setText('gpuDelay', !quota && !needed && s.funds >= gpuCost(s) ? delayNote(s, { funds: gpuCost(s) }) : '');
   setText('gpus', fmtInt(s.gpus));
   setText('gpuQuota', fmtInt(rentQuota(s)));
-  // The quota as a meter from 60 rented (owner feedback 1): the figure is in the hover.
+  // The quota as a meter from 60 rented (owner feedback 1), with the amount and the capacity beside it.
   if (s.revealed['quota']) setMeter('quotaMeter', s.gpus / rentQuota(s), 'use', `${fmtInt(s.gpus)} of the ${fmtInt(rentQuota(s))} the cloud rents`);
   setText('copies', fmtInt(copies(s)));
   const note = copiesIdle(s) ? '(idle: no power)' : s.training.run?.phase === 'training' ? '(half the GPUs are training)' : '';
@@ -498,6 +509,8 @@ function cardEta(s: GameState, c: { funds?: number; research?: number; insight?:
 function renderProjects(s: GameState): void {
   const list = byId('projectList');
   const visible = s.revealed['projects'] ? visibleProjects(s).filter((p) => !(p.grant && s.stage >= 3)) : [];
+  // Stage 1: the heading is not drawn without a card (stage1-round3-fixes.md §3 (a)).
+  setOff('panel-projects', s.stage === 1 && visible.length === 0);
   const ids = new Set(visible.map((p) => p.id));
   for (const [id, b] of projectButtons) {
     if (!ids.has(id)) {
@@ -511,7 +524,16 @@ function renderProjects(s: GameState): void {
       const cls = `projectButton${def.rescue ? ' rescue' : ''}${def.pinned ? ' pinned' : ''}${def.repeatable ? ' repeatable' : ''}`;
       b = make('button', { class: cls, id: `proj-${def.id}`, 'data-project': def.id });
       const title = make('b', { class: 'projectTitle' });
-      b.append(title, make('br'), make('span', { class: 'projectDesc' }, def.description));
+      b.append(title, make('br'), make('span', { class: 'projectDesc' }, def.description), make('span', { class: 'projectReason reason' }));
+      // First Datacenter's two status lines (§2): the cloud's GPUs against the next model, and the price.
+      if (def.id === 'p_datacenter') {
+        for (const part of ['Need', 'Money']) {
+          const line = make('span', { class: 'projectStatus', id: `dc${part}Line` });
+          if (part === 'Need') line.append(make('span', {}, 'Cloud GPUs the next model needs '));
+          line.append(make('span', { class: 'meter', id: `dc${part}Meter`, role: 'img' }), make('span', { id: `dc${part}Text` }));
+          b.append(line);
+        }
+      }
       const id = def.id;
       b.addEventListener('click', () => perform('buyProject', id));
       projectButtons.set(def.id, b);
@@ -532,12 +554,42 @@ function renderProjects(s: GameState): void {
     if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
     const tip = fold ? def.description : '';
     if (b.title !== tip) b.title = tip;
+    // A card the lab cannot hold says so, with the fix on screen (§3): `needs a lab that holds 2,000 — Expand Lab`.
+    const reason = b.querySelector<HTMLElement>('.projectReason');
+    const why = labReason(s, def.cost(s).research ?? 0);
+    if (reason && reason.textContent !== why) reason.textContent = why;
+    if (def.id === 'p_datacenter' && s.stage === 1) renderDatacenterCard(s);
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
     // The card that answers a standing wall, or that the stage cannot go on without (arc G31).
     const urgent = def.urgent?.(s) === true;
     if (b.classList.contains('urgent') !== urgent) b.classList.toggle('urgent', urgent);
   });
+}
+
+/**
+ * First Datacenter's status (stage1-round3-fixes.md §2). Until the wall: `Cloud GPUs the next model
+ * needs ｢￭￭￭￭￭￭････｣ 45 of 80` (and `The one after will not fit.` when the run after next is too
+ * big for any cloud) and `Price: 71 minutes of income.`; once it is needed, the money meter:
+ * `｢￭￭￭･･･････｣ $87,000 short — about 2:25`.
+ */
+function renderDatacenterCard(s: GameState): void {
+  const st = datacenterStatus(s);
+  const rent = Math.max(1, st.rent);
+  setMeter('dcNeedMeter', st.need / rent, 'use', `${fmtInt(st.need)} GPUs for the next model; the cloud rents ${fmtInt(st.rent)}`);
+  setText('dcNeedText', ` ${fmtInt(st.need)} of ${fmtInt(st.rent)}${st.afterTooBig && !st.needed ? '. The one after will not fit.' : ''}`);
+  const meterEl = byId('dcMoneyMeter');
+  if (st.needed) {
+    if (meterEl.classList.contains('off')) meterEl.classList.remove('off');
+    setMeter('dcMoneyMeter', st.price > 0 ? s.funds / st.price : 1, 'use', `${fmtMoneyShort(Math.floor(s.funds))} of ${fmtMoneyShort(st.price)}`);
+    const eta = Number.isFinite(st.eta) && st.eta < 36000 ? ` — about ${fmtClock(Math.max(1, st.eta))}` : '';
+    setText('dcMoneyText', st.short > 0 ? ` ${fmtMoneyShort(Math.ceil(st.short))} short${eta}` : ' in hand');
+  } else {
+    if (!meterEl.classList.contains('off')) meterEl.classList.add('off');
+    const secs = st.incomeSeconds;
+    const words = !Number.isFinite(secs) ? 'more than any income yet' : secs >= 600 ? `${fmtInt(Math.round(secs / 60))} minutes of income` : `${fmtClock(secs)} of income`;
+    setText('dcMoneyText', `Price: ${words}.`);
+  }
 }
 
 function renderTraining(s: GameState): void {
@@ -565,16 +617,18 @@ function renderTraining(s: GameState): void {
   } else {
     setTitle('btn-focus-safety', 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.');
   }
-  // The trade under the buttons, not only in their tooltips (critic round 2 §5); from Stage 2 all
-  // three trades are printed on the buttons themselves (critic C5).
+  // All three trades under the buttons, not in tooltips (critic C5; stage1-round3-fixes.md §4 for Stage 1).
+  const s1 = s.stage === 1;
   const s2 = s.stage === 2;
-  setText('focusTrade-capability', s2 ? '+12% capability' : '');
-  setText('focusTrade-efficiency', s2 ? 'copies ×1.15' : '');
-  setText('focusTrade-safety', s2 ? 'alignment +8' : '');
-  setText('focusNote', focusNote(s, t.focus));
+  setText('focusTrade-capability', s2 ? '+12% capability' : s1 ? '+10–14% capability' : '');
+  setText('focusTrade-efficiency', s2 ? 'copies ×1.15' : s1 ? '+5%, copies per GPU ×1.25' : '');
+  setText('focusTrade-safety', s2 ? 'alignment +8' : s1 ? '+5%, fewer issues for good' : '');
+  setText('focusNote', s1 ? '' : focusNote(s, t.focus));
 
   const slotRun = evalRun(s);
   const running = trainingRun(s);
+  // During a run a click changes the next run only, and the row says so (§4).
+  setText('focusHead', s1 && (running || slotRun) ? 'Next run:' : 'Focus:');
   // Idle: no run at all, or (two pipelines) one waiting in evaluation and none training.
   const idle = !running && (!t.run || trainSlotFree(s));
   showId('train-idle', idle);
@@ -619,7 +673,8 @@ function renderIdle(s: GameState): void {
   showId('trainGpuLine', need > 0);
   showId('trainGpuMeter', short);
   if (short) setMeter('trainGpuMeter', have / need, 'use', `${fmtInt(have)} of the ${fmtInt(need)} GPUs ${nextRunName(s)} needs`);
-  setText('trainReason', canStartTraining(s) ? '' : trainWait(s));
+  // At the wall the GPU line names the only fix (First Datacenter); the run's money is beside the point.
+  setText('trainReason', canStartTraining(s) || needsDatacenter(s) ? '' : trainWait(s));
 }
 
 function renderRunning(s: GameState, run: TrainingRun): void {

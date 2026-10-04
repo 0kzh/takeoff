@@ -12,7 +12,7 @@ import {
 import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun, delayNote } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
-import { stageDef } from './stages.js';
+import { stageDef, mechanic, mechanicClear } from './stages.js';
 import { BEAT_GAP_SECONDS } from './reveal.js';
 import { rand, pick, chance } from './rng.js';
 
@@ -32,12 +32,57 @@ export function choiceById(id: string): ChoiceDef | undefined {
  */
 export function updateDevelopments(s: GameState): void {
   for (const d of DEVELOPMENTS) {
-    if (s.developments[d.id] || d.stage !== s.stage) continue;
+    if (s.developments[d.id] || d.stage !== s.stage || d.calendar) continue;
     if (d.requires && !d.requires(s)) continue;
     const byDate = d.month !== undefined && s.date >= d.month;
     const byProgress = d.trigger ? d.trigger(s) : false;
     if (byDate || byProgress) fireDevelopment(s, d.id);
   }
+  updateCalendar(s);
+}
+
+/** Stage 1's first event waits this long after the first release; each later one this long after the last was answered. */
+export const EVENT_AFTER_RELEASE = 60;
+export const EVENT_SPACING = 156;
+
+/** The choices Stage 1's calendar opens (their answers start the next event's 2:36); built on first use. */
+let calendarChoices: Set<string> | null = null;
+function isCalendarChoice(id: string): boolean {
+  calendarChoices ??= new Set(DEVELOPMENTS.filter((d) => d.calendar && d.choice).map((d) => d.choice!));
+  return calendarChoices.has(id);
+}
+
+/** When the next calendar event may open (Infinity before the first release, or with none left). */
+function calendarSlotAt(s: GameState): number {
+  if (s.stage !== 1 || !DEVELOPMENTS.some((d) => d.calendar && d.stage === 1 && !s.developments[d.id])) return Infinity;
+  const first = s.flags['firstReleaseAt'];
+  if (typeof first !== 'number') return Infinity;
+  const answered = s.flags['eventAnsweredAt'];
+  return Math.max(first + EVENT_AFTER_RELEASE, typeof answered === 'number' ? answered + EVENT_SPACING : 0);
+}
+
+/**
+ * Stage 1's calendar is a queue (stage1-round3-fixes.md §4): events wait for the player. The first opens
+ * a minute after the first release, each later one 2:36 after the last was answered, never while a run
+ * waits for its evaluation, Red-team or Release; in table order, an event whose condition fails giving
+ * its slot to the next one and coming back.
+ */
+function updateCalendar(s: GameState): void {
+  if (s.stage !== 1 || s.stats.timePlayed < calendarSlotAt(s)) return;
+  const run = s.training.run;
+  if (run && run.phase !== 'training') return;
+  // Not within 30 s of another first-time mechanic (the Focus row, the quota line).
+  if (!modalCanOpen(s) || !mechanicClear(s)) return;
+  const next = DEVELOPMENTS.find((d) => d.calendar && d.stage === 1 && !s.developments[d.id] && (!d.requires || d.requires(s)));
+  if (!next) return;
+  mechanic(s);
+  s.flags['calendarOpened'] = true;
+  fireDevelopment(s, next.id);
+}
+
+/** A calendar event was answered (or ran out): the next one is 2:36 away. */
+function noteAnswered(s: GameState, choiceId: string): void {
+  if (s.stage === 1 && isCalendarChoice(choiceId)) s.flags['eventAnsweredAt'] = s.stats.timePlayed;
 }
 
 export function fireDevelopment(s: GameState, id: string): boolean {
@@ -63,6 +108,8 @@ export function fireDevelopmentOnce(s: GameState, id: string): boolean {
 
 /** Seconds until the next dated development that opens a modal (Infinity when none is left). */
 export function secondsToNextCalendarModal(s: GameState): number {
+  // Stage 1's calendar is a queue: its next slot.
+  if (s.stage === 1) return Math.max(0, calendarSlotAt(s) - s.stats.timePlayed);
   let next = Infinity;
   for (const d of DEVELOPMENTS) {
     if (!d.choice || d.month === undefined || d.stage !== s.stage || s.developments[d.id]) continue;
@@ -172,6 +219,9 @@ export function rivalRelease(s: GameState): void {
   const name = `Cadence-${s.rivalVersion}`;
   recordRival(s, name);
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
+  // Anthrosoft is named on the Training panel; before it, a release is news, not a console line
+  // (critic round 3 §10.9: `Cadence-2 beats Sage-1. Demand dips.` on a screen with one button).
+  if (!s.revealed['training']) return;
   const q = qualityMult(s);
   if (q < 0.995) say(s, `Anthrosoft's ${name} beats ${s.training.deployedName}. Demand ${q < 0.9 ? 'falls' : 'dips'}.`);
   else say(s, `Anthrosoft ships ${name}. ${s.training.deployedName} is still ahead.`);
@@ -279,6 +329,7 @@ export function resolveChoice(s: GameState, index: number): boolean {
   const cost = optionCost(s, opt);
   if (cost) pay(s, cost);
   s.activeChoice = null;
+  noteAnswered(s, def.id);
   opt.effect(s, active.context);
   s.choicesMade.push({ id: def.id, option: opt.record, date: dateLabel(s.date) });
   s.stats.choices += 1;
@@ -309,7 +360,10 @@ export function takeDefault(s: GameState): boolean {
   const def = active ? choiceById(active.id) : undefined;
   if (!active || !def || !def.timer) return false;
   const fallback = def.defaultOption ?? def.options.length - 1;
-  if (!resolveChoice(s, fallback)) s.activeChoice = null;
+  if (!resolveChoice(s, fallback)) {
+    s.activeChoice = null;
+    noteAnswered(s, def.id);
+  }
   return true;
 }
 
@@ -344,7 +398,8 @@ export function noveltyKeys(s: GameState): string[] {
   for (const p of visibleProjects(s)) if (p.canAfford(s)) keys.push(`aff:${p.id}:${s.projects[p.id]?.bought ?? 0}`);
   // Counted verbs carry their count, so "the next GPU became affordable" is new each time.
   if (s.stage < 2 && s.revealed['compute'] && s.funds >= gpuCost(s)) keys.push(`aff:gpu:${s.gpus}`);
-  if (s.revealed['marketing'] && s.funds >= marketingCost(s)) keys.push(`aff:marketing:${s.hypeLevel}`);
+  // Marketing is a Stage 1 verb (from Stage 2 the market cards widen the market).
+  if (s.stage < 2 && s.revealed['marketing'] && s.funds >= marketingCost(s)) keys.push(`aff:marketing:${s.marketingBought ?? 0}`);
   if (s.revealed['research'] && s.revealed['hireResearcher'] && s.trust >= 1) {
     keys.push(`aff:trust:${s.researchers + s.labSpace}`);
   }
@@ -413,6 +468,8 @@ function namedWait(s: GameState): boolean {
   return (
     phase === 'training' ||
     phase === 'evaluating' ||
+    // Stage 1: no event opens while a run waits for its Red-team or its Release (§4).
+    (s.stage === 1 && phase === 'redteam') ||
     !!trainingRun(s) ||
     s.powerQueue.length > 0 ||
     s.training.cooldown > 0 ||
@@ -455,7 +512,9 @@ export function idleGuard(s: GameState, dt: number): void {
   const presses = (s.flags['pressReleases'] as number) || 0;
   const emails = (s.flags['emailsThisStage'] as number) || 0;
   const raw = customerEmailAmount(s);
-  const amount = s.stage === 2 && raw < Math.max(0.25 * s.funds, 30 * s.stats.revPerSec) ? 0 : raw;
+  // Never pocket change against the funds on hand (critic C11 in Stage 2; critic round 3 §10.9 in
+  // Stage 1: $44 offered to a lab holding $2,376).
+  const amount = raw < Math.max(0.25 * s.funds, 30 * s.stats.revPerSec) ? 0 : raw;
   if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress'] && presses < MAX_PRESS_PER_STAGE) {
     s.flags['idlePress'] = true;
     s.flags['pressReleases'] = presses + 1;
@@ -501,7 +560,7 @@ function unaffordableFundsCosts(s: GameState): number[] {
     if (s.revealed['buyPower']) add(powerBlockCost(s));
     if (s.revealed['compute']) add(gpuCost(s));
   }
-  if (s.revealed['marketing']) add(marketingCost(s));
+  if (s.stage < 2 && s.revealed['marketing']) add(marketingCost(s));
   if (s.revealed['training'] && (s.stage < 2 ? !s.training.run : !trainingRun(s))) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
   // Lots, plants and halls are paid from the build fund (arc G34): a prepayment to funds does not buy them.

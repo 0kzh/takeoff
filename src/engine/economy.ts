@@ -60,8 +60,12 @@ export function gpuCost(s: GameState): number {
   return Math.round((5 + Math.pow(s.gpuCostGrowth, s.gpus)) * 100) / 100;
 }
 
+/**
+ * `$100 × 2^(levels bought)` (stage1-round3-fixes.md §2): the levels a round, a card or an event gives
+ * raise the level, not the price (it reached $12,800–$204,800 and stood grey for 13–23 minutes).
+ */
 export function marketingCost(s: GameState): number {
-  return 100 * Math.pow(2, s.hypeLevel - 1);
+  return 100 * Math.pow(2, s.marketingBought ?? 0);
 }
 
 /** The block the fleet warrants: 1,000 kWh, 10,000 at 20 GPUs, 100,000 at 200. */
@@ -96,7 +100,8 @@ export function powerBlockCost(s: GameState): number {
  * the button still sold 1,000 kWh to a player with $28).
  */
 export function powerBlockNews(s: GameState): void {
-  if (s.stage !== 1 || !s.revealed['buyPower']) return;
+  // With the Grid Contract buying, the block is the grid's business (said when the player buys by hand).
+  if (s.stage !== 1 || !s.revealed['buyPower'] || (s.gridAuto && isBought(s, 'p_grid'))) return;
   const block = powerBlock(s);
   if (block <= POWER_BLOCK || s.flags[`blockSaid${block}`]) return;
   s.flags[`blockSaid${block}`] = true;
@@ -536,9 +541,30 @@ export function trustCheck(s: GameState): void {
     s.flags['trustMilestones'] = ((s.flags['trustMilestones'] as number) || 0) + 1;
     // The first milestone opens the Research panel, which prints its own line. From Stage 2 the line
     // prints only when the Trust reaches something new (critic C6).
+    if (expandLabBeat(s)) {
+      say(s, `Trust +1. Hire a researcher, or expand the lab: it is full at ${fmtInt(researchCap(s))}.`);
+      continue;
+    }
     const line = s.revealed['research'] ? trustRewardLine(s) : '';
     if (line) say(s, line);
   }
+}
+
+/** Beat 11 waits this long after the Projects panel (beat 9): one mechanic at a time. */
+export const EXPAND_LAB_AFTER_PROJECTS = 40;
+
+/**
+ * Beat 11 (stage1-round3-fixes.md §3): Expand Lab arrives beside Hire in the tick of a Trust award, the
+ * first one at least 40 s after the Projects panel with the lab full; never while Trust is 0. True
+ * when it revealed the button (the award's line names both uses).
+ */
+function expandLabBeat(s: GameState): boolean {
+  if (s.stage !== 1 || s.revealed['expandLab'] || !s.revealed['projects'] || s.trust < 1) return false;
+  const at = s.flags['projectsAt'];
+  if (typeof at !== 'number' || s.stats.timePlayed - at < EXPAND_LAB_AFTER_PROJECTS) return false;
+  if (s.research < researchCap(s) - 0.5) return false;
+  s.revealed['expandLab'] = true;
+  return true;
 }
 
 /** Milestone lines say what the Trust is for (or that it only paid back what the lab owed). */
@@ -660,6 +686,7 @@ export function buyMarketing(s: GameState): boolean {
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.hypeLevel += 1;
+  s.marketingBought = (s.marketingBought ?? 0) + 1;
   if (s.stage >= 2) press(s, 'marketing');
   return true;
 }

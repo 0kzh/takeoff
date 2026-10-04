@@ -230,6 +230,11 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 /* Needed now: a wall's answer or a card the stage cannot go on without (arc G31). */
 .projectButton.urgent { border-left: 5px solid #000; }
 .projectButton.urgent .projectTitle::after { content: ' — needed'; font-weight: normal; font-style: italic; }
+/* A card the lab cannot hold says so (`needs a lab that holds 2,000 — Expand Lab`); First Datacenter's status lines. */
+.projectReason { display: block; }
+.projectReason:empty { display: none; }
+.projectStatus { display: block; }
+.meter.off { display: none; }
 
 /* ---------- training ---------- */
 
