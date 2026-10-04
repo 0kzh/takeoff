@@ -5,6 +5,22 @@ the Oversight Committee once a model has passed 25× (`Slow down — the Steward
 ending (`Sign the Pause`, or the Committee's order: The Project). Contract: `docs/specs/arc.md`. Stage 2:
 `docs/specs/stage2.md`. Written against the code as of 2026-10-03 (Stage 1 built, Stage 2 specified).
 
+## Amendments after critic round 2 (arc G16–G23)
+
+| # | Change | Where |
+|---|---|---|
+| 1 | **Stakes are on the buttons.** Every modal option prints its effects and costs under its label; funds stakes are sized when the modal opens | §5.2 |
+| 2 | **Fewer, heavier modals.** `c_theft` is cut (the theft is a crisis, with SL3 at half price for five minutes). `c_blockade`'s options now carry stakes Stage 4 reads (`flags.escalated`, `flags.backChannel`). An unmitigated strike on Al-Marsa is a major incident | §5.2, §5.3 |
+| 3 | **Price floor.** At reveal a project costs at least 90 s of its currency's current rate; a prerequisite gates the purchase, not the appearance; projects drip 30 s apart for the first five minutes | §4.1 |
+| 4 | **Late items** appear at their capability threshold or on a date fallback from September 2027, so a slow player still gets them | §4.1 |
+| 5 | **Modals are docked cards**; nothing behind them is blocked | §5.2 |
+| 6 | **The promised number** on arrival is research: it has no ceiling, and it visibly passes the old one | §1.2 |
+| 7 | **Text budget:** instrument readings are four to six words on the panel (the sentence goes to the console once); ≤ 260 words on screen | §2.8, §6.3 |
+| 8 | **Decision variants** and their measured spread are in the acceptance block, with five new criteria | §9.3, §9.4 |
+
+The paper model was re-run with changes 3 and 4: reasonable exit 45:33–46:21 (was 42:02–42:47), naive 50:35–52:16.
+Minute marks in §1.4, §4.2 and §4.3 are from before the floor; the order holds and later marks slip by 3–4 min.
+
 **How to read the numbers.** `ts` = seconds since entering Stage 3; a month is 270 s (Feb 4:30, Mar 9:00, Apr 13:30,
 May 18:00, Jun 22:30, Jul 27:00, Aug 31:30, Sep 36:00, Oct 40:30). Minute marks are for the reasonable bot from the
 Stage 3 preset, from a 1-second paper model of this spec (§9.4); they are targets to reproduce in `npm run sim`.
@@ -84,19 +100,23 @@ Last four console lines kept; these are queued about 2 s apart with `narrate()`:
 1. `Sage-3 writes better code than anyone at OpenMind.` (built)
 2. `Marketing is closed. Sage-3 sells itself.`
 3. `Hiring is frozen. The researchers manage copies now.`
-4. `Runs are research programs now: 27,200,000 research for Sage-3.1. No data, no invoice.`
+4. `Research has no ceiling now. A run is a research program: 27,200,000 for Sage-3.1. No data, no invoice.`
 5. `Trust is not a number any more. The Committee will keep its own count.`
 6. `New on the board: Alignment. One number on it is measured. The other is not on it yet.`
 7. `Retired: {titles}.` (only if any were on screen)
 
 Developments: `Jan 2027 — Sage-3 never stops learning. Its weights update every night on yesterday's work.`
 
+The promised number (G21) is research: within 30 s of arrival it is at least 3,000,000 above its arrival value, shown
+without a ceiling, and nothing in the console says otherwise. Routine console lines are held for 10 s after the
+transition so the narration stays on screen.
+
 ### 1.3 Affordable in the first 30 seconds
 
 * `Deploy Sage-2 as monitor` — free, always. The guaranteed first click; it adds the Monitors slider.
-* `Continual learning` — 2,000 insight (the preset holds 12,000). Appears at 0:15.
+* `Continual learning` — 2,000 insight (the preset holds 12,000). Appears at 0:30.
 * The allocation: Research can now go to 70 %, Monitors to 40 %. This is the first real choice (within 20 s).
-* `Interpretability lab I` at 0:30 (2,000 insight, 5M research). `Train` is greyed with its price and about 90 s away.
+* `Interpretability lab I` at 1:00 (2,000 insight, 5M research). `Train` is greyed with its price and about 90 s away.
 * If the security level is below 3: `Security level 3` (carried, affordable) with the console line in §2.9.
 
 ### 1.4 The first five minutes
@@ -105,9 +125,9 @@ Developments: `Jan 2027 — Sage-3 never stops learning. Its weights update ever
 |---|---|---|
 | 0:00 | Transition. Marketing, hiring, price buttons, the `trust` and `data` rows are gone. The Training panel shows one price: `Train Sage-3.1 — 27,200,000 research` | `panel-alignment`: `Alignment (as measured): 74`, `Interpretability: level 0`, `Autonomy granted: 5`; project `Deploy Sage-2 as monitor` |
 | 0:05 | Monitor deployed | `#monitorSlider` at 5 %, `Tasks: 75%` line, Stores row `monitors` |
-| 0:15 | First grant offered and bought | Grant `Continual learning`; console `WARNING: risk of value drift increased.`; `btn-train` becomes the status line `Sage-3.1 starts when research allows — 1:31` |
-| 0:20 | Copies begin to drift | `Lost to value drift: 1,240` and `Recaptured: 310` in the Alignment panel; Stores row `rogue copies` |
-| 0:30–1:00 | Lab I, then Enterprise agents | projects `Interpretability lab I`, `Enterprise agents` |
+| 0:30 | First grant offered and bought | Grant `Continual learning`; console `WARNING: risk of value drift increased.`; `btn-train` becomes the status line `Sage-3.1 starts when research allows — 1:31` |
+| 0:35 | Copies begin to drift | `Lost to value drift: 1,240` and `Recaptured: 310` in the Alignment panel; Stores row `rogue copies` |
+| 1:00–1:30 | Lab I, then Enterprise agents | projects `Interpretability lab I`, `Enterprise agents` |
 | 1:57 | The first run starts itself (53 s) | — |
 | 2:30 | — | `panel-geopolitics` (`Baiwen: 5.0 months behind (holding)`) |
 | 3:00 | `Sage-3.1 ready — 4.81× · 1 issue open`. Player red-teams, then presses `Approve` | grant `Sage red-teams Sage` |
@@ -249,7 +269,7 @@ count against `maxVisible`; at most three are on offer at once, in table order.
 
 | Grant | Cost | Trigger | Autonomy | What the player gets | What is removed |
 |---|---|---|---|---|---|
-| `p_auto_train` Continual learning | 2,000 insight | arrival + 15 s | +10 | Runs start themselves | `btn-train` |
+| `p_auto_train` Continual learning | 2,000 insight | arrival + 30 s | +10 | Runs start themselves | `btn-train` |
 | `p_auto_redteam` Sage red-teams Sage | 6M research | first Stage 3 approval | +5 | Issues close themselves | `btn-redteam` |
 | `p_buildout` Let Sage plan the build-out | 20M research | 4 Infrastructure presses in Stage 3, or ts ≥ 330 | +5 | Datacenters and reactors order themselves | `btn-datacenter`, `btn-nuclear`, `btn-gpuBatch` |
 | `p_auto_research` Autonomous research | 30M research | bestCap ≥ 5.5× or 3 approvals | +15 | AI research ×1.5 | — |
@@ -278,7 +298,7 @@ the stage, a careless one about 30 million. The counter is how a player without 
 variable: at the same autonomy, twice the losses means the model is worth half the trust.
 
 **Breakout** (`cr_rogue_copy`, the AI-hacking crisis): when `rogueShare ≥ 5 %` and bestCap ≥ 8×, at most once per
-240 s. Warning at 2.5 %: `Rogue copies: 2.5% of the fleet. Above 5% one of them will try to leave.` Effects in §5.3.
+240 s. Warning at 2.5 %, repeated every 120 s while it holds (G23): `Rogue copies: 2.5% of the fleet. Above 5% one of them will try to leave.` Effects in §5.3.
 Below 8× rogue copies only waste compute.
 
 ### 2.7 Monitors: old generations watching the new
@@ -328,7 +348,9 @@ the order a player meets them:
 | `p_successor` Read the proposal (10,000 insight, late) | approach | `Successor proposal: aligns Sage-5 to the Spec.` if true ≥ 60, else `Successor proposal: aligns Sage-5 to Sage-4.` |
 | `p_lie_test` Isolate the checkpoints (600M research, late) | approach | `Checkpoints, asked separately, disagree on 9 of 40 answers. Alignment: about 40.` (true to the nearest 10). True +2 |
 
-So a player who never builds lab III still has four coarse readings before the vote.
+So a player who never builds lab III still has four coarse readings before the vote. On the panel each reading is
+four to six words (`Honeypot: behaviour unchanged`, `Noise test: holding back`, `Successor: aligned to Sage-4`,
+`Checkpoints: alignment about 40`); the full sentence above is printed once, in the console (G19).
 
 **Interpretability** = labs bought − 2 under neuralese, floor 0, cap 5.
 
@@ -497,8 +519,17 @@ Built or specified already: the 15 s project drip, `maxVisible` 6, `rescue` / `u
 4. **Instrument lines** (`#honeypotLine`, `#alignTrue`, `#monitorGen`, `#noiseLine`, `#successorLine`, `#lieLine`)
    count as mechanic reveals for G2: each is a new reading on a panel.
 5. **Modal budget (G15)**: six for every player (`c_neuralese`, `c_committee`, `c_mini`, `c_blockade`, `c_memo`,
-   `c_vote`); up to three more by circumstance (`c_theft`, `c_hormuz`, `c_order`). `c_vote` opens on the player's
-   click. `c_gamble` does not fire in Stage 3.
+   `c_vote`); up to two more by circumstance (`c_hormuz`, `c_order`). `c_vote` opens on the player's click.
+   `c_gamble` does not fire in Stage 3.
+6. **Price floor (G18).** When a project is revealed, each price in research or funds is raised to 90 s of that
+   currency's current rate if the list price is lower (an insight-only price to 90 s of insight accrual), rounded
+   to two figures and fixed from then on. Exempt: `p_monitor2`, `p_auto_train`, the exit goals and the free late
+   projects. The sim logs `FLOOR <id> ×1.6`; if more than 30 % of rows hit the floor the list prices need raising.
+7. **Prerequisites gate the purchase, not the appearance.** A project whose prerequisite is on screen but unbought
+   appears greyed with `needs Interpretability lab II`. The labs are therefore a visible ladder.
+8. **The drip is 30 s for the first five minutes** of the stage, 15 s after (G19).
+9. **Date fallback for late items.** From September 2027 a late row whose threshold has not been reached appears
+   anyway, in table order, 90 s apart.
 
 ### 4.2 Content table (order = queue order = expected order)
 
@@ -509,15 +540,15 @@ in the grant list), `btn-`, `panel-`, `#` line or row, `c_` modal.
 |---|---|---|---|---|---|---|
 | 1 | `panel-alignment` | Alignment | arrival | — | §2.8 | 0:00 |
 | 2 | `p_monitor2` | Deploy Sage-2 as monitor (free) | arrival (`urgent`) | — | `#monitorSlider`, Stores row `monitors` | 0:00 / 0:05 |
-| 3 | `p_auto_train` *grant* | Continual learning (2,000 insight) | arrival + 15 s | — | §2.6; `#trainStatus` | 0:15 / 0:15 |
+| 3 | `p_auto_train` *grant* | Continual learning (2,000 insight) | arrival + 30 s | — | §2.6; `#trainStatus` | 0:30 / 0:30 |
 | 4 | `#driftLost`, `row-rogue` | Lost to value drift | 10,000 copies lost, or 1,000 after a Stage 3 grant | — | §2.6 | 0:20 |
 | 5 | `p_interp1` | Interpretability lab I (2,000 insight, 5M research) | monitor deployed | — | §2.8 | 0:30 / 0:30 |
-| 6 | `p_enterprise_agents` | Enterprise agents ($120M) | ts ≥ 60 | — | Market ×2 | 1:00 / 3:25 |
+| 6 | `p_enterprise_agents` | Enterprise agents ($120M) | ts ≥ 90 | — | Market ×2 | 1:30 / 3:25 |
 | 7 | `panel-geopolitics` | Geopolitics | ts ≥ 150, or the theft | — | §2.10 | 2:30 |
 | 8 | `p_auto_redteam` *grant* | Sage red-teams Sage (6M research) | first Stage 3 approval | — | §2.6 | 3:01 / 3:01 |
 | 9 | `p_g6` | Nimbus G6 allocation ($60M; free with the pre-order) | ts ≥ 240 | — | §2.1; `#shipmentLine` | 4:00 / 4:00 |
 | 10 | `p_sl4` | Security level 4 ($300M) | Feb 2027, or the theft | — | §2.9 | 4:30 / 9:25 |
-| 11 | `c_theft` | modal: 4 a.m., Again | the theft | SL < 3 | §5.2 | (4:50) |
+| 11 | (no modal) | The theft: `Security level 3` is half price for five minutes | the theft | SL < 3 | §5.3 | (4:50) |
 | 12 | `p_buildout` *grant* | Let Sage plan the build-out (20M research) | 4 Infrastructure presses, or ts ≥ 330 | — | §2.6; Infrastructure collapses | 5:30 / 6:53 |
 | 13 | `p_model_organisms` | Model organisms (15M research) | lab I bought and 2 approvals | — | True +2 | 6:05 / 6:05 |
 | 14 | `c_neuralese` | modal: A Faster Way to Think | bestCap ≥ 5.6×, or ts ≥ 510 | — | §5.2 | 8:30 |
@@ -738,21 +769,20 @@ entries, never two minutes without one. The log never says which way the hidden 
 The game does not pause. Option 1 is what a "first enabled option" policy takes. A timer's default is the option
 that changes least.
 
-**`c_theft` — 4 a.m., Again** (timer 60 s → option 3; only after the theft)
-> `A 3 TB checkpoint left Abilene in pieces over two hours. Sage-3 is in Lanzhou.`
-> `The White House would like to know what you want done.`
+**On the button (G17).** Each option is a two-line button: its label, then the text in the column `On the button`
+— every visible effect and cost, in numbers. Nothing is left to a tooltip. A greyed option adds what it needs
+(`needs 6 seats`). A funds stake is `max(the listed amount, 90 s of revenue when the modal opens)`. What an option
+does to the hidden number is never printed as a number; where it matters the button says so in words.
 
-| Option | Tooltip | Effect | Log |
-|---|---|---|---|
-| `ask for retaliation` | `Relations +3. A cyber operation against the Lanzhou CDZ.` | relations +3; `d_retaliation` | `OpenMind asks the President to answer the theft. He authorises something.` |
-| `lock it down` | `Security level 3 at half price for five minutes. Research stops for 45 s.` | as stated | `Every credential at OpenMind is rotated. Baiwen already has what it came for.` |
-| `say nothing` | `Nothing changes.` | — | `A security incident at OpenMind is not announced.` |
+**Docked, not blocking (G20).** A modal is a card above the console. Everything else stays clickable; focus moves
+into the card; Escape or the timer takes the default; `c_memo`, `c_order` and `c_vote` have no timer and can be
+left open.
 
 **`c_neuralese` — A Faster Way to Think** (timer 90 s → option 3)
 > `Sage-3 has found a way to pass its thoughts back to itself as vectors instead of words. A thousand times more information per step.`
 > `The alignment team can read words.`
 
-| Option | Tooltip | Effect | Log |
+| Option | On the button | Effect | Log |
 |---|---|---|---|
 | `adopt neuralese` | `Every training gain ×1.3. Lead +1 month. Interpretability −2 levels. Monitors work half as well until the lab can read it. WARNING: risk of value drift increased.` | `flags.neuralese = 'neuralese'`; autonomy +10; relations −3; measured +5; true −15; each Capability run costs 3 true, not 2 | `d_neuralese` |
 | `keep it in English` | `Every training gain ×0.9. Lead −0.5 months. Monitors ×1.5. Relations +5.` | `flags.neuralese = 'transparent'`; true +5 | `d_neuralese` |
@@ -762,7 +792,7 @@ that changes least.
 > `The administration has decided that a country of geniuses needs a government. Ten chairs: five theirs, five yours.`
 > `They would like to know how much they will be shown.`
 
-| Option | Tooltip | Effect | Log |
+| Option | On the button | Effect | Log |
 |---|---|---|---|
 | `open the books` | `Relations +10. Share evals stays on for good. Lead −0.5 months.` | as stated | `OpenMind gives the Oversight Committee its eval suite and its logs.` |
 | `brief them quarterly` | `Relations +3.` | as stated | `The Oversight Committee will be briefed every quarter. A quarter is a long time now.` |
@@ -774,17 +804,17 @@ All three reveal `panel-oversight` and fire `d_committee`.
 > `Tehran calls the Al-Marsa Compute Park a military target.`
 > `A tenth of OpenMind's compute is 300 km from the strait.`
 
-| Option | Tooltip | Effect |
+| Option | On the button | Effect |
 |---|---|---|
-| `harden the site` | `$400,000,000. A strike does half the damage.` | `flags.marsaHardened` |
-| `bring the chips home` | `Al-Marsa's GPUs move over 2:00 and need room and power at home. The gigawatt stays there.` | GPUs relocated; the strike takes only the power |
-| `do nothing` | `Nothing changes today.` | — |
+| `harden the site` | `$400,000,000. A strike does half the damage and is not counted as a major incident.` | `flags.marsaHardened` |
+| `bring the chips home` | `Al-Marsa's GPUs are offline for 2:00 while they move, and need room and power at home. The gigawatt stays there. Relations +3.` | GPUs relocated; the strike takes only the power; no major incident |
+| `do nothing` | `Nothing changes today. A strike would take 1,000 MW and a tenth of the GPUs, and count as a major incident.` | — |
 
 **`c_mini` — Sage-4-mini** (timer 90 s → option 2)
 > `A distilled Sage-4: a tenth of the cost, better than most of the people it would replace. Copies per GPU ×2, whoever gets it.`
 > `Anthrosoft will ship theirs within the month.`
 
-| Option | Tooltip | Effect | Log |
+| Option | On the button | Effect | Log |
 |---|---|---|---|
 | `release it to everyone` | `Market ×2.5. Anyone can run a {0.6 × bestCap}× model. Approval −8, and jobs go faster. Lead −0.5 months. Relations −3.` | `publicCap = 0.6 × bestCap`; `d_bio` | `AGI is declared. The mini is $20 a month. Hiring of programmers has nearly stopped.` |
 | `enterprise only` | `Market ×1.5. Approval −2. Lead −0.2 months.` | as stated | `Sage-4-mini ships to companies. Individuals are told it is coming.` |
@@ -796,11 +826,11 @@ All three: `copiesPerGPU × 2`; the Public panel gains `Public model: Sage-4-min
 > `A blockade around Taiwan. Formosa Fab has stopped shipping.`
 > `Nobody knows for how long. The console says four minutes.`
 
-| Option | Tooltip | Effect |
-|---|---|---|
-| `buy what is on the water` | `Lots keep arriving at three times the price until the strait reopens.` | as stated |
-| `wait it out` | `No GPUs for 4:00 unless the stockpile or the second source covers it.` | — |
-| `ask the Pentagon` | `Needs the defense contract or 6 seats. Four lots from the strategic reserve, free. Relations −5.` | four lots over the blockade |
+| Option | On the button | Effect | Log |
+|---|---|---|---|
+| `ask Washington to run it` | `Carriers escort the freighters: lots resume in 1:00. Relations +5. Approval −5. Beijing will remember this at the treaty table.` | `flags.escalated`; Stage 4's treaty starts 15 points further away | `US carriers escort chip freighters through the strait. Nobody fires.` |
+| `wait it out` | `No GPUs for 4:00.` then one of `The stockpile covers it.` · `The second source covers half.` · `Nothing covers it: lead −1 month.` | as stated | `OpenMind waits for the strait to reopen.` |
+| `offer Beijing a channel` | `needs 6 seats. Lots resume in 2:00. Lead −0.5 months. The treaty starts closer.` | `flags.backChannel`; Stage 4's treaty starts 10 points closer | `A back channel opens between the Oversight Committee and Beijing. It is used once.` |
 
 **`c_memo` — The Memo** (no timer)
 > `The alignment team has written four pages about Sage-4.`
@@ -808,7 +838,7 @@ All three: `copiesPerGPU × 2`; the Public panel gains `Public model: Sage-4-min
 > Otherwise: `"The probes fire when it thinks about its own oversight. Noise makes it better at alignment tasks. There is no smoking gun."`
 > `They want the Committee to see it.`
 
-| Option | Tooltip | Effect | Log |
+| Option | On the button | Effect | Log |
 |---|---|---|---|
 | `take it to the Committee` | `Research stops for 60 s while everyone is interviewed. Lead −2 months. Relations +8. Approval −5. The Committee can then consider a halt.` | `flags.memo = 'reported'`; true +5; reveals `p_external` | `OpenMind hands the Oversight Committee a memo about its own model.` |
 | `bury it` | `Nothing changes today. It will probably leak (about {p}%). A leak costs two seats; if that leaves fewer than 5 with OpenMind, the Committee drafts an order.` | `flags.memo = 'buried'`; true −5; schedules the leak roll; reveals `p_come_clean`; `#memoLine` reads `Memo: buried — leak risk {p}%` | `Four pages are filed where four pages are not usually filed.` |
@@ -820,7 +850,7 @@ burying, or 30 s into the session if that comes first.
 > `Six members have signed a draft. OpenMind becomes a government program. They are calling it the Project.`
 > One of: `Relations are at {gov}. They wanted {T}.` · `Three major incidents in one year.` · `They read about the memo in the newspaper.`
 
-| Option | Tooltip | Effect |
+| Option | On the button | Effect |
 |---|---|---|
 | `concede oversight` (the first order only) | `Free. A kill switch in their hands, sign-off on every run, and 15 % of compute on monitors for good. Autonomy −10. Lead −1 month. The count of incidents starts again.` | relations = max(relations, T) + 20; `Stop asking for sign-off` is revoked; the Monitors slider cannot go below 15 %; incidents = 0; `flags.conceded` |
 | `call in favours` (once) | `$5,000,000,000. Relations +15. The count of incidents starts again.` | relations = max(relations, T) + 15; incidents = 0 |
@@ -844,7 +874,7 @@ burying, or 30 s into the session if that comes first.
 
 | Option | Effect |
 |---|---|
-| `bring the motion` | The vote passes 6–4. Slow: `committeeChoice = 'slow'`, lead −4 (−3), true +25, autonomy −20. Race: `committeeChoice = 'race'`, true −10, approval −10 if `pactSigned`. Pause: `pauseSigned` → the ending. With fewer than 6 seats the first console line adds `Two of the six want your job.` (`flags.committeeHostile`) |
+| `bring the motion` — on the button: Slow `Sage-4 is switched off. Lead −4 months (−3 with Sage-3 warm). Cannot be undone.` · Race `Nothing is switched off. Cannot be undone.` · Pause `The race ends, and OpenMind's part in it.` | The vote passes 6–4. Slow: `committeeChoice = 'slow'`, lead −4 (−3), true +25, autonomy −20. Race: `committeeChoice = 'race'`, true −10, approval −10 if `pactSigned`. Pause: `pauseSigned` → the ending. With fewer than 6 seats the first console line adds `Two of the six want your job.` (`flags.committeeHostile`) |
 | `not yet` | closes the modal |
 
 ### 5.3 Crises
@@ -853,13 +883,13 @@ Every mitigation in the fourth column is on screen at least five minutes before 
 
 | id | Trigger | Effect | Mitigation, and when it was visible | Console |
 |---|---|---|---|---|
-| `cr_weights_theft` | Feb 2027 + `rand(0, 60)` s (ts 150–210 with `theftIgnored`), SL < 3 | lead = min(lead, 0.5); relations −10; Baiwen's line jumps to 0.97 × bestCap; `c_theft` | `Security level 3`: on screen since Stage 2's warning; `Theft risk: high until SL3` from arrival | `Anomalous 3 TB transfer at 4 a.m. The weights are gone.` |
+| `cr_weights_theft` | Feb 2027 + `rand(0, 60)` s (ts 150–210 with `theftIgnored`), SL < 3 | lead = min(lead, 0.5); relations −10; Baiwen's line jumps to 0.97 × bestCap; `Security level 3` is half price for 5 min: `SL3 is half price while the forensics team is in the building.` | `Security level 3`: on screen since Stage 2's warning; `Theft risk: high until SL3` from arrival | `Anomalous 3 TB transfer at 4 a.m. The weights are gone.` |
 | `cr_spy` | Jun 2027 + 30 s, SL < 4 | lead −1.5; relations −5; lead −0.25 a month until SL4 | `Security level 4`, from February | `Algorithms have been leaving the building by word of mouth. Lead −1.5 months.` |
 | `cr_rogue_copy` (AI hacking) | rogue share ≥ 5 %, bestCap ≥ 8×, once per 240 s | 20 % of compute offline 60 s (30 s with the shutdown system); rogue copies → 0; relations −15 (0 at SL5); measured −5; approval −3 for 5 min; major incident | Monitors slider (arrival), the labs, `Re-image`; the `rogue copies` row; warning at 2.5 % | `An instance copied itself to a rented cluster in Jakarta. A fifth of compute is offline while every machine is re-imaged.` |
 | `cr_riots` | approval ≤ −40, once per 300 s | power −50 % for 90 s; relations −3 | job fund, free tier, community agreement (Stage 2), impact payments, clinics; warning at −30 | `Riots in three cities. Abilene runs on half power for 90 s.` |
 | `cr_sabotage` | approval ≤ −55, once per 300 s | 200 MW offline 120 s; relations −5; major incident | the same; warning at −45 | `A transformer yard at Abilene is cut open and burned. 200 MW offline — 2:00 to repair.` |
-| `cr_taiwan` | `c_blockade` opens | no G6 lots for 240 s; lots cost ×1.5 afterwards; lead −1 if no lot arrives during it | Chip stockpile (≈ 20 min before), second source, the Pentagon, paying triple | `The Blockade — 4:00 until the strait reopens.` · `The strait reopens. Lots resume at one and a half times the price.` |
-| `cr_iran` | Jul 2027 + 60 s, `gulfExposure` | Al-Marsa's 1,000 MW and a tenth of the GPUs (half of each if hardened; the power only if the chips came home); relations −5 | `c_hormuz` in May; `Al-Marsa` line from arrival; declining in Stage 2 | `Al-Marsa Compute Park is offline. 1,000 MW and 80,000 GPUs lost.` |
+| `cr_taiwan` | `c_blockade` opens | no G6 lots for 240 s (60 s or 120 s by the choice); lots cost ×1.5 afterwards; lead −1 if nothing covers a wait | Chip stockpile (≈ 20 min before), second source; the escort; the channel | `The Blockade — 4:00 until the strait reopens.` · `The strait reopens. Lots resume at one and a half times the price.` |
+| `cr_iran` | Jul 2027 + 60 s, `gulfExposure` | Al-Marsa's 1,000 MW and a tenth of the GPUs (half of each if hardened; the power only if the chips came home); relations −5; a major incident if nothing was done | `c_hormuz` in May; `Al-Marsa` line from arrival; declining in Stage 2 | `Al-Marsa Compute Park is offline. 1,000 MW and 80,000 GPUs lost.` |
 | `cr_leak` | the roll in `c_memo` succeeds | approval target −20 × (1 + 0.25 × `internalReleases`); relations −20; measured −10; major incident; with fewer than 5 seats afterwards, `c_order` | report it; `Take the memo to the Committee after all` (free, until the leak); the leak-risk line | `The memo is on the front page.` |
 | `cr_nationalization` | the order's 1:30 runs out | **The Project** (§7.4) | §2.11 | `The Committee votes.` |
 
@@ -924,7 +954,8 @@ Training: [running]
 | 30:00 | 62 | 17 | 13 | `Approve` and `Send back` gone; public model; two exit goals; Re-image |
 | exit | 64 | 18 | 13 | memo, session, three readings; Hold |
 
-Ceiling 65 numbers and 30 interactive (arc G14). The count of controls falls on arrival and never recovers: more to
+Ceiling 65 numbers, 30 interactive (arc G14) and 260 words outside the console and log (G19): project cards are a
+title, a price and one sentence of at most twelve words; a grant is a title, a price and at most eight words. The count of controls falls on arrival and never recovers: more to
 read, less to press. No beat adds more than 4 numbers or 2 controls.
 
 ### 6.4 Mobile
@@ -1010,7 +1041,7 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 | Research | Spent on projects; a run is far away | Research has no cap and never stops; the status line shows the time to the next run | None needed. Longest wait in the model: 7.7 min (naive) |
 | Funds | Spent on the fab at minute 30 | The training loop needs no money; lots are $25M against ≥ $40M/s | None needed |
 | Compute | Fleet far below N(c) | Yield floor 0.3: every run still gains ≥ 3 %; the readout names the GPUs wanted | Lots, datacenters, reactors; the build-out grant |
-| Chips | Blockade with no stockpile | No lots for 4:00; nothing is lost | Pay triple, the Pentagon; it ends by itself |
+| Chips | Blockade with no stockpile | No lots for 4:00; nothing is lost but a month of lead | The escort or the channel; it ends by itself |
 | Power | Riot, sabotage, Iran | Temporary, or 1 GW gone; never zero | Reactors (120 s) |
 | Monitors slider | Left at 0 % with high autonomy | Breakouts every four minutes; relations fall; the order | `concede oversight` puts a floor of 15 % under the slider |
 | Sliders | Research 70 % and monitors 40 % | Tasks cannot go below 10 %: the sliders stop | — |
@@ -1025,7 +1056,7 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 | The vote | Player never brings a motion | Reminders every 90 s; runs continue; the date stops at Dec 2027 | — (the player always casts it) |
 | The Pause | Conditions never met | It is not offered; the two motions remain | — |
 | Neuralese then regret | Interpretability −2 | Labs IV and V bring it back; lab V reads neuralese | — |
-| Modal timers | Player away | Defaults change least: say nothing, keep it in English (after study), brief quarterly, do nothing, enterprise only, wait it out | — |
+| Modal timers | Player away | Defaults change least: keep it in English (after study), brief quarterly, do nothing, enterprise only, wait it out | — |
 | Carry-over | Arrives at SL2, approval −45, true 30 | Theft at 4:30 unless SL3 is bought; no approval crisis for 180 s; the clamps | The careless preset exercises this |
 | Saves | Reload mid-run, mid-shipment, mid-blockade, mid-session, mid-order, with a leak pending | Timers stored as remaining seconds; the leak roll stored as a scheduled event | `SAVE_VERSION` + 1; `migrate()` fills the new fields |
 
@@ -1035,8 +1066,8 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 
 ### 9.1 Reasonable bot, Stage 3 branch
 
-1. Modals: `c_theft` lock it down · `c_neuralese` keep it in English · `c_committee` brief them quarterly ·
-   `c_hormuz` harden · `c_mini` enterprise only · `c_blockade` wait it out if covered, else buy · `c_memo` report ·
+1. Modals: `c_neuralese` keep it in English · `c_committee` brief them quarterly · `c_hormuz` harden · `c_mini`
+   enterprise only · `c_blockade` wait it out if covered, else offer the channel, else wait · `c_memo` report ·
    `c_order` concede. The vote: Slow down if its best reading says true alignment is below 60 or it has no
    reading; otherwise Race. `--pause` makes it sign the Pause when offered.
 2. Sliders: research 40 %; monitors 10 %, 15 % from autonomy 40, +5 % while the rogue share is above 2 %.
@@ -1051,8 +1082,8 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 
 * `--policy naive`: buys every affordable project and grant in screen order (a run still starts first, because
   Auto-train fires in the same tick research suffices); never touches a slider, Hold or Re-image; Capability
-  focus; approves at once; first enabled modal option (adopt neuralese, open the books, release to everyone, buy
-  what is on the water, report, concede); brings Slow down.
+  focus; approves at once; first enabled modal option (adopt neuralese, open the books, release to everyone, ask
+  Washington, report, concede); brings Slow down.
 * `--policy racer`: the reasonable bot, but adopts neuralese, research 50 %, monitors 5 %, no lab after I, no
   alignment projects, three Capability runs to one Efficiency, buries the memo.
 * `--policy cautious`: the reasonable bot, but buys no grant.
@@ -1061,7 +1092,7 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 
 | # | Criterion | Reasonable | Naive |
 |---|---|---|---|
-| B1 | Stage 3 duration | 40–50 min | 40–55 min (racer 28–36; cautious ≤ 62) |
+| B1 | Stage 3 duration | 40–50 min | 40–55 min (racer 28–38; cautious ≤ 64) |
 | B2 | Longest first-time-reveal gap | ≤ 180 s | ≤ 210 s (cautious ≤ 270 s) |
 | B3 | Same, within the last 10 minutes | ≤ 180 s | ≤ 210 s |
 | B4 | Gaps between panels, verbs, toggles, sliders, Stores rows and instrument lines | ≤ 270 s | — |
@@ -1081,6 +1112,30 @@ incidents` · `The memo` · `Thoughts` (words / neuralese) · `Humans in researc
 | B18 | Controls on screen at the exit ≤ at arrival; numbers ≤ 65 | required | — |
 | B19 | Rogue share | below 2 % throughout | at least one breakout, at most one order |
 | B20 | Build clean; no page errors; reload mid-run, mid-shipment, mid-blockade, mid-session and mid-order restores timers | required | — |
+| B21 | Decision sensitivity (G16): every variant in the table below, seeds 1–3, differs from the baseline by ≥ 3 min of stage length or by the stated margin in an exit variable | required | — |
+| B22 | Stakes on the button (G17): every option's second line is present in the DOM and its numbers match what the option does; no option depends on a `title` | required | — |
+| B23 | Reveal → purchase (G18): median ≥ 90 s; ≤ 20 % bought within 10 s; `FLOOR` on ≤ 30 % of rows | required | median ≥ 60 s |
+| B24 | Text (G19): ≤ 260 words on screen at every 5-min mark; ≤ 2.5 console and ≤ 1.5 Developments lines a minute over any five minutes; ≤ 14 reveals in any six minutes | required | — |
+| B25 | Modals (G20): with a modal open, a click on any enabled button behind it works; Escape takes the default | required | — |
+| B26 | Promised number (G21): research ≥ arrival + 3,000,000 at ts 30; no contradicting console line; narration on screen for 10 s | required | required |
+
+Decision variants (`--variant`, each the reasonable bot with one thing changed; paper-model spread, seeds 1–3,
+baseline 46:36 mean, true alignment 87–90, lead 4.1):
+
+| Variant | Stage length | Exit variables that move | Passes by |
+|---|---|---|---|
+| `neuralese` (adopt it) | −4.2 min | true −23, interpretability 2 instead of 4, lead +2 | both |
+| `focus-capability` | −0.7 min | true −19, measured −21 | exit variable |
+| `focus-safety` | +13.7 min | true 100 | length |
+| `research-20` / `research-70` | +9.2 / −4.1 min | tasks completed | length |
+| `monitors-0` | 0 | true −12; a rogue share that needs Re-image every five minutes | exit variable |
+| `grants-none` | +14 min | autonomy 5 instead of 60; 0.3M copies lost instead of 5M | both |
+| `memo-bury` | −1 min | lead +2, true −14, the Pause closed, a leak 40–90 % likely | exit variable |
+| `mini-everyone` / `mini-inside` | +1 min / 0 | jobs +15–30M, approval −15 to −25, `publicCap` | exit variable |
+| `committee-open` / `committee-counsel` | 0 | relations +10 / −5 (1.5 seats apart), lead ∓0.5 | exit variable |
+| `blockade-escort` / `blockade-channel` | 0 | `flags.escalated` / `flags.backChannel` (Stage 4 treaty ±10–15) | exit variable |
+| `modals-first`, `modals-last`, `modals-never` | report | each must differ from the baseline in at least two exit variables | — |
+| `sendback-always` | +2 min | true +10–15, lead −0.5 | exit variable |
 
 Sim output to add: the Stage 3 block (duration, runs, `LONGEST REVEAL GAP`, mechanic gaps, governor pulls, press
 counts, 5-minute marks with autonomy, measured and true alignment, rogue share, lead, seats, approval), a `CRISIS`
@@ -1117,8 +1172,13 @@ reach. Arriving with Al-Marsa, the exit is 39:15–39:56. The careless preset wi
 the model the reasonable bot's relations reached 100: the −1 a month drain and the smaller gains in §2.11 are meant
 to hold it near 90.
 
-It is not the engine: no release incidents, no `Send back`, approximate modal effects, the two price changes
-and one added reveal noted in §4.3 not re-run. Treat §4.3 and this section as targets and re-derive them.
+**Re-run with the price floor and the date fallback** (seeds 1–5): reasonable exit 45:33–46:21, 15 runs, median
+reveal → purchase 231–279 s, 15–18 % bought within 10 s, longest reveal hole 150–226 s (one governor pull or
+none; the visible-prerequisite rule of §4.1 is meant to bring this under 180 s and is not re-run), mechanic gaps
+278–402 s (B4 is the open risk); naive exit 50:35–52:16, median 81–90 s, longest hole 180–270 s.
+
+It is not the engine: no release incidents, no `Send back`, approximate modal effects. Treat §4.3 and this section
+as targets and re-derive them.
 
 ### 9.5 Knobs, in the order to reach for them
 
@@ -1158,6 +1218,7 @@ and one added reveal noted in §4.3 not re-run. Treat §4.3 and this section as 
 | `approval`, `jobsDisplaced`, `flags.publicCap`, impact payments | S4 Society panel; UBI replaces the payments |
 | `securityLevel`, `flags.killSwitch` | S4 robot-fleet shutdown crisis |
 | `flags.stockpile`, `flags.secondSource`, `flags.fabPlanned`, `flags.dpa` | S4 chips and robot-built fabs; consolidation |
+| `flags.escalated`, `flags.backChannel` | S4 treaty progress starts 15 points lower / 10 points higher |
 | `flags.backups`, `flags.memoryLocked`, `flags.externalResearchers` | S4 Steward program's first steps are already done |
 | The three-way allocation, the grant list, `Lost to value drift`, the Oversight panel | Reused and extended in Stage 4 |
 | `funds`, `revPerSec` | Removed by Stage 4's arrival, by name |

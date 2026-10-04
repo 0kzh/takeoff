@@ -6,6 +6,18 @@ Numbers for Stages 4–5 are targets for the later specs to hit, not tuned value
 from `docs/specs/stage2.md`, `docs/specs/stage3.md` and 1-second paper models of them; they must be re-verified in
 `npm run sim`.
 
+## Amendments after critic round 2 (Stage 1: Takeoff 8.1, Paperclips 7.7)
+
+The round-2 critic's headline finding has no rubric row: *nothing Stage 1 asks the player to decide changes
+Stage 1*. Ten play styles ended within 31–35 minutes in the same state. The changes below make that testable.
+
+1. §6 gains **G16–G23**: decisions decide; stakes on the button; goals, not a conveyor belt; a text budget; modals
+   never block input; the promised number moves first; levers reach the income; walls repeat and nothing is dead.
+2. §7 "every stage ships" gains the decision-variant block.
+3. §2, §4 and §8 are updated from `stage4.md` and `stage5.md`: scale at the last two boundaries, the exact
+   `alignedAtHandover` inputs, the four end screens. The rule of §4 itself is unchanged.
+4. `stage3.md` is patched to the new guardrails (its own amendment list says where).
+
 ## 1. Requirements checklist
 
 Every feature in the original prompt, the stage that delivers it, and the mechanic. "S2" = Stage 2, etc.
@@ -31,7 +43,7 @@ Every feature in the original prompt, the stage that delivers it, and the mechan
 | R17 | Show the carrot: reveal on trigger, not affordability; a greyed-out goal always on screen | all | Guardrail G3; fallback lines `#nextTrust` (S1–S2) and `#nextTier` (S2+) |
 | R18 | Always something to work toward; the bottleneck is always addressable | all | §5; each bottleneck console line names the fix |
 | R19 | UI reshuffles between stages | all | §2 table C: each transition removes ≥ 1 panel and adds ≥ 1 |
-| R20 | Engineered crises: AI hacking, engineered pandemic, nanobots, robots shutting down all datacenters | S3–S4 | S3 `cr_rogue_copy` (AI hacking: rogue copies above 5 % of the fleet); S4 `cr_ashford`, `cr_nanobots`, `cr_shutdown`. Also S2 curtailment, protest, theft warning; S3 theft, the spy, riots, sabotage, Taiwan, Iran, the leak |
+| R20 | Engineered crises: AI hacking, engineered pandemic, nanobots, robots shutting down all datacenters | S3–S4 | S3 `cr_rogue_copy` (AI hacking: rogue copies above 5 % of the fleet); S4 `cr_ashford`, `cr_nano`, `cr_shutdown`, each resolving in one of three bands of true alignment (`stage4.md` §5.3). Also S2 curtailment, protest, theft warning; S3 theft, the spy, riots, sabotage, Taiwan, Iran, the leak |
 | R21 | Economy with changing bottlenecks | all | §5 |
 | R22 | Interpretability and neuralese | S3 | Interpretability lab I–V (level 3 puts true alignment on screen); `c_neuralese`: neuralese vs thoughts kept in English; honeypots, the noise test, the checkpoint test |
 | R23 | A stats panel that pops in later | S2 | `p_dashboard` → `panel-stats`, minute ≈ 26 of Stage 2 (first item of the approach) |
@@ -61,7 +73,7 @@ Nothing in the original prompt is unplaced.
 | Seconds per month | 300 | 210 | 270 | 150 | 90 |
 | Entry | new game | buy `Break ground` | buy `Let Sage-3 write the code` | Committee choice made at ≥ 25× | treaty signed, or autonomy granted/taken |
 | Exit project (visible, greyed, ≥ 8 min early) | Break ground | Let Sage-3 write the code — needs a released 4.00× model | Slow down (Steward) / Race (Sage-5) — needs 25× | Sign the Concord treaty / Grant the fleet autonomy | The long reflection / Final instructions |
-| Training runs | ≈ 7 | 9–12 (naive 7–9) | 13–16 (naive 8–11) | 8–12, automatic | none shown |
+| Training runs | ≈ 7 | 9–12 (naive 7–9) | 13–16 (naive 8–11) | 9–11, automatic, with a Verify toggle | automatic, one line in Stats |
 | UP stage the critic compares | Stage 1 | Stage 2 (power management) | Stage 2, late | Stage 3 | Stage 3 |
 
 Total 150–200 min of play; 3–4 h with reading. The date never passes the stage's end month + 2 before the exit.
@@ -73,18 +85,18 @@ S1→S2 is the built Stage 1 (`npm run sim`); S2→S3 is the Stage 2 paper model
 
 | | new game | S1→S2 | S2→S3 | S3→S4 | S4→S5 | ending |
 |---|---|---|---|---|---|---|
-| Capability | 1.0× | 1.5–1.8× | 4.0–4.6× | 25–30× | ≥ 1,000× | 10⁴–10⁶× |
-| Model | Sage-1 | Sage-1.6 | Sage-3 | Sage-4.7; the next is Sage-5 or Steward-1 | Sage-7 / Steward-4 / Concord-1 | — |
-| Tasks per second | 0 | ≈ 500 rented, ≈ 9,000 a second later | ≈ 1 × 10⁸ | ≈ 10¹⁰ | 10¹³–10¹⁴ | 10¹⁷+ |
-| Tasks Completed | 0 | 0.4–0.55 × 10⁶ | 3–7 × 10¹⁰ | 4–6 × 10¹² | ≈ 10¹⁷ | 10²⁰–10²² |
+| Capability | 1.0× | 1.5–1.8× | 4.0–4.6× | 25–30× | 300–1,000× | ≈ 10⁴× (the graph is retired there) |
+| Model | Sage-1 | Sage-1.6 | Sage-3 | Sage-4.7; the next is Sage-5 or Steward-1 | Sage-7 / Steward-3; Concord-1 enforces the treaty | — |
+| Tasks per second | 0 | ≈ 500 rented, ≈ 9,000 a second later | ≈ 1 × 10⁸ | ≈ 10¹⁰ | 2–9 × 10¹³ | ≈ 10¹⁸ |
+| Tasks Completed | 0 | 0.4–0.55 × 10⁶ | 3–7 × 10¹⁰ | 4–6 × 10¹² | 0.4–1.6 × 10¹⁶ | ≈ 10²⁰ |
 | Revenue | 0 | $0.7–1.1k/s, of which contracts $0.3–0.8k | $1.0–1.5M/s | $120–140M/s, then removed | — | — |
 | Funds on hand | 0 | the returned deposit: one GPU lot | $10–60M | $30–60B, then removed | — | — |
 | Price per task | $0.25 | $0.75–0.90 | ≈ $0.01 | — | — | — |
-| Compute | 0 | 90–115 rented GPUs → 1,000 owned | 0.8–1.25M owned GPUs (G4 + G5) | ≈ 4M (3M of them G6) | ≈ 10⁹ GPU-equivalents, robot-built | orbital, 10¹²+ |
-| Power | 1,000 kWh blocks | 5 MW on site | 1.0–1.6 GW | ≈ 4 GW | 0.5–1 TW | lunar and orbital solar |
-| Copies running | 0 | 110–180 | ≈ 10⁷ | ≈ 3 × 10⁸ | ≈ 10¹⁰ | — |
+| Compute | 0 | 90–115 rented GPUs → 1,000 owned | 0.8–1.25M owned GPUs (G4 + G5) | ≈ 4M (3M of them G6) | ≈ 4 × 10⁹ GPU-equivalents, robot-built | orbital, ≈ 10¹² |
+| Power | 1,000 kWh blocks | 5 MW on site | 1.0–1.6 GW | ≈ 4 GW | ≈ 4 TW | the swarm, 0.01 % of the Sun |
+| Copies running | 0 | 110–180 | ≈ 10⁷ | ≈ 3 × 10⁸ | ≈ 10¹¹ | — |
 | Research per second | 0 | 250–340 (all human) | 50–100k (0.3–0.6 % human) | ≈ 30M (no human share shown) | — | — |
-| Jobs displaced | 0 | 0 | 2.6–4.2M | 30–65M | 1–2B | — |
+| Jobs displaced | 0 | 0 | 2.6–4.2M | 30–65M | 0.8–1.0B | — |
 
 ### C. The reshuffle at each transition
 
@@ -92,8 +104,8 @@ S1→S2 is the built Stage 1 (`npm run sim`); S2→S3 is the Stage 2 paper model
 |---|---|---|---|---|
 | S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), the Abilene panel, the Contracts line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); new custom contracts (the signed ones keep paying); Stage-1-only projects are retired by name | `Buy GPUs (1,000)`, paid by the returned deposit |
 | S2→S3 | Alignment (measured alignment, autonomy grants, `Lost to value drift`); the Monitors slider; later Geopolitics, Oversight (in place of Government); Stores rows `monitors`, `rogue copies` | Marketing, Hire Researcher, Expand Lab, Researchers / Lab Space lines, price buttons, `+1 Trust at`, Stores rows `trust` and `data`, the research cap, gas and solar buttons, Release / Keep internal (one `Approve`) | Hiring; marketing; Trust as a currency; then, by the player's own grants, Train, Red-team, Approve and the Infrastructure buttons. The human share line stays until it rounds to zero | `Deploy Sage-2 as monitor` (free) |
-| S3→S4 | Robots, Society (UBI), Treaty, Monitors; Stores rows `robots`, `materials` | Business panel, Training panel (one status line), Complete Task button, Stores row `funds` | Money; the Train button; the manual verb. "The model runs the business now." | Set by the S4 spec |
-| S4→S5 | Space; Stores rows `launch mass`, `orbital GPUs` | Geopolitics, Robots (merged into Space), Society | Earth as the subject of the screen | Set by the S5 spec |
+| S3→S4 | Robots (the fleet's sliders); Stores as the main panel with `materials`, `robots`; then Society (the dividend), Treaty, the Committee's agenda | Business panel, Training panel (one status line), Infrastructure, Complete Task, Stores rows `funds` and `chips on order`, Focus, Approve / Send back / Hold | Money; the Train button; the manual verb. "The model runs the business now." On the race branch, the second button on some cards | `Convert a car plant` (free) |
+| S4→S5 | Space (the launch split, missions); Stores rows `launch mass`, `orbital GPUs`, later `matter`, `swarm`, `probes` | Treaty, Oversight, Society, Security, Alignment, Robots (its sliders become the launch sliders), the allocation, the grant list | Earth as the subject of the screen; in Silence, later, the sliders and the second button | `Launch contracts` (free) |
 
 Every transition follows §7.
 
@@ -104,8 +116,8 @@ Every transition follows §7.
 | 1 | — | Stage 1 keeps the Universal Paperclips layout; no Stores box |
 | 2 | funds · research · insight · trust · GPUs · power · copies · data · (late) chips on order | Existing value spans move into the box, so nothing is shown twice |
 | 3 | + monitors · rogue copies (once any exist); − trust · − data | Research loses its cap |
-| 4 | − funds · + robots · materials | The box becomes the main panel |
-| 5 | + launch mass · orbital GPUs · swarm % | Earth rows stay, greyed, and stop mattering |
+| 4 | − funds · − chips on order · + materials · robots · (late) treaty chips | The box becomes the main panel, centre column |
+| 5 | + launch mass · matter · orbital GPUs · swarm · mercury · people off Earth · probes; − research · insight · monitors · rogue copies | Earth rows stay, greyed, under the legend `earth` |
 
 Every row has a hover listing sources and sinks per second with a bold total. A negative total is how the player finds
 a consumption chain (ADR), and no other text explains it.
@@ -152,12 +164,15 @@ Checked in this order every tick once `stage ≥ 3`; the first true one ends the
 | Ending | Flag | Fires when | Mitigations (all visible before the trigger) |
 |---|---|---|---|
 | **The Project** (nationalised), S3 or S4 | `nationalized` | S3: every route goes through the modal `The Committee drafts an order` (`stage3.md` §2.11), which opens at ≥ 10× when (a) `govRelations` is below the threshold (20; 35 with `defenseContract`; 10 lower at SL5), (b) three major incidents have been counted (rogue breakout, sabotage, the leak), or (c) a buried memo leaks with `govRelations` < 50. The first order can be answered with a free concession, the second with $5B. The ending fires only when an order is refused, or a third is drawn up, and its 1:30 runs out with the cause unfixed. (d) S4: refuse consolidation with `govRelations` < 40 | Policy team, Brief the administration, Share evals, SL5, Report the memo, Nationalisation-proofing |
-| **The Pause** (halt treaty), S3 or S4 | `pauseSigned` | Player picks it: (a) S3 Committee vote, third option, enabled when the memo was reported, `govRelations` ≥ 60 and `lead` ≥ 2; (b) S4 Treaty panel `Sign a halt instead`, enabled at treaty progress ≥ 50 % and `approval` ≥ −60 | It is a choice, never forced |
+| **The Pause** (halt treaty), S3 or S4 | `pauseSigned` | Player picks it: (a) S3 `Sign the Pause`, offered 45 s into the Committee's session when the memo was reported, `govRelations` ≥ 60 and `lead` ≥ 2; (b) S4 `Sign a halt instead`, pinned from treaty progress ≥ 50 % with `approval` ≥ −60 | It is a choice, never forced |
 | **Concord** (aligned prosperity), S5 | `longReflection` | Stage 5 reached with `alignedAtHandover`, then the project `The long reflection` | — |
 | **Silence** (misaligned), S5 | `finalInstructions` | Stage 5 reached without `alignedAtHandover` (autonomy granted, or taken when `autonomy` ≥ 80 and `alignmentTrue` < 40, or a treaty signed by a misaligned model); the log stops mentioning people; `Final instructions` arrives with one button | Everything that raises `alignmentTrue`; Monitors at scale is the last exit |
 
-`alignedAtHandover` is computed once, at the Stage 4 exit: `alignmentTrue ≥ 60`, or (`alignmentTrue ≥ 40` and
-`interpretability ≥ 4` and `monitorShare ≥ 0.15`). Between 40 and 60 the monitors decide it; that is the engineered
+`alignedAtHandover` is computed once, at the Stage 4 exit (treaty signed, fleet granted, or fleet taken):
+`alignmentTrue ≥ 60`, or (`alignmentTrue ≥ 40` and `interpretability ≥ 4` and `monitorShare ≥ 0.15`), where
+`interpretability` is labs bought less 2 under neuralese and `monitorShare` is the Monitors slider (floor 0.15 after a
+conceded order, 0.40 after Monitors at scale). It alone picks Stage 5's skin and ending; the exit kind and Baiwen's
+alignment only change sentences on the end screen. Between 40 and 60 the monitors decide it; that is the engineered
 guarantee the player can build toward (UP's OODA line).
 
 Texture: The Pause sets tasks per second to zero and returns `Complete Task` as the only button on screen. Silence keeps
@@ -188,7 +203,7 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | # | Rule | Threshold | Measured by |
 |---|---|---|---|
 | G1 | No hole between first-time reveals | ≤ 180 s, from arrival to exit, last 10 min included | Sim: `LONGEST REVEAL GAP` per stage |
-| G2 | A new panel or mechanic (a new verb, toggle, slider, Stores row or instrument line) | about every 4 min; never more than 270 s | Sim: gaps between `REVEAL` events of kind panel/button/toggle/slider/row |
+| G2 | A new panel or mechanic (a new verb, toggle, slider, Stores row or instrument line) | about every 4 min; never more than 270 s (360 s in Stage 5, which must not promise more than it has) | Sim: gaps between `REVEAL` events of kind panel/button/toggle/slider/row |
 | G3 | A greyed-out goal is on screen | ≥ 99 % of ticks; ≥ 2 distinct greyed goals throughout the last 10 min of a stage | Sim: visible unaffordable projects and buttons; `#nextTrust` / `#nextTier` count as one |
 | G4 | No chore | No verb pressed more than twice in any 60 s once its automation exists; automation offered within 8 presses or 4 min | Sim: per-verb press log |
 | G5 | No disclosure spike | ≤ 8 new on-screen numbers and ≤ 3 new interactive elements in any beat | Engine: the reveal scheduler (15 s between projects); Playwright snapshot diff |
@@ -201,6 +216,14 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G12 | Idle rescues | ≤ 1 per stage for the reasonable bot | Sim counter |
 | G13 | No wall is carried across a transition | Next training run affordable in cap terms; Trust ≥ 0; ≥ 1 affordable action | `enter()` pre-flight |
 | G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage | Playwright count at 5-min marks |
+| G16 | Decisions decide | Every framed choice axis of a stage (each modal, each standing switch or slider, each grant taken or refused) moves the stage's length by ≥ 3 min, or moves an exit variable a later stage reads by a stated margin: true alignment ≥ 8, lead ≥ 1 month, relations ≥ 10, approval ≥ 10, or a branch or ending flag | Sim variants on seeds 1–3, each the reasonable bot with one thing changed (`--variant modals-first`, `modals-last`, `modals-never`, one per switch extreme). The stage spec lists its axes and the spread expected. An axis that fails is cut or stops being framed as a choice |
+| G17 | Stakes on the button | Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
+| G18 | Goals, not a conveyor belt | Median time from a project's first appearance to its purchase ≥ 90 s for the reasonable bot; ≤ 20 % bought within 10 s; nothing refunds its own price. Engine backstop: at reveal a price is raised to 90 s of its currency's current rate when the list price is lower; a prerequisite gates the purchase, not the appearance | Sim: reveal → purchase table; `FLOOR` lines on ≤ 30 % of rows |
+| G19 | Text budget | ≤ 260 words on screen outside the console and log (≤ 200 in Stage 1); ≤ 2.5 console lines and ≤ 1.5 Developments lines a minute over any five minutes; one flavour line per training run; a console line carries a number, a name or an instruction; ≤ 14 first-time reveals in any six minutes; projects drip 30 s apart for the first five minutes of a stage | Playwright word count at 5-min marks; sim line counter |
+| G20 | Modals never block input | A modal is a card docked in the page. Everything behind it stays clickable, focus moves into it, Escape or its timer takes the stated default, and one without a timer can be left open | Playwright clicks a button behind an open modal |
+| G21 | The promised number moves first | Each transition's narration names one number. Within 30 s of arrival it has moved as promised, no console line contradicts it, and routine console lines are held for 10 s so the narration stays on screen | Sim and Playwright at each preset |
+| G22 | Levers reach the income | After the first five minutes of a stage at least 70 % of income (of the score rate, once money is gone) responds to levers the stage has taught. Any quota or ceiling shows `x / cap` from the first unit | Sim: income by source at 5-min marks |
+| G23 | Walls repeat, rescues diagnose, nothing is dead | A wall or warning line re-arms every 120 s while it holds. The idle rescue names the cause before it offers help and never offers less than the cheapest thing on screen. No line reads "none" and no card sits unaffordable for more than 10 min for the reasonable bot, hazard counters and the stage goal excepted | Sim: wall-line log; dead-line scan |
 | G15 | Modals are rationed | ≤ 9 per stage; unprompted modals ≥ 150 s apart (one that comes due inside the window waits); a modal the player opens with their own click is exempt from the spacing; the idle rescue is outside the budget | The built pacer (`cadence.lastModalAt`); sim count per stage |
 
 The **cadence governor** enforces G1: if no first-time reveal has happened for 150 s, the engine reveals the next item
@@ -245,12 +268,17 @@ Every stage ships, before its critic round:
 * the sim's stage block: duration, runs, `LONGEST REVEAL GAP`, governor pulls, press counts, 5-minute marks, for the
   reasonable bot and the naive policy on seeds 1–5, from a new game and from the stage preset;
 * the two presets (its own start, the next stage's start) and a dev-overlay button for each;
+* the decision-variant block (G16): one sim variant per framed axis, with its spread on seeds 1–3;
 * its rows in `endStats()`, its `SAVE_VERSION` bump and `migrate()` defaults;
 * updated `docs/stages.md` and `README.md`; ids in earlier stages unchanged.
 
 ## 8. Stage sketches for the later specs
 
 Constraints, not designs. Each later spec turns its column into a content table and a reveal timeline like Stage 2's.
+All three columns are now specified (`stage3.md`, `stage4.md`, `stage5.md`); where this table and those files differ,
+the files win. The main differences: Stage 4 has no money, so its prices are materials, half a generation of
+research, or the Committee's time; its exits are the treaty, the fleet granted, or the fleet taken; Stage 5's
+projects are missions that cost only time, and its last project is not marked as the last.
 
 | | 3 Takeoff | 4 Superintelligence | 5 Beyond |
 |---|---|---|---|
