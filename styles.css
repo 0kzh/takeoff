@@ -201,6 +201,20 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 }
 .progressFill { height: 100%; width: 0; background: #888; }
 
+.meter {
+  display: inline-block;
+  width: 90px;
+  height: 9px;
+  border: 1px solid #000;
+  background: #fff;
+  vertical-align: middle;
+  overflow: hidden;
+}
+.meterFill { display: block; height: 100%; width: 0; background: #888; }
+.meter.warn .meterFill { background: #b00000; }
+#unbilledLine, #hypeLevelLine { display: none; }
+#unbilledLine.shown, #hypeLevelLine.shown { display: inline; }
+
 #benchmarks { margin: 4px 0 6px; font-size: 13px; }
 .bench { display: flex; align-items: center; height: 16px; }
 .benchLabel { width: 72px; }

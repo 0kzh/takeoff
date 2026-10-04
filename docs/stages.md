@@ -32,18 +32,20 @@ The first stage is by far the simplest. OpenMind has a model, a cloud bill, and 
 
 1. **Business** panel after the first task [0:01] — `Available Funds` only. The click pays `$0.25` at once. Console: `Task complete. The customer pays $0.25.`
 2. **Rent GPU — $6.00**, greyed, at funds ≥ $3 or 20 tasks [0:06]. Console: `GPUs can be rented. Each one runs a copy of Sage.` Nothing else in the panel yet.
-3. The first GPU [0:12] ends the opening: `GPUs rented`, `Copies running`, `Tasks per sec`, the price and demand lines, and `Power: 1,000 kWh`. **Buy Power** when that panel is up and power < 900 or funds ≥ $5.
-4. **Developments log** (left column) on the first world development, `Jul 2025 — Agents can order food and fill spreadsheets. Sometimes.` [1:30].
-5. **Marketing — Level 1 — $100.00** at funds ≥ 20 [3:00]. Affordable around [6:00].
-6. **Research** panel at the first Trust milestone (3,000 tasks) [3:00]: `Trust: 2`, `+1 Trust at: 5,000 tasks`, `Researchers: 1`, `Lab Space: 1`, `Research: 0 / 1,000`, `Hire Researcher (1 Trust)`, `Expand Lab (1 Trust)`.
-7. **Projects** column at the same moment, with **Better Prompting (750 research)** greyed out.
-8. **Blue-sky Research (1,000 research)** when research first hits its cap [5:00]. → **Insight** line appears.
-9. **Training Pipeline (2,000 research, $500)** at 10,000 tasks [7:00] alongside the free **Seed round**. → **Training** panel: `Current model: Sage-1`, `Train Sage-1.1`, focus buttons.
-10. First training run [9:00–10:30]; evaluation bars; first red-team; first **Release**; first hype spike; `Avg. Rev. per sec` doubles.
-11. **Grid Contract (7,000 research)** after the fifth power purchase [11:00].
-12. **Bulk GPU lease** at 50 GPUs [14:00]; **Usage-based pricing** at $10/s [16:00].
-13. **Series A** (free) at 100,000 tasks and one release [18:00].
-14. **First Datacenter ($250,000, 20,000 research)** greyed out at 500,000 tasks [22:00]; affordable around [28:00].
+3. The first GPU [0:12] adds `GPUs rented: 1` only. Console: `GPU rented. A copy of Sage completes a task every second.`
+4. **Power** meter at the third GPU, or 20 s after the first [0:26]. No buy button yet. Console: `Each task a copy completes burns 1 kWh. The meter drains.`
+5. **Buy Power** when the meter is down to 800 kWh, and at least 30 s after the meter [0:56].
+6. **Price** (`lower` / `raise`, unsold tasks, the billing line) once 20 tasks are unsold and the pile is still growing, 30 s after Buy Power [1:26].
+7. **Marketing** and `Avg. Rev. per sec`, plus public demand, 30 s after the first price change (or 45 s after the price appears) [2:02]. `Level` appears with the first purchase.
+8. **Developments** log and the date from 3:30, even if a line was logged earlier.
+9. **Research** at the first Trust milestone, after the beat before it. **Projects** 40 s later.
+10. **Blue-sky Research (1,000 research)** when research first hits its cap [5:00]. → **Insight** line appears.
+11. **Training Pipeline (2,000 research, $500)** at 10,000 tasks [7:00] alongside the free **Seed round**. → **Training** panel: `Current model: Sage-1`, `Train Sage-1.1`, focus buttons. Copies running appears with it.
+12. First training run [9:00–10:30]; evaluation bars; first red-team; first **Release**; first hype spike.
+13. **Grid Contract (7,000 research)** after the fifth power purchase [11:00].
+14. **Bulk GPU lease** at 50 GPUs [14:00]; **Usage-based pricing** at $10/s [16:00].
+15. **Series A** (free) at 100,000 tasks and one release [18:00].
+16. **First Datacenter ($250,000, 20,000 research)** greyed out at 500,000 tasks [22:00]; affordable around [28:00].
 
 ### Resources introduced
 
