@@ -8,7 +8,8 @@ import { stageDef, STAGES } from './stages.js';
 export function advanceClock(s: GameState, dt: number): void {
   const def = stageDef(s.stage);
   const before = s.date;
-  const limit = def.endMonth + 2 + 0.999;
+  // Stage 5 has no exit to wait for: its date stops at its end month, December 2030 (stage5.md).
+  const limit = def.endMonth + (s.stage >= 5 ? 0 : 2) + 0.999;
   s.date = Math.min(limit, s.date + dt / def.secondsPerMonth);
   if (Math.floor(before) !== Math.floor(s.date)) onNewMonth(s);
 }
