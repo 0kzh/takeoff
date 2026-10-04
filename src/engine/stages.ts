@@ -4,7 +4,7 @@ import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
-import { trainCost, atPlateau, nextRunName, arrivalRunScale } from './training.js';
+import { trainCost, atPlateau, nextRunName, arrivalRunScale, researchFor, MAJOR_TIERS } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
 import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
@@ -59,6 +59,9 @@ function retireProjects(s: GameState, next: number, quiet: string[]): string[] {
  * 5 MW; the market is calibrated once and priced on AUTO; signed contracts keep paying a fixed
  * rate. Pre-flight leaves no wall behind: Trust +2, and room in the lab for the next run.
  */
+/** What Stage 2's three lab cards multiply the arrival's lab by (×4 each). */
+const S2_LAB_CARDS = 64;
+
 function enterScale(s: GameState): void {
   const now = s.stats.timePlayed;
   const before = Math.max(1, s.stats.tasksPerSec);
@@ -89,8 +92,13 @@ function enterScale(s: GameState): void {
   // Ship With Open Issues? was asked once in Stage 1 and does not return (stage2.md §2.5).
   s.flags['shipIssuesAsked'] = true;
 
+  // Room for 1.25 × the first run, and enough that Stage 2's three lab cards (Research cluster,
+  // Experiment scheduler, Checkpoint farm, ×4 each) hold the stage's last run: Expand Lab leaves on
+  // arrival, so a lab that came small (a 1.55× exit: 24,000) would stop at 1,536,000 under a 1,600,000
+  // run with nothing left to buy.
   let roomAdded = false;
-  while (researchCap(s) < 1.25 * (trainCost(s).research ?? 0)) {
+  const lastRun = researchFor(MAJOR_TIERS[1]!, 2);
+  while (researchCap(s) < 1.25 * (trainCost(s).research ?? 0) || researchCap(s) * S2_LAB_CARDS < lastRun) {
     s.labSpace += 1;
     roomAdded = true;
   }
