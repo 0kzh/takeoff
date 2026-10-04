@@ -4,9 +4,9 @@ import { bestCapability } from '../engine/economy.js';
 import { moveGov } from '../engine/world.js';
 import { seats, committeeSeated, at2027, ts3, moveLead3 } from '../engine/world3.js';
 import { labEffect, syncInterpretability, rogueShare } from '../engine/alignment.js';
-import { voteReady, inSession, sessionAge, pauseEligible, SESSION_HALT_AT, VOTE_CAP } from '../engine/oversight.js';
+import { voteReady, inSession, sessionAge, pauseEligible, SESSION_HALT_AT, VOTE_CAP, voteRest } from '../engine/oversight.js';
 import { openChoice, fireDevelopmentOnce } from '../engine/events.js';
-import { dateLabel } from '../engine/format.js';
+import { dateLabel, fmtClock } from '../engine/format.js';
 import type { ProjectDef, ProjectInput } from './projects.js';
 
 /**
@@ -77,6 +77,8 @@ function voteOpen(s: GameState): boolean {
  * its one home on screen — then `(ready)`.
  */
 function motionTag(s: GameState): string {
+  const rest = voteRest(s);
+  if (voteReady(s) && rest > 0) return `(the Committee hears it again in ${fmtClock(Math.ceil(rest))})`;
   return voteReady(s) ? '(ready)' : '(needs the Committee\'s vote)';
 }
 
@@ -92,7 +94,7 @@ function motion(id: string, title: string, motionKey: 'slow' | 'race', descripti
     stages: [3],
     uses: Infinity,
     trigger: (s) => best(s) >= 12 || ts3(s) >= 1830,
-    canAfford: (s) => voteReady(s) && !voteOpen(s),
+    canAfford: (s) => voteReady(s) && !voteOpen(s) && voteRest(s) <= 0,
     buy: (s) => {
       openChoice(s, 'c_vote', { motion: motionKey });
     },
@@ -623,7 +625,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       uses: Infinity,
       trigger: (s) => inSession(s) && sessionAge(s) >= SESSION_HALT_AT && pauseEligible(s),
       expires: (s) => !pauseEligible(s),
-      canAfford: (s) => inSession(s) && pauseEligible(s) && !voteOpen(s) && s.flags['pauseSigned'] !== true,
+      canAfford: (s) => inSession(s) && pauseEligible(s) && !voteOpen(s) && voteRest(s) <= 0 && s.flags['pauseSigned'] !== true,
       buy: (s) => {
         openChoice(s, 'c_vote', { motion: 'pause' });
       },

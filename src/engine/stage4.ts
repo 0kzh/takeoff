@@ -445,11 +445,17 @@ function cards(s: GameState): void {
   }
 }
 
+/** What each Stage 4 grant adds to autonomy (§2.5). */
+const GRANT_AUTONOMY: Record<string, number> = { p_fleet_auto: 15, p_transition_auto: 5, p_negotiate_auto: 10 };
+
 /** `Revoke a grant` (§2.5): the newest Stage 4 grant and its control come back; autonomy −10. */
 export function revokeNewest(s: GameState): void {
   const id = s.s4.grants.pop();
   if (!id) return;
-  s.autonomy = Math.max(0, s.autonomy - 10);
+  // A revoked grant is not offered again, and Revoke takes back no more autonomy than the grant gave
+  // (a buy-and-revoke loop drove autonomy down for 30 s of research a turn).
+  s.flags[`revoked:${id}`] = true;
+  s.autonomy = Math.max(0, s.autonomy - Math.min(10, GRANT_AUTONOMY[id] ?? 10));
   if (id === 'p_fleet_auto') {
     s.flags['fleetAuto'] = false;
     s.s4.techRep /= 1.25;

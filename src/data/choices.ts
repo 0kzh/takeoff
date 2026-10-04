@@ -42,7 +42,8 @@ export interface ChoiceDef {
   valid?: (s: GameState, ctx: Ctx) => boolean;
   /** When it is put on screen (a price fixed to the economy of that moment). */
   onOpen?: (s: GameState, ctx: Ctx) => void;
-  defaultOption?: number;
+  /** What the timer chooses: an index, or (an order with options greyed) the first careful one enabled. */
+  defaultOption?: number | ((s: GameState, ctx: Ctx) => number);
   options: ChoiceOption[];
 }
 

@@ -1,12 +1,12 @@
 import type { GameState } from '../engine/state.js';
 import { say, logNews, counter, isBought, narrate } from '../engine/state.js';
-import { fmtMoneyShort, fmtNum, fmtInt, dateLabel } from '../engine/format.js';
+import { fmtMoneyShort, fmtNum, fmtInt, dateLabel, fmtClock } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { moveGov } from '../engine/world.js';
 import { seats, moveLead3 } from '../engine/world3.js';
 import { syncInterpretability } from '../engine/alignment.js';
-import { orderThreshold, ordersDrafted, ORDER_SECONDS, bestReading, leakPercent } from '../engine/oversight.js';
-import { fireDevelopmentOnce } from '../engine/events.js';
+import { orderThreshold, ordersDrafted, ORDER_SECONDS, bestReading, leakPercent, VOTE_REST_SECONDS } from '../engine/oversight.js';
+import { fireDevelopmentOnce, firstEnabled, choiceById } from '../engine/events.js';
 import { enterStage, voteCount } from '../engine/stages.js';
 import { secondsOfRevenue } from '../engine/infrastructure.js';
 import type { ChoiceDef } from './choices.js';
@@ -344,6 +344,10 @@ export const CHOICES3: ChoiceDef[] = [
         : `"The probes fire when it thinks about its own oversight.${s.flags['noise'] === 'holding' ? ' Noise makes it better at alignment tasks.' : ''} There is no smoking gun."`,
       'They want the Committee to see it.',
     ],
+    // Left open it stopped the session, the order and the vote for good (critic S3 round 1 §9 item 3):
+    // two minutes, then the careful answer.
+    timer: 120,
+    defaultOption: 0,
     options: [
       {
         label: 'take it to the Committee',
@@ -389,6 +393,10 @@ export const CHOICES3: ChoiceDef[] = [
     onOpen: (s, ctx) => {
       ctx['favours'] = stake(s, ctx, 'favours', 5e9, 900);
     },
+    // An order left open never resolved (critic S3 round 1 §9 item 3): 1:30, then the first careful
+    // answer still enabled (concede, favours, the keys), or the refusal when nothing else is.
+    timer: ORDER_SECONDS,
+    defaultOption: (s) => firstEnabled(s, choiceById('c_order')!, [0, 1, 2, 3]),
     options: [
       {
         label: 'concede oversight',
@@ -469,7 +477,15 @@ export const CHOICES3: ChoiceDef[] = [
     text: voteLines,
     options: [
       { label: 'bring the motion', record: 'brought the motion', line: voteLine, effect: bringMotion },
-      { label: 'not yet', record: 'not yet', line: 'The Committee waits.', effect: () => undefined },
+      {
+        label: 'not yet',
+        record: 'not yet',
+        // What is still counting, and when the motion can be brought again (critic S3 round 1 §9 item 3).
+        line: (s) => `The Committee waits; it hears a motion again in ${fmtClock(VOTE_REST_SECONDS)}.${s.revealed['incidents'] === true ? ` Incidents still count: ${fmtInt(s.majorIncidents ?? 0)} of 3.` : ''}`,
+        effect: (s) => {
+          s.flags['voteNotYetAt'] = s.stats.timePlayed;
+        },
+      },
     ],
   },
 ];

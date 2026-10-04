@@ -1,4 +1,4 @@
-import { GameState, say, logNews, press, counter, isBought } from './state.js';
+import { GameState, say, logNews, press, counter, isBought, heldForPlayer } from './state.js';
 import { fmtInt } from './format.js';
 import { bestCapability } from './economy.js';
 import { fireCrisis, fireDevelopmentOnce } from './events.js';
@@ -144,7 +144,7 @@ export function updateSociety(s: GameState): void {
 
 function societyLines(s: GameState): void {
   const now = s.stats.timePlayed;
-  if (s.stats.timeInStage < 120) return;
+  if (s.stats.timeInStage < 120 || heldForPlayer(s)) return;
   const fix = s.flags['transitionAuto'] === true ? 'Approval to hold answers it.' : 'Universal basic income and housing answer it.';
   if (s.approval <= -30 && s.approval > -40 && now - counter(s, 'riotWarnAt') >= 180) {
     s.flags['riotWarnAt'] = now;

@@ -1,4 +1,4 @@
-import { GameState, say, counter, isBought } from './state.js';
+import { GameState, say, counter, isBought, heldForPlayer } from './state.js';
 import { rand } from './rng.js';
 import { fmtInt, fmtClock, monthOf } from './format.js';
 import { fireCrisis, fireDevelopmentOnce, openChoice } from './events.js';
@@ -28,6 +28,9 @@ export function updateEvents3(s: GameState): void {
   if (s.stage !== 3) return;
   const now = s.stats.timePlayed;
   const t = ts3(s);
+
+  // The idle hold (engine/hold.ts): the incident clocks wait while the player is waited on.
+  if (heldForPlayer(s)) return;
 
   // Deferred effects of crises (data cannot reach the engine's counters without a cycle).
   const due = s.flags['majorDue'];

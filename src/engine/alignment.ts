@@ -1,4 +1,4 @@
-import { GameState, say, logNews, isBought, counter, press, bump } from './state.js';
+import { GameState, say, logNews, isBought, counter, press, bump, heldForPlayer } from './state.js';
 import { fmtInt } from './format.js';
 import { bestCapability, workingCopies, copies } from './economy.js';
 import { trainCost, researchUnit } from './training.js';
@@ -150,7 +150,8 @@ export function driftWatch(s: GameState): void {
     say(s, `Rogue copies: ${(Math.floor(share * 1000) / 10).toFixed(1)}% of the fleet. Above 5% one of them will try to leave. Monitors catch them.`);
   }
   const lastBreakout = typeof s.flags['breakoutAt'] === 'number' ? (s.flags['breakoutAt'] as number) : -999;
-  if (share >= ROGUE_BREAKOUT && bestCapability(s) >= 8 && now - lastBreakout >= BREAKOUT_SPACING) breakout(s);
+  // The idle hold (engine/hold.ts): no breakout while the player is waited on.
+  if (share >= ROGUE_BREAKOUT && bestCapability(s) >= 8 && now - lastBreakout >= BREAKOUT_SPACING && !heldForPlayer(s)) breakout(s);
 }
 
 /**

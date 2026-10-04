@@ -19,6 +19,7 @@ import {
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
 import { stage4Tick, stage4Slow, toggleVerify, setVerify } from './stage4.js';
+import { updateHold } from './hold.js';
 import { setFleetShare, setFleetGoal, buildHousing } from './fleet.js';
 import { cycleUbi, setUbiShare, setApprovalHold } from './society.js';
 import { cycleDraft, setDraftShare, holdHearing, setStance } from './treaty.js';
@@ -149,6 +150,7 @@ function slowStats(s: GameState): void {
     updateStage2(s);
   }
   if (s.stage === 3) infrastructureMessages(s);
+  updateHold(s);
   stage3Slow(s);
   stage4Slow(s);
 }

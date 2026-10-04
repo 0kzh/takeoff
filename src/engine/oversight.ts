@@ -1,4 +1,4 @@
-import { GameState, say, logNews, counter, isBought } from './state.js';
+import { GameState, say, logNews, counter, isBought, heldForPlayer } from './state.js';
 import { rng } from './rng.js';
 import { fmtClock, dateLabel } from './format.js';
 import { bestCapability } from './economy.js';
@@ -16,6 +16,14 @@ import { openChoice, fireDevelopmentOnce, fireCrisis } from './events.js';
 export const MAJOR_SPACING = 240;
 /** The order's named wait after a refusal. */
 export const ORDER_SECONDS = 90;
+/** After `not yet`, the Committee hears a motion again after this long (the re-asks are spaced). */
+export const VOTE_REST_SECONDS = 60;
+
+/** Seconds until a motion can be brought again after `not yet` (0 when it can). */
+export function voteRest(s: GameState): number {
+  const at = s.flags['voteNotYetAt'];
+  return typeof at === 'number' ? Math.max(0, VOTE_REST_SECONDS - (s.stats.timePlayed - at)) : 0;
+}
 /** The session's beats: the leak roll, the halt offer, the Hold toggle; ready once it is 120 s old. */
 export const SESSION_LEAK_AT = 30;
 export const SESSION_HALT_AT = 45;
@@ -151,6 +159,8 @@ export function updateOversight(s: GameState): void {
 
 /** The order (Stages 3 and 4): drafted when its cause stands; its 1:30 after a refusal. */
 function updateOrder(s: GameState): void {
+  // The idle hold (engine/hold.ts): the Committee neither drafts nor counts down while it waits on the player.
+  if (heldForPlayer(s)) return;
   if (orderLeft(s) > 0) {
     s.flags['orderLeft'] = Math.max(0, orderLeft(s) - 1);
     if (orderLeft(s) <= 0) {

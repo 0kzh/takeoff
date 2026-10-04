@@ -112,7 +112,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealResearch: RESEARCH_SECONDS_S4,
       description: 'The fleet assigns itself: replication ×1.25. The sliders go; a goal takes their place.',
       stages: [4],
-      trigger: (s) => ts4(s) >= 210 && s.revealed['robotFleet'] === true,
+      trigger: (s) => ts4(s) >= 210 && s.revealed['robotFleet'] === true && s.flags['revoked:p_fleet_auto'] !== true,
       buy: (s) => {
         grant4(s, 'p_fleet_auto', 'Let it assign the fleet', 15);
         s.flags['fleetAuto'] = true;
@@ -224,7 +224,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealResearch: RESEARCH_SECONDS_S4,
       description: 'It sets the dividend to hold approval: approval +10. The button goes; a target takes its place.',
       stages: [4],
-      trigger: (s) => s.revealed['society'] === true && ts4(s) >= 600,
+      trigger: (s) => s.revealed['society'] === true && ts4(s) >= 600 && s.flags['revoked:p_transition_auto'] !== true,
       buy: (s) => {
         grant4(s, 'p_transition_auto', 'Let it run the transition', 5);
         s.flags['transitionAuto'] = true;
@@ -281,7 +281,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealResearch: RESEARCH_SECONDS_S4,
       description: 'The models negotiate: treaty ×3, Concord-1 at 150×. The agenda\'s treaty items go; a stance takes their place.',
       stages: [4],
-      trigger: (s) => talksOpen(s) && ts4(s) >= 1020,
+      trigger: (s) => talksOpen(s) && ts4(s) >= 1020 && s.flags['revoked:p_negotiate_auto'] !== true,
       buy: (s) => {
         grant4(s, 'p_negotiate_auto', 'Let it negotiate with Baiwen-4', 10);
         s.flags['negotiateAuto'] = true;

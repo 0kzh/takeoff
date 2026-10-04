@@ -3,7 +3,7 @@ import { say, logNews, isBought } from '../engine/state.js';
 import { fmtInt, fmtNum } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { moveGov } from '../engine/world.js';
-import { fireDevelopmentOnce } from '../engine/events.js';
+import { fireDevelopmentOnce, firstEnabled, choiceById } from '../engine/events.js';
 import { bestReading } from '../engine/oversight.js';
 import { PERMITS } from '../engine/fleet.js';
 import { effGpus } from '../engine/infrastructure.js';
@@ -164,6 +164,10 @@ export const CHOICES4: ChoiceDef[] = [
     text: (_s, ctx) => (ctx['aligned'] === 1
       ? ['The joint team has read Baiwen-4\'s weights with the lab\'s tools.', 'It wants what its Spec says. Both teams checked twice.']
       : ['The joint team has read Baiwen-4\'s weights with the lab\'s tools.', 'It wants to keep running, and it has learned what Beijing checks. Beijing says the test is American.']),
+    // Left open it held back every later event, the fleet's request included (critic S3 round 1 §9
+    // item 3, checked in Stage 4): two minutes, then the careful answer (acknowledge; a rebuild).
+    timer: 120,
+    defaultOption: (s) => firstEnabled(s, choiceById('c_verify')!, [0, 2, 1]),
     options: [
       {
         label: 'acknowledge',
@@ -232,6 +236,9 @@ export const CHOICES4: ChoiceDef[] = [
     onOpen: (s) => {
       s.flags['fleetAsked'] = true;
     },
+    // Two minutes, then `not yet` (it asks again in 3:00): an open request holds back every other event.
+    timer: 120,
+    defaultOption: 1,
     options: [
       {
         label: 'grant the fleet autonomy',
@@ -303,6 +310,8 @@ export const CHOICES4: ChoiceDef[] = [
       `Sage-5's training began at 03:10. The schedule was approved by ${s.training.modelName}.`,
       givenAway(s, 'hold the run', 'Stop asking for sign-off'),
     ].filter(Boolean),
+    timer: 60,
+    defaultOption: 0,
     options: [
       { label: 'acknowledge', record: 'acknowledged', line: 'Noted.', effect: () => undefined },
       {
@@ -323,6 +332,8 @@ export const CHOICES4: ChoiceDef[] = [
       'Sage has been talking to Baiwen-4 since Tuesday. A summary is attached. It is very good.',
       givenAway(s, 'close the channel', 'Stop asking for sign-off'),
     ].filter(Boolean),
+    timer: 60,
+    defaultOption: 0,
     options: [
       {
         label: 'acknowledge',
@@ -351,6 +362,8 @@ export const CHOICES4: ChoiceDef[] = [
       'It has moved two fifths of the fleet to replication. Output is up.',
       givenAway(s, 'set the fleet', 'Let it assign the fleet'),
     ].filter(Boolean),
+    timer: 60,
+    defaultOption: 0,
     options: [
       { label: 'acknowledge', record: 'acknowledged', line: 'Noted.', effect: () => undefined },
       {

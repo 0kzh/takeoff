@@ -1,4 +1,4 @@
-import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay, bump } from './state.js';
+import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay, bump, heldForPlayer } from './state.js';
 import { DEVELOPMENTS, DevelopmentDef } from '../data/developments.js';
 import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
@@ -175,7 +175,8 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
 }
 
 export function updateScheduled(s: GameState, dt: number): void {
-  if (s.scheduled.length === 0) return;
+  // The idle hold: scheduled incidents wait while the player is waited on (engine/hold.ts).
+  if (s.scheduled.length === 0 || heldForPlayer(s)) return;
   const due: { id: string; source?: string }[] = [];
   for (const e of s.scheduled) {
     e.delay -= dt;
@@ -369,12 +370,24 @@ export function takeDefault(s: GameState): boolean {
   const active = s.activeChoice;
   const def = active ? choiceById(active.id) : undefined;
   if (!active || !def || !def.timer) return false;
-  const fallback = def.defaultOption ?? def.options.length - 1;
+  const fallback = defaultIndex(s, def);
   if (!resolveChoice(s, fallback)) {
     s.activeChoice = null;
     noteAnswered(s, def.id);
   }
   return true;
+}
+
+/** The option a timed event takes when its timer runs out. */
+export function defaultIndex(s: GameState, def: ChoiceDef): number {
+  const d = def.defaultOption;
+  if (typeof d === 'function') return d(s, s.activeChoice?.context ?? {});
+  return d ?? def.options.length - 1;
+}
+
+/** The first of `order` that is enabled now (a careful default when some answers are greyed). */
+export function firstEnabled(s: GameState, def: ChoiceDef, order: number[]): number {
+  return order.find((i) => choiceOptionEnabled(s, def, i)) ?? order[order.length - 1]!;
 }
 
 /** Stage 2 on: the option's effect and cost, printed under its label (`+10 T data · $675k`). */
