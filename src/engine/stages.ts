@@ -296,6 +296,9 @@ const STAGE4_HIDE = [
   'business', 'marketing', 'training', 'infrastructure', 'task', 'focus', 'shipments', 'buildout', 'buildBudget',
   'session', 'holdRuns', 'experiments', 'redteamDepth', 'stepSize', 'lobby', 'counterintel', 'payments', 'buildShare',
   'standingOrder', 'chipsRow', 'autoTrain', 'sendBack', 'memo', 'order', 'publicModel', 'evalLine', 'formosa', 'marsa',
+  // Stage 3's readings of Sage-4 (the honeypot, the noise test, the successor, the checkpoints): the
+  // three crises are Stage 4's readings (§2.6).
+  'honeypot', 'noise', 'successor', 'lie',
 ];
 
 /**
@@ -359,7 +362,7 @@ function enterBeyond(s: GameState): void {
   s.effects = s.effects.filter((e) => e.id !== 'cr_shutdown');
   hide(s, [
     'geopolitics', 'robots', 'society', 'treaty', 'oversight', 'security', 'alignment', 'allocation', 'monitors', 'projects',
-    'fleet', 'fleetChips', 'generations', 'ubi', 'public', 'government', 'research', 'agenda', 'hearing', 'housing', 'draft',
+    'robotFleet', 'fleetChips', 'generations', 'ubi', 'public', 'government', 'research', 'agenda', 'hearing', 'housing', 'draft',
     'fleetGoal', 'approvalTarget', 'stance', 'stage4',
   ]);
   show(s, ['space', 'storesMain']);

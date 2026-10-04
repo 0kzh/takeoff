@@ -37,6 +37,7 @@ import {
   mount3, renderResearch3, renderTraining3, renderInfrastructure3, renderAlignment, renderSecurity3, renderGeopolitics,
   renderOversight, renderPublic3, renderStats3, noteState3, setOff, folded,
 } from './render3.js';
+import { mount4, renderStage4 } from './render4.js';
 
 type Rest<T> = T extends (s: GameState, ...rest: infer R) => unknown ? R : never;
 export type Perform = <K extends keyof Actions>(name: K, ...args: Rest<Actions[K]>) => boolean;
@@ -88,6 +89,7 @@ export function mount(p: Perform): void {
   slider.addEventListener('input', () => perform('setResearchAlloc', Number(slider.value)));
   mountStores();
   mount3(p);
+  mount4(p);
 }
 
 /** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
@@ -113,6 +115,7 @@ export function render(s: GameState): void {
   renderTraining(s);
   renderWorld(s);
   renderLater(s);
+  renderStage4(s);
   renderGraph(s);
   renderStores(s);
   renderModal(s, (i) => perform('resolveChoice', i), () => perform('takeDefault'));

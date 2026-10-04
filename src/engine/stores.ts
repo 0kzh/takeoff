@@ -9,12 +9,17 @@ import {
 } from './infrastructure.js';
 import { trainCost, busyGpus } from './training.js';
 import { crawlRate, synthRate, flywheelRate } from './world.js';
+import {
+  materialsTerms, replicatedPerSec, builtPerSec, permitsOpen, fleetAuto, chipsRate,
+} from './fleet.js';
+import { fmtShortNum } from './format.js';
 
 /**
  * The Stores hover (stage2.md §2.13): for one row, every source and sink per second and a bold
  * total, as `[label, text, kind]` rows. DOM-free, so the sim and tests can read it.
  */
-export type StoreKey = 'funds' | 'research' | 'insight' | 'trust' | 'gpus' | 'power' | 'copies' | 'data' | 'chips';
+export type StoreKey = 'funds' | 'research' | 'insight' | 'trust' | 'gpus' | 'power' | 'copies' | 'data' | 'chips'
+  | 'materials' | 'robots' | 'treatyChips' | 'monitors' | 'rogue';
 export type TipRow = [string, string, ('total' | 'note')?];
 
 /** `+$2,148/s`, `−$43/s`, `+$1.2M/s`: whole dollars in a hover. */
@@ -31,7 +36,53 @@ function fillsIn(stock: number, cap: number, rate: number): string {
   return `full in ${fmtClock((cap - stock) / rate)}`;
 }
 
+/** Stage 4's rows (stage4.md §2.1): materials, robots, GPU-equivalents, power, treaty chips. */
+function storeBreakdown4(s: GameState, key: StoreKey): TipRow[] | null {
+  if (s.stage !== 4) return null;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  switch (key) {
+    case 'materials': {
+      const rows: TipRow[] = materialsTerms(s).filter(([, v]) => Math.abs(v) >= 0.5).map(([k, v]) => [k, `${v < 0 ? '−' : '+'}${fmtShortNum(Math.abs(v))} t/s`]);
+      const total = materialsTerms(s).reduce((a, [, v]) => a + v, 0);
+      rows.push(['total', `${total < 0 ? '−' : '+'}${fmtShortNum(Math.abs(total))} t/s`, 'total']);
+      return rows;
+    }
+    case 'robots': {
+      const rows: TipRow[] = [
+        ['replicating', `+${fmtShortNum(replicatedPerSec(s))}/s`],
+        ['permitted', permitsOpen(s) ? 'no cap' : fmtInt(s.s4.permitCap)],
+        ['on mines', pct(s.s4.mine)],
+        ['replicating', pct(s.s4.replicate)],
+        ['building', pct(s.s4.build)],
+      ];
+      if (s.s4.chips > 0) rows.push(['on treaty chips', pct(s.s4.chips)]);
+      if (fleetAuto(s)) rows.push([`set by ${s.training.modelName}`, '', 'note']);
+      return rows;
+    }
+    case 'gpus':
+      return [
+        ['robot-built', `+${fmtShortNum(builtPerSec(s))}/s`],
+        ['built by the fleet', fmtShortNum(s.s4.builtCompute)],
+        ['Earth total', '2.4 × 10⁸', 'note'],
+      ];
+    case 'power':
+      return [['1 kW per GPU-equivalent', '', 'note'], ['built with the datacenters', '', 'note']];
+    case 'treatyChips': {
+      const rate = chipsRate(s);
+      const left = rate > 0 ? (1 - s.s4.chipsInstalled) / rate : Infinity;
+      return [
+        ['fleet on chips', pct(s.s4.chips)],
+        ...(Number.isFinite(left) ? [['done in', fmtClock(left)] as TipRow] : [['nothing installing', '', 'note'] as TipRow]),
+      ];
+    }
+    default:
+      return null;
+  }
+}
+
 export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
+  const s4 = storeBreakdown4(s, key);
+  if (s4) return s4;
   switch (key) {
     case 'funds': {
       const billed = s.stats.soldPerSec * s.price;

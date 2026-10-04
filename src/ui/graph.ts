@@ -23,8 +23,10 @@ export const RUNGS: Rung[] = [
   { at: 4, label: 'superhuman coder' },
   { at: 10, label: 'country of geniuses' },
   { at: 25, label: 'superhuman AI researcher' },
-  { at: 250, label: 'superintelligence' },
-  { at: 1000, label: 'beyond' },
+  // Stage 4 (stage4.md §3).
+  { at: 100, label: 'superhuman remote worker' },
+  { at: 250, label: 'superintelligent AI researcher' },
+  { at: 1000, label: 'superintelligence' },
 ];
 
 const W = 310;
@@ -98,7 +100,10 @@ export function renderGraph(s: GameState): void {
   // The stage goal's card names the number once it is on screen; the line under the graph names the rung.
   const goalUp = s.projects['p_superhuman_coder']?.shown === true && !(s.projects['p_superhuman_coder']?.bought ?? 0);
   // Stage 3 (stage3.md §3): a country of geniuses at 10×, a superhuman AI researcher at 25×, then the vote.
-  const next = s.stage === 3 && bestCapability(s) >= 25 - 1e-9
+  const best4 = bestCapability(s);
+  const next = s.stage >= 4
+    ? (best4 >= 1000 - 1e-9 ? '' : `Next: ${rung.label} at ${fmtNum(rung.at, 0)}×`)
+    : s.stage === 3 && bestCapability(s) >= 25 - 1e-9
     ? 'The Committee votes'
     : goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label === 'country of geniuses' ? 'a country of geniuses' : rung.label === 'superhuman AI researcher' ? 'superhuman AI researcher' : rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`;
   setText('nextTier', next);
@@ -108,7 +113,7 @@ export function renderGraph(s: GameState): void {
   showId('leadLine', s.revealed['stats'] !== true);
 
   const models = s.training.models;
-  const key = `${models.length}|${s.rivalHistory.length}|${Math.round(s.lead * 4)}|${Math.floor(s.date * (s.stage >= 3 ? 4 : 1))}|${window.devicePixelRatio}|${s.flags['grantMarks'] ?? ''}|${s.flags['neuraleseAt'] ?? ''}|${s.flags['weightsStolen'] ?? ''}`;
+  const key = `${models.length}|${s.rivalHistory.length}|${Math.round(s.lead * 4)}|${Math.floor(s.date * (s.stage >= 3 ? 4 : 1))}|${window.devicePixelRatio}|${s.flags['grantMarks'] ?? ''}|${s.flags['neuraleseAt'] ?? ''}|${s.flags['weightsStolen'] ?? ''}|${s.flags['verifyMarks'] ?? ''}|${s.stage}`;
   if (key === lastKey) return;
   lastKey = key;
   draw(s);
@@ -133,8 +138,8 @@ function draw(s: GameState): void {
   const best = bestCapability(s);
   const plottedMax = Math.max(best, s.rivalCapability, ...models.map((m) => m.capability), ...rivals.map((r) => r.capability));
   const above = RUNGS.find((r) => r.at > plottedMax + 1e-9) ?? RUNGS[RUNGS.length - 1]!;
-  // Stage 3's axis tops (stage3.md §3): 12.5× until 10× is passed, then 31×, then 60×.
-  const top = s.stage === 3 ? (plottedMax < 10 ? 12.5 : plottedMax < 25 ? 31 : 60) : above.at * 1.25;
+  // Stage 3's axis tops (stage3.md §3): 12.5× until 10× is passed, then 31×, then 60×; Stage 4's is 1,250×.
+  const top = s.stage >= 4 ? Math.max(1250, plottedMax * 1.25) : s.stage === 3 ? (plottedMax < 10 ? 12.5 : plottedMax < 25 ? 31 : 60) : above.at * 1.25;
   // From Jan 2027 the window is the last 18 months, so the 2027 curve is not squeezed.
   const t1 = Math.max(12, s.date + 3);
   const t0 = s.stage >= 3 ? Math.max(0, t1 - 21) : 0;
@@ -167,9 +172,11 @@ function draw(s: GameState): void {
   // Their labels are drawn last, on a white ground, so the series never overdraws them (critic C10).
   const labels: { text: string; x: number; y: number; color: string }[] = [];
   for (const r of RUNGS) {
-    if (r.at > above.at || r.at > top) break;
-    // Stage 3 keeps 4× (crossed, grey), 10× and 25×; the low rungs leave the window.
+    if (r.at > top) break;
+    if (r.at > above.at && s.stage < 4) break;
+    // Stage 3 keeps 4× (crossed, grey), 10× and 25×; the low rungs leave the window. Stage 4 draws 10× to 1,000×.
     if (s.stage >= 3 && r.at < 4) continue;
+    if (s.stage >= 4 && r.at < 10) continue;
     const py = Math.round(y(r.at)) + 0.5;
     const isNext = r === above;
     ctx.strokeStyle = r.at === 1 ? '#2a623d' : isNext ? '#000' : '#aaa';
@@ -185,14 +192,28 @@ function draw(s: GameState): void {
   }
 
   dots = [];
-  // Sage: a step line through the best model so far, a square per release.
+  // Sage: a step line through the best model so far, a square per release. On the slow branch the Sage
+  // line ends at the vote (a hollow square, `Sage-4, switched off`) and a dark green Steward line
+  // starts lower (stage4.md §3).
+  const offAt = typeof s.flags['sage4Off'] === 'number' ? (s.flags['sage4Off'] as number) : null;
+  const steward = (m: { name: string }) => m.name.startsWith('Steward');
+  const sageModels = offAt === null ? models : models.filter((m) => !steward(m));
+  const stewardModels = offAt === null ? [] : models.filter(steward);
   const steps: [number, number][] = [];
   let level = 0;
-  for (const m of models) {
+  for (const m of sageModels) {
     level = Math.max(level, m.capability);
     steps.push([m.date, level]);
   }
-  const stepPath = (points: [number, number][], shift: number, floor: number) => {
+  const stewardSteps: [number, number][] = [];
+  let level2s = 0;
+  for (const m of stewardModels) {
+    level2s = Math.max(level2s, m.capability);
+    stewardSteps.push([m.date, level2s]);
+  }
+  // Baiwen follows the line the lab has now: Sage to the vote, then Steward.
+  const ownSteps = offAt === null ? steps : [...steps.filter(([d]) => d <= offAt), ...stewardSteps];
+  const stepPath = (points: [number, number][], shift: number, floor: number, end = t1) => {
     ctx.beginPath();
     let started = false;
     let prev = floor;
@@ -207,7 +228,7 @@ function draw(s: GameState): void {
       ctx.lineTo(tx, y(Math.max(floor, c)));
       prev = Math.max(floor, c);
     }
-    ctx.lineTo(x(t1), y(prev));
+    ctx.lineTo(x(Math.max(t0, Math.min(t1, end))), y(prev));
     ctx.stroke();
   };
 
@@ -221,7 +242,7 @@ function draw(s: GameState): void {
     const jump = Math.max(s.baiwenCapability ?? 0, ...steps.filter(([d]) => d <= stolenAt).map(([, c]) => 0.97 * c));
     stepPath([...before, [stolenAt - s.lead, jump], ...steps.filter(([d]) => d + s.lead >= stolenAt && d > stolenAt)], s.lead, BOTTOM);
   } else {
-    stepPath(steps, s.lead, BOTTOM);
+    stepPath(ownSteps, s.lead, BOTTOM);
   }
   ctx.setLineDash([]);
 
@@ -244,17 +265,35 @@ function draw(s: GameState): void {
 
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 1.5;
-  stepPath(steps, 0, BOTTOM);
+  stepPath(steps, 0, BOTTOM, offAt ?? t1);
+  if (offAt !== null && stewardSteps.length) {
+    ctx.strokeStyle = '#2a623d';
+    stepPath(stewardSteps, 0, BOTTOM);
+    ctx.strokeStyle = '#000';
+  }
   ctx.lineWidth = 1;
+  if (offAt !== null && offAt >= t0) {
+    // The switched-off model: a hollow square where the Sage line ends.
+    const capOff = typeof s.flags['sage4OffCap'] === 'number' ? (s.flags['sage4OffCap'] as number) : level;
+    const px = x(offAt);
+    const py = y(capOff);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px - 3.5, py - 3.5, 7, 7);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(px - 3.5, py - 3.5, 7, 7);
+    dots.push({ x: px, y: py, text: `Sage-4 · ${dateLabel(offAt)} · ${fmtNum(capOff, 1)}× · switched off` });
+    labels.push({ text: 'Sage-4, switched off', x: Math.max(PAD_L, px - ctx.measureText('Sage-4, switched off').width - 6), y: py - 6, color: '#555' });
+  }
   for (const m of models) {
     const px = x(m.date);
     const py = y(m.capability);
+    const ink = steward(m) ? '#2a623d' : '#000';
     ctx.fillStyle = '#fff';
     ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
-    ctx.strokeStyle = '#000';
+    ctx.strokeStyle = ink;
     ctx.strokeRect(px - 2.5, py - 2.5, 5, 5);
     if (m.public) {
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = ink;
       ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
     }
     // The IQ gloss stops at 10× (stage3.md §3): past it no human is a useful comparison.
@@ -279,6 +318,23 @@ function draw(s: GameState): void {
       ctx.lineTo(px - 3, py + 3 - 6);
       ctx.stroke();
       dots.push({ x: px, y: py - 6, text: `${title.join(':')} · ${dateLabel(date)} · granted` });
+    }
+    // Stage 4: a `+` over each generation that was read first (Verify).
+    const verified = typeof s.flags['verifyMarks'] === 'string' ? (s.flags['verifyMarks'] as string).split('|').map(Number) : [];
+    for (const date of verified) {
+      if (!(date >= t0)) continue;
+      const line = offAt !== null && date >= offAt ? stewardSteps : steps;
+      const lv = Math.max(BOTTOM, ...line.filter(([t]) => t <= date + 1e-6).map(([, c]) => c));
+      const px = x(date);
+      const py = y(lv) + 7;
+      ctx.strokeStyle = '#555';
+      ctx.beginPath();
+      ctx.moveTo(px - 2.5, py);
+      ctx.lineTo(px + 2.5, py);
+      ctx.moveTo(px, py - 2.5);
+      ctx.lineTo(px, py + 2.5);
+      ctx.stroke();
+      dots.push({ x: px, y: py, text: `${dateLabel(date)} · read first` });
     }
     const nAt = s.flags['neuraleseAt'];
     if (typeof nAt === 'number' && nAt >= t0) {
@@ -317,12 +373,14 @@ function draw(s: GameState): void {
   dots.push({ x: x(s.date), y: y(bNow), text: `Baiwen (estimated) · ${dateLabel(s.date)} · ${fmtNum(bNow, 2)}×` });
 
   // Legend: three words at the top left, in their line styles.
-  const legend: [string, string, number[]][] = [['Sage', '#000', []], ['Anthrosoft', '#888', [4, 3]], ['Baiwen', '#555', [1, 2]]];
+  const legend: [string, string, number[]][] = offAt !== null
+    ? [['Sage', '#000', []], ['Steward', '#2a623d', []], ['Baiwen', '#555', [1, 2]]]
+    : [['Sage', '#000', []], ['Anthrosoft', '#888', [4, 3]], ['Baiwen', '#555', [1, 2]]];
   let lx = PAD_L + 2;
   for (const [name, color, dash] of legend) {
     ctx.strokeStyle = color;
     ctx.setLineDash(dash);
-    ctx.lineWidth = name === 'Sage' ? 1.5 : 1;
+    ctx.lineWidth = name === 'Sage' || name === 'Steward' ? 1.5 : 1;
     ctx.beginPath();
     ctx.moveTo(lx, 9.5);
     ctx.lineTo(lx + 12, 9.5);

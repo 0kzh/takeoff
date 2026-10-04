@@ -360,7 +360,9 @@ export function renderAlignment(s: GameState): void {
     const ret = s.interpretability >= 3
       ? `read from the weights +${fmtNum(ALIGN_WORK_TRUE * perMin, 1)} a minute`
       : `measured +${fmtNum(ALIGN_WORK_MEASURED * perMin, 1)} a minute`;
-    setText('alignWorkNote', share > 0 ? `${ret} · runs ${fmtInt(Math.round((100 * share) / (1 - share)))}% later` : `10%: measured +${fmtNum(ALIGN_WORK_MEASURED * (60 * researchRate(s) * 0.1) / Math.max(1, researchUnit(s)), 1)} a minute · runs 11% later`);
+    // Stage 4: a share of research delays generations (stage4.md §2.11).
+    const what = s.stage >= 4 ? 'generations' : 'runs';
+    setText('alignWorkNote', share > 0 ? `${ret} · ${what} ${fmtInt(Math.round((100 * share) / (1 - share)))}% later` : `10%: measured +${fmtNum(ALIGN_WORK_MEASURED * (60 * researchRate(s) * 0.1) / Math.max(1, researchUnit(s)), 1)} a minute · ${what} 11% later`);
   }
   renderGrants(s);
 }

@@ -90,7 +90,7 @@ export function fmtClock(seconds: number): string {
 /** Compact counts for Stage 4's big numbers: `212,000`, `4.8M`, `3.5B`, `1.2T`. */
 export function fmtShortNum(n: number): string {
   const a = Math.abs(n);
-  if (a >= 1e15) return fmtInt(n);
+  if (a >= 1e15) return `${fmtInt(Math.round(n / 1e12))}T`;
   if (a >= 1e12) return `${fmtNum(n / 1e12, 1)}T`;
   if (a >= 1e9) return `${fmtNum(n / 1e9, 1)}B`;
   if (a >= 1e6) return `${fmtNum(n / 1e6, 1)}M`;

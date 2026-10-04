@@ -1,16 +1,18 @@
 import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
-import { fmtInt, fmtMoneyShort, fmtTonnes } from './format.js';
+import { fmtInt, fmtMoneyShort, fmtTonnes, fmtShortNum } from './format.js';
 
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
 }
 
-export function costLabel(c: Cost): string {
+/** A price in words: `$12M, 3 Trust`; Stage 4's big research prices short (`1.2B research`). */
+export function costLabel(c: Cost, short = false): string {
   const parts: string[] = [];
+  const n = (v: number) => (short ? fmtShortNum(v) : fmtInt(v));
   if (c.funds) parts.push(fmtMoneyShort(c.funds));
-  if (c.research) parts.push(`${fmtInt(c.research)} research`);
-  if (c.insight) parts.push(`${fmtInt(c.insight)} insight`);
+  if (c.research) parts.push(`${n(c.research)} research`);
+  if (c.insight) parts.push(`${n(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
   if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
   return parts.length ? parts.join(', ') : 'free';
@@ -18,7 +20,7 @@ export function costLabel(c: Cost): string {
 
 export function priceTag(s: GameState, def: ProjectDef): string {
   if (typeof def.priceTag === 'function') return def.priceTag(s);
-  return def.priceTag ?? `(${costLabel(def.cost(s))})`;
+  return def.priceTag ?? `(${costLabel(def.cost(s), s.stage >= 4)})`;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {

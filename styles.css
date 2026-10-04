@@ -571,3 +571,44 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 .meter { white-space: nowrap; letter-spacing: 0; }
 body.meterMono .meter { font-family: Menlo, Consolas, "Courier New", monospace; }
 .meter.warn { color: #b00000; }
+
+/* ---------- Stage 4 (stage4.md §6) ---------- */
+
+/* Stores is the main panel: the centre column, its full width. */
+body[data-stage="4"] #middleColumn { width: 360px; }
+body[data-stage="4"] #middleColumn .projectButton { width: 340px; }
+body[data-stage="4"] #panel-stores { font-size: 15px; }
+#robotsCap, #robotsCount { white-space: nowrap; }
+.fleetRow { white-space: nowrap; }
+.fleetJob { display: inline-block; width: 74px; }
+.fleetRow input[type="range"] { width: 80px; vertical-align: middle; margin: 0 2px; }
+.fleetPct { display: inline-block; min-width: 30px; }
+#fleetSliders .note { white-space: normal; }
+#fleetIdle:empty { display: none; }
+#fleetGoalBlock, #approvalHoldRow, #housingRow, #draftRow, #stanceRow, #hearingRow, #ubiRow, #genRow { margin-top: 3px; }
+.goalButton.selected, .goalButton.selected:hover {
+  background: linear-gradient(#bbb, #fff);
+  border: 1px solid #000;
+  font-weight: bold;
+}
+#genStatus { font-size: 14px; }
+#treatyWait:empty, #treatyLeadNote:empty, #societyApprovalNote:empty { display: none; }
+
+@media (max-width: 700px) {
+  /* Stage 4 at 390 px: Tasks, Stores, the fleet, Projects, Alignment (the generation line), the graph,
+     the treaty, the Committee, Society, Research, Security, Stats. */
+  body[data-stage="4"] #panel-stores { order: 2; }
+  body[data-stage="4"] #panel-robots { order: 3; }
+  body[data-stage="4"] #panel-projects { order: 4; }
+  body[data-stage="4"] #panel-alignment { order: 5; }
+  body[data-stage="4"] #panel-graph { order: 6; }
+  body[data-stage="4"] #panel-treaty, body[data-stage="4"] #panel-geopolitics { order: 7; }
+  body[data-stage="4"] #panel-oversight { order: 8; }
+  body[data-stage="4"] #panel-society, body[data-stage="4"] #panel-public { order: 9; }
+  body[data-stage="4"] #panel-research { order: 10; }
+  body[data-stage="4"] #panel-security { order: 11; }
+  body[data-stage="4"] #panel-stats { order: 12; }
+  #row-robots, #row-treatyChips, #row-materials { grid-column: 1 / -1; }
+  .fleetRow { white-space: normal; }
+  .fleetRow input[type="range"] { width: 45%; }
+}
