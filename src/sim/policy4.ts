@@ -67,7 +67,8 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
     case 'c_ashford':
       return has(mem, 'labs') || racer ? [0] : has(mem, 'pool') ? [2] : [1];
     case 'c_consolidation':
-      return has(mem, 'refuse-consolidation') ? [2] : [0];
+      // Accepting locks Verify on: a player keeping it off asks for time, then refuses.
+      return has(mem, 'refuse-consolidation') ? [2] : has(mem, 'verify-off') || mem.policy === 'racer' ? [1, 2] : [0];
     case 'c_verify':
       // Aligned: one button. Otherwise a rebuild (§9.1), or the variant's answer.
       return has(mem, 'sign-anyway') || racer ? [0, 1] : has(mem, 'walk-away') ? [0, 3] : [0, 2, 1];

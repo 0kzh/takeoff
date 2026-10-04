@@ -197,6 +197,10 @@ export function updateGenerations(s: GameState, dt: number): void {
   landGeneration(s);
 }
 
+/** True alignment a generation nobody read costs, below 100×, to 250×, beyond (slow, race). */
+export const UNREAD_SLOW = [2, 4, 6];
+export const UNREAD_RACE = [4, 8, 12];
+
 /** What a verified generation adds to measured alignment (and a fifth of what it trails the real thing by). */
 export const VERIFY_MEASURED = 3;
 
@@ -231,9 +235,11 @@ function landGeneration(s: GameState): void {
     const marks = typeof s.flags['verifyMarks'] === 'string' ? (s.flags['verifyMarks'] as string) : '';
     s.flags['verifyMarks'] = `${marks}${marks ? '|' : ''}${Math.round(s.date * 100) / 100}`;
   } else {
-    // Unread, the bigger the model the more it costs (deltas: the careful arrival no longer saturates).
+    // Unread, the bigger the model the more it costs (deltas: the careful arrival no longer saturates;
+    // the race branch's −4 / −8 / −12 against §2.4's −3 / −6 / −10, so that Verify left off still hands
+    // a careful race arrival over misaligned once Monitors at scale and the labs have added theirs).
     const size = g.capAfter < 100 ? 0 : g.capAfter < 250 ? 1 : 2;
-    s.alignmentTrue = clamp100(s.alignmentTrue - (slow ? [2, 4, 6][size]! : [3, 6, 10][size]!));
+    s.alignmentTrue = clamp100(s.alignmentTrue - (slow ? UNREAD_SLOW[size]! : UNREAD_RACE[size]!));
     moveLead4(s, 0.1);
   }
   if ((s.monitorShare ?? 0) >= 0.15 - 1e-9) s.alignmentTrue = clamp100(s.alignmentTrue + 1);
