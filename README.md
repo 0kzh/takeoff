@@ -5,16 +5,22 @@ An incremental browser game about an AI lab racing to superintelligence, in the 
 modals). You run OpenMind from July 2025: complete tasks, bill them, rent GPUs, hire researchers,
 train and release Sage models, and watch the world react in the margin.
 
-Built so far: the full architecture, **Stage 1 — The Startup** (about 20–30 minutes) and
-**Stage 2 — Scale** (about 36–44 minutes). Stage 1 opens one mechanic at a time (one button, then
-funds, a GPU to save for, the power meter, Buy Power, the price, Marketing, Research), and every
-training run needs a number of GPUs: when the next one needs more than the cloud will rent, `First
-Datacenter` (1,000 GPUs of OpenMind's own at Abilene) opens Stage 2, where OpenMind owns its
-datacenters: GPU lots in three sizes, datacenters that take time to build, power plants and an
-interconnect queue, an AUTO-priced market, data, two training pipelines, rivals, government, public
-approval, security and an alignment number nobody can see. `Let Sage-3 write the code`
-ends it and opens the Stage 3 shell (narrated arrival; Stage 3's content is not built yet). The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the
-two differ, `docs/stages.md` and the code win).
+Built so far: the full architecture, **Stage 1 — The Startup** (about 20–30 minutes),
+**Stage 2 — Scale** (about 36–44 minutes) and **Stage 3 — Takeoff** (about 42–50 minutes). Stage 1
+opens one mechanic at a time (one button, then funds, a GPU to save for, the power meter, Buy Power,
+the price, Marketing, Research), and every training run needs a number of GPUs: when the next one
+needs more than the cloud will rent, `First Datacenter` (1,000 GPUs of OpenMind's own at Abilene)
+opens Stage 2, where OpenMind owns its datacenters: GPU lots in three sizes, datacenters that take
+time to build, power plants and an interconnect queue, an AUTO-priced market, data, two training
+pipelines, rivals, government, public approval, security and an alignment number nobody can see.
+`Let Sage-3 write the code` opens Stage 3, where the model does the research: a run is a research
+program, the player hands the lab to the model one autonomy grant at a time (each prints
+`WARNING: risk of value drift increased.`), copies drift at a rate set by a true alignment nobody can
+see until the interpretability labs read it, older generations watch the new as monitors, and an
+Oversight Committee counts seats, incidents and a memo. The stage ends with the Committee's vote
+(`Slow down — the Steward program` or `Race — Sage-5`) into a clean Stage 4 shell, or with one of two
+endings (`The Pause`, `The Project`) and the end screen. The design lives in `docs/design.md` and the
+stage plan in `docs/stages.md` (where the two differ, `docs/stages.md` and the code win).
 
 ## Running it
 
@@ -33,6 +39,7 @@ npm run watch        # in a second terminal: recompile on save
 | `npm run sim -- --minutes 45 --seed 1` | build, then run the headless simulator |
 | `node tools/verify/smoke.mjs` | Stage 1 browser smoke test (after `npm run build`; needs `npm install` in `tools/`) |
 | `node tools/verify/smoke-stage2.mjs` | Stage 2 browser smoke test, from the Stage 2 preset through the Stage 3 arrival |
+| `node tools/verify/smoke-stage3.mjs` | Stage 3 browser smoke test, from both Stage 3 presets through the vote, the Pause and the Project |
 
 The browser loads `dist/main.js` as a native ES module, which is why every TypeScript import uses
 an explicit `.js` extension. `dist/` is gitignored.
@@ -52,18 +59,26 @@ src/
     projects.ts   project runtime: triggers, visibility cap, purchase
     events.ts     developments, crises, rival releases, choices, the idle guard
     stages.ts     stage definitions, transitions and reveal rules
-    reveal.ts     the reveal scheduler: triggered projects drip in one every 15 s; first-time reveal bookkeeping
+    reveal.ts     the reveal scheduler: triggered projects drip in; Stage 3's grant list, late rows and governor; first-time reveal bookkeeping
     clock.ts      game date (Stage 1: one month per 4 minutes; snaps on transitions)
-    endings.ts    ending stubs and end-of-run stats
+    endings.ts    the endings, their conditions and the end screen's rows
     rng.ts        mulberry32; the rolling seed lives in the state, so saves and sims replay exactly
     format.ts     numbers, money, durations, dates
-  data/           content tables: projects, developments, choices, crises, flavor text, dev presets
+    infrastructure.ts, market.ts, world.ts, stores.ts   Stage 2's lots, halls, plants, market, world, Stores hover
+    stage3.ts     Stage 3's coordinator: shipments, the loop, drift every tick; budget, world, Committee each second
+    alignment.ts  drift, monitors, rogue copies, Re-image, the labs and the instruments
+    world3.ts, oversight.ts, events3.ts   the lead, Anthrosoft, jobs and approval; the Committee, the order, the session, the vote; the scripted beats
+  data/           content tables: projects (projects3.ts for Stage 3), developments, choices (choices3.ts),
+                  crises, the Stage 2 and 3 content tables (stage2.ts, stage3.ts), flavor text, dev presets
   ui/             the only code that touches the DOM
     render.ts     render(state): diffs text into spans, toggles visibility from state.revealed
+    render3.ts    Stage 3's panels: allocation, the loop, shipments, Alignment and its grant list, Oversight, the end screen
     meter.ts      meter(fraction): the ten-cell capacity bar `｢￭￭￭￭￭￭￭･･･｣` (DOM-free; boot width check)
-    console.ts, log.ts, modal.ts, graph.ts, dev.ts, save.ts, dom.ts
+    console.ts, log.ts, modal.ts, graph.ts, stores.ts, dev.ts, save.ts, dom.ts
   sim/
-    policy.ts     the "reasonable player" bot (pure; also drives the dev overlay's Autoplay)
+    policy.ts     the "reasonable player" bot and the other policies (pure; also drives the dev overlay's Autoplay)
+    policy3.ts    the Stage 3 branch of every policy, with the decision variants
+    stage3sim.ts  the Stage 3 tracker and its B1–B35 block
     bot.ts        headless runner that prints a timeline
 ```
 
@@ -131,6 +146,17 @@ within 4 s of a modal opening, nor a modal within 4 s of anything new (`BEAT_GAP
 projects mostly cost research or insight, as Paperclips' cost operations; money is for compute,
 marketing, training and First Datacenter.
 
+Stage 3 projects live in `src/data/projects3.ts` and its content table (`src/data/stage3.ts`) orders
+them with the panels, buttons and modals the stage reveals. Extra options there: `grant` (an autonomy
+grant, listed in the Alignment panel outside the cap, three on offer and 15 s apart; buying one
+prints the WARNING line and adds autonomy), `lateAt` (an approach row, released at that capability
+75 s apart, or from September 2027 regardless), `instrument` (one of the approach's tests: it may pass
+a full shelf once the last mechanic is 150 s old) and `needs` (what a greyed card waits for when it
+is not money). Five cards are counted against the cap (the exit goals, the Pause and urgent fixes
+ride free), and one to three more may come out after a quiet spell. The governor fills a 170 s hole
+with the next row of the table, and as a last resort with the next late row within 15 % of its
+threshold.
+
 **A development** (Developments log): add to `src/data/developments.ts`. It fires on `month`
 (months since Jul 2025; use `monthOf(2025, 11)`) or on `trigger(s)`, whichever comes first. It can
 also print a `console` line, fire a `crisis` or open a `choice`.
@@ -156,8 +182,13 @@ Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 * **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at First
   Datacenter (bot, seeds 1–5, rebuilt after owner feedback 1; seed 3's records, 24:32), run through
   the arrival; Stage 3 is the median Stage 2 exit (bot from the Stage 2 preset, seeds 1–5; seed 2's
-  records, 34:59) run through the Stage 3 arrival; 4–5 load the Stage 3 preset and say `preset
-  pending`.
+  records, 34:59, with the four cards every current exit has bought) run through the Stage 3
+  arrival; Stage 4 is a real Stage 3 exit: the bot plays the Stage 3 preset (median seed) until the
+  session is ready and the slow-down motion is brought. Stage 5 says `preset pending`.
+* **A second row** of named starts: `Stage 3 start (careless)` (the same exit after a Stage 2 played
+  for speed: Al-Marsa signed, the theft warning ignored, little alignment compute, relations 45,
+  approval −30) and the four Stage 4 starts, slow and race from each Stage 3 preset (the careless
+  pair played by the first-timer).
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save, and seeds the
   presets; `?speed=0` boots paused (the smoke tests reload mid-game without real-time frames).
@@ -174,9 +205,12 @@ __game.tick(ms)         // advance game time (honours Autoplay), then render
 __game.projects         // { all, byId(id), visible() }
 __game.events           // { fireable, fire(id) }
 __game.presets          // preset table
-__game.loadPreset(n)    // 1–5
+__game.loadPreset(n)    // 1–5, or a named start: '3c', '4s', '4r', '4cs', '4cr'
 __game.setSpeed(n)      // 1, 5, 20 … (0 freezes the real-time loop; drive it with tick)
-__game.setAutoplay(on, policy?, holdTransition?)  // policy 'bot' | 'naive' | 'greedy' | 'trainfirst'; hold leaves First Datacenter to you
+__game.setAutoplay(on, policy?, holdTransition?, variant?)
+                        // policy 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
+                        // hold leaves First Datacenter (Stage 1) or the motion (Stage 3) to you;
+                        // variant: one of the sim's --variant names, e.g. 'pause' or 'refuse'
 __game.save()           // write localStorage now
 __game.version          // SAVE_VERSION
 ```
@@ -186,9 +220,10 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 6; versions
-1–5 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
-Datacenter, and the opening's new flags are set). The game saves every 15 s,
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 7; versions
+1–6 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
+Datacenter, and the opening's new flags are set; version 7 adds Stage 3's fields: shipments,
+autonomy, drift and rogue copies, interpretability, the Committee, the ending). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -206,17 +241,26 @@ npm run sim -- --minutes 45 --seed 1 --json             # one machine-readable s
 npm run sim -- --minutes 60 --stop-at-stage 2
 npm run sim -- --minutes 60 --preset 2 --stop-at-stage 3   # Stage 2 from its preset
 npm run sim -- --minutes 60 --preset 2 --variant modals-worst --json
+npm run sim -- --minutes 90 --preset 3 --stop-at-stage 4   # Stage 3 from its preset (3c: the careless start)
+npm run sim -- --minutes 90 --preset 3 --policy racer --variant memo-bury
 ```
 
 `--preset N` starts from the dev overlay's Stage N preset (2: the Stage 1 median at First Datacenter;
-3: the Stage 2 median exit). `--variant` plays the policy with one decision fixed. Both stages:
+3: the Stage 2 median exit; `3c`: the careless Stage 3 start; `4s`, `4r`, `4cs`, `4cr`: the Stage 4
+starts). `--variant` plays the policy with one decision fixed. Both stages:
 `modals-best` / `modals-worst` (the most careful- or reckless-looking answer to every modal, waiting
 for a greyed careful one), `modals-last`, `modals-ignore` (alias `ignore-modals`: every event runs
 out its timer to the default), `redteam-never`, `focus-efficiency` / `focus-safety` (every run).
 Stage 1: `price-never` (the opening price is never touched). Stage 2: `slider-N` (copies on research
-fixed at N %), `safety-0` / `safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`.
+fixed at N %), `safety-0` / `safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`. Stage 3
+(`stage3.md` §9.3): `neuralese`, `focus-capability` / `focus-safety`, `research-20` … `research-70`,
+`monitors-0`, `grants-none`, `memo-bury`, `mini-everyone` / `mini-inside`, `committee-open` /
+`committee-counsel`, `blockade-escort` / `blockade-channel`, `modals-first` / `modals-last` /
+`modals-never`, `sendback-always`, `alignwork-0` / `alignwork-30`, `budget-0` … `budget-100`,
+`lobby-never`, `payments-0` / `payments-5`, `step-small` / `step-large`, `pause` (signs the Pause when
+offered) and `refuse` (refuses the Committee's order: The Project). Variants combine with commas.
 
-Four policies play through `actions` only:
+Six policies play through `actions` only:
 
 * **bot** (default) — a reasonable player: the first-timer's purchase loop with judgment on top.
   It prices every second (Dynamic pricing once offered), answers each modal with the careful
@@ -237,6 +281,19 @@ Four policies play through `actions` only:
   Infrastructure buttons up to fifteen times a check); its Infrastructure follows the main lot's
   reason (a lot when it is enabled, the cheapest power per MW at "no power", a hall at "no
   room"), as the harness does.
+* **racer** and **cautious** (Stage 3 only; the bot before it) — the reasonable bot with one
+  temperament changed: the racer adopts neuralese, puts half the copies on research, buys no lab
+  after the first and no alignment project, trains three Capability runs to one Efficiency and buries
+  the memo; the cautious player buys no grant.
+
+In Stage 3 (`stage3.md` §9.1–§9.2) the bot answers each modal with the careful option (keep it in
+English, brief quarterly, enterprise only, report, concede) and brings Slow down when its best reading
+of true alignment is under 60 or it has none; it keeps research at 40 % and monitors at 10–15 %, buys
+the monitor, every grant but `Let Sage revise the Spec` and then the cards in table order, never
+spends more than a run's price on research, red-teams to zero, and feeds a seventh of research to
+Alignment work. The first-timer buys everything affordable in screen order, never touches a slider,
+and takes the first option of every modal; greedy presses every enabled purchase; trainfirst follows
+the lot row's reason, then presses everything enabled once, as the critic harness does.
 
 Both read a modal for 2.5 s before answering. The output contains one line per minute, one line
 per event (BUY, REVEAL, PROJECT shown, MODAL, TRAIN, RELEASE, STAGE, LOG, CHOICE, IDLE RESCUE),
@@ -269,6 +326,20 @@ lead, funds, security level), and the critic's hands-and-eyes measures from 3:00
 share of 2-s checks with no enabled purchase and with two or more distinct ones (lot sizes count
 once), the share of the stage after 10:00 spent inside gaps of 30 s or more between the player's
 actions, and the longest interval between two model releases (from the arrival).
+
+The Stage 3 block prints the B1–B35 acceptance numbers of `stage3.md` §9.3 with `<-- MISS` beside a
+miss: duration and how the stage ended, reveal and mechanic gaps, runs and the intervals between their
+starts, the GPUs each needed, capability at the vote, the greyed goal, presses before each
+automation, governor pulls and modals, crises with when their mitigation first showed, the reveal →
+purchase latency, text rates, the hands measures (nothing enabled, two or more things, click gaps,
+the longest capability step), the `REMOVED → GAINED` log, dead grey and repeated lines, and 5-minute
+marks (GPUs, power, tasks, revenue, capability, research, autonomy, true and measured alignment, the
+rogue share, lead, seats, approval, jobs). `--json` carries it as `s3`.
+
+Stage 3 targets (seeds 1–5 from both Stage 3 presets and from a new game): 40–50 minutes for the bot
+(the first-timer 40–55, the racer 28–38, the cautious player at most 64); no first-time reveal gap
+over 180 s (the first-timer 210 s); 13–16 runs (the first-timer 8–11), each 30–60 s, starting 150–200
+s apart on average; capability 25–30× when the vote opens; no ending the policy did not choose.
 
 Stage 2 targets (critic round 1 and owner feedback 1; the harness's first-timer and the bot):
 36:00–44:00; 10–12 training runs, starts 180–300 s apart on average and never more than 330 s;
@@ -322,3 +393,18 @@ now`, the Train row short of GPUs (`Needs 3,700 GPUs. 1,000 free.` and, with GPU
 39 and 54 at 5:00 and 10:00 with a nearly empty early stage, 66–83 at the marks from 15:00;
 controls ≤ 30), the Stage 3 narration and dev overlay, the Stage 3 preset,
 and 390 px without horizontal overflow. Screenshots go to `agent-tools/shots/stage2/`.
+
+```sh
+node tools/verify/smoke-stage3.mjs [--seed 1] [--dump]
+```
+
+Loads `Stage 3 start` and plays it with the reasonable bot through the vote into Stage 4. It checks
+the arrival (the narration, the promised research number passed within 30 s, `Approve` in place of
+`Release`, no Stage 2 control left); every Stage 3 panel, the grants and their WARNING line, drift,
+the readings, the session and the motion; Stage 4's narration and its clean screen; save → reload
+mid-run, mid-shipment, mid-event and mid-session with the timers kept; numbers / controls / words at
+each 5-minute mark (counted as in `stage2.md` §6.3; controls ≤ 30; numbers held under 130, above the
+spec's 65, see `stage3.md` §6.3); the careless start played by the first-timer into Stage 4; the
+Pause (signed by the test when the bot is offered it) and the Project (the first-timer with
+`refuse`), each with the end screen; 390 px without horizontal overflow; and no page errors. `--dump` prints what it counted.
+Screenshots go to `agent-tools/shots/stage3/`.

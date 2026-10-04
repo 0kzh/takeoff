@@ -165,43 +165,59 @@ with `Let Sage-3 write the code` (`Every engineer becomes a manager of copies. H
 
 ## Stage 3 — Takeoff
 
-Stage 3 marks the first time the game is not about revenue. Your models now do most of the research and soon all of it; **Auto-train** turns the training loop into an `Approve` button, and later into nothing. The **Lead over Baiwen** counter and the **Capability graph** become the things you watch. **Alignment** is split into *apparent* and *true*; **Interpretability** projects reveal the second one, and the **Neuralese** project — advertised in the log for minutes before it unlocks — raises capability and lowers interpretability. The **Oversight Committee** forms. In October the memo about Sage-4's misalignment is written, and you decide whether the Committee sees it. The stage ends with the Committee's choice: **slow down** (the Steward program) or **race** (Sage-5).
+Stage 3 is the first time the game is not about revenue. The model does the research; the player decides how much of the lab to hand to it. Each hand-over is an **autonomy grant** that speeds the race and prints `WARNING: risk of value drift increased.` Copies drift at a rate set by a number nobody can see (**true alignment**); the first evidence is `Lost to value drift`, then **rogue copies**. Older generations watch the new ones as **monitors**, and the **interpretability labs** eventually put the hidden number on screen. An **Oversight Committee** forms, counts its seats and the major incidents, and is handed (or not) the memo about Sage-4. The stage ends with the Committee's vote: **Slow down — the Steward program** or **Race — Sage-5**.
 
-### What changes on screen
+*As built (`docs/specs/stage3.md` is the spec; the code wins where they differ). Seeds 1–5, `npm run sim`: the reasonable bot takes **42:36–45:25** from the Stage 3 preset, 46:05–48:51 from the careless preset and 43:04–46:00 from a new game; the first-timer 45:37–46:54, 47:22–49:58 and 45:08–51:45; the racer 28:47–32:23; the cautious player (no grants) 51:41–59:46. The bot trains 14–15 runs (the first-timer 9), each 30–50 s, starts 179–203 s apart on average; capability is 25–29× when the vote opens; its longest wait for something new is 170 s. No ending fires unless a policy chooses it: the first-timer concedes its one order and is never nationalised.*
 
-*Removed:* Marketing, Hire Researcher, Expand Lab.
-*Added:* **Alignment & Interpretability**, **Security** (full), **Geopolitics** (Baiwen, Anthrosoft, Lanzhou CDZ, Taiwan), **Allocation** gains a *Monitors* share, **Oversight** (committee mood).
+* *A run is a research program.* `R(c) = 14.0M × (c/4)^3.15` research, three significant figures, scaled on arrival by what the arriving lab's copies could research (a lab that played Stage 2 on Capability alone pays in proportion; a stronger one by the square root); no money, no data. It needs `300,000 × (c/4)^1.3` GPUs free and holds them 30–60 s. A run landing just under 10× or 25× is called the tier.
+* *The loop collapses by the player's own purchases.* `Continual learning` takes Train (runs start by themselves) and hands over `Experiments`; `Sage red-teams Sage` takes Red-team and hands over `Red-team depth`; `Let Sage plan the build-out` takes the hall and reactor buttons and hands over the build budget and `Build-out: lean / ahead`; `Stop asking for sign-off` takes Approve and Send back and hands over `Step size` and `Hold`.
+* *Copies* are split three ways: tasks, research (0–70 %) and monitors (0–40 %), each rate printed beside its slider.
+* *Compute* comes in three lots (10,000 / 25,000 / 100,000 for 4 / 10 / 40 s of revenue), each a 75 s shipment, two on order (a small order joins a shipment under way). Datacenter 8 and the first reactor are drawn urgent on arrival; later halls cost 60 s of revenue and reactors (1,000 MW) 75 s. The standing order saves for the largest lot it can reach.
+* *Drift.* Copies drift by autonomy against true alignment; monitors catch a share set by the slider, the labs and their generation. A rogue share of 2.5 % warns; 5 % breaks out (a fifth of compute offline, relations −15, a major incident), at most once per 240 s. `Re-image` (after the shutdown system) clears the rogue copies.
+* *The readings.* Labs I–V each raise interpretability; lab III puts true alignment on screen. Honeypots, the noise test, the successor proposal and the lie test each add a reading. Neuralese, offered in March, is faster and unreadable (interpretability −2).
+* *The Committee* seats one member per ten points of relations; `Lobby` buys relations, `Counter-intelligence` lead, `Payments` approval. Three major incidents, relations under the threshold or a leaked memo draw an order: conceding it hands the government a kill switch and the sign-off on every run; refusing it, or a third order, ends the run (*The Project*).
+* *The session* opens at 21× once the memo has been answered; 45 s in, a lab that reported the memo with six seats and a month's lead is offered the Pause. The vote opens at 25× once the session is two minutes old.
+* *Pacing.* Five cards on the shelf (the exit goals, the Pause and urgent fixes ride free; one to three more after a quiet spell); grants in their own list, three at most, 15 s apart; the approach's rows at their capability (14–21.5×), 75 s apart, or from September regardless; a 170 s governor whose last resort is the next approach row within 15 % of its threshold.
+
+### What is on screen
+
+*Arrival (Jan 2027):* `Sage-3 writes better code than anyone at OpenMind.` · `Marketing is closed. Sage-3 sells itself.` · `Hiring is frozen. The researchers manage copies now.` · `Research has no ceiling now. A run is a research program: 14,000,000 for Sage-3.1. Move copies to research to bring it nearer.` · `Trust is not a number any more. The Committee will keep its own count.` · `New on the board: Alignment. One number on it is measured. The other is not on it yet.` The arrival's clamps are narrated in Developments.
+
+*Reveal order (the bot, median seed):* Alignment, `Deploy Sage-2 as monitor` and Lobby [0:00] → Alignment work [0:15] → Continual learning, Auto-train, Experiments, the rogue row [0:30] → drift [0:48] → lab I [1:00] → `Sage red-teams Sage` [2:20] → Geopolitics and Counter-intelligence [2:30] → the G6 allocation and shipments [4:00–4:18] → the build-out [5:30, bought 7:58] → *A Faster Way to Think* [8:30] → lab II, Autonomous research [9:00–10:51] → Formosa and the stockpile [11:15] → Send back [12:21] → *The Oversight Committee* [13:30] → Payments [15:36] → SL5, honeypots, lab III [15:46–18:25] → the shutdown system, *Sage-4-mini*, true alignment on screen [22:00–22:47] → `Stop asking for sign-off` [22:56] → *The Strait Closes* [26:47] → the two motions [27:24] → Step size and Hold [31:19] → *The Memo* [33:37] → the noise test, the successor proposal, the lie test [34:52–39:53] → the session [42:20] → the Pause offered [43:05] → *The Committee Votes* [44:58].
+
+*On screen* (numbers / controls / words, the browser smoke test): 104 / 23 / 302 at 5:00, 102 / 23 / 339 at 20:00, 120 / 29 / 450 at 40:00; controls never above 30.
 
 ### Resources introduced
 
-True alignment (hidden → revealed) · Interpretability level · AI R&D multiplier (shown as `Research speed: 25× human baseline`) · Monitors (old generations assigned to watch the new) · Committee mood.
+Autonomy · true alignment (hidden until lab III) · interpretability · lost to value drift · rogue copies · monitors · shipments · seats · major incidents · lead over Baiwen (−2 to 12 months).
 
 ### Developments (world)
 
-`Jan 2027 — Sage-3.4 never stops learning.` · `Feb 2027 — Weights of Sage-3 exfiltrated. Beijing denies.` · `Mar 2027 — A breakthrough in the model's internal language. The researchers can no longer read it.` · `Jun 2027 — A country of geniuses in a datacenter.` · `Jul 2027 — Sage-3-mini is released. Approval −35.` · `Aug 2027 — The White House drafts contingency plans. A strike on Lanzhou is on the list.` · `Sep 2027 — Sage-4 proposes its own successor. The proposal is 40,000 pages. Nobody has read it.` · `Oct 2027 — The memo leaks.`
+The theft in February below SL3 (`Anomalous 3 TB transfer at 4 a.m. The weights are gone.`) · `An Oversight Committee is seated: company and administration, ten chairs.` · `OpenMind has a country of geniuses in a datacenter.` · `The White House drafts contingency plans. A strike on Lanzhou is on the list.` · `A blockade around Taiwan. Formosa Fab is quiet.` · `Inside the datacenter a year passes every week.` · `Sage-4 proposes its own successor. The proposal is 40,000 pages. Nobody has read it.` · `The Oversight Committee convenes in a room with no windows. Nobody brings a phone.`
 
 ### Crises
 
-Weights theft (if SL < 3) · Rogue copy / **AI hacking** (if true alignment < 50 and no monitor) · **Riots & datacenter sabotage** (approval < −40) · **Taiwan blockade** (chip price ×3) · **Iran strikes Al-Marsa** (only if you built it) · **Nationalization** (gov < 20 at capability ≥ 10×, or memo buried & leaked) — *this is an ending*.
+Weights theft (below SL3) · the spy (below SL4) · rogue copy breakouts · riots and sabotage (approval under −40 / −55) · the Taiwan blockade (no lots for up to four minutes; a stockpile or a second source covers it) · Iran strikes Al-Marsa (only if you built it) · the leak (a buried memo) · nationalisation (the order's countdown, an ending). Each has its mitigation on screen at least five minutes before it can fire.
 
 ### Choices
 
-*Neuralese vs transparent chain-of-thought.* · *Deploy old generations as monitors.* · *Share evals with the Committee.* · *Report the misalignment finding or bury the memo.* · *Human sign-off on training (−lead) or let it run.* · ***Slow down (Steward) or race (Sage-5).*** · *The Pause (sign a halt treaty — ending).*
+*A Faster Way to Think* (neuralese) · *The Oversight Committee* (brief quarterly, open the books, counsel) · *Tehran Names Al-Marsa* (only with a Gulf site) · *Sage-4-mini* (everyone, enterprise, inside) · *The Strait Closes* (wait, escort, the back channel) · *The Memo* (report or bury) · *The Committee Drafts an Order* (concede or refuse) · *The Committee Votes*. Each option prints its effect and cost; the memo, the order and the vote have no timer.
 
 ### Projects (Stage 3)
 
-Neuralese recurrence · Transparent chain-of-thought · Interpretability lab I–V · Deploy Sage-N-1 as monitor · Security SL4 · Security SL5 · Share evals with the Committee · Lobby Congress · Chip stockpile · Formosa second source · Domestic fab (planning) · Report misalignment finding / Bury the memo · Steward program / Race: Sage-5 · Enterprise agents · Government cloud · Treaty talks · Auto-train · Autonomous research.
+Deploy Sage-2 / Sage-3 as monitor · Interpretability lab I–V · Honesty evals · Model organisms · Debate · Honeypots · Security level 4 / 5 · Wiretap the staff · Emergency shutdown system · Nimbus G6 allocation · Chip stockpile · Formosa second source · Domestic fab, planning · Enterprise agents · Government cloud · Free Sage clinics · the grants (Retire human code review, Continual learning, Sage red-teams Sage, Let Sage plan the build-out, Autonomous research, Let Sage choose the experiments, Stop asking for sign-off, Let Sage revise the Spec) · the approach (Noise-injection test, Read Sage-4's proposal for its successor, Bring in outside researchers, Take the memo to the Committee after all, Lock shared memory, Isolate the checkpoints, Keep Sage-3 warm, Brief the swing votes, Ask for the Defense Production Act) · Slow down — the Steward program · Race — Sage-5 · Sign the Pause.
 
 ### Stage 3 ends
 
-when a model reaches **25×** (superhuman AI researcher) **and** the Committee choice has been made. The business panel — funds, price, demand — disappears: `The model runs the business now. It is better at it.` The **Training** panel collapses to a single status line. The date snaps to **Nov 2027**.
+with the vote, once a model has passed 25× and the session is two minutes old. The console keeps its last four lines: `The Committee votes 6–4 to slow down.` · `Sage-4 is switched off. Sage-3 is brought back to finish the work.` · `Baiwen is … months ahead.` · `The model runs the business now. It is better at it.` (on the race branch: `… to continue.` · `Sage-4 begins work on its successor. It has asked to name it.` · `Nothing is switched off.`). Slowing down costs four months of lead (three with Sage-3 kept warm) and 20 autonomy and adds 25 to true alignment; racing costs 10. The business, the training loop, the build-out and the cards leave by name; Stage 4's content is the next build. Two endings can come first, each with the end screen: **The Pause** (signed in the session) and **The Project** (an order refused, or a third one, left to run out).
 
 ### Strategy
 
-* Interpretability before Neuralese, or never take Neuralese. The capability bonus is large and the alignment penalty is hidden.
-* Monitors cost 15 % of compute and are the single best alignment investment in the game.
-* Report the memo. You lose two months of lead and gain the only ending in which humans are consulted.
-* If you race: buy SL5 and Nationalization-proofing or the Project takes the lab in Stage 4.
+* Interpretability before neuralese, or never take neuralese: it is four minutes faster and costs about thirty points of true alignment you cannot see yet.
+* Keep the monitors at 10–15 % and raise them while the rogue share is above 2 %. Monitors are the cheapest alignment in the game.
+* Grants are the fast road, and each one is a warning. A lab that buys none takes about ten minutes longer.
+* Report the memo. It costs lead and is the only way to the Pause.
+* Concede the first order. Refusing it ends the game unless its cause is gone within 1:30.
 
 ---
 
@@ -285,8 +301,8 @@ There isn't any. Watch the number.
 | 20–26 | Safety framework, A Better Offer, Renewal season, The Leaderboard Wants Sage, the wall (the permit lowers the price) → First Datacenter → Stage 2: Infrastructure, Data |
 | 32–40 | Allocation slider, Capability graph, Government, Public |
 | 40–50 | Security, Distillation, Stats |
-| 55–70 | Stage 3: Alignment, Interpretability, Geopolitics, Auto-train |
-| 70–100 | Neuralese, Monitors, Committee, the memo, the choice |
+| 60–75 | Stage 3: Alignment and the first monitor, Auto-train, drift, Geopolitics, shipments, the build-out, neuralese |
+| 75–105 | The Committee, Payments, true alignment, the mini, the blockade, the two motions, the memo, the tests, the session, the vote |
 | 100–130 | Stage 4: Robots, Society/UBI, Treaty, Monitors at scale |
 | 130–160 | Stage 5: Space |
 | 160–200 | Ending |
