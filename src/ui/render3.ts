@@ -198,8 +198,10 @@ export function renderTraining3(s: GameState): void {
     setOff('btn-experiments5', true);
     const name = s.training.pending?.name ?? (s.training.run?.phase === 'training' ? s.training.run.name : nextRunName(s));
     const gain = nextGainPct(s, 0.25) - nextGainPct(s);
+    // The delay a unit costs the waiting run prints from 10 s, as on every card (arc G34 rule 3).
+    const delay = delaySeconds(s, unit);
     setText('experimentsNote', room
-      ? `+${fmtNum(gain, 1)} points · ${fmtClock(delaySeconds(s, unit))} later`
+      ? `+${fmtNum(gain, 1)} points${delay >= 10 ? ` · ${fmtClock(delay)} later` : ''}`
       : `${name} takes no more`);
   }
   if (s.revealed['redteamDepth']) {
@@ -274,8 +276,9 @@ export function renderInfrastructure3(s: GameState): void {
   const dc = nextDatacenter(s);
   setText('dcNumber', String(dc.n));
   setText('dcSlots', fmtInt(dc.add));
-  setText('datacenterCost', fmtMoneyShort(dc.cost));
   const building = datacenterBuilding(s);
+  // While a hall goes up its price is not a choice: the row shows the clock only.
+  setText('datacenterCost', building ? '' : fmtMoneyShort(dc.cost));
   const site = needsSite2(s);
   const dcShort = building || site ? '' : buildShortLine(s, dc.cost);
   setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : site ? 'needs the New Carlisle campus' : dcShort);
@@ -465,7 +468,10 @@ export function renderOversight(s: GameState): void {
     setDisabled('btn-lobby', s.funds < cost);
     const g = s.govRelations;
     const next = nextSeatAt(s);
-    setText('lobbyNote', `relations ${fmtNum(g, 1)} → ${fmtNum(Math.min(100, g + lobbyGain(s)), 1)}${next <= 100 ? ` · seat ${next / 10} at ${next}` : ''}`);
+    // One number for the return (G27); the next seat only when it is near (a band edge, not a goal).
+    const gain = Math.min(100, g + lobbyGain(s)) - g;
+    setText('lobbyNote', `relations +${fmtNum(gain, 1)}${next <= 100 && next - g <= 3 ? ` · seat ${next / 10} at ${next}` : ''}`);
+    setTitle('btn-lobby', `Forty meetings on the Hill: relations ${fmtNum(g, 1)} → ${fmtNum(g + gain, 1)}${next <= 100 ? `; seat ${next / 10} at ${next}` : ''}. Each unit costs 1.3× the last; the price relaxes a step every 90 s.`);
   }
   if (!seated) return;
   const n = seats(s);
@@ -493,7 +499,9 @@ export function renderPublic3(s: GameState): void {
     setText('btn-payments', level >= PAYMENT_MAX ? 'level 5 (back to 0)' : `level ${level}`);
     const target = approvalTargetS3(s);
     const up = level >= PAYMENT_MAX ? -PAYMENT_MAX * PAYMENT_APPROVAL : PAYMENT_APPROVAL;
-    setText('paymentsNote', `${fmtInt(level * PAYMENT_SHARE * 100)}% of revenue · approval ${signed(target)} → ${signed(target + up)}`);
+    // What the next notch returns (G27), one number; the target itself is in the approval line's hover.
+    setText('paymentsNote', `${fmtInt(level * PAYMENT_SHARE * 100)}% of revenue · next: approval ${signed(up)}`);
+    setTitle('btn-payments', `Impact payments to displaced workers: 3% of revenue a level, approval target +7 a level, 0 to 5. The target is ${signed(target)} now; the next press makes it ${signed(target + up)}.`);
   }
   foldNote(s, 'publicModel', `Public model: Sage-4-mini (${fmtNum(publicCap(s), 1)}×)`, 'panel-public');
 }
