@@ -461,8 +461,12 @@ function lateDrip3(s: GameState, approach: boolean): void {
     const due = best >= lateAtOf(id) - 1e-9;
     // The date fallback releases rows whose threshold has not come, in table order, 90 s apart.
     if (!due && !(fallback && since >= FALLBACK_SECONDS)) continue;
-    // One card past the shelf at most: the approach is the densest screen of the stage (arc G14).
-    if (revealRow(s, row, 1)) {
+    // One card past the shelf, the approach being the densest screen of the stage (arc G14); after a
+    // quiet spell (a shelf of cards nobody can afford yet) up to three, so the approach never stalls.
+    // A test (noise, successor, lie test) gets the same three once the last mechanic is 150 s old.
+    const quiet = now - c.lastRevealAt >= GOVERNOR_SECONDS - 20
+      || (projectDef(id)?.instrument === true && now - c.lastMechanicAt >= LATE_MECHANIC_SPACING);
+    if (revealRow(s, row, quiet ? OVERFLOW + 1 : 1)) {
       c.lastLateAt = now;
       c.lateQueue = c.lateQueue.filter((q) => q !== id);
       return;

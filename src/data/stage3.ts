@@ -106,6 +106,8 @@ export const STAGE3_TABLE: ContentRow[] = [
   project('p_second_source'),
   project('p_kill_switch'),
   choiceRow('c_hormuz', {
+    // A decision with its own stakes for a lab with a Gulf site: a mechanic beat (G2).
+    mechanic: true,
     trigger: (s) => date(s, 5) && s.gulfExposure > 0,
     prereq: (s) => s.gulfExposure > 0,
     onOpen: (s) => fireDevelopmentOnce(s, 'd_tehran'),

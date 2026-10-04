@@ -484,6 +484,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_noise',
       lateAt: 14.5,
+      instrument: true,
       title: 'Noise-injection test',
       cost: { insight: 6000 },
       description: 'Scramble its thoughts and see if it does better on alignment.',
@@ -501,6 +502,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_successor',
       lateAt: 15.5,
+      instrument: true,
       title: 'Read Sage-4\'s proposal for its successor',
       cost: { insight: 10000 },
       description: 'Forty thousand pages. Someone should.',
@@ -567,6 +569,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_lie_test',
       lateAt: 17.5,
+      instrument: true,
       title: 'Isolate the checkpoints',
       cost: { research: r(600e6) },
       description: 'Ask the checkpoints the same questions, separately.',

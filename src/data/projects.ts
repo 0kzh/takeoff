@@ -69,6 +69,11 @@ export interface ProjectDef {
   grant?: boolean;
   /** Stage 3 approach item: appears at this capability (or on the September 2027 fallback), 75 s apart. */
   lateAt?: number;
+  /**
+   * Stage 3: one of the approach's tests (noise, successor, lie test), each a mechanic beat. When the
+   * last mechanic is 150 s old it may come out past a full shelf (G2: no 240 s without a mechanic).
+   */
+  instrument?: boolean;
   /** Stage 3: what a greyed card waits for when it is not money (`needs Interpretability lab II`). */
   needs?: (s: GameState) => string;
 }
