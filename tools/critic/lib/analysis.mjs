@@ -25,6 +25,39 @@ export function loadRun(prefix) {
   return { meta: snaps.meta, snaps: snaps.snaps, events: events.events, actions };
 }
 
+/**
+ * The part of a run that is Stage `stage`, re-based so t = 0 is that stage's start (the first
+ * snapshot showing it). A run that starts in that stage is returned unchanged. The window ends at
+ * the next stage change (meta.stageEnd) or at the end of the run.
+ */
+export function sliceStage(run, stage) {
+  const { meta, snaps, events, actions } = run;
+  if (stage == null || stage === meta.stageStart) return run;
+  const first = snaps.find((s) => s.stage === stage);
+  if (!first) throw new Error(`run ${meta.prefix} never shows Stage ${stage}`);
+  const t0 = first.t;
+  const after = snaps.find((s) => s.t > t0 && s.stage !== stage);
+  const t1 = after ? after.t : snaps[snaps.length - 1].t;
+  const shift = (x) => ({ ...x, t: x.t - t0 });
+  const inWin = (x) => x.t >= t0 && x.t <= t1;
+  const stEvents = events.filter((e) => e.type === 'stage-end' && e.t > t0);
+  return {
+    meta: {
+      ...meta,
+      prefix: `${meta.prefix} (Stage ${stage} from ${Math.floor(t0 / 60)}:${String(t0 % 60).padStart(2, '0')})`,
+      stageStart: stage,
+      stageEnd: after ? (stEvents.length ? stEvents[0].t : after.t) - t0 : null,
+      endT: t1 - t0,
+      phase1End: Math.max(0, meta.phase1End - t0),
+      sliceFrom: t0,
+    },
+    // The first snapshot of the stage counts as the stage's opening screen: its elements are "initial".
+    snaps: snaps.filter(inWin).map(shift),
+    events: events.filter(inWin).map((e) => (e.t === t0 && e.type === 'reveal' ? { ...shift(e), initial: true } : shift(e))),
+    actions: actions.filter(inWin).map(shift),
+  };
+}
+
 const purchaseLike = (b) => !b.a && b.kind !== 'modal' && b.kind !== 'tab';
 
 /** Gaps between sorted event times inside [from, to]; the window edges close the first/last gap. */
@@ -180,7 +213,9 @@ export function analyze(run) {
       continue;
     }
     if (a.why === 'mash-stop') continue;
-    const k = `${a.why} · ${a.label}`;
+    // Short labels ("+10", "+1k", "<", ">") repeat across kinds: name the button too.
+    const label = /^[+<>]|^.{0,3}$/.test(a.label || '') ? `${a.label} [${a.key}]` : a.label;
+    const k = `${a.why} · ${label}`;
     counts.set(k, (counts.get(k) || 0) + 1);
   }
   const why = (w) => actions.filter((a) => inStage(a.t) && a.why === w).length;

@@ -7,12 +7,14 @@
 //               visible, one purchase of it is always kept in reserve when buying anything else
 //               with funds (the first automation and a big-ticket goal are exempt)
 //   lower/raise price controls, moved only by watching the backlog
-//   drip        repeat purchases stopped (and funds saved) once a big-ticket goal is visible
+//   drip        repeat purchases held back (to save) while a big-ticket goal is visible; other
+//               purchases (training, one-off projects) are still bought when affordable
 //   goal        big-ticket goal button keys
 //   goalRule(c) optional: further big-ticket goal keys derived from what is on screen right now
 //   skip        never clicked by the generic buy loop
 //   veto(c)     keys the generic loop must not click given the current controls
 //   special(ctx) game-specific steps (red-team/release, processors/memory, navigation)
+//   modalChoice(modal, enabledOptions, t) optional: which option answers a modal (null = leave it)
 // Every other visible, enabled, non-ambient button is "an upgrade/project/automation" and is bought
 // when affordable, least-bought first (ties in DOM order).
 import { fmtN } from './util.mjs';
@@ -47,6 +49,8 @@ export class Policy {
     this.counts = new Map();
     this.noops = 0;
     this.noopUntil = new Map();
+    /** Scratch space an adapter's special() keeps between checks (what the player remembers). */
+    this.memory = {};
   }
 
   async pass(t) {
@@ -54,8 +58,9 @@ export class Policy {
     const p = this.p;
     // A click that changed nothing (e.g. ADR's "not enough wood") is not retried for 30 s.
     const backoff = new Set([...this.noopUntil].filter(([, until]) => until > t).map(([k]) => k));
-    const ctx = { t, controls: await s.controls(), noop: backoff };
+    const ctx = { t, controls: await s.controls(), noop: backoff, session: s, memory: this.memory };
     ctx.click = async (key, why, detail) => {
+      const shown = ctx.controls.buttons.find((b) => b.k === key);
       const r = await s.click(key);
       if (!(r.ok && r.changed)) {
         this.noops++;
@@ -64,17 +69,32 @@ export class Policy {
         return ctx.controls;
       }
       this.counts.set(key, (this.counts.get(key) || 0) + 1);
+      if (this.rec.clickedUnseen) this.rec.clickedUnseen(t, shown || { k: key, l: r.label, kind: 'button' });
       this.rec.action({ t, key, label: r.label, why, detail });
       ctx.controls = await s.controls();
       return ctx.controls;
     };
+    /** Sets a visible <select>/<input> (strategy picker, slider) and logs it like a click. */
+    ctx.set = async (selector, value, why, detail) => {
+      const r = await s.setValue(selector, value);
+      if (!(r.ok && r.changed)) return ctx.controls;
+      this.rec.action({ t, key: selector, label: r.label, why, detail });
+      ctx.controls = await s.controls();
+      return ctx.controls;
+    };
     const find = (k) => (k ? ctx.controls.buttons.find((b) => b.k === k) : null);
+    // A purchase that changes the stage ends this check: the new screen is read at the next one.
+    const passStage = ctx.controls.m.stage;
+    const stageChanged = () => passStage != null && ctx.controls.m.stage !== passStage;
 
     // 1. A modal is answered with its first enabled option (once per pass; a fading or chained
-    //    modal is handled at the next check).
+    //    modal is handled at the next check). adapter.policy.modalChoice(modal, enabledOptions, t)
+    //    may pick another option, or return null to leave the modal open (critic round 2,
+    //    explore.mjs variants). Default unchanged.
     if (ctx.controls.modal) {
       const modal = ctx.controls.modal;
-      const opt = modal.options.find((o) => o.e && !ctx.noop.has(o.k));
+      const enabled = modal.options.filter((o) => o.e && !ctx.noop.has(o.k));
+      const opt = p.modalChoice ? p.modalChoice(modal, enabled, t) : enabled[0];
       if (opt) await ctx.click(opt.k, 'modal', `${modal.title} → ${opt.l}`);
     }
 
@@ -138,6 +158,7 @@ export class Policy {
     // One sweep per check: every affordable button is clicked at most once (a GPU/clipper "drip").
     const clicked = new Set();
     for (let i = 0; i < 60; i++) {
+      if (stageChanged()) break;
       const c = ctx.controls;
       const m = c.m;
       const goals = new Set([...staticGoals, ...(p.goalRule ? p.goalRule(c) : [])]);
@@ -151,7 +172,9 @@ export class Policy {
         if (!b.e || b.a || b.kind === 'modal' || b.kind === 'tab' || skip.has(b.k) || veto.has(b.k) || ctx.noop.has(b.k) || clicked.has(b.k)) return false;
         if (!affordableResources(b, m)) return false;
         if (goals.has(b.k)) return true;
-        if (goalVisible && (drip.has(b.k) || (b.funds || 0) > 0)) return false;
+        // Report §1: "stop the GPU/marketing drip and save" — only the drip is held back; training runs
+        // and one-off projects are still bought when affordable (keeping the consumable reserve).
+        if (goalVisible && drip.has(b.k)) return false;
         if (!((b.funds || 0) > 0)) return true;
         return m.funds - b.funds >= reserve;
       });

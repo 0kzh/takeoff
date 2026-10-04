@@ -137,6 +137,33 @@ export async function openSession(opts) {
       }
       return r;
     },
+    /**
+     * Sets a visible <select>/<input> to `value` the way a player would (then input/change events).
+     * Returns { ok, changed, label } (label = the chosen option's text for a <select>).
+     */
+    async setValue(selector, value) {
+      const r = await page.evaluate(
+        ([sel, v]) => {
+          const el = document.querySelector(sel);
+          if (!el || !el.checkVisibility({ checkVisibilityCSS: true }) || el.disabled) return { ok: false, changed: false, label: '' };
+          const before = String(el.value);
+          el.value = String(v);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          const opt = el.tagName === 'SELECT' && el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : String(el.value);
+          return { ok: true, changed: String(el.value) !== before, label: opt };
+        },
+        [selector, value],
+      );
+      if (r.ok && r.changed && clickGap > 0) {
+        if (realtimeActive) await new Promise((res) => setTimeout(res, clickGap));
+        else {
+          await page.evaluate((m) => window.__advance(m), clickGap);
+          consumed += clickGap;
+        }
+      }
+      return r;
+    },
     async screenshot(file) {
       await page.screenshot({ path: file, fullPage: true });
     },

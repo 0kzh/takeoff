@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// Usage: node tools/critic/analyze.mjs <prefix|label>   → prints and writes <prefix>.analysis.md (+ .analysis.json)
+// Usage: node tools/critic/analyze.mjs <prefix|label> [--stage N]
+//   → prints and writes <prefix>.analysis.md (+ .analysis.json); with --stage N (a later stage reached
+//     inside the run) the window starts at that stage and times count from its start
+//     (<prefix>.s<N>.analysis.md).
 import fs from 'node:fs';
-import { analyze, loadRun, LOAD_MINUTES, GAP_LIST_OVER } from './lib/analysis.mjs';
-import { resolvePrefix, mmss, fmtN, mdTable, writeJson } from './lib/util.mjs';
+import { analyze, loadRun, sliceStage, LOAD_MINUTES, GAP_LIST_OVER } from './lib/analysis.mjs';
+import { resolvePrefix, mmss, fmtN, mdTable, writeJson, parseArgs } from './lib/util.mjs';
 
 export function renderAnalysis(a) {
   const m = a.meta;
@@ -83,15 +86,19 @@ export function renderAnalysis(a) {
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {
-  const arg = process.argv[2];
+  const { pos, flags } = parseArgs(process.argv.slice(2));
+  const arg = pos[0];
   if (!arg) {
-    console.error('usage: analyze.mjs <prefix|label>');
+    console.error('usage: analyze.mjs <prefix|label> [--stage N]');
     process.exit(2);
   }
   const prefix = resolvePrefix(arg.replace(/\.(snaps|events|actions)\.json$/, ''));
-  const a = analyze(loadRun(prefix));
+  const run = loadRun(prefix);
+  const stage = flags.stage != null ? Number(flags.stage) : null;
+  const a = analyze(sliceStage(run, stage));
   const md = renderAnalysis(a);
-  fs.writeFileSync(`${prefix}.analysis.md`, md);
-  writeJson(`${prefix}.analysis.json`, a);
+  const out = stage != null && stage !== run.meta.stageStart ? `${prefix}.s${stage}` : prefix;
+  fs.writeFileSync(`${out}.analysis.md`, md);
+  writeJson(`${out}.analysis.json`, a);
   console.log(md);
 }

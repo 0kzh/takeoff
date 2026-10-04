@@ -32,11 +32,12 @@ export function loadFixture(adapter, { stage, fixture }) {
 
 /**
  * opts: { game, prefix, gameDir, realtime, accelMinutes, autoplay, stage, seed, fixture,
- *         postStage, quiet, onSnapshot(ctx) }
+ *         postStage, quiet, onSnapshot(ctx), onStageEnd({ t, session }), adapter, viewport }
  * Returns { prefix, meta, rec }.
  */
 export async function runGame(opts) {
-  const adapter = await loadAdapter(opts.game);
+  // opts.adapter: a ready adapter (e.g. explore.mjs's modified policies) instead of loading one by name.
+  const adapter = opts.adapter ?? (await loadAdapter(opts.game));
   const prefix = resolvePrefix(opts.prefix);
   const gameDir = resolveGameDir(adapter, opts.gameDir);
   const seed = Number(opts.seed ?? 1);
@@ -50,7 +51,7 @@ export async function runGame(opts) {
   if (path.resolve(gameDir) === REPO_ROOT) log('warning: measuring the repo root (it may be mid-rebuild)');
 
   const wallStart = performance.now();
-  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture });
+  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture, viewport: opts.viewport });
   const startStage = session.bootInfo.stage ?? stageReq;
   const rec = new Recorder();
   const policy = opts.autoplay ? null : new Policy(adapter, session, rec, { startStage });
@@ -68,6 +69,7 @@ export async function runGame(opts) {
     if (stageEnd != null) return;
     stageEnd = t;
     stopAt = Math.min(capSeconds, t + postStage);
+    if (opts.onStageEnd) await opts.onStageEnd({ t, session });
     rec.event({ t, type: 'stage-end', how });
     await shot('tend');
     log(`  stage end at ${mmss(t)} (${how})`);
@@ -119,51 +121,63 @@ export async function runGame(opts) {
   // ---------------- phase 1: real time ----------------
   let t = 0;
   let mashClicks = 0;
-  if (realtime > 0) {
-    log(`${adapter.name}: phase 1, ${realtime} s real time`);
-    await session.startRealtime();
-    const t0 = performance.now();
-    let nextSnap = 0;
-    let nextMash = 1 / MASH_PER_SEC;
-    for (;;) {
-      const el = (performance.now() - t0) / 1000;
-      if (el >= realtime || nextSnap >= stopAt) break;
-      if (el >= nextSnap) {
-        t = nextSnap;
-        // Mash clicks are logged per 2-s window, stamped with the window start (as in phase 2).
-        if (mashClicks) rec.action({ t: t - SNAP_EVERY, key: mainKey, why: 'mash', count: mashClicks });
-        mashClicks = 0;
-        await onSnapshot(t, 1);
-        await policyPass(t);
-        nextSnap += SNAP_EVERY;
-        continue;
-      }
-      if (el >= nextMash) {
-        if (policy && policy.mashing && mainKey) {
-          const r = await session.page.evaluate((k) => window.__critic.click(k), mainKey);
-          if (r.ok) mashClicks++;
+  let phase1End = 0;
+  let abort = null;
+  try {
+    if (realtime > 0) {
+      log(`${adapter.name}: phase 1, ${realtime} s real time`);
+      await session.startRealtime();
+      const t0 = performance.now();
+      let nextSnap = 0;
+      let nextMash = 1 / MASH_PER_SEC;
+      for (;;) {
+        const el = (performance.now() - t0) / 1000;
+        if (el >= realtime || nextSnap >= stopAt) break;
+        if (el >= nextSnap) {
+          t = nextSnap;
+          // Mash clicks are logged per 2-s window, stamped with the window start (as in phase 2).
+          if (mashClicks) rec.action({ t: t - SNAP_EVERY, key: mainKey, why: 'mash', count: mashClicks });
+          mashClicks = 0;
+          await onSnapshot(t, 1);
+          await policyPass(t);
+          nextSnap += SNAP_EVERY;
+          continue;
         }
-        nextMash += 1 / MASH_PER_SEC;
-        while (nextMash < el) nextMash += 1 / MASH_PER_SEC; // skip, never burst
-        continue;
+        if (el >= nextMash) {
+          if (policy && policy.mashing && mainKey) {
+            const r = await session.page.evaluate((k) => window.__critic.click(k), mainKey);
+            if (r.ok) mashClicks++;
+          }
+          nextMash += 1 / MASH_PER_SEC;
+          while (nextMash < el) nextMash += 1 / MASH_PER_SEC; // skip, never burst
+          continue;
+        }
+        await sleep(Math.max(1, (Math.min(nextSnap, nextMash) - el) * 1000));
       }
-      await sleep(Math.max(1, (Math.min(nextSnap, nextMash) - el) * 1000));
+      await session.stopRealtime();
+      t = Math.min(nextSnap, Math.ceil(realtime / SNAP_EVERY) * SNAP_EVERY);
+      if (mashClicks) rec.action({ t: t - SNAP_EVERY, key: mainKey, why: 'mash', count: mashClicks });
     }
-    await session.stopRealtime();
-    t = Math.min(nextSnap, Math.ceil(realtime / SNAP_EVERY) * SNAP_EVERY);
-    if (mashClicks) rec.action({ t: t - SNAP_EVERY, key: mainKey, why: 'mash', count: mashClicks });
-  }
-  const phase1End = realtime > 0 ? t : 0;
+    phase1End = realtime > 0 ? t : 0;
 
-  // ---------------- phase 2: deterministic stepping ----------------
-  if (t < stopAt) log(`${adapter.name}: phase 2, stepping from ${mmss(t)} to ${mmss(capSeconds)} game time (or stage end + ${postStage} s)`);
-  while (t <= stopAt) {
-    await onSnapshot(t, 2);
-    if (t >= stopAt) break;
-    await policyPass(t);
-    const n = await session.step(SNAP_EVERY * 1000, policy && policy.mashing ? mainKey : null);
-    if (n) rec.action({ t, key: mainKey, why: 'mash', count: n });
-    t += SNAP_EVERY;
+    // ---------------- phase 2: deterministic stepping ----------------
+    if (t < stopAt) log(`${adapter.name}: phase 2, stepping from ${mmss(t)} to ${mmss(capSeconds)} game time (or stage end + ${postStage} s)`);
+    while (t <= stopAt) {
+      await onSnapshot(t, 2);
+      if (t >= stopAt) break;
+      await policyPass(t);
+      const n = await session.step(SNAP_EVERY * 1000, policy && policy.mashing ? mainKey : null);
+      if (n) rec.action({ t, key: mainKey, why: 'mash', count: n });
+      t += SNAP_EVERY;
+    }
+  } catch (e) {
+    // The game navigated (Paperclips' reset() reloads the page into a new universe) or the page broke:
+    // end the run here and keep everything recorded so far.
+    const msg = String((e && e.message) || e).split('\n')[0];
+    const navigated = /context was destroyed|navigat|Target page, context or browser has been closed/i.test(msg);
+    abort = navigated ? 'the game reloaded the page (reset / new universe)' : msg;
+    rec.event({ t, type: navigated ? 'page-reset' : 'abort', message: abort });
+    log(`  run ended at ${mmss(t)}: ${abort}`);
   }
 
   const harnessErr = await session.harnessErrors().catch(() => ({}));
@@ -188,6 +202,7 @@ export async function runGame(opts) {
     pageErrors: session.errors.slice(0, 20),
     harnessErrors: harnessErr,
     policyNoops: policy ? policy.noops : null,
+    abort,
     wallSeconds: Math.round(wallSeconds),
     createdAt: new Date().toISOString(),
   };
@@ -225,6 +240,7 @@ function summary(meta, rec) {
     `| phase 1 (real time) | ${meta.realtime} s |`,
     `| phase 2 (stepped) | ${mmss(meta.phase1End)} → ${mmss(meta.endT)} game time (cap ${meta.accelMinutes} min) |`,
     `| stage end | ${meta.stageEnd != null ? mmss(meta.stageEnd) : 'not reached'} |`,
+    meta.abort ? `| run ended at ${mmss(meta.endT)} | ${meta.abort} |` : null,
     `| snapshots | ${meta.snapshots} |`,
     `| reveals | ${count((e) => e.type === 'reveal')} (${count((e) => e.type === 'reveal' && e.what === 'panel')} panels, ${count((e) => e.type === 'reveal' && e.what === 'button')} buttons, ${count((e) => e.type === 'reveal' && e.what === 'project')} projects, ${count((e) => e.type === 'reveal' && e.what === 'modal')} modals) |`,
     `| enabled transitions | ${count((e) => e.type === 'enabled')} |`,

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Usage: node tools/critic/compare.mjs <prefixA> <prefixB> [<prefixC> …]
+// Usage: node tools/critic/compare.mjs <prefixA[:stage]> <prefixB[:stage]> [more…]
+//   (':N' analyses Stage N of that run, timed from that stage's start)
 // One side-by-side markdown table of the headline numbers (writes <lastPrefix-dir>/compare-<A>-vs-<B>.md).
 import fs from 'node:fs';
 import path from 'node:path';
-import { analyze, loadRun, LOAD_MINUTES } from './lib/analysis.mjs';
+import { analyze, loadRun, sliceStage, LOAD_MINUTES } from './lib/analysis.mjs';
 import { resolvePrefix, mmss, mdTable } from './lib/util.mjs';
 
 export function headline(a) {
@@ -41,8 +42,12 @@ if (isMain) {
     console.error('usage: compare.mjs <prefixA> <prefixB> [more…]');
     process.exit(2);
   }
-  const prefixes = args.map((p) => resolvePrefix(p));
-  const cols = prefixes.map((p) => headline(analyze(loadRun(p))));
+  const specs = args.map((a) => {
+    const m = /^(.*?)(?::(\d+))?$/.exec(a);
+    return { prefix: resolvePrefix(m[1]), stage: m[2] != null ? Number(m[2]) : null };
+  });
+  const prefixes = specs.map((x) => x.prefix);
+  const cols = specs.map((x) => headline(analyze(sliceStage(loadRun(x.prefix), x.stage))));
   const rows = cols[0].map((row, i) => [row[0], ...cols.map((c) => c[i][1])]);
   const md = [`# Compare: ${prefixes.map((p) => path.basename(p)).join(' vs ')}`, '', mdTable(['metric', ...prefixes.map((p) => path.basename(p))], rows), ''].join('\n');
   const out = path.join(path.dirname(prefixes[0]), `compare-${prefixes.map((p) => path.basename(p)).join('-vs-')}.md`);

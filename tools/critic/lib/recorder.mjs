@@ -52,6 +52,19 @@ export class Recorder {
     this.actions.push(a);
   }
 
+  /**
+   * A button the player clicked that no snapshot has shown yet (it appeared and was bought within
+   * one 2-s check — Paperclips' clock runs while the player clicks) counts as revealed then.
+   */
+  clickedUnseen(t, b) {
+    if (!b || b.kind === 'modal') return;
+    const what = b.kind === 'project' ? 'project' : 'button';
+    const uid = `${what}:${b.k}`;
+    if (this.seen.has(uid)) return;
+    this.seen.add(uid);
+    this.events.push({ t, type: 'reveal', what, key: b.k, label: b.l, enabled: 1, viaClick: true });
+  }
+
   event(e) {
     this.events.push(e);
   }

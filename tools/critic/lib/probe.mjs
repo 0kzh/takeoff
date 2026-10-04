@@ -8,8 +8,8 @@ import { mmss, fmtN } from './util.mjs';
 /** Thrown by a scenario when the game no longer has what the scenario needs. */
 export class NotApplicable extends Error {}
 
-export async function openProbe(adapter, { gameDir, seed = 1, stage = 1, fixture = null, prefix }) {
-  const session = await openSession({ adapter, gameDir, seed, stage, fixture });
+export async function openProbe(adapter, { gameDir, seed = 1, stage = 1, fixture = null, prefix, viewport }) {
+  const session = await openSession({ adapter, gameDir, seed, stage, fixture, viewport });
   const rec = new Recorder();
   const kit = {
     adapter,

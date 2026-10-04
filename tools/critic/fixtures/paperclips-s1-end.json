@@ -2,7 +2,7 @@
  "name": "paperclips-s1-end",
  "game": "paperclips",
  "stage": 1,
- "createdWith": "node tools/critic/make-fixtures.mjs (cheats in tools/critic/games/paperclips.mjs)",
+ "createdWith": "node tools/critic/make-fixtures.mjs paperclips-s1-end (cheats)",
  "notes": "Resource levels are cheated to round values; gating projects were bought through their own buttons.",
  "metrics": {
   "stage": 1,
@@ -23,6 +23,8 @@
   "storedPower": 0,
   "availableMatter": 6e+27,
   "probeCount": 0,
+  "probeTrust": 0,
+  "swarmGifts": 0,
   "nextTrust": 1346269000
  },
  "cheatLog": [

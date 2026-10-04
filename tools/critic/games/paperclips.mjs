@@ -2,7 +2,8 @@
 // The game is never modified: timers/Date/Math.random are virtualised by the init script, and
 // game state is read from its globals (declared with `var`, so they live on window).
 import path from 'node:path';
-import { REFS_DIR } from '../lib/util.mjs';
+import { REFS_DIR, fmtN } from '../lib/util.mjs';
+import { REPEAT_KEYS, FACTORY, LAUNCH_PROBE, stageGoals, opsPlan, pickStrategy, swarmSlider, stage2, stage3 } from './paperclips-late.mjs';
 
 /** Debug/save buttons the jgmize mirror leaves visible. Excluded from every count. */
 const DEBUG_BUTTONS = [
@@ -40,9 +41,21 @@ export default {
     const w = window;
     const n = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
     if (typeof w.clips === 'undefined' || typeof w.humanFlag === 'undefined') return { ready: 0 };
+    // Stage 2/3 rates are read as printed ("36.65 billion"), like a player would.
+    const WORDS = { thousand: 3, million: 6, billion: 9, trillion: 12, quadrillion: 15, quintillion: 18, sextillion: 21, septillion: 24, octillion: 27, nonillion: 30, decillion: 33, undecillion: 36, duodecillion: 39, tredecillion: 42, quattuordecillion: 45, quindecillion: 48, sexdecillion: 51 };
+    const shown = (id) => {
+      const el = document.getElementById(id);
+      const mm = el && /(-?[0-9][0-9,]*(?:\.[0-9]+)?)\s*([a-z]+)?/i.exec(el.textContent || '');
+      return mm ? parseFloat(mm[1].replace(/,/g, '')) * Math.pow(10, WORDS[(mm[2] || '').toLowerCase()] || 0) : 0;
+    };
+    const vis = (id) => {
+      const el = document.getElementById(id);
+      return !!(el && el.checkVisibility({ checkVisibilityCSS: true }));
+    };
+    const slider = document.getElementById('slider');
     return {
       ready: 1,
-      stage: w.spaceFlag == 1 ? 3 : w.humanFlag == 0 ? 2 : 1,
+      stage: w.milestoneFlag >= 15 ? 4 : w.spaceFlag == 1 ? 3 : w.humanFlag == 0 ? 2 : 1,
       funds: n(w.funds),
       backlog: n(w.unsoldClips),
       rate: n(w.clipRate),
@@ -76,6 +89,44 @@ export default {
       availableMatter: n(w.availableMatter),
       probeCount: n(w.probeCount),
       ticks: n(w.ticks),
+      // Stage 2 (Manufacturing / Wire Production / Power / Swarm Computing boxes)
+      wireStock: n(w.wire),
+      acquiredMatter: n(w.acquiredMatter),
+      harvestRate: shown('maps'),
+      wireRate: shown('wpps'),
+      powerProd: shown('powerProductionRate'),
+      powerCons: shown('powerConsumptionRate'),
+      powerCap: n(w.batteryLevel) * n(w.batterySize),
+      performance: shown('performance'),
+      factoryCost: n(w.factoryCost),
+      harvesterCost: n(w.harvesterCost),
+      wireDroneCost: n(w.wireDroneCost),
+      farmCost: n(w.farmCost),
+      batteryCost: n(w.batteryCost),
+      swarmGifts: n(w.swarmGifts),
+      swarmStatus: vis('swarmEngine') && vis('swarmStatusDiv') ? (document.getElementById('swarmStatus').textContent || '').trim() : '',
+      slider: slider ? Number(slider.value) : 0,
+      autoTourney: vis('autoTourneyStatusDiv') ? (document.getElementById('autoTourneyStatus').textContent || '').trim() : '',
+      // Stage 3 (Von Neumann Probe Design / Space Exploration boxes)
+      probeTrust: n(w.probeTrust),
+      probeUsedTrust: n(w.probeUsedTrust),
+      maxTrust: n(w.maxTrust),
+      probeSpeed: n(w.probeSpeed),
+      probeNav: n(w.probeNav),
+      probeRep: n(w.probeRep),
+      probeHaz: n(w.probeHaz),
+      probeFac: n(w.probeFac),
+      probeHarv: n(w.probeHarv),
+      probeWire: n(w.probeWire),
+      probeCombat: n(w.probeCombat),
+      probesLaunched: n(w.probeLaunchLevel),
+      probesLostHaz: n(w.probesLostHaz),
+      probesLostDrift: n(w.probesLostDrift),
+      probesLostCombat: n(w.probesLostCombat),
+      drifterCount: n(w.drifterCount),
+      honor: n(w.honor),
+      explored: shown('colonizedDisplay'),
+      milestoneFlag: n(w.milestoneFlag),
     };
   },
 
@@ -87,6 +138,8 @@ export default {
       w.wireDroneLevel, w.factoryLevel, w.farmLevel, w.batteryLevel, w.probeCount, w.unusedClips, w.bankroll, w.investLevel,
       w.tourneyInProg, w.swarmGifts, w.activeProjects ? w.activeProjects.length : 0,
       w.projects ? w.projects.map((p) => p.flag).join('') : '',
+      w.probeTrust, w.probeSpeed, w.probeNav, w.probeRep, w.probeHaz, w.probeFac, w.probeHarv, w.probeWire, w.probeCombat,
+      w.maxTrust, w.honor, w.probeLaunchLevel, w.boredomFlag, w.disorgFlag, w.entertainCost, w.storedPower, w.autoTourneyStatus,
     ]);
   },
 
@@ -98,11 +151,18 @@ export default {
     raise: 'btnRaisePrice',
     drip: ['btnMakeClipper', 'btnExpandMarketing', 'btnMakeMegaClipper'],
     goal: [],
-    /** Toggles and "Disassemble All" are never clicked; tournaments are handled in special(). */
+    /**
+     * Toggles and "Disassemble All" are never clicked; tournaments are handled in special(), and the
+     * Stage 2 repeat purchases (drones, farms, batteries) by the Stage 2 rules (paperclips-late.mjs).
+     */
     skip: [
       'btnToggleWireBuyer', 'btnToggleAutoTourney', 'btnFactoryReboot', 'btnHarvesterReboot', 'btnWireDroneReboot',
-      'btnFarmReboot', 'btnBatteryReboot', 'btnNewTournament', 'btnRunTournament',
+      'btnFarmReboot', 'btnBatteryReboot', 'btnNewTournament', 'btnRunTournament', ...REPEAT_KEYS,
     ],
+    /** Stage 2: the first Clip Factory, then Space Exploration (saved for; bought first when affordable). */
+    goalRule(c) {
+      return stageGoals(c);
+    },
     /**
      * Trust goes to Memory while the cheapest visible project costs more ops than the cap; any Trust
      * left is spent by the generic loop (Processors/Memory least-bought first). Strategic Modeling
@@ -110,14 +170,44 @@ export default {
      */
     /** Keys the generic loop must not buy right now: no Processors while Memory is what is needed. */
     veto(c) {
+      const out = [];
       const opsCosts = c.buttons.filter((b) => b.kind === 'project' && b.costs && b.costs.ops > 0).map((b) => b.costs.ops);
       const cheapest = opsCosts.length ? Math.min(...opsCosts) : null;
-      return cheapest != null && cheapest > c.m.maxOps ? ['btnAddProc'] : [];
+      if (cheapest != null && cheapest > c.m.maxOps) out.push('btnAddProc');
+      // Factories after the first are bought by the Stage 2 chain rule (wire piling up).
+      if ((c.m.factoryLevel || 0) >= 1) out.push(FACTORY);
+      // Stage 2+: Photonic Chips (a repeatable ops sink) wait while ops are wanted elsewhere.
+      if ((c.m.stage || 1) >= 2) {
+        const plan = opsPlan(c);
+        if (plan.pendingOps || plan.focus) out.push(...c.buttons.filter((b) => /^Photonic Chip/.test(b.l)).map((b) => b.k));
+      }
+      // Probes died to hazards and the design has no hazard remediation or replication yet: wait.
+      if ((c.m.probesLostHaz || 0) >= 1 && ((c.m.probeHaz || 0) < 1 || (c.m.probeRep || 0) < 1)) out.push(LAUNCH_PROBE);
+      return out;
     },
     async special(ctx) {
+      const stage = ctx.controls.m.stage || 1;
+      if (stage >= 2) await pickStrategy(ctx);
       let c = ctx.controls;
       const nt = c.buttons.find((b) => b.k === 'btnNewTournament');
-      if (nt && nt.e && c.m.ops >= c.m.maxOps) c = await ctx.click('btnNewTournament', 'tournament', `ops at cap ${c.m.maxOps}`);
+      if (stage < 2) {
+        // Stage 1 (round 1): tournaments only with spare ops (ops at the cap).
+        if (nt && nt.e && c.m.ops >= c.m.maxOps) c = await ctx.click('btnNewTournament', 'tournament', `ops at cap ${c.m.maxOps}`);
+      } else {
+        // Stage 2+: a project waiting for ops comes first; then tournaments while the closest goal is
+        // priced in yomi; ops idle at the cap while it is priced in creativity; else spare ops only.
+        const plan = opsPlan(c);
+        const yomiFocus = !plan.pendingOps && plan.focus && plan.focus.res === 'yomi';
+        const atCap = !plan.pendingOps && !plan.focus && c.m.ops >= c.m.maxOps;
+        if (nt && nt.e && (yomiFocus || atCap)) {
+          c = await ctx.click('btnNewTournament', 'tournament', yomiFocus ? `for ${plan.focus.project} (${fmtN(plan.focus.have)} of ${fmtN(plan.focus.price)} yomi)` : `ops at cap ${c.m.maxOps}`);
+        }
+        // AutoTourney (once bought) is on exactly while tournaments are wanted.
+        const want = yomiFocus ? 'ON' : 'OFF';
+        if (c.m.autoTourney && c.m.autoTourney !== want && c.buttons.some((b) => b.k === 'btnToggleAutoTourney' && b.e)) {
+          c = await ctx.click('btnToggleAutoTourney', 'tournament', `AutoTourney ${want}: ${plan.pendingOps ? `ops wanted for ${plan.pendingOps.l}` : plan.focus ? `goal ${plan.focus.project} (${plan.focus.res})` : 'no goal'}`);
+        }
+      }
       const run = c.buttons.find((b) => b.k === 'btnRunTournament');
       if (run && run.e) c = await ctx.click('btnRunTournament', 'tournament', 'run');
       for (let guard = 0; guard < 30; guard++) {
@@ -130,7 +220,10 @@ export default {
         c = await ctx.click('btnAddMem', 'memory', `cheapest project ${cheapest} ops > cap ${c.m.maxOps}`);
         if (c === before) break;
       }
-      return c;
+      if (stage >= 2) await swarmSlider(ctx);
+      if (stage === 2) await stage2(ctx, ctx.memory);
+      if (stage === 3) await stage3(ctx, ctx.memory);
+      return ctx.controls;
     },
   },
 
@@ -165,7 +258,11 @@ export default {
       const { page } = session;
       for (let i = 0; i < 400; i++) {
         const st = await page.evaluate((tt) => {
-          /* global clips, unusedClips, trust, creativity, standardOps, memory, processors, project70, project35, project219 */
+          /* global clips, unusedClips, funds, trust, creativity, standardOps, memory, processors, project70, project35, project219 */
+          // Some funds, as any player has after the first sales: the game's milestone chain (and with
+          // it "Full autonomy attained", "One Trillion Clips Created" … and the end of Stage 3,
+          // "Universal Paperclips achieved") starts with "funds ≥ $5". Too little for any funds project.
+          funds = Math.max(funds, 1000);
           clips = Math.max(clips, 1.2e9); // trust milestones + projects reveal (calculateTrust runs per tick)
           unusedClips = Math.max(unusedClips, clips); // every clip made adds to unusedClips (clipClick)
           if (trust < tt) trust = tt;

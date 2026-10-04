@@ -138,8 +138,25 @@ const TAKEOFF = [
         await d.accept();
       });
       await kit.click('btn-release', 1, 'release-open');
-      const after = await kit.snap();
-      out.push(`At ${mmss(hit.t)}: evaluation found ${hit.m.issuesOpen} open issues; the button reads "${rel.l}". Clicked it once: ${dialogs.length ? `browser dialog "${dialogs[0]}"` : 'no confirmation of any kind'}; training phase now "${after.m.trainingPhase || 'idle'}".`);
+      let after = await kit.snap();
+      // The game may confirm with its own modal rather than a browser dialog: report it and confirm.
+      let confirm = null;
+      if (after.modal) {
+        const modal = after.modal;
+        confirm = { title: modal.title, options: modal.options.map((o) => `"${o.l}"${o.e ? '' : ' (disabled)'}`) };
+        const ship = modal.options.find((o) => o.e && /release|ship/i.test(o.l) && !/red|wait|hold|back|not|keep/i.test(o.l));
+        if (ship) {
+          await kit.click(ship.k, 1, 'confirm-release');
+          confirm.chose = ship.l;
+          after = await kit.snap();
+        }
+      }
+      const how = dialogs.length
+        ? `browser dialog "${dialogs[0]}"`
+        : confirm
+          ? `the game's own modal "${confirm.title}" (${confirm.options.join(' / ')})${confirm.chose ? `, confirmed with "${confirm.chose}"` : ', no option that releases'}`
+          : 'no confirmation of any kind';
+      out.push(`At ${mmss(hit.t)}: evaluation found ${hit.m.issuesOpen} open issues; the button reads "${rel.l}". Clicked it once: ${how}; training phase now "${after.m.trainingPhase || 'idle'}".`);
       const t0 = kit.t;
       const end = await kit.run(240, kit.with(pol));
       await kit.shot('release-open-issues');
