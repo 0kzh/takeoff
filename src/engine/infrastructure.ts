@@ -1,4 +1,4 @@
-import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay, bump } from './state.js';
+import { GameState, PowerOrder, Shipment, say, logNews, addFunds, press, isBought, canPay, bump } from './state.js';
 import { fmtInt, fmtClock } from './format.js';
 import { trainCost, trainSlotFree, runOtherwiseReady, gpusShort, gpusAvailable, gpusNeeded } from './training.js';
 import { visibleProjects } from './projects.js';
@@ -213,9 +213,24 @@ export function shipmentSeconds(s: GameState): number {
   return SHIPMENT_SECONDS;
 }
 
+/**
+ * A shipment holds up to the largest lot. An order joins the shipment waiting behind the one on its
+ * way when it fits (same chips), so three small lots fill one slot, not three: the queue caps what
+ * arrives (two shipments, 75 s each), not how the player happens to buy it.
+ */
+export const SHIPMENT_CAPACITY = 100000;
+
+function joinable(s: GameState, n: number): Shipment | undefined {
+  const q = s.shipments ?? [];
+  if (q.length < 2) return undefined;
+  const last = q[q.length - 1]!;
+  const gen = s.flags['g6'] === true ? 6 : 5;
+  return last.gen === gen && last.gpus + n <= SHIPMENT_CAPACITY ? last : undefined;
+}
+
 /** Why a Stage 3 lot of `n` cannot be ordered now ('' when it can): the queue, the strait, room or power. */
 export function orderReasonS3(s: GameState, n: number): string {
-  if ((s.shipments ?? []).length >= SHIPMENTS_MAX) return '2 / 2 on order';
+  if ((s.shipments ?? []).length >= SHIPMENTS_MAX && !joinable(s, n)) return '2 / 2 on order';
   if (s.flags['blockade'] === true && s.flags['secondSource'] !== true) return 'the strait is closed';
   if (freeSlots(s) < n) return 'no room';
   if (freePowerGpus(s) < n) return 'no power';
@@ -227,6 +242,11 @@ export function orderLot(s: GameState, n: number, cost: number): void {
   addFunds(s, -cost);
   const half = s.flags['blockade'] === true;
   const secs = shipmentSeconds(s) * (half ? 2 : 1);
+  const into = joinable(s, n);
+  if (into) {
+    into.gpus += n;
+    return;
+  }
   s.shipments.push({ gpus: n, gen: s.flags['g6'] === true ? 6 : 5, remaining: secs });
   // The first order names the wait; after it the Infrastructure panel's shipment line carries it.
   if (s.shipments.length === 1 && s.flags['shipmentSaid'] !== true) {
@@ -329,11 +349,14 @@ export function wallFix(s: GameState): { price: number; what: 'plant' | 'hall' }
  * build-out grant takes both over.
  */
 function wallFixS3(s: GameState): { price: number; what: 'plant' | 'hall' } | null {
-  if (!s.revealed['infrastructure'] || s.flags['buildout'] === true) return null;
-  const smallest = LOT_SIZES_S3[0];
+  if (!s.revealed['infrastructure']) return null;
+  // Handed over, the build-out orders the fix when the next big lot would not fit; the money for it
+  // is kept from the lots and the repeatable sinks so the order can go through.
+  const buildout = s.flags['buildout'] === true;
+  const reach = buildout ? LOT_SIZES_S3[LOT_SIZES_S3.length - 1] : 2 * LOT_SIZES_S3[0];
   const power = freePowerGpus(s) + Math.floor((queuedMW(s) * 1000) / KW_PER_GPU);
   const room = datacenterBuilding(s) ? Infinity : freeSlots(s);
-  if (Math.min(power, room) >= 2 * smallest) return null;
+  if (Math.min(power, room) >= reach) return null;
   const fix = room <= power
     ? (needsSite2(s) ? null : { price: datacenterCost(s), what: 'hall' as const })
     : (reactorQueueFull(s) ? null : { price: nuclearCost(s), what: 'plant' as const });

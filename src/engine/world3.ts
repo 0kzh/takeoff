@@ -2,7 +2,7 @@ import { GameState, say, logNews, isBought, counter, press, canPay, pay } from '
 import { rand, pick } from './rng.js';
 import { fmtNum, fmtInt, fmtMoneyShort, monthOf } from './format.js';
 import { bestCapability, qualityMult } from './economy.js';
-import { secondsOfRevenue } from './infrastructure.js';
+import { secondsOfRevenue, wallFix } from './infrastructure.js';
 import { moveGov, recordRival, approvalTerms, RIVAL_LINES_S2 } from './world.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 
@@ -130,6 +130,11 @@ export function paymentsLevel(s: GameState): number {
   return Math.max(0, Math.min(PAYMENT_MAX, counter(s, 'payments')));
 }
 
+const S2_TERMS_KEPT = [
+  'gas turbines', 'Al-Marsa', 'defense contract', 'declined the Pentagon', 'free tier', 'job-transition fund',
+  'community agreement', 'joint statement', 'system card', 'candid testimony',
+];
+
 /** Every term of Stage 3's approval target, for the hover (§2.12). */
 export function approvalTermsS3(s: GameState): [string, number][] {
   const now = s.stats.timePlayed;
@@ -138,10 +143,11 @@ export function approvalTermsS3(s: GameState): [string, number][] {
     if (Math.abs(v) >= 0.05) out.push([label, v]);
   };
   add('jobs displaced', -12 * Math.log2(1 + Math.max(0, s.jobsDisplaced) / 2));
-  // Stage 2's standing terms: gas, Al-Marsa, the Pentagon, the free tier, the community, the pact, the card, the testimony.
+  // Stage 2's standing terms (stage3.md §2.12): gas, Al-Marsa, the Pentagon, the free tier, the job
+  // fund, the community, the pact, the card, the testimony. The rest were Stage 2's news.
   for (const [label, v] of approvalTerms(s)) {
+    if (!S2_TERMS_KEPT.includes(label)) continue;
     // Stage 2's job fund counts until Payments takes it over as level 1.
-    if (label === 'jobs displaced' || label === 'recent incidents' || label === 'Sage-3 public') continue;
     if (label === 'job-transition fund' && s.revealed['payments'] === true) continue;
     add(label, v);
   }
@@ -192,11 +198,19 @@ export function lobbyGain(s: GameState): number {
   return Math.min(1, (100 - s.govRelations) / 80);
 }
 
+/**
+ * What the repeatable revenue sinks keep in hand: the wall's fix (the next hall or reactor) while the
+ * lots are stopped by room or power, as the lot buttons do (stage3.md as-built deltas row 4).
+ */
+export function sinkHold(s: GameState): number {
+  return wallFix(s)?.price ?? 0;
+}
+
 /** `Lobby`: relations +1 (tapered), once a unit; the price heats up. */
 export function lobby(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['lobby']) return false;
   const cost = lobbyCost(s);
-  if (!canPay(s, { funds: cost })) return false;
+  if (!canPay(s, { funds: cost }) || s.funds - cost < sinkHold(s)) return false;
   pay(s, { funds: cost });
   moveGov(s, 1);
   s.flags['lobbyHeat'] = heatOf(s, 'lobbyHeat') + 1;
@@ -209,7 +223,7 @@ export function lobby(s: GameState): boolean {
 export function counterintel(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['counterintel']) return false;
   const cost = counterintelCost(s);
-  if (!canPay(s, { funds: cost })) return false;
+  if (!canPay(s, { funds: cost }) || s.funds - cost < sinkHold(s)) return false;
   pay(s, { funds: cost });
   moveLead3(s, 0.1);
   s.flags['ciHeat'] = heatOf(s, 'ciHeat') + 1;

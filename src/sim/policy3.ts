@@ -28,6 +28,7 @@ import { canPay } from '../engine/state.js';
 
 /** Per-stage bookkeeping the Stage 3 policies keep (on BotMemory). */
 export interface S3Memory {
+  paymentsPressed?: boolean;
   trainings0: number;
   alignBudget: number;
   readyRun: number;
@@ -379,12 +380,17 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
   if (hallUrgent(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
   if (reactorUrgent(s) && s.funds >= nuclearCost(s)) a.buyNuclear(s);
+  // A new button is pressed once, as a new card is bought: Payments goes up a level when it appears.
+  if (s.revealed['payments'] && mem3(s, mem).paymentsPressed !== true) {
+    mem3(s, mem).paymentsPressed = true;
+    a.stepPayments(s, true);
+  }
   if (greedy || trainfirst) {
     for (const n of [...LOT_SIZES_S3].reverse()) a.buyGpuBatch(s, n);
     if (s.revealed['lobby'] && s.funds >= lobbyCost(s)) a.lobby(s);
     if (s.revealed['counterintel'] && s.funds >= counterintelCost(s)) a.counterintel(s);
-    if (s.revealed['experiments']) a.runExperiments(s, 1);
-    if (s.revealed['alignWork'] && greedy) a.alignWork(s, 1);
+    // The harness presses Experiments (capped per run); research is never pressed to nothing.
+    if (s.revealed['experiments'] && trainfirst) a.runExperiments(s, 1);
   }
 }
 

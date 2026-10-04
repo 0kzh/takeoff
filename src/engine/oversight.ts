@@ -50,7 +50,9 @@ export function orderCause(s: GameState): '' | 'relations' | 'incidents' | 'leak
   if (s.flags['leaked'] === true && s.flags['memo'] === 'leaked' && s.govRelations < 50 && s.flags['leakOrderUsed'] !== true) return 'leak';
   const shownAt = s.flags['incidentsShownAt'];
   if (typeof shownAt !== 'number' || s.stats.timePlayed - shownAt < 300) return '';
-  if (s.govRelations < orderThreshold(s)) return 'relations';
+  // Once oversight has been conceded the government holds the kill switch and signs off every run:
+  // only three more major incidents (or the leak) bring a second order, not relations alone.
+  if (s.govRelations < orderThreshold(s) && s.flags['conceded'] !== true) return 'relations';
   if ((s.majorIncidents ?? 0) >= 3) return 'incidents';
   return '';
 }
@@ -74,7 +76,7 @@ export function orderLine(s: GameState): string {
 /** The order condition still holds (for the 1:30 after a refusal). */
 export function orderStands(s: GameState): boolean {
   if ((s.majorIncidents ?? 0) >= 3) return true;
-  return s.govRelations < orderThreshold(s);
+  return s.govRelations < orderThreshold(s) && s.flags['conceded'] !== true;
 }
 
 /** The session is open (the Committee waits for a 25× model and a motion). */

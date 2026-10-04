@@ -10,7 +10,7 @@ import {
   canRedTeam, canApprove, canSendBack, researchUnit, EXPERIMENTS_MAX,
 } from './training.js';
 import { updateDrift, driftWatch, reimageCooldown } from './alignment.js';
-import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX } from './world3.js';
+import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX, sinkHold } from './world3.js';
 import { sl3Cost } from './world.js';
 import { visibleProjects } from './projects.js';
 import { enabledPurchases } from './events.js';
@@ -169,8 +169,8 @@ export function enabledPurchasesS3(s: GameState): string[] {
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
   if (s.revealed['alignWork'] && s.research >= researchUnit(s)) out.push('alignWork');
   if (s.revealed['experiments'] && counter(s, 'expPts') < EXPERIMENTS_MAX && s.research >= researchUnit(s)) out.push('experiments');
-  if (s.revealed['lobby'] && s.funds >= lobbyCost(s)) out.push('lobby');
-  if (s.revealed['counterintel'] && s.funds >= counterintelCost(s)) out.push('counterintel');
+  if (s.revealed['lobby'] && s.funds - lobbyCost(s) >= sinkHold(s)) out.push('lobby');
+  if (s.revealed['counterintel'] && s.funds - counterintelCost(s) >= sinkHold(s)) out.push('counterintel');
   if (s.revealed['payments'] && paymentsLevel(s) < PAYMENT_MAX) out.push('payments');
   if (s.revealed['reimage'] && reimageCooldown(s) <= 0) out.push('reimage');
   return out;
