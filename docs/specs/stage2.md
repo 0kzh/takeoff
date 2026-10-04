@@ -11,6 +11,7 @@ actually built. Where this file and the code disagree about a Stage 1 id or numb
 | 1 | **No undertrained runs.** A run needs `N(c) = 600 × (c/1.6)^7` G4-equivalents (two significant figures; a third fewer with Distributed training) or `Train` is disabled and says what is missing. There is no yield: gains are in full. `Train now` is withdrawn. The N GPUs are busy while the run trains; nothing else is diverted | §2.5, §8 |
 | 2 | Entry is `First Datacenter`, one purchase; Stage 1 has no ladder and is 20–26 minutes. The arrival below is rebuilt from the sim once Stage 1 is retuned | header, §1 |
 | 3 | GPU room and power are meters in the Stores box; a lot row says what it draws and a plant row what it runs; a lot is never sold into no power or no room | §2.1, §2.13; `user-feedback-1.md` B3 |
+| 4 | **Research is new to the Train row here** (`stage1-round3-fixes.md` §1: a Stage 1 run costs dollars and GPUs only). Stage 2's price is unchanged. One console line 30 s after the arrival narration: `Runs this size need research as well as money: 34,000 for Sage-1.6.` The arrival's research gift stays. From 1.6× Stage 1 already quotes this stage's dollar price, so the figure does not jump at the gate. Rebuild the preset from the retuned Stage 1 (about 1.7–1.85×, more research in hand) | §1, §2.5 |
 
 ## As-built deltas (read first)
 

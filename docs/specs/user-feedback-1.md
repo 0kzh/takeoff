@@ -139,7 +139,8 @@ and says why; with them the run gains in full. The N GPUs serve no customers whi
 rented fleet trains three models, not five: the runs start at 1.00 / 1.17 / 1.37× (10 / 20 / 40 GPUs) and the
 fourth, from 1.60×, already needs 600. Yield used to cut the later gains to about 10 %. For five rented runs,
 Stage 1's Capability gain becomes **+10–14 %** (Efficiency and Safety stay at +5 %); the table's first row is
-that path. Research and funds prices are functions of capability and do not move.
+that path. Research and funds prices are functions of capability and do not move. (Superseded for Stage 1 by
+`stage1-round3-fixes.md` §1: the run costs dollars only, `$290 × c^11.5`.)
 
 **Checks on Stage 2.** Against the built fleet at each run (median bot: 5,000 GPUs at 1.85×, 14,000 at 2.2×,
 47,000 at 2.6×, 85,000 at 2.9×, 420,000 G4-equivalents at 3.35×, 579,000 at 3.9×) the rule asks for 26–54 % of
@@ -171,7 +172,7 @@ Leave the exponent.
 | | |
 |---|---|
 | Card | `p_datacenter`, retitled `First Datacenter`, pinned. `1,000 GPUs of our own at Abilene. Stop renting.` |
-| Appears (greyed) | When Series A is bought, or at the second release, or in October 2025 — whichever comes first. About minute 10–12, so 9–14 minutes before it is bought (G11 asks for 8) |
+| Appears (greyed) | When Series A is bought, or at the second release, or in October 2025 — whichever comes first. About minute 10–12, so 9–14 minutes before it is bought (G11 asks for 8). Superseded by `stage1-round3-fixes.md` §2: at the third release, with two status lines |
 | List price | **$150,000** |
 | At the wall | The first time a run needs more GPUs than the cloud will rent, the price is set once, down only: `clamp(240 × revenue per second, $90,000, $150,000)`, with a line: `Abilene fast-tracks the permit. First Datacenter: $118,000.` A player with nothing saved then waits four minutes at most; one who has saved since the card appeared, one or two |
 | Buying it | Stage 2 at once, with the built arrival (1,000 GPUs, 5 MW, Datacenter 1) and the built narration |

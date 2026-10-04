@@ -43,6 +43,16 @@ The owner played the build of 2026-10-04. Where a note of theirs and a critic-dr
    cannot be bought into no power or no room; the rows say that GPUs need power.
 5. The Pause needs a lead of 1 month, not 2 (the built Stage 2 ends at 1.4; `stage3.md`, as-built deltas).
 
+## Amendments after the Stage 1 round-3 critic (`stage1-round3-fixes.md`)
+
+1. **What a run costs changes once a stage, and is said each time.** Stage 1: dollars and GPUs (research buys
+   cards only). Stage 2: dollars, research and data, and GPUs. Stage 3: research, and GPUs. Stage 4: nothing.
+2. **The run first.** While a run lacks only its dollars, other dollar purchases keep its price in hand and say
+   so; the same for a card a wall names. Built for Stage 2's lots; Stage 1 takes it for every dollar button.
+3. First Datacenter appears at the third release, prints its price in minutes of income and a meter of the
+   cloud's GPUs; cards wait until they cannot be paid for at once; events queue behind the player's progress
+   and list their default first.
+
 ## 1. Requirements checklist
 
 Every feature in the original prompt, the stage that delivers it, and the mechanic. "S2" = Stage 2, etc.
@@ -211,7 +221,7 @@ The resource that binds, in order, and the fix that is on screen when it binds.
 
 | Stage | Binding resource, in order | Always-visible fix |
 |---|---|---|
-| 1 | power (kWh) → funds → demand → compute → research cap → GPUs for the next run (First Datacenter) | Buy Power / Grid Contract; lower the price, Marketing; Rent GPU; Hire, Expand Lab; First Datacenter |
+| 1 | power (kWh) → funds → demand → compute → research cap (cards) → money for the next run → GPUs (First Datacenter) | Buy Power / Grid Contract; lower the price, Marketing; Rent GPU; Hire, Expand Lab; the levers on income; First Datacenter |
 | 2 | supply vs market (price falls) → power (MW) → research rate → datacenter room → data → market again → power again → training compute → funds | Agent platform, release; gas / solar / nuclear / Gulf; AI research assistants + slider; Build Datacenter; crawl → licences → synthetic → flywheel; International, Sage-mini; Build + Buy GPUs; all of the above |
 | 3 | research (the model does it) → funds, for the first eight minutes only → **alignment you cannot see** (drift, rogue copies) → lead → chips (Taiwan) → power (Iran, if Gulf) → government → approval | The allocation, autonomy grants; datacenters and reactors; monitors, interpretability, Re-image; security levels; stockpile, second source; reactors; share evals, lobby, the conceded order; impact payments, clinics |
 | 4 | robots → materials → approval (jobs) → treaty progress → monitor compute | Atlas factories; robot mines; UBI, cures; Verify Baiwen; Monitors at scale |
