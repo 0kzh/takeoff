@@ -29,6 +29,10 @@ import { renderLog } from './log.js';
 import { renderModal } from './modal.js';
 import { renderGraph } from './graph.js';
 import { mountStores, renderStores } from './stores.js';
+import {
+  mount3, renderResearch3, renderTraining3, renderInfrastructure3, renderAlignment, renderSecurity3, renderGeopolitics,
+  renderOversight, renderPublic3, renderStats3,
+} from './render3.js';
 
 type Rest<T> = T extends (s: GameState, ...rest: infer R) => unknown ? R : never;
 export type Perform = <K extends keyof Actions>(name: K, ...args: Rest<Actions[K]>) => boolean;
@@ -75,6 +79,7 @@ export function mount(p: Perform): void {
   const slider = byId<HTMLInputElement>('allocSlider');
   slider.addEventListener('input', () => perform('setResearchAlloc', Number(slider.value)));
   mountStores();
+  mount3(p);
 }
 
 /** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
@@ -260,20 +265,24 @@ function renderInfrastructure(s: GameState): void {
   const cap = gpuCapacity(s);
   setMeter('gpuMeter', s.gpus / Math.max(1, cap), 'use', `${fmtInt(s.gpus)} GPUs in ${fmtInt(cap)} slots`);
   // The words under the figure (their own line, so a long one never pushes the box wider).
-  setText('gpuFull', s.gpus >= cap ? 'the halls are full · Build Datacenter' : '');
+  setText('gpuFull', s.gpus >= cap ? (s.stage >= 3 && s.flags['buildout'] === true ? 'the halls are full · the build-out orders one' : 'the halls are full · Build Datacenter') : '');
   const draw = powerDrawMW(s);
   setMeter('powerMeterS', draw / Math.max(1e-9, s.powerCapacityMW), 'use', `${fmtNum(draw, 1)} of ${fmtInt(s.powerCapacityMW)} MW in use`);
   const dark = Math.max(0, s.gpus - activeGpus(s));
   const powerFull = freePowerGpus(s) < 100;
   setText('powerFull', dark > 0
     ? `${fmtInt(dark)} GPUs dark${powerScale(s) < 1 ? ': a crisis holds power back' : ': add power'}`
-    : powerFull ? `full · ${cheapestPlantFix(s)}` : `runs ${fmtInt(poweredGpus(s))} GPUs`);
+    : powerFull ? `full · ${s.stage >= 3 ? (s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW') : cheapestPlantFix(s)}` : `runs ${fmtInt(poweredGpus(s))} GPUs`);
   setText('infraCopies', fmtInt(copies(s)));
   setText('datacenters', fmtInt(s.datacenters));
   setText('chipPrice', fmtMoney(gpuUnitPrice(s)));
   setText('activeGpus', fmtInt(activeGpus(s)));
   setText('infraTasksPerSec', fmtInt(s.stats.tasksPerSec));
   setText('data', fmtNum(s.data, 1));
+  if (s.stage >= 3) {
+    renderInfrastructure3(s);
+    return;
+  }
   setText('chipsOnOrder', chipsOnOrder(s) > 0 ? fmtInt(chipsOnOrder(s)) : 'none yet');
 
   // GPU lots, side by side, each with its price and what it adds at today's market (critic C1).
@@ -388,6 +397,7 @@ function renderResearch(s: GameState): void {
     setText('humanShare', `${share >= 10 ? fmtInt(share) : fmtNum(share, share >= 1 ? 1 : 2)}%`);
   }
   if (s.revealed['alignShare']) setText('btn-alignShare', `Alignment compute: ${Math.round(s.alignShare * 100)}%`);
+  if (s.stage === 3) renderResearch3(s);
 }
 
 const projectButtons = new Map<string, HTMLButtonElement>();
@@ -395,7 +405,7 @@ const projectButtons = new Map<string, HTMLButtonElement>();
 /** Buttons are kept and updated in place so a hover or a half-finished click survives a re-render. */
 function renderProjects(s: GameState): void {
   const list = byId('projectList');
-  const visible = s.revealed['projects'] ? visibleProjects(s) : [];
+  const visible = s.revealed['projects'] ? visibleProjects(s).filter((p) => !(p.grant && s.stage >= 3)) : [];
   const ids = new Set(visible.map((p) => p.id));
   for (const [id, b] of projectButtons) {
     if (!ids.has(id)) {
@@ -416,7 +426,8 @@ function renderProjects(s: GameState): void {
     }
     if (list.children[i] !== b) list.insertBefore(b, list.children[i] ?? null);
     const title = b.firstElementChild as HTMLElement;
-    const label = `${def.title} ${priceTag(s, def)}`;
+    const needs = s.stage >= 3 && def.prereq && def.needs && !def.prereq(s) ? ` (${def.needs(s)})` : '';
+    const label = `${def.title} ${priceTag(s, def)}${needs}`;
     if (title.textContent !== label) title.textContent = label;
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
@@ -469,6 +480,7 @@ function renderTraining(s: GameState): void {
   if (idle) renderIdle(s);
   if (running) renderRunning(s, running);
   if (slotRun) renderEval(s, slotRun);
+  if (s.stage === 3) renderTraining3(s);
 }
 
 /**
@@ -596,7 +608,7 @@ function renderEval(s: GameState, run: TrainingRun): void {
           : `Release ${run.name} to customers. Demand and hype go up; +1 Trust.`,
     );
     setTitle('btn-releaseInternal', sh ? sh.internal : `Keep ${run.name} for research: it starts at once; customers keep ${t.deployedName}.`);
-    setText('releaseNote', t.releaseWait > 0 ? `outside evaluation ${fmtClock(Math.ceil(t.releaseWait))}` : '');
+    if (s.stage < 3) setText('releaseNote', t.releaseWait > 0 ? `outside evaluation ${fmtClock(Math.ceil(t.releaseWait))}` : '');
   }
 }
 
@@ -604,6 +616,10 @@ function renderEval(s: GameState, run: TrainingRun): void {
 function renderWorld(s: GameState): void {
   if (s.stage < 2) return;
   setText('securityLevel', fmtInt(s.securityLevel));
+  if (s.stage >= 3) {
+    renderWorld3(s);
+    return;
+  }
   if (s.revealed['security']) {
     setText('securityNote', SECURITY_NOTES[s.securityLevel] ?? `SL${s.securityLevel}`);
     const c = sl3Cost(s);
@@ -633,6 +649,30 @@ function renderWorld(s: GameState): void {
   }
 }
 
+/** Stage 3's world: Security, Government then Oversight, Public, Alignment, Geopolitics, Stats. */
+function renderWorld3(s: GameState): void {
+  renderSecurity3(s);
+  setText('govRelations', fmtInt(Math.round(s.govRelations)));
+  setText('govMood', govMood(s));
+  setText('govNote', '');
+  setToggle('btn-shareEvals', s.shareEvals, s.shareEvals ? 'ON' : 'OFF');
+  setDisabled('btn-shareEvals', s.flags['evalsLocked'] === true);
+  renderOversight(s);
+  renderPublic3(s);
+  setText('jobsDisplaced', fmtJobs(s.jobsDisplaced));
+  setToggle('btn-jobFund', s.jobFund, s.jobFund ? 'ON' : 'OFF');
+  renderAlignment(s);
+  renderGeopolitics(s);
+  if (s.revealed['stats']) {
+    setText('statCopies', fmtInt(copies(s)));
+    setText('statSpeed', fmtNum(perCopyRate(s), 0));
+    setText('statRunRate', fmtMoney(runRate(s)));
+    setText('statLead', fmtNum(Math.round(s.lead * 2) / 2, 1));
+    setText('statAlignment', fmtInt(Math.round(s.alignmentApparent)));
+  }
+  renderStats3(s);
+}
+
 /** Later-stage panels are hidden but kept current so revealing one shows real values. */
 function renderLater(s: GameState): void {
   const n = (id: string, v: number, d = 0) => setText(id, d ? fmtNum(v, d) : fmtInt(v));
@@ -647,14 +687,14 @@ function renderLater(s: GameState): void {
   n('robots', s.robots);
   n('societyApproval', s.approval);
   n('societyJobs', s.jobsDisplaced);
-  n('alignmentApparent', s.alignmentApparent);
-  n('interpretability', s.interpretability);
+  if (s.stage < 3) {
+    n('alignmentApparent', s.alignmentApparent);
+    n('interpretability', s.interpretability);
+  }
   n('lead', s.lead);
   n('baiwenCapability', s.baiwenCapability, 2);
   n('launchCapacity', s.launchCapacity);
   n('orbitalCompute', s.orbitalCompute);
-  n('monitorCoverage', typeof s.flags['monitorCoverage'] === 'number' ? (s.flags['monitorCoverage'] as number) : 0);
-  setText('oversightStatus', typeof s.flags['committeeChoice'] === 'string' ? (s.flags['committeeChoice'] as string) : 'not convened');
   setText('treatyStatus', s.flags['treatySigned'] ? 'signed' : 'not negotiating');
   setText('statTasksPerSec', fmtInt(s.stats.tasksPerSec));
   setText('statRevPerSec', fmtMoney(s.stats.revPerSec));

@@ -35,7 +35,7 @@ export const DEPOSIT_PER_GPU = 400;
 export const MIN_DEPOSIT = 25000;
 /** Flags shown only while their stage is on screen; Stage 3 hides these (stage3.md §1.1). */
 // The AUTO billing line stays (critic C11: Stage 3 opened on the manual line, `0.0/s of 0.0/s produced: idle`).
-const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow', 'lot5', 'lot25'];
+const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow'];
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;
@@ -188,7 +188,8 @@ function enterTakeoff(s: GameState): void {
   s.autoPrice = true;
   hide(s, STAGE2_ONLY_FLAGS);
   hide(s, ['releaseInternal']);
-  show(s, ['alignment', 'takeoff']);
+  // The three lots side by side from the first second (as-built deltas row 4), and what is on order.
+  show(s, ['alignment', 'takeoff', 'infrastructure', 'lot5', 'lot25', 'chipsRow', 'nuclearButton', 'dcButton']);
   // What the public can run themselves: the last public model (§1.1).
   const publicModels = s.training.models.filter((m) => m.public);
   s.flags['publicCap'] = publicModels.length ? publicModels[publicModels.length - 1]!.capability : s.capability;

@@ -12,6 +12,7 @@ import {
 import { updateDrift, driftWatch, reimageCooldown } from './alignment.js';
 import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX, sinkHold } from './world3.js';
 import { sl3Cost } from './world.js';
+import { humanShare } from './economy.js';
 import { visibleProjects } from './projects.js';
 import { enabledPurchases } from './events.js';
 import { updateOversight } from './oversight.js';
@@ -31,6 +32,10 @@ export function stage3Tick(s: GameState, dt: number): void {
 
 export function stage3Slow(s: GameState): void {
   if (s.stage !== 3) return;
+  if (s.flags['humanShareGone'] !== true && s.stats.timeInStage > 30 && humanShare(s) < 0.0005) {
+    s.flags['humanShareGone'] = true;
+    say(s, 'Human share of research: 0.0%. The line is removed.');
+  }
   runStandingOrder(s);
   runBuildout(s);
   updateWorld3(s);

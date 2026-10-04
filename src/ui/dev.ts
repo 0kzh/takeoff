@@ -6,7 +6,7 @@ import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
-import { PRESETS, presetFor } from '../data/presets.js';
+import { PRESETS, presetFor, EXTRA_PRESETS, presetByKey } from '../data/presets.js';
 import { byId, make } from './dom.js';
 import { resetGraph } from './graph.js';
 import { resetLogCache } from './log.js';
@@ -40,7 +40,15 @@ function load(host: DevHost, next: GameState): void {
   host.render();
 }
 
-export function loadPreset(host: DevHost, n: number): GameState {
+export function loadPreset(host: DevHost, key: number | string): GameState {
+  // `3c`, `4s`…: a named variant of a stage's start (EXTRA_PRESETS); a number: the stage's start.
+  if (typeof key === 'string' && EXTRA_PRESETS[key]) {
+    const extra = presetByKey(key)!;
+    const param = new URLSearchParams(location.search).get('seed');
+    load(host, extra.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
+    return host.state;
+  }
+  const n = Number(key);
   const preset = presetFor(n);
   // `?seed=N` makes a preset reproducible too (the smoke tests); otherwise a fresh seed each time.
   const param = new URLSearchParams(location.search).get('seed');
@@ -113,7 +121,16 @@ export function mountDev(host: DevHost): void {
     return div;
   };
 
-  const stageRow = row('Stage ', ...PRESETS.map((p) => btn(`dev-stage-${p.stage}`, String(p.stage), () => loadPreset(host, p.stage))));
+  const stageRow = row(
+    'Stage ',
+    ...PRESETS.map((p) => btn(`dev-stage-${p.stage}`, String(p.stage), () => loadPreset(host, p.stage))),
+    ' ',
+    ...Object.entries(EXTRA_PRESETS).map(([key, p]) => {
+      const b = btn(`dev-stage-${key}`, key, () => loadPreset(host, key));
+      b.title = p.label;
+      return b;
+    }),
+  );
   const speedButtons = SPEEDS.map((n) => btn(`dev-speed-${n}`, `×${n}`, () => host.setSpeed(n)));
   const autoplay = btn('dev-autoplay', 'Autoplay', () => host.setAutoplay(!host.getAutoplay()));
   const speedRow = row('Speed ', ...speedButtons, ' ', autoplay);
@@ -206,7 +223,7 @@ export function mountDev(host: DevHost): void {
       fire: (id: string) => actions.fireEvent(host.state, id),
     },
     presets: PRESETS,
-    loadPreset: (n: number) => loadPreset(host, n),
+    loadPreset: (n: number | string) => loadPreset(host, n),
     setSpeed: host.setSpeed,
     setAutoplay: host.setAutoplay,
     save: () => host.saver.saveNow(),

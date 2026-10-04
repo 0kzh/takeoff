@@ -1,4 +1,6 @@
-import { GameState, newGame } from './engine/state.js';
+import { GameState, newGame, replaceState } from './engine/state.js';
+import { resetGraph } from './ui/graph.js';
+import { resetLogCache } from './ui/log.js';
 import { actions, tick, step, TICK_MS } from './engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './sim/policy.js';
 import { mount, render, Perform } from './ui/render.js';
@@ -41,6 +43,17 @@ const perform = ((name: keyof typeof actions, ...args: unknown[]) => {
 }) as Perform;
 
 mount(perform);
+// The end screen's way back (stage5.md §7.2): a fresh game, the old save gone.
+document.getElementById('btn-newGame')?.addEventListener('click', () => {
+  saver.clear();
+  replaceState(state, newGame(Date.now()));
+  resetGraph();
+  resetLogCache();
+  bot = newBotMemory(policy);
+  autoplay = false;
+  saver.saveNow();
+  render(state);
+});
 mountDev({
   state,
   saver,

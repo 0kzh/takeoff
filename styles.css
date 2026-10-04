@@ -491,12 +491,28 @@ div.storeRow[data-reveal].shown { display: flex; }
   #panel-government { order: 13; }
   #panel-public { order: 14; }
   #panel-stats { order: 15; }
-  #panel-alignment, #panel-geopolitics, #panel-oversight, #panel-monitors { order: 16; }
+  #panel-alignment, #panel-geopolitics, #panel-oversight { order: 16; }
+  /* Stage 3 (stage3.md §6.4): Tasks, Stores, Training, the graph, Alignment, Projects, Research,
+     Oversight, Geopolitics, Security, Public, Business, Infrastructure, Stats. */
+  body[data-stage="3"] #panel-training { order: 3; }
+  body[data-stage="3"] #panel-graph { order: 4; }
+  body[data-stage="3"] #panel-alignment { order: 5; }
+  body[data-stage="3"] #panel-projects { order: 6; }
+  body[data-stage="3"] #panel-research { order: 7; }
+  body[data-stage="3"] #panel-oversight, body[data-stage="3"] #panel-government { order: 8; }
+  body[data-stage="3"] #panel-geopolitics { order: 9; }
+  body[data-stage="3"] #panel-security { order: 10; }
+  body[data-stage="3"] #panel-public { order: 11; }
+  body[data-stage="3"] #panel-business { order: 12; }
+  body[data-stage="3"] #panel-infrastructure { order: 13; }
+  body[data-stage="3"] #panel-stats { order: 14; }
+  .projectButton.grant { width: 100%; }
+  #allocSlider, #monitorSlider { width: 100%; max-width: 260px; }
   #panel-robots, #panel-society, #panel-treaty, #panel-space { order: 17; }
   #panel-log { order: 30; }
   /* Stores rows in two columns; a row with two numbers (x / y) takes the whole width. */
   #panel-stores.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
-  #row-research, #row-gpus, #row-power, #row-chips { grid-column: 1 / -1; }
+  #row-research, #row-gpus, #row-power, #row-chips, #row-rogue { grid-column: 1 / -1; }
   .projectButton { width: 100%; max-width: 100%; box-sizing: border-box; }
   .progress { width: 100%; max-width: 300px; box-sizing: border-box; }
   .benchBar { width: auto; flex: 1 1 auto; min-width: 60px; }
@@ -514,6 +530,21 @@ div.storeRow[data-reveal].shown { display: flex; }
 /* Focus: each button carries its trade from Stage 2 (critic C5). */
 .focusTrade { display: block; font-size: 10px; line-height: 1.1; color: #555; }
 .focusTrade:empty { display: none; }
+
+/* ---------- Stage 3 (stage3.md §6) ---------- */
+
+/* A control a grant took away (Train, Red-team, Approve, the hall and reactor buttons). */
+.off { display: none !important; }
+#monitorSlider { width: 110px; vertical-align: middle; margin: 0 2px; }
+#experimentsRow, #redteamDepthRow, #stepSizeRow, #holdRow, #alignWorkRow, #buildBudgetRow, #paymentsRow { margin-top: 3px; }
+#shipmentRow, #theftNote { font-size: 14px; }
+#grantList { margin-top: 6px; }
+/* A grant: the hand-over, drawn apart from the cards (UP's probe-trust button sits by itself). */
+.projectButton.grant { width: 310px; min-height: 44px; border-style: double; border-width: 3px; }
+#btn-sl3.urgent, #btn-datacenter.urgent, #btn-nuclear.urgent { border: 2px solid #000; font-weight: bold; }
+#btn-sl3.urgent::after, #btn-datacenter.urgent::after, #btn-nuclear.urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
+#endingBox p { margin-top: 18px; }
+#btn-newGame { font-size: 14px; }
 
 /* The capacity meter (owner feedback 1, B3): halfwidth glyphs keep one width in the page's font; the
    boot check falls back to block glyphs in the console's monospace stack. */
