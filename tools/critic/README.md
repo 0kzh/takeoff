@@ -37,8 +37,19 @@ node tools/critic/analyze.mjs pc-sN
 node tools/critic/compare.mjs tk-sN pc-sN tk-sN-auto
 node tools/critic/transition.mjs takeoff    --game-dir agent-tools/snapshots/<build> --stage N
 node tools/critic/transition.mjs paperclips                   # Stage 1→2 from fixture paperclips-s1-end
-node tools/critic/softlock.mjs takeoff    --game-dir agent-tools/snapshots/<build>
+node tools/critic/softlock.mjs takeoff    --game-dir agent-tools/snapshots/<build> [--stage N]
 node tools/critic/softlock.mjs paperclips
+```
+
+Takeoff Stage 2 baselines (build `s2-r1`, seeds 1–3, stepped):
+
+```sh
+node tools/critic/run.mjs takeoff tk-s2-seedN --game-dir agent-tools/snapshots/s2-r1 --stage 2 --realtime 0 --accel-minutes 70 --seed N   # N = 1, 2, 3
+node tools/critic/run.mjs takeoff tk-s2-auto  --game-dir agent-tools/snapshots/s2-r1 --stage 2 --realtime 0 --accel-minutes 70 --autoplay
+node tools/critic/explore.mjs baseline,modal-last,modal-ignore,toggles --game-dir agent-tools/snapshots/s2-r1 --stage 2 --minutes 90
+node tools/critic/transition.mjs takeoff --game-dir agent-tools/snapshots/s2-r1 --stage 2      # → transition-takeoff-s2.md
+node tools/critic/softlock.mjs takeoff   --game-dir agent-tools/snapshots/s2-r1 --stage 2      # → softlock-takeoff-s2.md
+node tools/critic/decisions.mjs tk-s2-seed1 tk-s2-seed2 tk-s2-seed3
 ```
 
 Round-1 baselines (Stage 1) were captured with:
@@ -91,7 +102,8 @@ while mashing). Outputs per run:
 `node tools/critic/analyze.mjs <label>` prints and writes `<label>.analysis.md` and `.analysis.json`:
 time to first automation; first-meaningful-choice candidates; nothing-to-do (loose) for the first
 5 minutes and the stage; novelty and reveal gaps (every gap > 120 s, the longest); reveal timeline;
-greyed-out-goal coverage; cognitive load at minutes 0/1/3/5/10/20/end and the five largest
+greyed-out-goal coverage; cognitive load at minutes 0/1/3/5/10/20/30/end (30 added for longer
+stages; '—' when the stage ends earlier) and the five largest
 single-beat disclosure spikes; action counts (+ game counters for Autoplay runs); panel and project
 cadence. Analysis windows run from the stage start to the stage change; for a run that starts at
 Stage N (`--stage N`) t = 0 is that stage's start. `analyze.mjs <label> --stage M` analyses a later
@@ -103,12 +115,15 @@ stage of a run).
 
 * `transition.mjs <game> [--stage N] [--fixture NAME]` — plays (stepped) until the stage changes and
   writes `transition-<game>.md` plus `.tpre/.tend/.transition.png`.
-* `softlock.mjs <game> [--scenario NAME]` — the §4 dead-end probes as named scenarios, each from a
-  new game in stepped mode; writes `softlock-<game>.md` and `softlock-<game>-<scenario>.png`.
-  Takeoff: `power-zero`, `idle-new-game`, `price-200x`, `ignore-research-15min`,
-  `release-open-issues`, `reload-mid-training`. Paperclips: `wire-out-low-price`, `absurd-price`,
-  `reload`, `idle`. A scenario whose preconditions no longer hold reports
-  `scenario no longer applicable: <reason>` instead of failing.
+* `softlock.mjs <game> [--scenario NAME] [--stage N]` — the §4 dead-end probes as named scenarios,
+  each from a new game (or the start of Stage N) in stepped mode; writes `softlock-<game>[-sN].md`
+  and `softlock-<game>[-sN]-<scenario>.png`. Takeoff: `power-zero`, `idle-new-game`, `price-200x`
+  (these three are Stage 1 situations and report "not applicable" under `--stage 2`),
+  `ignore-research-15min` (from Stage 2 it also reports the Train button's state and when the lab cap
+  first greyed it), `release-open-issues` (from Stage 2 the player keeps training and building while
+  it waits for an evaluation with open issues), `reload-mid-training`. Paperclips:
+  `wire-out-low-price`, `absurd-price`, `reload`, `idle`. A scenario whose preconditions no longer
+  hold reports `scenario no longer applicable: <reason>` instead of failing.
 * `determinism.mjs <game> [run flags]` — runs the same stepped run twice and diffs events, actions
   and snapshots (`DETERMINISTIC` or the first difference).
 * `make-fixtures.mjs` — rebuilds `fixtures/paperclips-stage2.json` (just after "Release the
@@ -130,7 +145,8 @@ stage of a run).
   `hire-only`, `expand-only`, `ship-open`, `modal-last`, `modal-ignore`, `modal-worst`,
   `modal-best`, `no-train`, `click-only`, `no-projects`, `mobile` (390 × 844), `focus-efficiency`,
   `focus-safety`, `no-marketing`, `no-redteam-wait`, `no-contracts`, `no-side-projects`,
-  `baseline`) and write a normal run `<tag>-<name>.*` (so `analyze.mjs`, `compare.mjs` and
+  `toggles` (every setting pressed once at first sight, each slider set to its minimum at first
+  sight and its maximum 10 minutes later), `baseline`) and write a normal run `<tag>-<name>.*` (so `analyze.mjs`, `compare.mjs` and
   `decisions.mjs` work on it) plus `<tag>-<name>.explore.md` (one metrics row per minute, every
   modal with body text / timer / option tooltips, on-screen notes each time they change, every
   console and log line), `.modals.json` and `.modal<N>.png`. **Probes** are short scripted
@@ -145,8 +161,9 @@ stage of a run).
   (default `x`; round 2 used `r2x`).
 * `decisions.mjs <label[:N]…> [--stage N]` — gaps between non-drip decisions, and reveal → purchase
   latency of projects, for any run; `:N`/`--stage N` takes Stage N of a run, timed from its start.
-  From Stage 2 on, Paperclips' repeat purchases (drones, farms, batteries, probe launches,
-  Processors/Memory bought with swarm gifts) count as drip too; Stage 1 numbers are unchanged.
+  From Stage 2 on, repeat purchases count as drip too — Paperclips' drones, farms, batteries, probe
+  launches and Processors/Memory bought with swarm gifts; Takeoff's GPU lots, plants and
+  datacenters (policy tag `infra`); Stage 1 numbers are unchanged.
 * Library hooks: `adapter.policy.modalChoice(modal, enabledOptions, t)` in `lib/policy.mjs`
   (default unchanged: first enabled option; return `null` to leave the modal open);
   `runGame({ adapter, viewport })` in `lib/runner.mjs` (a pre-built adapter instead of the one
@@ -162,13 +179,14 @@ stage of a run).
 The report's §1 definitions are applied verbatim (see the header of `lib/analysis.mjs`). Where §1
 left something open, the harness does this:
 
-* **Big-ticket goals** (Takeoff). §1 says the first-timer stops the GPU/marketing drip and saves once a
+* **Big-ticket goals** (Takeoff Stage 1). §1 says the first-timer stops the GPU/marketing drip and saves once a
   big-ticket goal is visible, and round 1 named that goal by id (First Datacenter). The adapter keeps the
   id as the stage gate and adds a rule (`policy.goalRule`) so later builds need no edit: any visible
   project priced in funds at ≥ $10,000 and ≥ 60 s of current revenue is a goal. Without it the policy
   keeps renting GPUs at any price and never saves for a funds-priced ladder. While a goal is visible only
   the `drip` set (GPUs, marketing) is held back, as §1 words it; training runs and one-off projects are
-  still bought when affordable, keeping the one-purchase consumable reserve.
+  still bought when affordable, keeping the one-purchase consumable reserve. Not used from Stage 2 on
+  (see Takeoff Stage 2).
 
 * **Visible** = `checkVisibility({visibilityProperty})` (ADR also: opacity, and clipping by an
   `overflow:hidden` ancestor, because its locations slide off-screen inside a clipped frame).
@@ -190,7 +208,8 @@ left something open, the harness does this:
   reserve; price lowered when the backlog > 30 s of production and growing, raised after 4
   consecutive checks with backlog ≤ max(5, 1 s of production), 8 s cool-down; then one sweep over
   every other visible enabled non-ambient button (each clicked at most once per check, least-bought
-  first); while a big-ticket goal is visible (Takeoff: funds-priced projects, see above) the drip
+  first; settings are never pressed by this sweep, see below); while a big-ticket goal is visible
+  (Takeoff Stage 1: funds-priced projects, see above) the drip
   (GPU/marketing) is held back until it is bought; a purchase that changes the stage ends the check
   (the new screen is read at the next one). Takeoff: red-team until 0 open issues, then release.
   Paperclips: Memory (never Processors) while the cheapest visible project costs more ops than the
@@ -242,6 +261,39 @@ left something open, the harness does this:
     Nav, Wire, Harv, Fac, Combat). The arrows are clicked to match (lower first, then raise).
   * *Launch Probe* once per check, except while probes have died to hazards and the design still has
     no Haz or no Rep.
+* **Settings are not purchases** (all games). `lib/pagelib.mjs` marks a visible button as a setting
+  (`t: 1`, ambient) when it is a toggle (class `toggle` or an `aria-pressed` attribute), is labelled
+  ON/OFF or AUTO…, or reads "Name: value" with a short value ("Alignment compute: 1%"); the sweep
+  never presses one. It also records a greyed button's inline reason (`why`, from a
+  `<span class="reason">` in the same row). Paperclips' toggles are switched only by its own rules.
+* **Takeoff Stage 2 (Abilene)** — rules used only from Stage 2 on (`games/takeoff-late.mjs`).
+  Inputs are labels, the reasons printed next to greyed buttons, and numbers on screen.
+  * *Defaults are left alone.* A first-timer does not switch a newly offered setting: AUTO pricing
+    stays on (on at arrival), the Standing order stays on (switched on when its project is bought),
+    Share evals and the Job-transition fund stay off, alignment compute stays at 1%, and the copies
+    slider is never dragged. While a setting labelled AUTO (not "off") is on screen, lower/raise are
+    not touched (`policy.priceHold`); the Stage 1 backlog rule would apply if AUTO were off.
+    (`explore.mjs toggles` is the player who presses all of them.)
+  * *Train first:* Train is pressed whenever it is enabled, before anything else is bought. Then
+    red-team until 0 open issues and Release; "Keep internal" is never pressed (the release modal is
+    answered like any other: first enabled option, "release publicly").
+  * *Infrastructure follows the GPU lot's reason:* lot enabled → buy a lot; "no power" → the power
+    source (a button labelled "(+N MW)") with the lowest shown $ per MW; "no room" → a datacenter;
+    "standing order" (the order buys the lots) → room or power, whichever the Stores panel shows
+    nearer full ("GPUs X / Y" against "power A / B MW"). Up to three such purchases per check; plants
+    and datacenters are bought by this rule only (never by the sweep), and the game greys the ones it
+    calls "power to spare" / "room to spare".
+  * *Modals:* first enabled option (`policy.modalChoice` overrides it). *Projects and the rest:*
+    whatever is affordable, through the sweep (projects, Hire Researcher/Expand Lab with Trust,
+    Marketing, Security level 3).
+  * *No big-ticket saving from Stage 2 on* (`goalRule` returns nothing). Checked, not assumed: on
+    `s2-r1`, seeds 1–3, with the Stage 1 rule the stage ended at the same times (41:26 / 38:30 / 38:38)
+    with the same 9 runs, 24 GPU lots and 33–34 projects as without it; the rule held back only
+    Marketing (1 press instead of 1–2) and moved a few plants/datacenters, so nothing that gates
+    progress starves without it.
+  * Ids used: `btn-gpuBatch` (GPU lot), `btn-datacenter`, `btn-train`, `btn-redteam`, `btn-release`,
+    `btn-releaseInternal` (never pressed); plants by their "(+N MW)" label, AUTO by its label; the
+    Stores numbers from `#infraGpus`, `#gpuCapacity`, `#powerMW`, `#powerCapMW` (adapter metrics).
 * **Stage end**: Takeoff `state.stage` increases or `state.ending` is set; Paperclips Stage 1 ends
   when `humanFlag` drops to 0 (Release the HypnoDrones), Stage 2 when `spaceFlag` becomes 1 (Space
   Exploration), Stage 3 at "Universal Paperclips achieved" (milestone 15, the Emperor of Drift
@@ -257,7 +309,7 @@ lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG,
        policy.mjs · recorder.mjs (events) · runner.mjs (phases, outputs) · analysis.mjs
        transition-report.mjs · probe.mjs (softlock kit) · util.mjs
 games/ takeoff.mjs · paperclips.mjs · adr.mjs   (selectors, ambient set, metrics, policy hooks, cheats)
-       paperclips-late.mjs (Paperclips Stage 2/3 play rules)
+       takeoff-late.mjs (Takeoff Stage 2+ play rules) · paperclips-late.mjs (Paperclips Stage 2/3 play rules)
 fixtures/ paperclips-stage2.json · paperclips-stage3.json · paperclips-s1-end.json
 ```
 

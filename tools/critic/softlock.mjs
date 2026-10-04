@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// Usage: node tools/critic/softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--scenario NAME] [--out LABEL]
+// Usage: node tools/critic/softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--stage N] [--scenario NAME] [--out LABEL]
 // Dead-end probes from critic report §4, each a named scenario played in stepped (deterministic)
-// mode from a new game. Each reports what the player sees and whether/when recovery is possible,
-// or "scenario no longer applicable: <reason>" when the game no longer has what it needs.
-// Writes <out>.md (default softlock-<game>.md) and <out>-<scenario>.png screenshots.
+// mode from a new game (or, with --stage N, from the start of Stage N). Each reports what the player
+// sees and whether/when recovery is possible, or "scenario no longer applicable: <reason>" when the
+// game no longer has what it needs. A scenario with `stages` runs only at those stages (Takeoff's
+// power-zero, idle-new-game and price-200x are Stage 1 situations).
+// Writes <out>.md (default softlock-<game>[-sN].md) and <out>-<scenario>.png screenshots.
 import fs from 'node:fs';
 import path from 'node:path';
 import { openProbe, NotApplicable } from './lib/probe.mjs';
+import { trainStep, infraStep } from './games/takeoff-late.mjs';
 import { resolveGameDir } from './lib/runner.mjs';
 import { loadAdapter, parseArgs, resolvePrefix, mmss, fmtN } from './lib/util.mjs';
 
@@ -21,6 +24,7 @@ const TAKEOFF = [
   {
     name: 'power-zero',
     title: 'Spend everything on GPUs until power hits 0',
+    stages: { 1: true, other: 'Stage 1 only: power is a consumable bought by the 1,000 there; from Stage 2 it is built capacity (plants, MW)' },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       let zero = null;
@@ -56,6 +60,7 @@ const TAKEOFF = [
   {
     name: 'idle-new-game',
     title: 'Idle 3 minutes on a brand-new game',
+    stages: { 1: true, other: 'Stage 1 only: a brand-new game' },
     async run(kit, out) {
       const s0 = await kit.snap();
       need(kit.find(s0, 'btn-task'), 'no main button on a new game');
@@ -73,6 +78,7 @@ const TAKEOFF = [
   {
     name: 'price-200x',
     title: 'Raise the price 200× (after 3 minutes of normal play)',
+    stages: { 1: true, other: 'Stage 1 only: from Stage 2 the price starts on AUTO, and lower/raise do nothing while AUTO is on' },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       const pol = kit.policy();
@@ -100,9 +106,21 @@ const TAKEOFF = [
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       const pol = kit.policy({ skip: ['btn-hireResearcher', 'btn-expandLab'] });
-      const s = await kit.run(900, kit.with(pol));
+      let labFull = null;
+      const step = async (t, snap) => {
+        const tr = kit.find(snap, 'btn-train');
+        if (!labFull && tr && /lab holds/i.test(tr.why || '')) labFull = { t, why: tr.why };
+        await pol.pass(t);
+      };
+      step.policy = pol; // as kit.with(pol): the policy decides when mashing stops
+      const s = await kit.run(900, step);
       need(kit.rec.events.some((e) => e.type === 'reveal' && e.key === 'btn-hireResearcher'), 'no Hire Researcher button appeared in 15 minutes');
       await kit.shot('ignore-research-15min');
+      if (kit.stage >= 2) {
+        const tr = kit.find(s, 'btn-train');
+        const trains = kit.rec.actions.filter((a) => /^Train /.test(a.label || ''));
+        out.push(`Stage ${kit.stage}: Train ${tr ? `${tr.e ? 'enabled' : 'grey'}${tr.why ? ` ("${tr.why}")` : ''}` : 'not visible'} at 15:00; Train pressed ${trains.length}× (last ${trains.length ? `${mmss(trains[trains.length - 1].t)} ${trains[trains.length - 1].label}` : '—'}); Train first greyed by the lab cap ${labFull ? `at ${mmss(labFull.t)} ("${labFull.why}")` : 'never in 15 minutes'}.`);
+      }
       const cap = await text(kit, '#researchCap');
       const tp = s.buttons.find((b) => /Training Pipeline/.test(b.l));
       const capLines = kit.rec.events.filter((e) => e.type === 'console' && /capacity/i.test(e.text));
@@ -115,7 +133,12 @@ const TAKEOFF = [
     title: 'Release with open issues and watch for an incident',
     async run(kit, out) {
       kit.mashKey = 'btn-task';
-      const pol = kit.policy({}, false); // no red-team/release logic
+      // No red-team/release logic. From Stage 2 the player still trains and builds (takeoff-late.mjs).
+      const pol = kit.policy({}, kit.stage >= 2 ? async (ctx) => {
+        await trainStep(ctx);
+        await infraStep(ctx);
+        return ctx.controls;
+      } : false);
       let hit = null;
       await kit.run(1500, async (t, s) => {
         await pol.pass(t);
@@ -308,20 +331,28 @@ if (isMain) {
   const { pos, flags } = parseArgs(process.argv.slice(2));
   const game = pos[0];
   if (!SCENARIOS[game]) {
-    console.error('usage: softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--scenario NAME] [--out LABEL]');
+    console.error('usage: softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--stage N] [--scenario NAME] [--out LABEL]');
     process.exit(2);
   }
   const adapter = await loadAdapter(game);
   const gameDir = resolveGameDir(adapter, flags.gameDir);
-  const prefix = resolvePrefix(flags.out ?? `softlock-${game}`);
+  const stage = Number(flags.stage ?? 1);
+  const prefix = resolvePrefix(flags.out ?? `softlock-${game}${stage > 1 ? `-s${stage}` : ''}`);
   const list = SCENARIOS[game].filter((s) => !flags.scenario || s.name === flags.scenario);
-  const md = [`# Soft-lock probes: ${adapter.title}`, '', `Game dir \`${path.relative(process.cwd(), gameDir)}\`, seed ${flags.seed ?? 1}, stepped mode (2-s steps), each scenario from a new game. Times are game time.`, ''];
+  const from = stage > 1 ? `the start of Stage ${stage}${game === 'takeoff' ? ` (__game.loadPreset(${stage}))` : ` (fixture ${game}-stage${stage})`}` : 'a new game';
+  const md = [`# Soft-lock probes: ${adapter.title}${stage > 1 ? `, Stage ${stage}` : ''}`, '', `Game dir \`${path.relative(process.cwd(), gameDir)}\`, seed ${flags.seed ?? 1}, stepped mode (2-s steps), each scenario from ${from}. Times are game time${stage > 1 ? ' from that start' : ''}.`, ''];
   for (const sc of list) {
     process.stdout.write(`${sc.name} … `);
     const out = [];
     let kit;
+    if (sc.stages && !sc.stages[stage]) {
+      out.push(`scenario no longer applicable: ${sc.stages.other}`);
+      console.log('not applicable at this stage');
+      md.push(`## ${sc.name} — ${sc.title}`, '', ...out, '');
+      continue;
+    }
     try {
-      kit = await openProbe(adapter, { gameDir, seed: Number(flags.seed ?? 1), prefix });
+      kit = await openProbe(adapter, { gameDir, seed: Number(flags.seed ?? 1), stage, prefix });
       await sc.run(kit, out);
       console.log('ok');
     } catch (e) {

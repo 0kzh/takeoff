@@ -8,13 +8,14 @@
 //   Reveal gap: time between consecutive first-time reveals (console lines excluded).
 //   Greyed-out goal on screen: ≥ 1 visible disabled purchase/project, or a visible "+1 Trust at" line.
 //   Cognitive load: numeric tokens + visible interactive elements (buttons + sliders) + visible panels,
-//     sampled at minutes 0, 1, 3, 5, 10, 20 and stage end.
+//     sampled at minutes 0, 1, 3, 5, 10, 20 and stage end (+ minute 30, added for stages that run
+//     longer, e.g. Takeoff Stage 2; '—' when the stage ends before it).
 //   First meaningful choice: ≥ 2 distinct affordable non-ambient actions; a price decision; a modal.
 import fs from 'node:fs';
 import { elementsOf } from './recorder.mjs';
 import { median, readJson } from './util.mjs';
 
-export const LOAD_MINUTES = [0, 1, 3, 5, 10, 20];
+export const LOAD_MINUTES = [0, 1, 3, 5, 10, 20, 30];
 export const GAP_LIST_OVER = 120;
 export const FIRST_WINDOW = 300;
 

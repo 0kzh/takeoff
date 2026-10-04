@@ -1,5 +1,7 @@
 // Takeoff adapter: everything the harness knows about Takeoff specifically. Buttons are discovered
 // generically from the DOM (any visible <button>), so new buttons/projects need no changes here.
+import { INFRA, KEEP_INTERNAL, PLANT_KEYS_RE, priceAuto, trainStep, infraStep } from './takeoff-late.mjs';
+
 export default {
   name: 'takeoff',
   title: 'Takeoff',
@@ -30,6 +32,11 @@ export default {
     const run = s.training && s.training.run;
     let projectsBought = 0;
     for (const k in s.projects) projectsBought += (s.projects[k] && s.projects[k].bought) || 0;
+    const shown = (id) => {
+      const el = document.getElementById(id);
+      const mm = el && /-?[0-9][0-9,]*(?:\.[0-9]+)?/.exec(el.textContent || '');
+      return mm ? parseFloat(mm[0].replace(/,/g, '')) : 0;
+    };
     const bp = document.getElementById('btn-buyPower');
     const unitMatch = bp && /\(([0-9][0-9,]*)/.exec(bp.textContent || '');
     return {
@@ -71,6 +78,13 @@ export default {
       projectsBought,
       capability: s.capability,
       date: s.date,
+      // Stage 2+: room and power as the Stores panel prints them ("GPUs X / Y", "power A / B MW").
+      gpusShown: shown('infraGpus'),
+      gpuCapacity: shown('gpuCapacity'),
+      powerDrawMW: shown('powerMW'),
+      powerCapMW: shown('powerCapMW'),
+      autoPrice: s.autoPrice ? 1 : 0,
+      dataT: s.data,
     };
   },
 
@@ -94,13 +108,33 @@ export default {
      * need no edit: any visible project priced in funds at ≥ $10,000 and ≥ one minute of revenue.
      */
     goalRule(c) {
+      // Stage 2+: no big-ticket saving. Checked on s2-r1, seeds 1–3: with and without it the stage
+      // ends at the same minute with the same runs and purchases (Marketing, the only drip on screen,
+      // is rarely affordable there), so nothing that gates progress starves without it.
+      if ((c.m.stage || 1) >= 2) return [];
       const floor = Math.max(10000, 60 * (c.m.revPerSec || 0));
       return c.buttons.filter((b) => b.kind === 'project' && ((b.costs && b.costs.funds) || 0) >= floor).map((b) => b.k);
     },
-    /** Never clicked by the generic buy loop (handled in special()). */
-    skip: ['btn-redteam', 'btn-release'],
-    /** Red-team until 0 open issues, then release. */
+    /**
+     * Never clicked by the generic buy loop: red-team/release (special), "Keep internal" (the
+     * first-timer releases publicly), and Stage 2 infrastructure (bought by its on-screen reasons).
+     */
+    skip: ['btn-redteam', 'btn-release', KEEP_INTERNAL, INFRA.lot, INFRA.datacenter],
+    /** Power plants (any "+N MW" button) are bought by the infrastructure rule only. */
+    veto(c) {
+      return c.buttons.filter((b) => b.kind === 'button' && PLANT_KEYS_RE.test(b.l)).map((b) => b.k);
+    },
+    /** Stage 2: AUTO pricing is left on; lower/raise are not touched while it is. */
+    priceHold(c) {
+      return priceAuto(c);
+    },
+    /**
+     * Stage 2+: Train first whenever it is enabled; then red-team until 0 open issues and release
+     * (publicly); then infrastructure by the lot row's reason (takeoff-late.mjs).
+     */
     async special(ctx) {
+      const late = (ctx.controls.m.stage || 1) >= 2;
+      if (late) await trainStep(ctx);
       let c = ctx.controls;
       const find = (k) => c.buttons.find((b) => b.k === k);
       for (let guard = 0; guard < 3; guard++) {
@@ -114,7 +148,8 @@ export default {
           c = await ctx.click('btn-release', 'release', '0 open issues');
         } else break;
       }
-      return c;
+      if (late) await infraStep(ctx);
+      return ctx.controls;
     },
   },
 

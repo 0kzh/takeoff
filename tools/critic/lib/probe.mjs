@@ -17,12 +17,17 @@ export async function openProbe(adapter, { gameDir, seed = 1, stage = 1, fixture
     rec,
     t: 0,
     prefix,
+    stage,
     mashKey: null,
-    /** A Policy whose adapter.policy fields are overridden (e.g. { skip: [...], lower: null }). */
+    /**
+     * A Policy whose adapter.policy fields are overridden (e.g. { skip: [...], lower: null }).
+     * `special`: true keeps the adapter's game-specific steps, false drops them, a function replaces them.
+     */
     policy(over = {}, special = true) {
       const pol = { ...adapter.policy, ...over };
       if (over.skip) pol.skip = [...(adapter.policy.skip || []), ...over.skip];
-      if (!special) pol.special = null;
+      if (typeof special === 'function') pol.special = special;
+      else if (!special) pol.special = null;
       return new Policy({ ...adapter, policy: pol }, session, rec, { startStage: stage });
     },
     async snap() {

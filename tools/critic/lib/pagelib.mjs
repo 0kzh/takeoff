@@ -120,7 +120,8 @@ export function pageLib() {
     const own = parseMoney(label);
     if (own != null) return own;
     const tail = trailingText(el);
-    const m = /Cost[^$\n]*(\$[^\n]*)/i.exec(tail);
+    // "Cost: $ 7.00" after the button, or (Takeoff Stage 2 rows) the price straight after it.
+    const m = /Cost[^$\n]*(\$[^\n]*)/i.exec(tail) || /^\s*(\$\s*[0-9.][^\n]*)/.exec(tail);
     if (m) {
       const v = parseMoney(m[1]);
       if (v != null) return v;
@@ -129,6 +130,20 @@ export function pageLib() {
   }
 
   // ---- collectors ----------------------------------------------------------------------------
+  function isSetting(el, label) {
+    if (el.classList.contains('toggle') || el.hasAttribute('aria-pressed')) return true;
+    if (/^(on|off)$/i.test(label) || /^auto\b/i.test(label)) return true;
+    return /^[A-Za-z][^:()]{1,40}:\s*[^:()]{1,12}$/.test(label);
+  }
+  function reasonOf(el) {
+    const row = el.parentElement;
+    if (!row) return '';
+    for (const r of row.querySelectorAll('.reason')) {
+      const t = norm(r.textContent);
+      if (t) return t;
+    }
+    return '';
+  }
   function kindOf(el, sp) {
     if (sp.modalOption && el.matches(sp.modalOption)) return 'modal';
     if (sp.project && el.matches(sp.project)) return 'project';
@@ -150,6 +165,15 @@ export function pageLib() {
       const kind = kindOf(el, sp);
       const b = { k, l, e: isEnabled(el, sp) ? 1 : 0, kind, a: ambient.has(k) || kind === 'tab' ? 1 : 0 };
       if (sp.selectedClass && el.classList.contains(sp.selectedClass)) b.s = 1;
+      // A setting, not a purchase: a toggle (class or aria-pressed), an ON/OFF/AUTO label, or a
+      // "Name: value" label on a non-project button. Settings are ambient (like Takeoff's Grid toggle).
+      if (kind === 'button' && isSetting(el, l)) {
+        b.t = 1;
+        b.a = 1;
+      }
+      // Why a button is greyed, as the game prints it next to the button (<span class="reason">).
+      const why = reasonOf(el);
+      if (why) b.why = why;
       if (withCosts && !b.a && kind !== 'modal') {
         b.funds = b.e ? fundsCost(el, sp, l) : 0;
         b.costs = parseCosts(l);

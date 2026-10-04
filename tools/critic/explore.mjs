@@ -54,6 +54,12 @@ const READ_SCREEN = () => {
       rival: txt('rivalLine'),
       site: txt('panel-site'),
       trustNote: txt('trustCostNote'),
+      // Stage 2+ (absent from Stage 1 builds, so Stage 1 output is unchanged).
+      trainReason: txt('trainReason'),
+      releaseNote: txt('releaseNote'),
+      copiesOnResearch: txt('allocPct'),
+      humanShare: txt('humanShare'),
+      interconnectLine: txt('interconnectLine'),
     },
     modal: modalOpen
       ? {
@@ -125,6 +131,10 @@ const RUNS = {
   'no-marketing': { title: 'Never buys Marketing', adapter: variant({ skip: [...base.policy.skip, 'btn-marketing'] }) },
   'no-redteam-wait': { title: 'Red-teams to zero but never answers "let her try" (first option only on other modals)', adapter: variant({ modalChoice: (modal, enabled) => (/Can I try/.test(modal.title) ? enabled[enabled.length - 1] : enabled[0]) }) },
   'no-contracts': { title: 'Never buys the repeatable Custom model contract', adapter: { ...base, policy: { ...base.policy, veto: (c) => c.buttons.filter((b) => /Custom model contract/.test(b.l)).map((b) => b.k) } } },
+  toggles: {
+    title: 'Presses every setting (toggle, AUTO, "Name: value" button) once when it first appears, and drags each slider to its minimum when it first appears and to its maximum 10 minutes later',
+    adapter: variant({ special: togglesSpecial }),
+  },
   'no-side-projects': {
     title: 'Buys only research projects and the four Abilene rungs — none of the funds-priced side offers',
     adapter: { ...base, policy: { ...base.policy, veto: (c) => c.buttons.filter((b) => b.kind === 'project' && /\$/.test(b.l) && !/Reserve the Abilene|Interconnect queue|Substation|Break ground/.test(b.l)).map((b) => b.k) } },
@@ -139,6 +149,37 @@ function byLabel(wanted, wait = false) {
     if (wait && modal.options.some((o) => !o.e && wanted.some((re) => re.test(o.l)))) return null;
     return enabled[0];
   };
+}
+
+/**
+ * The `toggles` run: the first-timer's own steps, plus every setting (lib/pagelib.mjs marks toggles,
+ * ON/OFF/AUTO and "Name: value" buttons with `t`) pressed once at first sight and never again, and
+ * every visible slider set to its min at first sight and to its max 600 s later (input event, as a drag).
+ */
+async function togglesSpecial(ctx) {
+  let c = await base.policy.special(ctx);
+  const mem = (ctx.memory.toggles ||= { pressed: new Set(), sliders: {} });
+  for (const b of c.buttons) {
+    if (!b.t || !b.e || mem.pressed.has(b.k)) continue;
+    mem.pressed.add(b.k);
+    c = await ctx.click(b.k, 'setting', `pressed at first sight: "${b.l}"`);
+  }
+  const sliders = await ctx.session.page.evaluate(() =>
+    [...document.querySelectorAll('input[type=range]')]
+      .filter((el) => el.id && !el.disabled && el.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }))
+      .map((el) => ({ sel: `#${el.id}`, min: el.min, max: el.max, v: el.value })),
+  );
+  for (const sl of sliders) {
+    const st = (mem.sliders[sl.sel] ||= { first: ctx.t, phase: 0 });
+    if (st.phase === 0) {
+      c = await ctx.set(sl.sel, sl.min, 'slider', `first sight: ${sl.v} → minimum ${sl.min}`);
+      st.phase = 1;
+    } else if (st.phase === 1 && ctx.t >= st.first + 600) {
+      c = await ctx.set(sl.sel, sl.max, 'slider', `${sl.v} → maximum ${sl.max}`);
+      st.phase = 2;
+    }
+  }
+  return c;
 }
 
 function focusSpecial(key) {

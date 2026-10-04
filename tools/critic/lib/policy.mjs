@@ -7,6 +7,7 @@
 //               visible, one purchase of it is always kept in reserve when buying anything else
 //               with funds (the first automation and a big-ticket goal are exempt)
 //   lower/raise price controls, moved only by watching the backlog
+//   priceHold(c) optional: true while the screen shows pricing on automatic (lower/raise untouched)
 //   drip        repeat purchases held back (to save) while a big-ticket goal is visible; other
 //               purchases (training, one-off projects) are still bought when affordable
 //   goal        big-ticket goal button keys
@@ -16,7 +17,8 @@
 //   special(ctx) game-specific steps (red-team/release, processors/memory, navigation)
 //   modalChoice(modal, enabledOptions, t) optional: which option answers a modal (null = leave it)
 // Every other visible, enabled, non-ambient button is "an upgrade/project/automation" and is bought
-// when affordable, least-bought first (ties in DOM order).
+// when affordable, least-bought first (ties in DOM order). Settings (toggles, ON/OFF or "Name: value"
+// buttons; lib/pagelib.mjs) are ambient: the buy loop never presses them.
 import { fmtN } from './util.mjs';
 
 export const MASH_PER_SEC = 4;
@@ -128,10 +130,10 @@ export class Policy {
       }
     }
 
-    // 5. Price, by watching the backlog.
+    // 5. Price, by watching the backlog — unless the screen says pricing is automated (priceHold).
     const lower = find(p.lower);
     const raise = find(p.raise);
-    if (lower || raise) {
+    if ((lower || raise) && !(p.priceHold && p.priceHold(ctx.controls))) {
       const m = ctx.controls.m;
       const B = m.backlog ?? 0;
       const R = Math.max(m.rate ?? 0, this.mashing ? MASH_PER_SEC : 0);
