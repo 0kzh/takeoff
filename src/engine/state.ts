@@ -22,6 +22,8 @@ export interface Cost {
   data?: number;
   /** Stage 4: tonnes of materials, the stage's currency. */
   materials?: number;
+  /** Dollars from the build fund (the second campus: what the fleet waits for is paid from the fleet's purse). */
+  build?: number;
 }
 
 /** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
@@ -833,7 +835,8 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.funds || s.funds >= c.funds) &&
     (!c.trust || s.trust >= c.trust) &&
     (!c.data || s.data >= c.data - 1e-9) &&
-    (!c.materials || s.s4.materials >= c.materials)
+    (!c.materials || s.s4.materials >= c.materials) &&
+    (!c.build || s.buildFund >= c.build)
   );
 }
 
@@ -845,6 +848,7 @@ export function pay(s: GameState, c: Cost): boolean {
   s.trust -= c.trust ?? 0;
   if (c.data) spendData(s, c.data);
   if (c.materials) s.s4.materials = Math.max(0, s.s4.materials - c.materials);
+  if (c.build) payBuild(s, c.build);
   return true;
 }
 

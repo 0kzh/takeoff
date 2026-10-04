@@ -15,6 +15,8 @@ export function costLabel(c: Cost, short = false): string {
   if (c.insight) parts.push(`${n(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
   if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
+  // The purse is named on the row (critic S3 round 1 §9 item 5).
+  if (c.build) parts.push(`${fmtMoneyShort(c.build)} from the build fund`);
   return parts.length ? parts.join(', ') : 'free';
 }
 

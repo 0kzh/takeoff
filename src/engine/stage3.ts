@@ -13,7 +13,7 @@ import { updateDrift, driftWatch, reimageCooldown } from './alignment.js';
 import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX } from './world3.js';
 import { sl3Cost } from './world.js';
 import { humanShare } from './economy.js';
-import { visibleProjects } from './projects.js';
+import { visibleProjects, buyProject } from './projects.js';
 import { enabledPurchases } from './events.js';
 import { updateOversight } from './oversight.js';
 import { updateEvents3 } from './events3.js';
@@ -69,6 +69,8 @@ export function runBuildout(s: GameState): void {
   const big = LOT_SIZES_S3[LOT_SIZES_S3.length - 1];
   const roomShort = freeSlots(s) < big;
   const powerShort = freePowerGpus(s) < big;
+  // Datacenter 10 needs the second campus: the build-out buys it from the fund it plans with.
+  if (needsSite2(s) && (ahead || roomShort) && visibleProjects(s).some((p) => p.id === 'p_site2' && p.canAfford(s))) buyProject(s, 'p_site2');
   if (!datacenterBuilding(s) && !needsSite2(s) && (ahead || roomShort)) {
     const next = nextDatacenter(s);
     if (s.buildFund >= next.cost) {
