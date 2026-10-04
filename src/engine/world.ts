@@ -27,10 +27,12 @@ export function crawlRate(s: GameState): number {
   return isBought(s, 'p_web_crawl') && s.crawlLeft > 0 ? CRAWL_RATE : 0;
 }
 
-/** Synthetic data: `0.004 × √(research copies / 1000)` T/s. */
+/** Synthetic data: `0.006 × √(research copies / 1000)` T/s (stage2.md has 0.004; see tuning notes). */
+export const SYNTH_RATE = 0.006;
+
 export function synthRate(s: GameState): number {
   if (!isBought(s, 'p_synth')) return 0;
-  return 0.004 * Math.sqrt((copies(s) * s.researchAlloc) / 1000);
+  return SYNTH_RATE * Math.sqrt((copies(s) * s.researchAlloc) / 1000);
 }
 
 /** T/s from the flywheel at the current billing rate. */
@@ -60,6 +62,13 @@ export function updateData(s: GameState, dt: number): void {
     if (last > 0 && s.tasksSold > last) s.data += ((s.tasksSold - last) / 1e9) * FLYWHEEL_T_PER_BILLION;
     s.flags['flywheelSold'] = s.tasksSold;
   }
+}
+
+/** The data wall's named fixes are urgent while the crawl is spent and the next run lacks data. */
+export function dataWall(s: GameState): boolean {
+  if (s.stage !== 2 || s.flags['dataEra'] !== true || !isBought(s, 'p_web_crawl') || s.crawlLeft > 0) return false;
+  const need = trainCost(s).data ?? 0;
+  return need > 0 && s.data + 1e-9 < need;
 }
 
 /** The next run needs more data than the lab holds, the crawl is spent, and research is half there. */

@@ -1,6 +1,7 @@
 import { GameState, PowerOrder, say, logNews, addFunds, press, isBought } from './state.js';
 import { fmtInt, fmtNum, fmtClock } from './format.js';
-import { trainCost, runOtherwiseReady } from './training.js';
+import { trainCost, trainSlotFree, computeYield } from './training.js';
+import { visibleProjects } from './projects.js';
 
 /**
  * Stage 2 infrastructure (stage2.md §2.1): datacenters give room, plants give power, GPUs arrive
@@ -13,7 +14,7 @@ import { trainCost, runOtherwiseReady } from './training.js';
  * arrival revenue: `R0 / 650`, where R0 is task revenue (contracts excluded) 30 s after arrival from
  * the Stage 2 preset, median of seeds 1–5 (stage2.md "How to read the numbers", §9.4).
  */
-export const S2_FUNDS_SCALE = 2.0;
+export const S2_FUNDS_SCALE = 1.9;
 
 /** A Stage 2 funds price: scale-1 dollars → dollars on screen. */
 export function s2(amount: number): number {
@@ -35,12 +36,14 @@ export const SOLAR_QUEUE_MAX = 2;
 /** A G5 does the work of one and a half G4s. */
 export const G5_COMPUTE = 1.5;
 export const G4_PRICE = 50;
-export const G5_PRICE = 90;
+/** stage2.md: $90; §9.5's knob when minutes 25–30 are too steep. */
+export const G5_PRICE = 110;
 
 /** Datacenters, hand-tuned (UP factory style): slots added and scale-1 price. The first is Break ground. */
 const DC_TABLE: [number, number][] = [
   [10000, 0],
-  [15000, 250000],
+  // stage2.md has $250k; the second hall is the first room wall and lands by minute ten.
+  [15000, 150000],
   [25000, 800000],
   [50000, 2000000],
   [75000, 4000000],
@@ -189,12 +192,31 @@ export function buyGpuBatch(s: GameState): boolean {
 }
 
 /**
- * Standing order, once a second: a lot that fits, keeping the next run's money in hand whenever that
- * run is otherwise ready to start (its research and data are there and a pipeline is free).
+ * Standing order, once a second: a lot that fits, keeping money in hand for what the next run is
+ * waiting on — its own price when everything else is ready (research, data, a free pipeline and
+ * most of its compute), otherwise the price of the wall's named fix on screen (a data licence, a
+ * research-cap project).
  */
+export function standingReserve(s: GameState): number {
+  // The next run's money once its research is most of the way there (data may still be coming);
+  // a run short of compute is waiting for exactly what the order buys: no reserve for it then.
+  let run = 0;
+  if (s.revealed['training'] && trainSlotFree(s) && computeYield(s) >= 0.85) {
+    const cost = trainCost(s);
+    if (s.research >= 0.6 * (cost.research ?? 0)) run = cost.funds ?? 0;
+  }
+  let fix = 0;
+  for (const p of visibleProjects(s)) {
+    if (p.rescue || p.urgent?.(s) !== true) continue;
+    const f = p.cost(s).funds ?? 0;
+    if (f > 0 && (fix === 0 || f < fix)) fix = f;
+  }
+  return Math.max(run, fix);
+}
+
 export function runStandingOrder(s: GameState): void {
   if (s.stage < 2 || !standingOrderOn(s)) return;
-  const reserve = runOtherwiseReady(s) ? (trainCost(s).funds ?? 0) : 0;
+  const reserve = standingReserve(s);
   let guard = 0;
   while (guard++ < 3) {
     const lot = lotSize(s);
@@ -222,9 +244,12 @@ export function roomToSpare(s: GameState): boolean {
   return freeSlots(s) > Math.max(5000, s.gpus);
 }
 
-/** Power to spare: the plants online and queued already cover every GPU slot. */
+/**
+ * Power to spare: the plants online already cover every GPU slot. (Plants still in the queue do
+ * not count: a farm three minutes away is no reason to grey the turbines that arrive now.)
+ */
 export function powerToSpare(s: GameState): boolean {
-  return s.powerCapacityMW + queuedMW(s) >= gpuCapacity(s) / 1000;
+  return s.powerCapacityMW >= gpuCapacity(s) / 1000;
 }
 
 export function datacenterReason(s: GameState): '' | 'room to spare' {
@@ -251,8 +276,11 @@ export function buildDatacenter(s: GameState): boolean {
 
 // ---------- plants ----------
 
+/** Gas: $60,000 × 1.7^n at scale 1 (stage2.md has $90,000; §9.5's knob for the early power wall). */
+export const GAS_BASE = 60000;
+
 export function gasCost(s: GameState): number {
-  return s2(90000 * Math.pow(1.7, s.gasPlants));
+  return s2(GAS_BASE * Math.pow(1.7, s.gasPlants));
 }
 
 function queued(s: GameState, kind: PowerOrder['kind']): PowerOrder[] {
@@ -311,6 +339,7 @@ export function buySolar(s: GameState): boolean {
   addFunds(s, -cost);
   const n = s.solarFarms + queued(s, 'solar').length + 1;
   s.powerQueue.push({ kind: 'solar', mw: SOLAR_MW, remaining: solarSeconds(s), label: `Solar farm ${n}` });
+  s.revealed['queue'] = true;
   press(s, 'solar');
   const eta = solarEta(s, queued(s, 'solar').length - 1);
   say(s, `The Interconnect Queue — ${fmtClock(eta)} until Solar farm ${n} is connected.`);

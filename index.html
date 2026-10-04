@@ -144,7 +144,7 @@
         <span data-hide="stores"><br>Research: <span id="research">0</span> / <span id="researchCap">1,000</span><br></span>
         <span data-reveal="insight"><span data-hide="stores">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span></span>
         <div data-reveal="allocation" id="allocBlock">
-          Copies on research: <input type="range" id="allocSlider" min="0" max="50" step="5" value="15" aria-label="Share of copies on research"> <span id="allocPct">15%</span><br>
+          Copies on research: <input type="range" id="allocSlider" min="5" max="50" step="5" value="15" aria-label="Share of copies on research"> <span id="allocPct">15%</span><br>
           <span id="humanShareLine" title="Researchers' share of all research done.">Human share of research: <span id="humanShare">100%</span></span><br>
         </div>
         <div data-reveal="alignShare"><button class="button2" id="btn-alignShare" title="A share of the copies checks the others. Above 1%, it comes out of the copies on tasks.">Alignment compute: 1%</button></div>
@@ -308,7 +308,7 @@
   <div id="storeTip" role="tooltip"></div>
 
   <div id="modalOverlay" data-panel="modal">
-    <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div id="modal" role="dialog" aria-modal="false" aria-labelledby="modalTitle" tabindex="-1">
       <div id="modalTitle"></div>
       <div id="modalText"></div>
       <div id="modalTimer"></div>

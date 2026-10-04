@@ -3,7 +3,7 @@ import { GameState, say, canPay, pay, press, isBought } from './state.js';
 import { trainingShare } from './training.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
-import { sellS2, S2_MIN_PRICE, S2_PRICE_STEP, fmtPrice } from './market.js';
+import { sellS2, S2_MIN_PRICE, S2_PRICE_STEP, fmtPrice, autoTarget } from './market.js';
 
 export {
   activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
@@ -107,11 +107,16 @@ export function humanResearchRate(s: GameState): number {
   return s.researchers * 10 * humanEfficiency(s) * s.researchMult * researchEffects(s);
 }
 
-/** Copies on research: `8 × √(copies × allocation) × best^1.5` once AI research assistants exist. */
+/**
+ * Copies on research: `10 × √(copies × allocation) × best^1.5` once AI research assistants exist
+ * (stage2.md §2.4 has 8; §9.5's knob for research that binds too long in minutes 12–24).
+ */
+export const AI_RESEARCH_COEFF = 10;
+
 export function aiResearchRate(s: GameState): number {
   if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return 0;
   const onResearch = copies(s) * s.researchAlloc;
-  return 8 * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
+  return AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
 }
 
 export function researchRate(s: GameState): number {
@@ -535,9 +540,13 @@ export function toggleGrid(s: GameState): boolean {
 }
 
 /** The allocation slider: 0–50 % of copies on research, in steps of 5 (stage2.md §2.4). */
+/** The slider's floor, in percent. */
+export const RESEARCH_ALLOC_MIN = 5;
+
 export function setResearchAlloc(s: GameState, pct: number): boolean {
   if (s.stage < 2 || !s.revealed['allocation'] || !Number.isFinite(pct)) return false;
-  const v = Math.min(50, Math.max(0, Math.round(pct / 5) * 5)) / 100;
+  // 5–50 %: some copies always help the researchers (at 0 % a lab past its human ceiling stalls).
+  const v = Math.min(50, Math.max(RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
   if (Math.abs(v - s.researchAlloc) < 1e-9) return false;
   s.researchAlloc = v;
   press(s, 'slider');
@@ -595,18 +604,29 @@ export function decayEffects(s: GameState, dt: number): void {
  * The console names the bottleneck when it bites (each at most once per 90 s), and names the
  * fix: an absurd price is called out by its value; a backlog points at the price or marketing.
  */
+/** Seconds of a growing backlog under a manual price before finance turns AUTO back on. */
+export const AUTO_RESCUE_SECONDS = 300;
+
 export function bottleneckMessages(s: GameState): void {
   const now = s.stats.timePlayed;
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
   if (s.stage >= 2) {
-    // Manual pricing far above what the market takes: name the price and where AUTO is.
+    // Manual pricing above what the market takes: name the share billed, the price that would
+    // clear, and where AUTO is. Five minutes of it and finance turns AUTO back on (no dead end
+    // for a lab that switched it off and forgot: critic round 2 §5).
     if (!s.autoPrice && s.revealed['autoPrice']) {
       const made = Math.max(1, productionPerSec(s));
-      if (s.stats.soldPerSec < 0.1 * made && s.unbilled > 30 * made) {
+      if (s.stats.soldPerSec < 0.5 * made && s.unbilled > 60 * made) {
         if (typeof s.flags['absurdSince'] !== 'number') s.flags['absurdSince'] = now;
-        if (now - (s.flags['absurdSince'] as number) >= 30 && ready('absurdAt')) {
+        const since = now - (s.flags['absurdSince'] as number);
+        if (since >= AUTO_RESCUE_SECONDS) {
+          s.autoPrice = true;
+          delete s.flags['absurdSince'];
+          say(s, `Finance puts pricing back on AUTO. ${fmtInt(s.unbilled)} tasks were waiting at ${fmtPrice(s.price)}.`);
+        } else if (since >= 30 && ready('absurdAt')) {
           s.flags['absurdAt'] = now;
-          say(s, `Nothing sells at ${fmtPrice(s.price)}. Pricing AUTO is beside the price.`);
+          const pct = Math.round((100 * s.stats.soldPerSec) / made);
+          say(s, `Billing ${pct}% of output at ${fmtPrice(s.price)}. AUTO would clear it at ${fmtPrice(autoTarget(s))}.`);
         }
       } else {
         delete s.flags['absurdSince'];

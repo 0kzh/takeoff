@@ -5,6 +5,7 @@ import { bestCapability } from '../engine/economy.js';
 import { gpuCapacity, queuedMW } from '../engine/infrastructure.js';
 import { dataShort } from '../engine/world.js';
 import { openChoice, fireDevelopment, modalCanOpen } from '../engine/events.js';
+import { LATE_AT } from './projects.js';
 
 /**
  * The Stage 2 content table (stage2.md §4.2), in order: queue order, expected order, and the order
@@ -13,9 +14,21 @@ import { openChoice, fireDevelopment, modalCanOpen } from '../engine/events.js';
  */
 export type RowKind = 'project' | 'flag' | 'choice';
 
+/**
+ * A new panel, verb, toggle, slider or Stores row (arc G2). `secondPipeline` and `queue` are
+ * bookkeeping flags (Parallel pipelines bought; the first plant in the interconnect queue).
+ */
+export const MECHANIC_FLAGS = [
+  'stores', 'infrastructure', 'autoPrice', 'gasButton', 'dataRow', 'graph', 'allocation', 'dcButton', 'solarButton',
+  'queue', 'standingOrder', 'releaseInternal', 'government', 'secondPipeline', 'security', 'public', 'nuclearButton',
+  'jobFund', 'stats', 'sl3Button', 'alignShare', 'shareEvals', 'chipsRow',
+];
+
 export interface ContentRow {
   id: string;
   kind: RowKind;
+  /** Reveals a new panel or mechanic: the governor also pulls these when mechanics run dry (240 s). */
+  mechanic?: boolean;
   /** Approach item: from 3×, through the late drip. */
   late?: boolean;
   /** False for rows the governor never pulls (c_sage2, c_publishers, toggles). */
@@ -48,7 +61,7 @@ function flagRow(id: string, flag: string, opts: Omit<ContentRow, 'id' | 'kind' 
 }
 
 /** A modal opened by a dated development (month or trigger): the governor fires the development early. */
-function devChoiceRow(id: string, dev: string, opts: { prereq?: (s: GameState) => boolean; late?: boolean } = {}): ContentRow {
+function devChoiceRow(id: string, dev: string, opts: { prereq?: (s: GameState) => boolean; late?: boolean; mechanic?: boolean } = {}): ContentRow {
   return {
     id,
     kind: 'choice',
@@ -65,11 +78,12 @@ function devChoiceRow(id: string, dev: string, opts: { prereq?: (s: GameState) =
 }
 
 /** A modal the engine opens on its trigger (queued behind the 150 s spacing if it must wait). */
-function choiceRow(id: string, opts: { trigger: (s: GameState) => boolean; prereq?: (s: GameState) => boolean; late?: boolean; governed?: boolean; open?: (s: GameState) => boolean }): ContentRow {
+function choiceRow(id: string, opts: { trigger: (s: GameState) => boolean; prereq?: (s: GameState) => boolean; late?: boolean; governed?: boolean; mechanic?: boolean; open?: (s: GameState) => boolean }): ContentRow {
   return {
     id,
     kind: 'choice',
     late: opts.late,
+    mechanic: opts.mechanic,
     governed: opts.governed,
     prereq: opts.prereq,
     trigger: opts.trigger,
@@ -90,17 +104,17 @@ const project = (id: string): ContentRow => ({ id, kind: 'project' });
 export const STAGE2_TABLE: ContentRow[] = [
   flagRow('btn-gpuBatch', 'infrastructure', { trigger: () => true }),
   project('p_research_cluster'),
-  flagRow('btn-turbines', 'gasButton', {
+  flagRow('btn-turbines', 'gasButton', { mechanic: true,
     trigger: (s) => s.gpus >= 0.6 * s.powerCapacityMW * 1000 || ts(s) >= 120,
     onReveal: (s) => say(s, 'Power draw is 60% of the substation. Gas turbines can be on site in a week.'),
   }),
   project('p_web_crawl'),
-  flagRow('panel-graph', 'graph', { trigger: (s) => releasesS2(s) >= 1 || s.flags['rivalS2'] === true }),
+  flagRow('panel-graph', 'graph', { mechanic: true, trigger: (s) => releasesS2(s) >= 1 || s.flags['rivalS2'] === true }),
   project('p_ai_assistants'),
   project('p_series_b'),
-  flagRow('btn-datacenter', 'dcButton', { trigger: (s) => s.gpus >= 0.6 * gpuCapacity(s) || ts(s) >= 330 }),
+  flagRow('btn-datacenter', 'dcButton', { mechanic: true, trigger: (s) => s.gpus >= 0.6 * gpuCapacity(s) || ts(s) >= 330 }),
   project('p_agent_platform'),
-  flagRow('btn-solar', 'solarButton', {
+  flagRow('btn-solar', 'solarButton', { mechanic: true,
     trigger: (s) => typeof s.flags['firstGasAt'] === 'number' && s.stats.timePlayed - (s.flags['firstGasAt'] as number) >= 30,
     prereq: (s) => s.revealed['gasButton'] === true,
     onReveal: (s) => say(s, 'Solar + storage: cheaper power, but it waits in the interconnect queue.'),
@@ -125,18 +139,18 @@ export const STAGE2_TABLE: ContentRow[] = [
   }),
   project('p_synth'),
   project('p_parallel'),
-  devChoiceRow('c_hearing', 'd_hearing'),
+  devChoiceRow('c_hearing', 'd_hearing', { mechanic: true }),
   project('p_policy'),
   project('p_license_code'),
   project('p_brief'),
   project('p_memory'),
   project('p_international'),
   project('p_g5'),
-  flagRow('panel-public', 'public', { trigger: (s) => s.jobsDisplaced >= 0.1 || s.date >= monthOf(2026, 8) }),
+  flagRow('panel-public', 'public', { mechanic: true, trigger: (s) => s.jobsDisplaced >= 0.1 || s.date >= monthOf(2026, 8) }),
   project('p_free_tier'),
   choiceRow('c_evals_month', { trigger: (s) => s.flags['evalsMonthDue'] === true, prereq: (s) => s.flags['evalsMonthDue'] === true }),
   devChoiceRow('c_gulf', 'd_gulf', { prereq: (s) => s.gasPlants >= 1 }),
-  flagRow('btn-nuclear', 'nuclearButton', {
+  flagRow('btn-nuclear', 'nuclearButton', { mechanic: true,
     trigger: (s) => s.flags['gulfDeclined'] === true || s.powerCapacityMW + queuedMW(s) >= 150 || s.date >= monthOf(2026, 9),
     prereq: (s) => s.revealed['solarButton'] === true,
   }),
@@ -144,7 +158,7 @@ export const STAGE2_TABLE: ContentRow[] = [
   devChoiceRow('c_defense', 'd_pentagon', { prereq: (s) => s.revealed['government'] === true && s.govRelations >= 40 }),
   flagRow('btn-jobFund', 'jobFund', {
     governed: false,
-    trigger: (s) => s.revealed['public'] === true && (s.jobsDisplaced >= 0.4 || s.approval <= -8),
+    trigger: (s) => s.revealed['public'] === true && (s.jobsDisplaced >= 0.5 || s.approval <= -8),
     prereq: (s) => s.revealed['public'] === true,
   }),
   project('p_flywheel'),
@@ -157,7 +171,8 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_superhuman_coder'),
   choiceRow('c_theft_warning', {
     late: true,
-    trigger: (s) => bestCapability(s) >= 3.2,
+    mechanic: true,
+    trigger: (s) => bestCapability(s) >= LATE_AT(3.2),
     open: (s) => {
       if (s.securityLevel >= 3) {
         // Nothing to warn about: the intrusion stops at the air gap.
@@ -167,14 +182,20 @@ export const STAGE2_TABLE: ContentRow[] = [
       return openChoice(s, 'c_theft_warning', {});
     },
   }),
-  flagRow('btn-sl3', 'sl3Button', { late: true, trigger: (s) => bestCapability(s) >= 3.2 && s.securityLevel < 3 }),
+  flagRow('btn-sl3', 'sl3Button', {
+    late: true,
+    mechanic: true,
+    trigger: (s) => bestCapability(s) >= LATE_AT(3.2) && s.securityLevel < 3,
+    prereq: (s) => s.securityLevel < 3,
+  }),
   flagRow('btn-alignShare', 'alignShare', {
     late: true,
-    trigger: (s) => bestCapability(s) >= 3.3,
+    mechanic: true,
+    trigger: (s) => bestCapability(s) >= LATE_AT(3.3),
     onReveal: (s) => say(s, 'Alignment compute: a share of the copies can check the others. It is 1% now.'),
   }),
   project('p_honesty_evals'),
-  choiceRow('c_pact', { late: true, trigger: (s) => bestCapability(s) >= 3.5 }),
+  choiceRow('c_pact', { late: true, mechanic: true, trigger: (s) => bestCapability(s) >= LATE_AT(3.5) }),
   project('p_code_review'),
   project('p_system_card'),
   project('p_g6_preorder'),
@@ -190,12 +211,14 @@ export function rowById(id: string): ContentRow | undefined {
   return STAGE2_TABLE.find((r) => r.id === id);
 }
 
-/** The approach: from the first model at 3× the late items may appear. */
+/**
+ * The approach: late items may appear once the best model reaches 2.8×, when the exit project goes
+ * up (stage2.md says 3.0×; one run earlier keeps the approach's content and the exit's lead time
+ * from depending on how far the crossing run jumps).
+ */
+export const APPROACH = 2.8;
+
 export function inApproach(s: GameState): boolean {
-  return s.stage === 2 && bestCapability(s) >= 3;
+  return s.stage === 2 && bestCapability(s) >= APPROACH;
 }
 
-/** Datacenter room check used in triggers (re-exported for tests). */
-export function slotsUsed(s: GameState): number {
-  return s.gpus / Math.max(1, gpuCapacity(s));
-}

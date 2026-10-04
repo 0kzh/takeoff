@@ -95,7 +95,7 @@ export function render(s: GameState): void {
   renderLater(s);
   renderGraph(s);
   renderStores(s);
-  renderModal(s, (i) => perform('resolveChoice', i));
+  renderModal(s, (i) => perform('resolveChoice', i), () => perform('takeDefault'));
   renderEnding(s);
 }
 

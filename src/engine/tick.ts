@@ -19,7 +19,7 @@ import {
 import { buyProject, visibleProjects } from './projects.js';
 import { updateProjects, updateStageContent, noteReveals } from './reveal.js';
 import {
-  updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, fireEvent, drainChoiceQueue,
+  updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
 } from './events.js';
 import { updateReveals, checkStageExit, updateStage2 } from './stages.js';
 import { advanceClock } from './clock.js';
@@ -113,7 +113,7 @@ function drainConsoleQueue(s: GameState, dt: number): void {
   head.delay -= dt;
   if (head.delay <= 0) {
     s.consoleQueue.shift();
-    printLine(s, head.text);
+    if (head.text) printLine(s, head.text);
   }
 }
 
@@ -234,6 +234,7 @@ export const actions = {
   finishTraining,
   buyProject,
   resolveChoice,
+  takeDefault,
   fireEvent,
   forceEnding,
 };

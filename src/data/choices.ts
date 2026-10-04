@@ -4,7 +4,7 @@ import { chance, randInt, rand } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, queueGulf } from '../engine/infrastructure.js';
 import { moveGov, moveLead } from '../engine/world.js';
-import { bestCapability } from '../engine/economy.js';
+import { bestCapability, researchRate } from '../engine/economy.js';
 
 type Ctx = Record<string, number | string>;
 
@@ -14,6 +14,10 @@ export interface ChoiceOption {
   record: string;
   /** A function when it names a price that scales with the stage. */
   tooltip?: string | ((s: GameState) => string);
+  /** Stage 2 on: effect and cost in a few words, printed on the button under the label. */
+  line?: string | ((s: GameState, ctx: Ctx) => string);
+  /** What a greyed option is waiting for, when it is not simply its price. */
+  needs?: string | ((s: GameState, ctx: Ctx) => string);
   cost?: Cost | ((s: GameState) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
   effect: (s: GameState, ctx: Ctx) => void;
@@ -30,6 +34,8 @@ export interface ChoiceDef {
   timer?: number;
   /** A queued modal that no longer applies when its turn comes is dropped. */
   valid?: (s: GameState, ctx: Ctx) => boolean;
+  /** When it is put on screen (a price fixed to the economy of that moment). */
+  onOpen?: (s: GameState, ctx: Ctx) => void;
   defaultOption?: number;
   options: ChoiceOption[];
 }
@@ -40,9 +46,32 @@ function runFor(s: GameState, ctx: Ctx): TrainingRun | undefined {
 
 const clamp100 = (v: number) => Math.min(100, Math.max(0, v));
 
-/** Al-Marsa's price: $8M at scale 1, half again if the lab asked for a month. */
+/** The gamble in Stage 2 costs a minute of the lab's research (Stage 1: 500), rounded to 1,000. */
+function gambleCost(s: GameState): number {
+  return s.stage >= 2 ? Math.max(1000, Math.round((60 * researchRate(s)) / 1000) * 1000) : 500;
+}
+
+function gambleOdds(s: GameState): number {
+  return Math.min(0.8, 0.45 + 0.05 * s.researchers);
+}
+
+/** Lockdown and the Bureau (stage2.md §5.2, sized to the late economy: critic round 2 §5). */
+const LOCKDOWN_SECONDS = 60;
+const BUREAU_SECONDS = 120;
+
+/**
+ * Al-Marsa's price: a minute of revenue when the offer opens (fixed then; the spec's $8M at scale 1
+ * is out of reach inside the 90 s timer at minute 21), half again if the lab asked for a month.
+ */
 function gulfPrice(s: GameState): number {
-  return s2(s.flags['gulfPremium'] === true ? 12000000 : 8000000);
+  const base = typeof s.flags['gulfBase'] === 'number' ? (s.flags['gulfBase'] as number) : gulfBaseNow(s);
+  return s.flags['gulfPremium'] === true ? Math.round(base * 1.5) : base;
+}
+
+function gulfBaseNow(s: GameState): number {
+  const raw = Math.max(s2(1000000), 60 * s.stats.revPerSec);
+  const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
+  return Math.round(raw / unit) * unit;
 }
 
 function runName(s: GameState, ctx: Ctx): string {
@@ -64,13 +93,14 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'let her try',
         record: 'gamble',
-        tooltip: '500 research. Good odds of a benchmark tier; a miss adds red-team issues.',
-        cost: { research: 500 },
+        tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss adds red-team issues.`,
+        line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else 4–6 more issues · ${fmtNum(gambleCost(s), 0)} research`,
+        cost: (s) => ({ research: gambleCost(s) }),
         enabled: (s, ctx) => runFor(s, ctx)?.phase === 'training',
         effect: (s, ctx) => {
           const run = runFor(s, ctx);
           if (!run) return;
-          const odds = Math.min(0.8, 0.45 + 0.05 * s.researchers);
+          const odds = gambleOdds(s);
           if (chance(s, odds)) {
             run.gamble = 'success';
             const bench = randInt(s, 0, BENCHMARKS.length - 1);
@@ -88,6 +118,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'not now',
         record: 'no gamble',
+        line: 'the run trains as planned',
         effect: (s, ctx) => {
           const run = runFor(s, ctx);
           if (run) run.gamble = 'declined';
@@ -108,6 +139,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'release publicly',
         record: 'public',
         tooltip: 'Market grows with capability. Release hype ×2. Open issues become incidents. Lead −0.15 months.',
+        line: 'market grows with it · +1 Trust · lead −0.15 months',
         effect: (s, ctx) => {
           s.flags['sage2Decided'] = true;
           if (s.stage >= 2) s.revealed['releaseInternal'] = true;
@@ -120,6 +152,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'keep it internal',
         record: 'internal',
         tooltip: 'Research uses it at once; customers keep the old model. Lead +0.5 months. It will come out eventually.',
+        line: 'research ×1.25 · lead +0.5 months · customers keep the old model',
         effect: (s, ctx) => {
           s.flags['sage2Decided'] = true;
           if (s.stage >= 2) s.revealed['releaseInternal'] = true;
@@ -387,6 +420,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'accept',
         record: 'prepayment',
+        line: (_s, ctx) => `+${fmtMoney(Number(ctx['amount'] ?? 25))} now`,
         effect: (s, ctx) => {
           const amount = Number(ctx['amount'] ?? 25);
           addFunds(s, amount);
@@ -397,6 +431,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'ask for a case study',
         record: 'case study',
         tooltip: 'marketing level +1',
+        line: 'marketing level +1',
         effect: (s) => {
           s.hypeLevel += 1;
           say(s, 'Case study published. Marketing level up.');
@@ -419,6 +454,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'testify candidly',
         record: 'testified',
         tooltip: 'Government relations +8, approval +3. The roadmap goes on the record: lead −0.5 months.',
+        line: 'government +8 · approval +3 · lead −0.5 months',
         effect: (s) => {
           moveGov(s, 8);
           s.flags['candid'] = true;
@@ -431,6 +467,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'send the lawyers',
         record: 'lawyers',
         tooltip: 'Government relations −5.',
+        line: 'government −5 · nothing on the record',
         effect: (s) => {
           moveGov(s, -5);
           hearingDone(s);
@@ -440,8 +477,9 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'bring a demo',
         record: 'demo',
-        tooltip: '40,000 research. Marketing level +1, government relations +3.',
-        cost: { research: 40000 },
+        tooltip: '100,000 research. Marketing level +1, government relations +3.',
+        line: 'marketing level +1 · government +3 · 100,000 research',
+        cost: { research: 100000 },
         effect: (s) => {
           s.hypeLevel += 1;
           moveGov(s, 3);
@@ -462,8 +500,10 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'license the archives',
         record: 'licensed',
-        tooltip: () => `${fmtMoneyShort(s2(400000))}. +10 T of data now. Approval +2.`,
-        cost: () => ({ funds: s2(400000) }),
+        // stage2.md: $400,000 at scale 1; $250,000 is in reach when the crawl runs out.
+        tooltip: () => `${fmtMoneyShort(s2(250000))}. +10 T of data now. Approval +2.`,
+        line: () => `+10 T data now · approval +2 · ${fmtMoneyShort(s2(250000))}`,
+        cost: () => ({ funds: s2(250000) }),
         effect: (s) => {
           s.data += 10;
           s.flags['licensedPublishers'] = true;
@@ -475,6 +515,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'fight it',
         record: 'fought',
         tooltip: '+5 T now. Government relations −3, approval −4. They will sue.',
+        line: '+5 T data now · government −3 · approval −4 · a lawsuit',
         effect: (s) => {
           s.data += 5;
           moveGov(s, -3);
@@ -488,6 +529,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'write our own',
         record: 'synthetic',
         tooltip: 'No deal. Synthetic data costs half as much.',
+        line: 'no data now · synthetic data at half price',
         effect: (s) => {
           s.flags['synthHalf'] = true;
           s.flags['publishersDone'] = true;
@@ -505,11 +547,15 @@ export const CHOICES: ChoiceDef[] = [
     ],
     timer: 90,
     defaultOption: 1,
+    onOpen: (s) => {
+      if (typeof s.flags['gulfBase'] !== 'number') s.flags['gulfBase'] = gulfBaseNow(s);
+    },
     options: [
       {
         label: 'sign for Al-Marsa',
         record: 'signed Al-Marsa',
         tooltip: (s) => `${fmtMoneyShort(gulfPrice(s))}. +1,000 MW in 2:00. Government relations −8, approval −3, lead −0.5 months. The site is abroad.`,
+        line: (s) => `+1,000 MW in 2:00 · government −8 · approval −3 · lead −0.5 months · ${fmtMoneyShort(gulfPrice(s))}`,
         cost: (s) => ({ funds: gulfPrice(s) }),
         effect: (s) => {
           queueGulf(s);
@@ -523,6 +569,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'domestic only',
         record: 'domestic',
         tooltip: 'Government relations +3. A nuclear PPA is offered now.',
+        line: 'government +3 · a nuclear PPA is offered now',
         effect: (s) => {
           moveGov(s, 3);
           s.flags['gulfDeclined'] = true;
@@ -533,7 +580,9 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'ask for a month',
         record: 'asked for a month',
-        tooltip: () => `The offer returns once, at ${fmtMoneyShort(s2(12000000))}.`,
+        tooltip: (s) => `The offer returns once, at ${fmtMoneyShort(Math.round(gulfPrice(s) * 1.5))}.`,
+        line: (s) => `the offer returns once, at ${fmtMoneyShort(Math.round(gulfPrice(s) * 1.5))}`,
+        needs: 'asked once already',
         enabled: (s) => s.flags['gulfPremium'] !== true,
         effect: (s) => {
           s.flags['gulfPremium'] = true;
@@ -556,6 +605,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'give them the month',
         record: 'month',
         tooltip: 'The next run cannot start for 60 s. Alignment (as measured) +2. They will remember.',
+        line: 'next run waits 1:00 · alignment +2',
         effect: (s) => {
           s.training.cooldown = Math.max(s.training.cooldown, 60);
           s.alignmentApparent = clamp100(s.alignmentApparent + 2);
@@ -569,6 +619,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'give them a week',
         record: 'week',
         tooltip: 'The next run cannot start for 15 s.',
+        line: 'next run waits 0:15',
         effect: (s) => {
           s.training.cooldown = Math.max(s.training.cooldown, 15);
           s.alignmentTrue = clamp100(s.alignmentTrue + 1);
@@ -580,6 +631,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'not now',
         record: 'not now',
         tooltip: 'No delay.',
+        line: 'no delay · they will remember',
         effect: (s) => {
           s.alignmentTrue = clamp100(s.alignmentTrue - 1);
           s.flags['whistleblowRisk'] = counter(s, 'whistleblowRisk') + 1;
@@ -603,6 +655,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'sign the contract',
         record: 'signed',
         tooltip: 'Revenue +12 % for good. Government relations +15, lead +0.5 months, approval −8. The government becomes a customer it will not want to lose.',
+        line: 'revenue +12% for good · government +15 · lead +0.5 months · approval −8',
         effect: (s) => {
           s.flags['defenseContract'] = true;
           s.revenueMult *= 1.12;
@@ -615,6 +668,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'decline',
         record: 'declined',
         tooltip: 'Government relations −5, approval +3.',
+        line: 'government −5 · approval +3',
         effect: (s) => {
           moveGov(s, -5);
           s.flags['declinedDefense'] = true;
@@ -637,9 +691,10 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'lock it down',
         record: 'locked down',
-        tooltip: 'Research stops for 45 s while every credential is rotated. Security level 3 is 25 % off for 5 minutes.',
+        tooltip: `Research stops for ${LOCKDOWN_SECONDS} s while every credential is rotated. Security level 3 is 25 % off for 5 minutes.`,
+        line: 'research stops 1:00 · security level 3 25% off for 5:00',
         effect: (s) => {
-          s.effects.push({ id: 'lockdown', remaining: 45, demandMult: 1, researchMult: 0 });
+          s.effects.push({ id: 'lockdown', remaining: LOCKDOWN_SECONDS, demandMult: 1, researchMult: 0 });
           s.flags['sl3DiscountUntil'] = s.stats.timePlayed + 300;
           s.revealed['sl3Button'] = true;
         },
@@ -648,11 +703,12 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'call the Bureau',
         record: 'called the Bureau',
-        tooltip: 'Government relations +5, lead +0.5 months. Research −20 % for 90 s while agents sit in the office.',
+        tooltip: `Government relations +5, lead +0.5 months. Research −20 % for ${BUREAU_SECONDS} s while agents sit in the office.`,
+        line: 'government +5 · lead +0.5 months · research −20% for 2:00',
         effect: (s) => {
           moveGov(s, 5);
           moveLead(s, 0.5);
-          s.effects.push({ id: 'bureau', remaining: 90, demandMult: 1, researchMult: 0.8 });
+          s.effects.push({ id: 'bureau', remaining: BUREAU_SECONDS, demandMult: 1, researchMult: 0.8 });
           s.revealed['sl3Button'] = true;
         },
         log: 'The FBI opens a counterintelligence file on OpenMind\'s behalf.',
@@ -661,6 +717,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'review it quietly',
         record: 'reviewed quietly',
         tooltip: 'Nothing changes today. Lead −0.5 months.',
+        line: 'nothing changes today · lead −0.5 months',
         effect: (s) => {
           moveLead(s, -0.5);
           s.flags['theftIgnored'] = true;
@@ -684,6 +741,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'sign it',
         record: 'signed',
         tooltip: 'Approval +5, government relations +5. Releases from 4× up wait 30 s for the evaluator.',
+        line: 'approval +5 · government +5 · releases from 4× wait 0:30',
         effect: (s) => {
           s.flags['pactSigned'] = true;
           moveGov(s, 5);
@@ -695,6 +753,7 @@ export const CHOICES: ChoiceDef[] = [
         label: 'decline',
         record: 'declined',
         tooltip: 'Anthrosoft publishes the letter anyway. Approval −2.',
+        line: 'approval −2 · no wait on releases',
         effect: (s) => {
           s.flags['pactDeclined'] = true;
           s.revealed['shareEvals'] = true;

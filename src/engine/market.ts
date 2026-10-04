@@ -11,7 +11,7 @@ import { effectsDemandMult, marketingMult, productionPerSec } from './economy.js
 export const MARKET_BASE_MIN = 30;
 export const MARKET_BASE_MAX = 54;
 /** AUTO closes this share of the gap to its target each second. */
-export const AUTO_RATE = 0.2;
+export const AUTO_RATE = 0.5;
 export const S2_MIN_PRICE = 0.001;
 export const S2_MAX_AUTO = 5;
 /** Manual price steps in Stage 2 are 5 % of the price. */

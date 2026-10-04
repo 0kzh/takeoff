@@ -79,9 +79,25 @@ export function fundsFor(c: number): number {
   return Math.round(25000 * Math.pow(c / COST_KNEE, c >= COST_KNEE ? 8 : 9.5));
 }
 
-/** Data `2.0 T × (c/1.6)^3` (Stage 2, from the second run): 2.8 T at 1.8×, 13.2 T at 3.0×. */
+/**
+ * Stage 2 funds per run: `$25,000 × (c/1.6)^F2` at scale 1. stage2.md §2.5 has F2 = 8; with the
+ * built economy the last runs (3.6–4.0×) then cost a spender minutes of saving (see the tuning
+ * notes in docs/stages.md), so Stage 2 uses a gentler exponent.
+ */
+export const S2_FUNDS_EXPONENT = 7;
+
+export function fundsForS2(c: number): number {
+  return Math.round(25000 * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
+}
+
+/**
+ * Data `1.8 T × (c/1.6)^3` (Stage 2, from the second run): 2.6 T at 1.8×, 11.9 T at 3.0×.
+ * stage2.md has 2.0 T; 1.8 keeps the mid-stage data wall to the length its paper model had.
+ */
+export const DATA_BASE = 1.5;
+
 export function dataFor(c: number): number {
-  return Math.round(20 * Math.pow(c / COST_KNEE, 3)) / 10;
+  return Math.round(10 * DATA_BASE * Math.pow(c / COST_KNEE, 3)) / 10;
 }
 
 /**
@@ -98,14 +114,22 @@ export function trainCost(s: GameState): Cost {
   if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
   // Stage 3: runs are research programs (stage3.md §1.1); its build re-bases the price itself.
   if (s.stage >= 3) return { research: researchFor(c) };
-  const cost: Cost = { research: researchFor(c), funds: Math.round(fundsFor(c) * S2_FUNDS_SCALE) };
+  const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
 }
 
+/**
+ * Stage 2's compute exponent (stage2.md §2.5 and §9.5's second knob: `N(c) = 1,000 × (c/1.6)^7.5`).
+ * 7.2 keeps a player who trains the moment Train lights up from a tail of half-trained runs.
+ */
+export const S2_COMPUTE_EXPONENT = 7.5;
+
 /** GPUs of training compute the next run wants. */
 export function requiredCompute(s: GameState): number {
-  return computeFor(startCapability(s));
+  const c = startCapability(s);
+  if (s.stage >= 2 && c >= COST_KNEE) return 1000 * Math.pow(c / COST_KNEE, S2_COMPUTE_EXPONENT);
+  return computeFor(c);
 }
 
 /**
@@ -299,7 +323,8 @@ export function updateTraining(s: GameState, dt: number): void {
       const r = t.run;
       if (r && r.phase === 'redteam' && r.issues > 0) {
         r.issues -= 1;
-        say(s, r.issues === 0 ? 'Red team signs off. Ready to release.' : pick(s, REDTEAM_LINES));
+        say(s, r.issues === 0 ? 'Red team signs off. Ready to release.'
+          : s.stage >= 2 ? `${pick(s, REDTEAM_LINES)} ${r.issues} open.` : pick(s, REDTEAM_LINES));
       }
     }
   }
@@ -310,8 +335,10 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
   if (run.elapsed < run.duration) {
     run.elapsed += dt;
     const progress = run.elapsed / run.duration;
-    while (run.flavorShown < 3 && progress >= (run.flavorShown + 1) * 0.25) {
-      const pool = TRAINING_FLAVOR[run.flavorShown] ?? [];
+    // Stage 1: a flavour line at each quarter. Stage 2 on: one per run, at the halfway mark.
+    const flavorCount = s.stage >= 2 ? 1 : 3;
+    while (run.flavorShown < flavorCount && progress >= (s.stage >= 2 ? 0.5 : (run.flavorShown + 1) * 0.25)) {
+      const pool = TRAINING_FLAVOR[s.stage >= 2 ? 1 : run.flavorShown] ?? [];
       run.flavorShown += 1;
       if (pool.length) say(s, pick(s, pool));
     }
@@ -364,6 +391,7 @@ function offerGamble(s: GameState, run: TrainingRun): void {
 function applyTrainingEvent(s: GameState, run: TrainingRun): void {
   const ev = pick(s, TRAINING_EVENTS);
   run.eventId = ev.id;
+  let bench = -1;
   switch (ev.id) {
     case 'loss_spike':
       run.duration = s.stage >= 2 ? Math.min(120, run.duration + 10) : run.duration + 10;
@@ -376,11 +404,17 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
       run.capMult *= 0.75;
       break;
     case 'emergent':
-      run.benchBonus[randInt(s, 0, BENCHMARKS.length - 1)]! += 1;
+      bench = randInt(s, 0, BENCHMARKS.length - 1);
+      run.benchBonus[bench]! += 1;
       run.gainBonus += 0.01;
       break;
   }
-  say(s, ev.line);
+  // Stage 2 on: a console line carries its number (critic round 2: a number or an instruction).
+  const s2Line: Record<string, string> = {
+    contamination: 'Data contamination found in the eval set. The run gains a quarter less.',
+    emergent: `Emergent ability: ${BENCHMARKS[bench] ?? 'a benchmark'} up a tier.`,
+  };
+  say(s, s.stage >= 2 ? (s2Line[ev.id] ?? ev.line) : ev.line);
 }
 
 /**

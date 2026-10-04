@@ -1,6 +1,6 @@
 import { GameState, projectState } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
-import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, inApproach, rowById } from '../data/stage2.js';
+import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, MECHANIC_FLAGS, inApproach, rowById } from '../data/stage2.js';
 import { visibleProjects } from './projects.js';
 
 /**
@@ -21,10 +21,12 @@ import { visibleProjects } from './projects.js';
 export const DRIP_SECONDS = 15;
 export const LATE_SECONDS = 75;
 export const GOVERNOR_SECONDS = 150;
+/** No new panel or mechanic for this long: the governor pulls the next mechanic row (arc G2). */
+export const MECHANIC_GOVERNOR_SECONDS = 240;
 
 /** Projects on screen at once (rescues, urgent fixes and the stage goal not counted). */
 export function maxVisible(s: GameState): number {
-  return s.stage === 1 ? 4 : 6;
+  return s.stage === 1 ? 4 : 8;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {
@@ -36,9 +38,12 @@ function exempt(s: GameState, def: ProjectDef): boolean {
   return def.rescue === true || def.pinned === true || def.urgent?.(s) === true;
 }
 
-/** Not counted against the cap (and never blocked by it). */
+/**
+ * Not counted against the cap (and never blocked by it): side-offers, and from Stage 2 the
+ * leftovers carried from an earlier stage, so a shelf of old offers never holds back new content.
+ */
 function uncapped(s: GameState, def: ProjectDef): boolean {
-  return exempt(s, def) || def.sideline === true;
+  return exempt(s, def) || def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
 function eligible(s: GameState, def: ProjectDef): boolean {
@@ -228,9 +233,14 @@ function lateDrip(s: GameState, approach: boolean): void {
 function governor(s: GameState, approach: boolean): void {
   const c = s.cadence;
   const now = s.stats.timePlayed;
-  if (s.activeChoice || now - c.lastRevealAt < GOVERNOR_SECONDS) return;
+  if (s.activeChoice) return;
+  const reveals = now - c.lastRevealAt >= GOVERNOR_SECONDS;
+  const mechanics = now - c.lastMechanicAt >= MECHANIC_GOVERNOR_SECONDS;
+  if (!reveals && !mechanics) return;
   for (const row of STAGE2_TABLE) {
     if (row.governed === false || rowDone(s, row)) continue;
+    // A mechanic hole is filled with a mechanic; a reveal hole with any row.
+    if (!reveals && row.mechanic !== true) continue;
     const late = rowLate(row);
     if (late && !approach) continue;
     if (!rowPrereq(s, row)) continue;
@@ -260,13 +270,16 @@ export function noteReveals(s: GameState): void {
     seenSets.set(seen, known);
   }
   const set = known;
-  const mark = (key: string, counts = true) => {
-    if (set.has(key)) return;
+  const mark = (key: string, counts = true): boolean => {
+    if (set.has(key)) return false;
     set.add(key);
     seen.push(key);
     if (counts) s.cadence.lastRevealAt = s.stats.timePlayed;
+    return true;
   };
-  for (const [id, on] of Object.entries(s.revealed)) if (on) mark(`f:${id}`);
+  for (const [id, on] of Object.entries(s.revealed)) {
+    if (on && mark(`f:${id}`) && MECHANIC_FLAGS.includes(id)) s.cadence.lastMechanicAt = s.stats.timePlayed;
+  }
   for (const [id, st] of Object.entries(s.projects)) {
     if (!st.shown) continue;
     // Rescues are the game noticing a stall, and carried-over projects are not new (arc §6).

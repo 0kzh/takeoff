@@ -181,6 +181,8 @@ export interface Cadence {
   lastLateAt: number;
   /** Content-table rows the governor revealed, with the time (`<seconds>:<id>`). */
   governed: string[];
+  /** When a new panel, verb, toggle, slider or Stores row last appeared (arc G2). */
+  lastMechanicAt: number;
 }
 
 /** Bookkeeping for the idle guard (design.md §8). */
@@ -536,7 +538,7 @@ export function newGame(seed: number = Date.now()): GameState {
     choiceQueue: [],
     choicesMade: [],
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
-    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [] },
+    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [], lastMechanicAt: 0 },
     stats: newStats(),
 
     tickAccum: 0,
@@ -566,10 +568,13 @@ export function printLine(s: GameState, text: string): void {
  * Stage transitions: keep the last lines on screen and print the narration one line at a time
  * (`[seconds after the previous line, text]`). Other lines wait until the narration is done.
  */
-export function narrate(s: GameState, lines: [number, string][]): void {
+export function narrate(s: GameState, lines: [number, string][], holdAfter = 0): void {
   if (s.console.length > CONSOLE_KEEP_ON_TRANSITION) s.console.splice(0, s.console.length - CONSOLE_KEEP_ON_TRANSITION);
   const waiting = s.consoleQueue.filter((q) => !q.hold);
-  s.consoleQueue = [...lines.map(([delay, text]) => ({ delay, text, hold: true })), ...waiting];
+  const held: QueuedLine[] = lines.map(([delay, text]) => ({ delay, text, hold: true }));
+  // An arrival's lines stay on screen, whole, for `holdAfter` seconds before routine lines follow.
+  if (holdAfter > 0) held.push({ delay: holdAfter, text: '', hold: true });
+  s.consoleQueue = [...held, ...waiting];
 }
 
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {

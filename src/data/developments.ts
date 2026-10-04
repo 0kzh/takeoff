@@ -226,8 +226,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 2,
     choice: 'c_hearing',
     month: monthOf(2026, 5),
-    // stage2.md says 300k tasks/s; the built economy reaches 100k where the paper model reached 300k.
-    trigger: (s) => s.stats.tasksPerSec >= 100000,
+    // stage2.md says 300k tasks/s; the built economy reaches 80k where the paper model reached 300k.
+    trigger: (s) => s.stats.tasksPerSec >= 80000,
   },
   {
     id: 'd_juniors',

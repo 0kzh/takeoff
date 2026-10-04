@@ -14,7 +14,7 @@ import {
 } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
-import { choiceById, choiceOptionEnabled } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
 
 export type PolicyName = 'bot' | 'naive' | 'greedy';
@@ -47,14 +47,21 @@ export interface BotMemory {
   /** The open modal and when it opened: players read before they click. */
   choiceKey: string;
   choiceSince: number;
+  /**
+   * Stage 2 decision variants (critic round 2 §5): `modals-best`, `modals-worst`, `redteam-never`,
+   * `slider-0|20|50`, `safety-0|2`, `gulf-sign`, `gulf-domestic`, `auto-off`. Empty: the plain bot.
+   */
+  variant: string;
+  autoOffDone?: boolean;
   /** Leave the stage-ending purchase (Break ground) to the player (the browser smoke test clicks it). */
   holdTransition: boolean;
 }
 
-export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false): BotMemory {
+export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false, variant = ''): BotMemory {
   return {
     policy, ticks: 0, lastPriceTick: -100, hireNext: 'researcher', bought: [],
     clickAcc: 0, lastPriceMove: -100, lowChecks: 0, prevBacklog: 0, choiceKey: '', choiceSince: 0, holdTransition,
+    variant,
   };
 }
 
@@ -456,12 +463,61 @@ function runsS2(s: GameState): number {
   return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
 }
 
-function answerChoiceS2(s: GameState, a: Actions): void {
+/** The publishers' licence, while the bot holds the offer open for the money (≤ 60 s). */
+function publishersWait(s: GameState, mem: BotMemory): number {
+  const a = s.activeChoice;
+  if (!a || a.id !== 'c_publishers') return 0;
+  const def = choiceById('c_publishers');
+  if (!def || choiceOptionEnabled(s, def, 0)) return 0;
+  const price = optionCost(s, def.options[0]!)?.funds ?? 0;
+  return s.stats.timePlayed - mem.choiceSince < 60 ? price : 0;
+}
+
+/**
+ * Decision variants. `best`: the answer that looks most careful (candid, licensed, domestic, the
+ * month, no Pentagon, lockdown, the pledge, public, no gamble). `worst`: the one that looks most
+ * reckless (lawyers, fight, Al-Marsa, not now, the Pentagon, quietly, no pledge, internal, gamble).
+ * An option that cannot be paid for falls through to the next.
+ */
+const CHOICES_BEST: Record<string, number[]> = {
+  c_sage2: [0], c_hearing: [0], c_publishers: [0, 2], c_gulf: [1], c_evals_month: [0], c_defense: [1],
+  c_theft_warning: [0], c_pact: [0], c_gamble: [1], c_customer_email: [0], c_ship_issues: [1],
+};
+const CHOICES_WORST: Record<string, number[]> = {
+  c_sage2: [1], c_hearing: [1], c_publishers: [1], c_gulf: [0, 2, 1], c_evals_month: [2], c_defense: [0],
+  c_theft_warning: [2], c_pact: [1], c_gamble: [0, 1], c_customer_email: [0], c_ship_issues: [0],
+};
+
+/** Variant `gulf-sign`: Al-Marsa's price is held while its offer is on screen. */
+function gulfWait(s: GameState, mem: BotMemory): number {
+  const a = s.activeChoice;
+  if (mem.variant !== 'gulf-sign' || !a || a.id !== 'c_gulf') return 0;
+  const def = choiceById('c_gulf');
+  return def ? optionCost(s, def.options[0]!)?.funds ?? 0 : 0;
+}
+
+function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
   const id = s.activeChoice!.id;
+  if (mem.variant === 'modals-best' || mem.variant === 'modals-worst') {
+    if (mem.variant === 'modals-best' && publishersWait(s, mem) > 0) return;
+    answerChoice(s, a, mem.variant === 'modals-best' ? CHOICES_BEST : CHOICES_WORST);
+    return;
+  }
+  if (id === 'c_gulf' && (mem.variant === 'gulf-sign' || mem.variant === 'gulf-domestic')) {
+    // Signing waits for the money while the timer runs (the timer's default is domestic).
+    if (mem.variant === 'gulf-sign') {
+      if (choiceOptionEnabled(s, choiceById('c_gulf')!, 0)) a.resolveChoice(s, 0);
+      return;
+    }
+    answerChoice(s, a, { c_gulf: [1] });
+    return;
+  }
   if (id === 'c_defense') {
     a.resolveChoice(s, s.approval > -15 ? 0 : 1);
     return;
   }
+  // The publishers' modal has no timer: hold it for up to a minute while the licence money comes in.
+  if (publishersWait(s, mem) > 0) return;
   answerChoice(s, a, CHOICE_POLICY_S2);
 }
 
@@ -476,11 +532,28 @@ function computeRatio(s: GameState): number {
 }
 
 /** Every enabled release-slot action: red-team to zero, then release (publicly). */
-function redTeamAndRelease(s: GameState, a: Actions): void {
+function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
   const run = s.training.run;
   if (!run || run.phase !== 'redteam') return;
+  // Variant: never red-team; every model ships with what the evaluation found.
+  if (mem?.variant === 'redteam-never' && s.stage === 2) {
+    if (canReleasePublic(s)) a.release(s);
+    return;
+  }
   if (canRedTeam(s)) a.redTeam(s);
   if (run.issues === 0 && canReleasePublic(s)) a.release(s);
+}
+
+/** The Focus for the next Stage 2 run: the cycle, with the variants' Safety count. */
+function focusFor(s: GameState, mem: BotMemory): (typeof FOCUS_CYCLE)[number] {
+  const focus = FOCUS_CYCLE[runsS2(s) % FOCUS_CYCLE.length]!;
+  if (mem.variant === 'safety-0' && focus === 'safety') return 'capability';
+  if (mem.variant === 'safety-2') {
+    // Two Safety runs, the third and the sixth; the cycle's own Safety turns become Capability.
+    const n = runsS2(s);
+    return n === 2 || n === 5 ? 'safety' : focus === 'safety' ? 'capability' : focus;
+  }
+  return focus;
 }
 
 /** Power per dollar: the cheapest MW on screen (gas, solar if the queue has room, nuclear). */
@@ -491,6 +564,14 @@ function cheapestPower(s: GameState): 'gas' | 'solar' | 'nuclear' | '' {
   if (s.revealed['nuclearButton']) options.push(['nuclear', nuclearCost(s) / NUCLEAR_MW]);
   options.sort((x, y) => x[1] - y[1]);
   return options[0]?.[0] ?? '';
+}
+
+/** Power that does not wait in the interconnect queue: gas, or a reactor when it is cheaper per MW. */
+function cheapestInstantPower(s: GameState): 'gas' | 'nuclear' | '' {
+  const gas = s.revealed['gasButton'] ? gasCost(s) / GAS_MW : Infinity;
+  const nuclear = s.revealed['nuclearButton'] ? nuclearCost(s) / NUCLEAR_MW : Infinity;
+  if (gas === Infinity && nuclear === Infinity) return '';
+  return nuclear < gas ? 'nuclear' : 'gas';
 }
 
 function buyPowerKind(s: GameState, a: Actions, kind: 'gas' | 'solar' | 'nuclear'): boolean {
@@ -513,8 +594,10 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
   if (s.ending) return;
-  if (s.activeChoice && readModal(s, mem)) answerChoiceS2(s, a);
-  redTeamAndRelease(s, a);
+  if (s.activeChoice && readModal(s, mem)) answerChoiceS2(s, a, mem);
+  redTeamAndRelease(s, a, mem);
+  // Variant: AUTO off on arrival, and the price never touched again.
+  if (mem.variant === 'auto-off' && !mem.autoOffDone && s.autoPrice && a.toggleAutoPrice(s)) mem.autoOffDone = true;
   if (mem.ticks % 2 !== 0) return;
 
   const cost = trainCost(s);
@@ -524,12 +607,14 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   const slot = trainSlotFree(s);
   // The next run's money once its research is 60 % there and its data is in hand; or, when a wall
   // blocks it, the price of the wall's named fix (a data licence, a research-cap project) if that
-  // is within two minutes of revenue.
+  // is within three minutes of revenue.
   const urgentFix = visibleProjects(s)
     .filter((p) => p.urgent?.(s) === true && !p.rescue && !p.canAfford(s))
     .reduce((m, p) => Math.max(m, p.cost(s).funds ?? 0), 0);
-  const runReserve = slot && s.research >= 0.6 * runResearch && dataReady(s) ? runFunds : 0;
-  const reserve = Math.max(runReserve, urgentFix <= 120 * rev ? urgentFix : 0, wallFixPrice(s, rev));
+  // A run waiting for compute is waiting for GPU lots: no reserve until the cluster is nearly there.
+  // A run waiting only for its data keeps its money too: the data fix is saved for beside it.
+  const runReserve = slot && s.research >= 0.6 * runResearch && computeRatio(s) >= 0.9 * TRAIN_COMPUTE_GATE ? runFunds : 0;
+  const reserve = Math.max(runReserve, urgentFix <= 180 * rev ? urgentFix : 0, wallFixPrice(s, rev), publishersWait(s, mem), gulfWait(s, mem));
   const buy = (p: ProjectDef) => {
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   };
@@ -554,7 +639,10 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   // 3. The binding wall: power (the cheapest MW; solar ahead at 80 % with an empty queue), then room.
   const reason = lotReason(s);
   if (reason === 'no power' || (standingOrderOn(s) && freePowerGpus(s) < 1000 && freeSlots(s) >= 1000)) {
-    const kind = cheapestPower(s);
+    // The cheapest MW (§9.1) — but solar waits in the queue, so with a farm already queued the
+    // binding wall is fixed with power that arrives now (gas, or nuclear when cheaper per MW).
+    let kind = cheapestPower(s);
+    if (kind === 'solar' && s.powerQueue.some((o) => o.kind === 'solar')) kind = cheapestInstantPower(s);
     if (kind && s.funds >= powerCostOf(s, kind) && (kind !== 'nuclear' || s.funds - powerCostOf(s, kind) >= reserve)) buyPowerKind(s, a, kind);
   } else if (
     s.revealed['solarButton'] && !s.powerQueue.some((o) => o.kind === 'solar') &&
@@ -568,30 +656,36 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
 
   // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 72 % of the compute wanted.
   if (slot && canStartTraining(s) && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE) {
-    a.setFocus(s, FOCUS_CYCLE[runsS2(s) % FOCUS_CYCLE.length]!);
+    a.setFocus(s, focusFor(s, mem));
     a.startTraining(s);
   }
 
   // 5. Other projects in table order: keep the run's money, and its research while it is otherwise ready.
   const otherwiseReady = slot && s.funds >= runFunds && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE;
+  // A free slot waiting for compute: money goes to GPU lots before cards that are not named fixes.
+  const computeBound = slot && dataReady(s) && computeRatio(s) < TRAIN_COMPUTE_GATE && lotSize(s) >= 1000;
   // Insight is kept for the Stage 2 projects on screen before the shelf of Stage 1 leftovers.
   const insightHeld = ordered
     .filter((p) => !p.stages.includes(1))
     .reduce((m, p) => Math.max(m, p.cost(s).insight ?? 0), 0);
-  for (const p of stage2First(visibleProjects(s))) {
+  // A named fix (the wall's own card) goes before the rest of the table.
+  const step5 = stage2First(visibleProjects(s));
+  step5.sort((x, y) => Number(y.urgent?.(s) === true) - Number(x.urgent?.(s) === true));
+  for (const p of step5) {
     if (!p.canAfford(s)) continue;
     const c = p.cost(s);
     if (c.insight && p.stages.includes(1) && s.insight - c.insight < insightHeld) continue;
     const named = p.urgent?.(s) === true;
     if (c.funds && !named && s.funds - c.funds < reserve) continue;
+    if (c.funds && !named && computeBound && c.funds > 20 * rev) continue;
     if (c.research && c.research > 0.15 * runResearch && otherwiseReady && s.research - c.research < runResearch) continue;
-    if (c.trust && !trustSpare(s, c.trust)) continue;
+    if (c.trust && !trustSpare(s, c.trust, p.id)) continue;
     buy(p);
   }
 
   // 6. GPU lots by hand until the standing order, saving first for the next Stage 2 project that
   //    only lacks money (within two minutes of revenue); SL3 when it is on screen.
-  const saving = reserve + nextProjectPrice(s, rev, reserve);
+  const saving = reserve + (computeBound ? 0 : nextProjectPrice(s, rev, reserve));
   if (!standingOrderOn(s)) {
     let guard = 0;
     while (lotSize(s) >= 1000 && s.funds - lotCost(s) >= saving && guard++ < 5 && a.buyGpuBatch(s)) {
@@ -608,7 +702,8 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
 
   // 8. The slider, the toggles, alignment compute.
   if (s.revealed['allocation']) {
-    const want = s.research >= researchCap(s) - 1 ? 10 : 20;
+    const fixed = /^slider-(\d+)$/.exec(mem.variant);
+    const want = fixed ? Number(fixed[1]) : s.research >= researchCap(s) - 1 ? 10 : 20;
     if (Math.round(s.researchAlloc * 100) !== want) a.setResearchAlloc(s, want);
   }
   if (s.revealed['jobFund'] && !s.jobFund && s.approval <= -10) a.toggleJobFund(s);
@@ -639,7 +734,7 @@ function nextProjectPrice(s: GameState, rev: number, reserve: number): number {
   for (const p of visibleProjects(s)) {
     if (p.stages.includes(1)) continue;
     const c = p.cost(s);
-    if (!c.funds || c.funds > 120 * rev || s.funds - c.funds >= reserve) continue;
+    if (!c.funds || c.funds > 180 * rev || s.funds - c.funds >= reserve) continue;
     if ((c.research ?? 0) > s.research || (c.insight ?? 0) > s.insight || (c.trust ?? 0) > s.trust) continue;
     return c.funds;
   }
@@ -652,10 +747,10 @@ function stage2First(list: ProjectDef[]): ProjectDef[] {
 }
 
 /** Trust the bot may spend: it holds 3 for SL3 and 2 for the Policy team while either is on screen. */
-function trustSpare(s: GameState, amount: number): boolean {
+function trustSpare(s: GameState, amount: number, forId = ''): boolean {
   let hold = 0;
   if (s.revealed['sl3Button'] && s.securityLevel < 3) hold += 3;
-  if (visibleProjects(s).some((p) => p.id === 'p_policy') && !isBought(s, 'p_policy')) hold += 2;
+  if (forId !== 'p_policy' && visibleProjects(s).some((p) => p.id === 'p_policy') && !isBought(s, 'p_policy')) hold += 2;
   return s.trust - amount >= hold;
 }
 

@@ -345,12 +345,13 @@ div.storeRow[data-reveal].shown { display: flex; }
 
 /* ---------- modal (ADR event panel) ---------- */
 
+/* Non-blocking: the overlay is a positioning layer only; the page behind keeps taking clicks. */
 #modalOverlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.6);
   z-index: 20;
+  pointer-events: none;
 }
 #modalOverlay.shown { display: block; }
 #modal {
@@ -362,8 +363,13 @@ div.storeRow[data-reveal].shown { display: flex; }
   background: #fff;
   border: 2px solid #000;
   padding: 16px 20px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
 }
+#modal:focus { outline: none; }
+#modal:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
 #modalTitle { font-weight: bold; font-size: 20px; margin-bottom: 10px; }
 #modalText p { margin: 0 0 10px; }
 #modalTimer { font-size: 13px; color: #555; margin-bottom: 8px; }
@@ -379,6 +385,10 @@ div.storeRow[data-reveal].shown { display: flex; }
   text-align: center;
 }
 .modalButton:hover { text-decoration: underline; }
+.modalButton.twoLine { display: block; width: 100%; text-align: left; margin: 0 0 8px; }
+.modalButton.twoLine .optLabel { display: block; }
+.modalButton.twoLine .optLine { display: block; font-size: 13px; color: #444; margin-top: 2px; }
+.modalButton.twoLine:disabled .optLine { color: #999; }
 .modalButton:disabled { color: #999; border-color: #999; text-decoration: none; cursor: default; }
 
 /* ---------- ending ---------- */

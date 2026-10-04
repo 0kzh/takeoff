@@ -4,7 +4,7 @@ import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1 } from './economy.js';
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName } from './training.js';
-import { calibrateMarket } from './market.js';
+import { calibrateMarket, autoTarget } from './market.js';
 import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
@@ -98,7 +98,13 @@ function enterScale(s: GameState): void {
   s.gpusG5 = 0;
   const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / before));
   s.cadence.lastRevealAt = now;
+  s.cadence.lastMechanicAt = now;
+  // AUTO starts at the price that clears the new output, so the first number that moves is
+  // revenue (up), not a backlog: no Stage 1 price is left standing for a minute of ×10 supply.
+  s.price = autoTarget(s);
+  s.stats.priceHist = [];
 
+  // Five lines, the console's height; they stay whole for 10 s before routine lines follow.
   const lines: [number, string][] = [
     [0.1, 'Ground broken outside Abilene.'],
     [2, `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
@@ -106,13 +112,13 @@ function enterScale(s: GameState): void {
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
     [2, 'Pricing is on AUTO. The price falls to meet supply; watch revenue, not price.'],
   ];
-  if (contracts > 0) {
-    lines.push([2, `No new custom contracts. The ${fmtInt(contracts)} signed keep paying ${fmtMoneyShort(Math.round(s.contractIncome))} a second.`]);
-  }
-  if (retired.length) lines.push([2, `Retired with the rented fleet: ${retired.join(', ')}.`]);
-  narrate(s, lines);
-  if (roomAdded) say(s, 'The new site has room for a bigger lab.');
+  narrate(s, lines, 10);
   logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
+  if (contracts > 0) {
+    logNews(s, `No new custom contracts. The ${fmtInt(contracts)} signed keep paying ${fmtMoneyShort(Math.round(s.contractIncome))} a second.`);
+  }
+  if (retired.length) logNews(s, `Retired with the rented fleet: ${retired.join(', ')}.`);
+  if (roomAdded) logNews(s, 'The new site has room for a bigger lab.');
 }
 
 /** Projects Stage 3 grants for free when a player arrives without them (stage3.md §1.1). */
@@ -163,9 +169,9 @@ function enterTakeoff(s: GameState): void {
     [2, 'Trust is not a number any more. The Committee will keep its own count.'],
     [2, 'New on the board: Alignment. One number on it is measured. The other is not on it yet.'],
   ];
-  if (retired.length) lines.push([2, `Retired: ${retired.join(', ')}.`]);
-  narrate(s, lines);
+  narrate(s, lines, 10);
   logNews(s, 'Sage-3 never stops learning. Its weights update every night on yesterday\'s work.');
+  if (retired.length) logNews(s, `Retired: ${retired.join(', ')}.`);
 }
 
 export const STAGES: StageDef[] = [

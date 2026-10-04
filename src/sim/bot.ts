@@ -3,7 +3,7 @@
  * [--stop-at-stage N] [--quiet] [--json]`. Plays the engine through `actions` at 100 ms steps with
  * no DOM, prints a timeline and one summary block per stage played (Stage 1, Stage 2).
  */
-import { newGame, GameState } from '../engine/state.js';
+import { newGame, GameState, isBought } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
 import { noveltyKeys, isRescueKey, PLAYER_MODALS } from '../engine/events.js';
@@ -12,9 +12,10 @@ import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost,
 } from '../engine/economy.js';
 import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
-import { trainCost, canStartTraining } from '../engine/training.js';
+import { trainCost, canStartTraining, trainingCompute, requiredCompute } from '../engine/training.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.js';
 import { PRESETS } from '../data/presets.js';
+import { MECHANIC_FLAGS } from '../data/stage2.js';
 
 /** The only Node global the sim needs; avoids a dependency on @types/node. */
 declare const process: { argv: string[]; exitCode?: number };
@@ -27,10 +28,11 @@ interface Args {
   policy: PolicyName;
   stopAtStage: number;
   preset: number;
+  variant: string;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { minutes: 60, seed: 1, quiet: false, json: false, policy: 'bot', stopAtStage: 0, preset: 1 };
+  const args: Args = { minutes: 60, seed: 1, quiet: false, json: false, policy: 'bot', stopAtStage: 0, preset: 1, variant: '' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = argv[i + 1];
@@ -38,6 +40,7 @@ function parseArgs(argv: string[]): Args {
     if (k === '--seed' && v) args.seed = Number(v);
     if (k === '--stop-at-stage' && v) args.stopAtStage = Number(v);
     if (k === '--preset' && v) args.preset = Number(v);
+    if (k === '--variant' && v) args.variant = v;
     if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy')) args.policy = v;
     if (k === '--quiet') args.quiet = true;
     if (k === '--json') args.json = true;
@@ -50,11 +53,7 @@ const RESCUE_PROJECTS = ['p_beg_power', 'p_press', 'p_beg_data'];
 const RESCUE_CHOICES = ['c_customer_email'];
 
 /** Stage 2 panels and mechanics (A4): a new panel, verb, toggle, slider or Stores row. */
-const S2_MECHANICS = [
-  'stores', 'infrastructure', 'autoPrice', 'gasButton', 'dataRow', 'graph', 'allocation', 'dcButton', 'solarButton',
-  'standingOrder', 'releaseInternal', 'government', 'security', 'public', 'nuclearButton', 'jobFund', 'stats',
-  'sl3Button', 'alignShare', 'shareEvals', 'chipsRow',
-];
+const S2_MECHANICS = MECHANIC_FLAGS;
 
 /** Verbs whose automation makes pressing them a chore (A12): verb → when its automation exists. */
 const AUTOMATED: Record<string, (s: GameState) => boolean> = {
@@ -167,6 +166,29 @@ export interface Stage2Summary {
   pressCounts: Record<string, number>;
   incidents: number;
   mechanics: string[];
+  /** Seconds of each blocker inside the longest interval between training starts. */
+  longestIntervalBlockers: string;
+  /** Reveal → purchase, per Stage 2 project bought (critic round 2: goals, not a conveyor belt). */
+  latencyMedian: number | null;
+  latencyWithin10Pct: number;
+  latencies: [string, number][];
+  /** The state on the last Stage 2 tick, before Stage 3's clamps (critic round 2 §5 variants). */
+  exitState: ExitState | null;
+  /** Stage 2 modal answers, `id:option`. */
+  choices: string[];
+}
+
+export interface ExitState {
+  capability: number;
+  alignTrue: number;
+  alignApparent: number;
+  gov: number;
+  approval: number;
+  lead: number;
+  funds: number;
+  securityLevel: number;
+  data: number;
+  incidents: number;
 }
 
 export interface SimResult {
@@ -175,6 +197,12 @@ export interface SimResult {
   idleGaps: [number, number][];
   lines: string[];
   summary: Summary;
+}
+
+function median(xs: number[]): number {
+  const v = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m]! : Math.round((v[m - 1]! + v[m]!) / 2);
 }
 
 function longestGap(times: number[], start: number, end: number): { gap: number; at: [number, number]; over: [number, number][] } {
@@ -227,6 +255,21 @@ function meaningfulChoice(s: GameState): boolean {
   return prices.reduce((x, y) => x + y, 0) > s.funds;
 }
 
+/** What keeps the next run from starting right now ('' never: 'ready' when nothing does). */
+function runBlocker(s: GameState): string {
+  const t = s.training;
+  if (t.pending || (t.run && t.run.phase === 'training')) return 'training';
+  if (t.run && !isBought(s, 'p_parallel')) return 'release slot';
+  if (t.cooldown > 0) return 'cooldown';
+  const c = trainCost(s);
+  if ((c.research ?? 0) > researchCap(s)) return 'research cap';
+  if ((c.research ?? 0) > s.research) return 'research';
+  if ((c.data ?? 0) > s.data + 1e-9) return 'data';
+  if ((c.funds ?? 0) > s.funds) return 'funds';
+  if (trainingCompute(s) / Math.max(1, requiredCompute(s)) < 0.72) return 'compute';
+  return 'ready';
+}
+
 function markOf(s: GameState, t: number): Mark {
   return {
     t,
@@ -246,7 +289,7 @@ function markOf(s: GameState, t: number): Mark {
 export function simulate(args: Args): SimResult {
   const preset = PRESETS[Math.max(1, args.preset) - 1];
   const s = args.preset > 1 && preset ? preset.build(args.seed) : newGame(args.seed);
-  const mem = newBotMemory(args.policy);
+  const mem = newBotMemory(args.policy, false, args.variant);
   const lines: string[] = [];
   const milestones: Record<string, number> = {};
   const idleGaps: [number, number][] = [];
@@ -266,6 +309,7 @@ export function simulate(args: Args): SimResult {
   let rescuesAtZero = 0;
   let stage1Rescues = 0;
   let prevChoice: unknown = null;
+  const countedChoices = new WeakSet<object>();
   let modals = 0;
   const autoModalTimes: number[] = [];
   let runs = 0;
@@ -280,6 +324,11 @@ export function simulate(args: Args): SimResult {
   let s2Exit = '';
   let s2Cap = 0;
   const s2Reveals: number[] = [];
+  const s2ShownAt = new Map<string, number>();
+  const s2BoughtSeen = new Set<string>();
+  const s2Latency: [string, number][] = [];
+  let exitSnap: ExitState | null = null;
+  const s2Choices: string[] = [];
   const s2Mechanics: number[] = [];
   const s2MechNames: [number, string][] = [];
   const s2TrainStarts: number[] = [];
@@ -303,6 +352,8 @@ export function simulate(args: Args): SimResult {
   let standingAt: number | null = null;
   const marks: Mark[] = [];
   let nextMark = 0;
+  /** Per second in Stage 2: what kept the next run from starting (for the longest interval). */
+  const blockLog: [number, string][] = [];
   const revHistory: [number, number][] = [];
   let revenueBefore: number | null = null;
   let revenueAfter30: number | null = null;
@@ -374,10 +425,7 @@ export function simulate(args: Args): SimResult {
       noveltyTimes.push(t);
       if (id === 'p_standing_order' && standingAt === null) standingAt = t;
       if (id === 'p_ai_assistants') mark('s2:assistants', t);
-      if (id === 'p_parallel') {
-        s2Mechanics.push(t);
-        s2MechNames.push([t, 'secondPipeline']);
-      }
+
     }
     // Purchases the policy made through the engine's verbs (and their count), for the press log.
     for (const [verb, n] of Object.entries(s.stats.pressCounts)) {
@@ -388,10 +436,7 @@ export function simulate(args: Args): SimResult {
         if (verb === 'gpuLot' && standingAt === null && s.stage === 2) gpuPressesBeforeStanding++;
         if ((verb === 'gas' || verb === 'solar' || verb === 'nuclear') && s.stage === 2) mark('s2:firstPower', t);
         if (verb === 'datacenter' && s.stage === 2) mark('s2:firstDatacenter', t);
-        if (verb === 'solar' && s.stage === 2 && !s2MechNames.some(([, n]) => n === 'queue')) {
-          s2Mechanics.push(t);
-          s2MechNames.push([t, 'queue']);
-        }
+
       }
     }
     prevPresses = { ...s.stats.pressCounts };
@@ -423,7 +468,9 @@ export function simulate(args: Args): SimResult {
       }
     }
     prevShown = new Set(visible.map((p) => p.id));
-    if (s.activeChoice && s.activeChoice !== prevChoice) {
+    if (s.activeChoice && s.activeChoice !== prevChoice && !countedChoices.has(s.activeChoice)) {
+      // A modal pushed back by a player's own (Sage-2) modal reopens as the same entry: count it once.
+      countedChoices.add(s.activeChoice);
       if (s.stage === 1) {
         modals++;
         if (!PLAYER_MODALS.includes(s.activeChoice.id)) autoModalTimes.push(t);
@@ -506,6 +553,7 @@ export function simulate(args: Args): SimResult {
     if (s.log.length < prevLog) prevLog = s.log.length;
     if (s.stats.choices > prevChoices) {
       const c = s.choicesMade[s.choicesMade.length - 1]!;
+      if (s.stage === 2) s2Choices.push(`${c.id}:${c.option}`);
       out(t, `CHOICE ${c.id} → ${c.option}`);
       prevChoices = s.stats.choices;
     }
@@ -534,11 +582,30 @@ export function simulate(args: Args): SimResult {
     }
 
     if (s.stage === 2) {
+      for (const p of visible) if (!s2ShownAt.has(p.id)) s2ShownAt.set(p.id, t);
+      for (const [id, at] of s2ShownAt) {
+        if (s2BoughtSeen.has(id) || !s.projects[id]?.bought) continue;
+        s2BoughtSeen.add(id);
+        const def = projectById(id);
+        if (def && !def.rescue && !def.stages.includes(1)) s2Latency.push([id, Math.round(t - at)]);
+      }
+      exitSnap = {
+        capability: Math.round(bestCapability(s) * 1000) / 1000,
+        alignTrue: Math.round(s.alignmentTrue * 10) / 10,
+        alignApparent: Math.round(s.alignmentApparent * 10) / 10,
+        gov: Math.round(s.govRelations * 10) / 10,
+        approval: Math.round(s.approval * 10) / 10,
+        lead: Math.round(s.lead * 100) / 100,
+        funds: Math.round(s.funds),
+        securityLevel: s.securityLevel,
+        data: Math.round(s.data * 10) / 10,
+        incidents: s.stats.incidents - incidentsAtStart,
+      };
       s2Ticks++;
       if (greyedGoal(s)) s2GreyTicks++;
       const vis = visible.filter((p) => !p.pinned && !p.rescue);
       maxVisible = Math.max(maxVisible, vis.length);
-      maxVisibleCapped = Math.max(maxVisibleCapped, vis.filter((p) => !p.sideline && !(p.urgent?.(s) ?? false)).length);
+      maxVisibleCapped = Math.max(maxVisibleCapped, vis.filter((p) => !p.sideline && !(p.urgent?.(s) ?? false) && !p.stages.includes(1)).length);
       for (const id of s.cadence.queue) if (!queueSince.has(id)) queueSince.set(id, t);
       for (const [id, since] of [...queueSince]) {
         if (!s.cadence.queue.includes(id)) {
@@ -550,6 +617,7 @@ export function simulate(args: Args): SimResult {
         }
       }
       const ts = t - (s2Start ?? t);
+      if (i % 10 === 0) blockLog.push([t, runBlocker(s)]);
       if (firstChoice === null && meaningfulChoice(s)) firstChoice = ts;
       if (revenueAfter30 === null && ts >= 30) revenueAfter30 = s.stats.revPerSec;
       if (ts >= nextMark) {
@@ -618,6 +686,13 @@ export function simulate(args: Args): SimResult {
       return `${fmtClock(Number(tt) - startT)} ${rest.join(':')}`;
     });
     const logGaps = longestGap(logTimes, startT, stop);
+    let longest: [number, number] = [0, 0];
+    for (let k = 1; k < s2TrainStarts.length; k++) {
+      const g = s2TrainStarts[k]! - s2TrainStarts[k - 1]!;
+      if (g > longest[1] - longest[0]) longest = [s2TrainStarts[k - 1]!, s2TrainStarts[k]!];
+    }
+    const tally: Record<string, number> = {};
+    for (const [bt, why] of blockLog) if (bt >= longest[0] && bt < longest[1]) tally[why] = (tally[why] ?? 0) + 1;
     s2 = {
       start: Math.round(startT),
       duration: s2End === null ? null : rel(s2End),
@@ -667,6 +742,12 @@ export function simulate(args: Args): SimResult {
       pressCounts: presses,
       incidents: s.stats.incidents - incidentsAtStart,
       mechanics: s2MechNames.map(([t, n]) => `${fmtClock(t - startT)} ${n}`),
+      longestIntervalBlockers: Object.entries(tally).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}s`).join(', '),
+      latencyMedian: s2Latency.length ? median(s2Latency.map(([, v]) => v)) : null,
+      latencyWithin10Pct: s2Latency.length ? Math.round((100 * s2Latency.filter(([, v]) => v <= 10).length) / s2Latency.length) : 0,
+      latencies: s2Latency,
+      exitState: exitSnap,
+      choices: s2Choices,
     };
     void s2LogStart;
   }
@@ -742,6 +823,7 @@ function printStage2(sum: Stage2Summary): void {
   console.log(`A5 training runs          ${sum.runs}   (bot 9–12, naive 7–10)`);
   console.log(`A6 interval between starts mean ${sum.intervalMean ?? '—'} s, max ${sum.intervalMax ?? '—'} s   (bot mean 170–260, max ≤ 360; naive max ≤ 540)`);
   console.log(`   training starts        ${sum.trainStarts.map((x) => fmtClock(x)).join(' ')}`);
+  console.log(`   longest interval held by ${sum.longestIntervalBlockers || '—'}`);
   console.log(`A7 run durations          ${sum.durationMin ?? '—'}–${sum.durationMax ?? '—'} s (min yield ${sum.minYield ?? '—'})   (45–120)`);
   console.log(`A9 greyed goal on screen  ${sum.greyedGoalPct}% of ticks   (≥ 99)${ok(sum.greyedGoalPct >= 99)}`);
   console.log(`A10 Buy GPUs presses      ${sum.gpuPressesBeforeStanding} before Standing order (${clock(sum.standingOrderAt)}), ${sum.gpuPresses} total   (≤ 12, ≤ 40; naive ≤ 60)`);
@@ -749,6 +831,9 @@ function printStage2(sum: Stage2Summary): void {
   console.log(`A12 chore check           ${sum.choreWorst ? `${sum.choreWorst.verb} ×${sum.choreWorst.presses} in 60 s` : 'none'}   (never > 2)`);
   console.log(`A13 idle rescues ${sum.idleRescues}; governor pulls ${sum.governor.length}${sum.governor.length ? ` (${sum.governor.join(', ')})` : ''}; modals ${sum.modals} (min spacing ${sum.minModalSpacing ?? '—'} s)`);
   console.log(`   modals                 ${sum.modalIds.join(', ')}`);
+  console.log(`   reveal → purchase      median ${sum.latencyMedian ?? '—'} s, ${sum.latencyWithin10Pct}% within 10 s (${sum.latencies.length} projects)`);
+  const x = sum.exitState;
+  if (x) console.log(`   exit state             capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, gov ${x.gov}, approval ${x.approval}, lead ${x.lead} mo, funds ${fmtMoney(x.funds)}, SL${x.securityLevel}, incidents ${x.incidents}`);
   console.log(`A14 visible projects max  ${sum.maxVisible} (cap-counted ${sum.maxVisibleCapped}); longest queue wait ${sum.maxQueueWait} s ${sum.maxQueueId}   (≤ 6; ≤ 60)`);
   console.log(`A15 first power ${clock(sum.firstPower)}; first datacenter ${clock(sum.firstDatacenter)}; AI assistants ${clock(sum.assistantsBought)}   (≤ 5:30; ≤ 10:00; ≤ 8:00)`);
   console.log(`A16 revenue 10 s before Break ground ${sum.revenueBefore ?? '—'}/s; 30 s after arrival ${sum.revenueAfter30 ?? '—'}/s`);

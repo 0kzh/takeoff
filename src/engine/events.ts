@@ -3,7 +3,7 @@ import { DEVELOPMENTS, DevelopmentDef } from '../data/developments.js';
 import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
-import { visibleProjects } from './projects.js';
+import { visibleProjects, costLabel } from './projects.js';
 import { gpuCost, marketingCost, qualityMult, powerBlockCost } from './economy.js';
 import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
@@ -178,6 +178,7 @@ export function modalCanOpen(s: GameState): boolean {
 function present(s: GameState, entry: ActiveChoice): void {
   s.activeChoice = entry;
   s.cadence.lastModalAt = s.stats.timePlayed;
+  choiceById(entry.id)?.onOpen?.(s, entry.context);
 }
 
 /**
@@ -265,10 +266,34 @@ export function updateChoice(s: GameState, dt: number): void {
   }
   if (!def.timer) return;
   active.remaining -= dt;
-  if (active.remaining <= 0) {
-    const fallback = def.defaultOption ?? def.options.length - 1;
-    if (!resolveChoice(s, fallback)) s.activeChoice = null;
-  }
+  if (active.remaining <= 0) takeDefault(s);
+}
+
+/**
+ * What the timer does when it runs out, now (Escape on a timed modal): the default option, or, if
+ * the default cannot be paid for, the modal closes with no effect. An untimed modal has no default.
+ */
+export function takeDefault(s: GameState): boolean {
+  const active = s.activeChoice;
+  const def = active ? choiceById(active.id) : undefined;
+  if (!active || !def || !def.timer) return false;
+  const fallback = def.defaultOption ?? def.options.length - 1;
+  if (!resolveChoice(s, fallback)) s.activeChoice = null;
+  return true;
+}
+
+/** Stage 2 on: the option's effect and cost, printed under its label (`+10 T data · $675k`). */
+export function optionLine(s: GameState, opt: ChoiceOption): string {
+  const ctx = s.activeChoice?.context ?? {};
+  return (typeof opt.line === 'function' ? opt.line(s, ctx) : opt.line) ?? '';
+}
+
+/** A greyed option says what it needs: its own words, or the price it cannot pay. */
+export function optionNeeds(s: GameState, opt: ChoiceOption): string {
+  const own = typeof opt.needs === 'function' ? opt.needs(s, s.activeChoice?.context ?? {}) : opt.needs;
+  if (own) return own;
+  const cost = optionCost(s, opt);
+  return cost && !canPay(s, cost) ? `needs ${costLabel(cost)}` : 'not available';
 }
 
 // ---------- idle guard ----------
