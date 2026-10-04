@@ -348,7 +348,10 @@ try {
 
     // Break ground affordable: the test (not the policy) clicks it, then inspects the arrival before
     // anyone spends the new Trust or money.
-    if (snap.stage === 1 && !snap.modal && snap.buttons.some((b) => b.id === 'proj-p_datacenter' && b.enabled)) {
+    // The reasonable bot breaks ground at the wall (the price is three minutes of income for everyone,
+    // so it can be affordable sooner); the first-timer as soon as it can.
+    const atWall = POLICY !== 'bot' || await page.evaluate(() => window.__game.state.flags['wallAt'] !== undefined);
+    if (snap.stage === 1 && !snap.modal && atWall && snap.buttons.some((b) => b.id === 'proj-p_datacenter' && b.enabled)) {
       await page.evaluate(() => window.__game.setAutoplay(false));
       counts['end'] = { numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length };
       await shot(page, '07b-before-break-ground');

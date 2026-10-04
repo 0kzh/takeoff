@@ -6,11 +6,11 @@ import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contrac
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
-import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW, lotCostOf } from './infrastructure.js';
+import { SUBSTATION_MW, lotCostOf } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
-import { PROJECTS, exitReady } from '../data/projects.js';
+import { PROJECTS, exitReady, rentDeposit } from '../data/projects.js';
 
 /**
  * Stages own the UI layout: `enter(state)` flips `state.revealed[...]` flags, and the renderer
@@ -30,9 +30,6 @@ export interface StageDef {
 
 /** Stage 1 projects that make no sense once ground is broken, retired without a line. */
 const QUIET_RETIRE = ['p_cooling', 'p_soundwall', 'p_abatement', 'p_ppa', 'p_desks', 'p_contract'];
-/** The rented fleet's deposit comes back at the transition: $400 a GPU, at least the first lot. */
-export const DEPOSIT_PER_GPU = 400;
-export const MIN_DEPOSIT = 25000;
 /** Flags shown only while their stage is on screen; Stage 3 hides these (stage3.md §1.1). */
 // The AUTO billing line stays (critic C11: Stage 3 opened on the manual line, `0.0/s of 0.0/s produced: idle`).
 const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow'];
@@ -100,9 +97,10 @@ function enterScale(s: GameState): void {
   const researchGift = Math.max(0, Math.round(0.75 * firstRun - s.research));
   s.research += researchGift;
 
+  // The deposit is what the card said: $400 a rented GPU, at least a first lot (critic round 3 §6.4:
+  // it was $120,000 whatever was rented, and never announced).
   const rented = s.gpus;
-  const firstLot = Math.round(1000 * G4_PRICE * S2_FUNDS_SCALE);
-  const deposit = Math.max(firstLot, DEPOSIT_PER_GPU * rented, MIN_DEPOSIT);
+  const deposit = rentDeposit(s);
   addFunds(s, deposit);
   s.gpus = 1000;
   s.gpusG5 = 0;

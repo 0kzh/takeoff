@@ -65,11 +65,16 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     month: monthOf(2025, 9),
     trigger: (s) => s.priceRaises >= 3 && s.stats.timePlayed >= 300,
   },
+  // Each calendar event waits for what it talks about (critic round 3 §6.3: a $15,000 bridge round
+  // at 0 tasks; two researchers leaving a lab of one). Not yet true on its date, it waits; never
+  // true in Stage 1, it is dropped with the stage.
   {
     id: 'd_bridge',
     stage: 1,
     choice: 'c_bridge',
     month: monthOf(2025, 9) + 0.2,
+    // A fund bridges a business: tasks sold and money coming in.
+    requires: (s) => s.tasks >= 10000 && s.stats.revPerSec >= 10,
   },
   {
     id: 'd_lead_times',
@@ -84,6 +89,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     crisis: 'cr_rival_open_weights',
     choice: 'c_rival',
     month: monthOf(2025, 9) + 0.85,
+    // A rival undercuts a lab with customers and a price to cut.
+    requires: (s) => s.revealed['pricing'] === true && s.stats.revPerSec >= 1,
   },
   {
     id: 'd_outage',
@@ -120,6 +127,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_journalist',
     stage: 1,
     choice: 'c_journalist',
+    // The piece is about how a released model was tested, and the answer costs research.
+    requires: (s) => s.stats.releases >= 1 && s.revealed['research'] === true,
     text: 'A reporter is writing about how frontier models are tested. Nobody is sure who tests them.',
     month: monthOf(2025, 10) + 0.5,
   },
@@ -127,6 +136,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_letter',
     stage: 1,
     choice: 'c_letter',
+    // Signatories who work here, and three who can resign.
+    requires: (s) => s.researchers >= 4,
     text: 'Two hundred researchers sign a letter asking frontier labs to slow down. Eleven work at OpenMind.',
     month: monthOf(2025, 11) + 0.15,
   },
@@ -153,6 +164,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_poach',
     stage: 1,
     choice: 'c_poach',
+    // Two researchers to poach, and a lab left behind them.
+    requires: (s) => s.researchers >= 3,
     text: 'Pay for AI researchers passes that of professional athletes. Nobody checks the comparison.',
     month: monthOf(2025, 11) + 0.8,
   },
@@ -160,6 +173,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_leaderboard',
     stage: 1,
     choice: 'c_leaderboard',
+    // The board ranks a released model.
+    requires: (s) => s.stats.releases >= 1,
     month: monthOf(2025, 12) + 0.45,
   },
   {

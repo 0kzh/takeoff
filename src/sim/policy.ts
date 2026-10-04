@@ -71,6 +71,8 @@ function heldGoalPrice(s: GameState, mem: BotMemory): number {
   if (!mem.holdTransition || !isVisible(s, TRANSITION)) return 0;
   const price = projectById(TRANSITION)!.cost(s).funds ?? 0;
   const saving = mem.policy === 'bot' ? needsDatacenter(s) : mem.policy !== 'greedy';
+  // The bot holds the price from the wall only (it buys there); the others once they can pay it.
+  if (mem.policy === 'bot') return saving ? price : 0;
   return saving || s.funds >= price ? price : 0;
 }
 
@@ -320,6 +322,9 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
     if (!p.canAfford(s)) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
     if (p.id === TRANSITION && mem.holdTransition) continue;
+    // The reasonable player breaks ground when the next run needs more GPUs than any cloud rents
+    // (the price is three minutes of income for everyone now, so it is affordable sooner).
+    if (p.id === TRANSITION && careful && !needsDatacenter(s)) continue;
     if (careful && patient(s, p)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }

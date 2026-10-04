@@ -150,34 +150,42 @@ const sinceFlag = (s: GameState, key: string): number => {
 };
 
 /**
- * First Datacenter (owner feedback 1, B2): list $300,000 (the spec's $150,000, tuned as it asks: the
- * built economy earns $800–2,600 a second at the wall, two to five times the paper model's, so at
- * $150,000 the reasonable bot bought it 10–40 s after the wall, not 60–150). The first time a run
- * needs more GPUs than the cloud will rent, the price is set once, down only, to `clamp(240 × revenue
- * per second, $90,000, list)` with a narrated line, so a lab with nothing saved waits four minutes
- * at most; a sixth less with the tax abatement.
+ * First Datacenter (owner feedback 1, B2; critic round 3 §6.4): three minutes of the lab's best
+ * revenue so far, at least $90,000 and at most $300,000, a sixth less with the tax abatement; held
+ * where it stands from the moment the wall is reached, so the goal stops moving for the lab that has
+ * to save for it. One rule for everyone: the player who saves pays what the player who hits the wall
+ * pays at the same income (round 3 found a $250,000 card for the saver and $75,000 at the wall).
+ * The best revenue only rises, so the price cannot be talked down by pricing nobody in.
  */
 export const DATACENTER_LIST = 300000;
 export const DATACENTER_WALL_CAP = DATACENTER_LIST;
-export const DATACENTER_FLOOR = 90000;
+export const DATACENTER_FLOOR = 100000;
 export const DATACENTER_WALL_SECONDS = 180;
 
 export function datacenterPrice(s: GameState): number {
-  const fixed = s.flags['price:p_datacenter'];
-  const base = typeof fixed === 'number' ? fixed : DATACENTER_LIST;
+  const held = s.flags['dcWallPrice'];
+  const best = Math.max(s.stats.revPerSec, counter(s, 'peakRev'));
+  const base = typeof held === 'number' ? held : Math.min(DATACENTER_WALL_CAP, Math.max(DATACENTER_FLOOR, DATACENTER_WALL_SECONDS * best));
   return threeSig(base * (isBought(s, 'p_abatement') ? 5 / 6 : 1));
 }
 
-/** Slow tick, Stage 1: at the wall, once, First Datacenter is re-priced to what four minutes of income reach. */
+/** What the rented fleet's deposit returns at the transition: $400 a GPU, at least a first 100-GPU lot. */
+export function rentDeposit(s: GameState): number {
+  return Math.max(DEPOSIT_MIN, DEPOSIT_PER_GPU * s.gpus);
+}
+export const DEPOSIT_PER_GPU = 400;
+export const DEPOSIT_MIN = 12000;
+
+/** Slow tick, Stage 1: the best revenue so far (the datacenter's price), and when the wall came. */
 export function datacenterAtWall(s: GameState): void {
-  if (s.stage !== 1 || s.flags['price:p_datacenter'] !== undefined || !s.projects['p_datacenter']?.shown) return;
+  if (s.stage !== 1) return;
+  if (s.stats.revPerSec > counter(s, 'peakRev')) s.flags['peakRev'] = s.stats.revPerSec;
+  if (s.flags['wallAt'] !== undefined || !s.projects['p_datacenter']?.shown) return;
   // The wall is the moment Train is blocked by it: the last rented model released, its GPUs serving again.
   if (!needsDatacenter(s) || s.training.run || s.training.pending) return;
-  const price = threeSig(Math.min(DATACENTER_WALL_CAP, Math.max(DATACENTER_FLOOR, DATACENTER_WALL_SECONDS * Math.max(1, s.stats.revPerSec))));
-  s.flags['price:p_datacenter'] = price;
   s.flags['wallAt'] = s.stats.timePlayed;
-  // The line prints whenever the permit makes it cheaper (never at the list price).
-  if (price < DATACENTER_LIST) say(s, `Abilene fast-tracks the permit. First Datacenter: ${fmtMoneyShort(datacenterPrice(s))}.`);
+  const best = Math.max(s.stats.revPerSec, counter(s, 'peakRev'));
+  s.flags['dcWallPrice'] = Math.min(DATACENTER_WALL_CAP, Math.max(DATACENTER_FLOOR, DATACENTER_WALL_SECONDS * best));
 }
 
 function threeSig(raw: number): number {
@@ -497,6 +505,8 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_datacenter',
     title: 'First Datacenter',
     cost: (s) => ({ funds: datacenterPrice(s) }),
+    // The price and what comes back for the rented fleet, both on the card (critic round 3 §6.4).
+    priceTag: (s) => `(${fmtMoneyShort(datacenterPrice(s))}; the rented GPUs return ${fmtMoneyShort(rentDeposit(s))})`,
     description: '1,000 GPUs of our own at Abilene. Stop renting.',
     // Greyed from Series A, the second release or October, whichever comes first: about minute
     // 10–12, nine to fourteen minutes before it is bought (arc G11). Urgent at the wall.

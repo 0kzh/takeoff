@@ -89,6 +89,32 @@ export function powerBlockCost(s: GameState): number {
   return blockPrice(s, powerBlock(s));
 }
 
+/**
+ * Slow tick, Stage 1: the first time Buy Power actually sells a bigger block (the fleet warrants it
+ * and the money is there), say so (critic round 3 §10.2: the line printed at the 20th GPU while
+ * the button still sold 1,000 kWh to a player with $28).
+ */
+export function powerBlockNews(s: GameState): void {
+  if (s.stage !== 1 || !s.revealed['buyPower']) return;
+  const block = powerBlock(s);
+  if (block <= POWER_BLOCK || s.flags[`blockSaid${block}`]) return;
+  s.flags[`blockSaid${block}`] = true;
+  say(s, `Power can now be bought ${fmtInt(block)} kWh at a time.`);
+}
+
+/** Seconds of power left at the copies' current draw (1 kWh a task; Infinity when nothing draws). */
+export function powerSecondsLeft(s: GameState): number {
+  const draw = copiesIdle(s) ? 0 : potentialTasksPerSec(s);
+  return draw > 0 ? s.power / draw : Infinity;
+}
+
+/** A manual price far past what clears the market sells nothing; the raise stops there (critic round 3). */
+export const PRICE_CEILING_MULT = 20;
+
+export function priceCeiling(s: GameState): number {
+  return Math.max(1, PRICE_CEILING_MULT * autoTarget1(s));
+}
+
 // ---------- research ----------
 
 /** Lab space × 1,000 × the lab multipliers. Stage 3 retires the cap (stage3.md §1.1). */
@@ -543,7 +569,6 @@ export function rentGpu(s: GameState): boolean {
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.gpus += 1;
-  if (s.gpus === 20) say(s, 'Power can now be bought 10,000 kWh at a time.');
   if (atRentQuota(s) && !s.flags[`quotaSaid${s.gpus}`]) {
     s.flags[`quotaSaid${s.gpus}`] = true;
     say(s, 'The provider has no more GPUs to rent. Owning compute is the way past this.');
@@ -582,6 +607,8 @@ export function lowerPrice(s: GameState): boolean {
 
 export function raisePrice(s: GameState): boolean {
   if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
+  // Nobody pays twenty times the clearing price: the button stops there, and says so.
+  if (s.price >= priceCeiling(s)) return false;
   s.price = priceUp(s.price);
   s.priceRaises += 1;
   priceMove(s);

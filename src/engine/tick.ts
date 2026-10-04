@@ -1,9 +1,9 @@
-import { GameState, say, printLine } from './state.js';
+import { GameState, say, printLine, counter } from './state.js';
 import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota, setMonitorShare,
+  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota, setMonitorShare, powerBlockNews,
 } from './economy.js';
 import {
   buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
@@ -132,6 +132,7 @@ function slowStats(s: GameState): void {
   trustPace(s);
   wallWatch(s);
   hireFadeCheck(s);
+  powerBlockNews(s);
   if (s.stage === 2) {
     runStandingOrder(s);
     updateWorld(s);
@@ -175,9 +176,14 @@ export function researchWanted(s: GameState): { amount: number; what: string } {
   return best;
 }
 
-/** The fix for a full lab that is on screen right now, named in the wall's console line. */
+/**
+ * The fix for a full lab that is on screen right now, named in the wall's console line. A card is
+ * named only if the lab can hold its price (critic round 3 §6.2: `The Experiment tracker doubles
+ * it` 25 times for a 3,000-research card in a 1,000-research lab); otherwise Expand Lab.
+ */
 function capFix(s: GameState): string {
-  const shown = (id: string) => visibleProjects(s).some((p) => p.id === id);
+  const cap = researchCap(s);
+  const shown = (id: string) => visibleProjects(s).some((p) => p.id === id && (p.cost(s).research ?? 0) <= cap);
   if (s.stage >= 2) {
     if (shown('p_research_cluster')) return 'The Research cluster holds four times as much.';
     if (shown('p_exp_scheduler')) return 'The Experiment scheduler holds four times as much.';
@@ -209,6 +215,15 @@ function researchWall(s: GameState): void {
     if (now - ((s.flags['wallSaidAt'] as number) ?? -999) < WALL_REPEAT_SECONDS) return;
     s.flags['wallSaidAt'] = now;
     const fix = capFix(s);
+    // The same wall, the same fix: said three times, then left to the screen until something changes.
+    const key = `${want.what}|${cap}|${fix}`;
+    if (s.flags['wallLineKey'] === key) {
+      if (counter(s, 'wallLineCount') >= 3) return;
+      s.flags['wallLineCount'] = counter(s, 'wallLineCount') + 1;
+    } else {
+      s.flags['wallLineKey'] = key;
+      s.flags['wallLineCount'] = 1;
+    }
     if (want.what === 'the next run') {
       say(s, `The Research Plateau — the next run needs ${fmtInt(want.amount)} research. The lab holds ${fmtInt(cap)}. ${fix}`);
     } else {

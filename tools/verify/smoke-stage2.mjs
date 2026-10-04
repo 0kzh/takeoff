@@ -93,7 +93,13 @@ const SNAPSHOT = () => {
     .filter((el) => el.id !== 'dev' && vis(el))
     .map((el) => el.innerText)
     .join('\n');
-  const tokens = text.match(/\d+(?:[.,:]\d+)*/g) ?? [];
+  // stage2.md §6.3's counting rule: numeric tokens in panels and the header, excluding the console,
+  // the Developments log and modals (the canvas has no DOM text).
+  const counted = [document.getElementById('topDiv'), ...document.querySelectorAll('#columns .panel')]
+    .filter((el) => el.id !== 'panel-log' && vis(el) && !el.parentElement.closest('.panel'))
+    .map((el) => el.innerText)
+    .join('\n');
+  const tokens = counted.match(/\d+(?:[.,:]\d+)*/g) ?? [];
   const words = text.split(/\s+/).filter((w) => /[A-Za-z]/.test(w));
   const controls = [...document.querySelectorAll('button, input')].filter((b) => !b.closest('#dev') && vis(b));
   const panels = [...document.querySelectorAll('.panel')].filter((p) => vis(p)).map((p) => p.id);
@@ -125,6 +131,13 @@ const SNAPSHOT = () => {
     powerRow: vis(document.getElementById('row-power')) ? document.getElementById('row-power').innerText : '',
   };
 };
+
+/** Numeric tokens per visible top-level block (the `--dump` flag). */
+const DUMP_TOKENS = () => [...document.body.children, ...document.querySelectorAll('.panel')]
+  .filter((el) => el.id !== 'dev' && el.id !== 'columns' && el.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true }))
+  .map((el) => `${el.id}:${(el.innerText.match(/\d+(?:[.,:]\d+)*/g) ?? []).join(' ')}`)
+  .filter((x) => !x.endsWith(':'))
+  .join(' | ');
 
 async function shot(page, name, opts = {}) {
   await page.waitForTimeout(900);
@@ -306,6 +319,8 @@ try {
 
     if (snap.stage === 2 && ts >= nextMark) {
       marks.push({ t: nextMark, numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length });
+      // `--dump`: the numeric tokens per block at each mark (for trimming the screen).
+      if (args.includes('--dump')) console.log(`      ${clock(nextMark)} ${await page.evaluate(DUMP_TOKENS)}`);
       await shot(page, `10-mark-${String(nextMark / 60).padStart(2, '0')}min`);
       nextMark += 300;
     }

@@ -1,10 +1,10 @@
 import type { GameState, Focus, TrainingRun } from '../engine/state.js';
-import { counter } from '../engine/state.js';
+import { counter, isBought } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock,
   powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec, marketState, priceAbsurd,
-  humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM, fleetPowerBlock,
+  humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM, powerSecondsLeft, priceCeiling,
 } from '../engine/economy.js';
 import {
   lotSize, shownLot, lotReason, lotReasonOf, lotHoldReason, holdNote, lotCostOf, lotReturn, lotNote, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
@@ -160,9 +160,13 @@ function setToggle(id: string, on: boolean, text: string): void {
 function renderPower(s: GameState): void {
   if (s.stage >= 2) return;
   setText('power', fmtInt(s.power));
-  // A store that drains: the scale is the block Buy Power sells (1,000, then 10,000, then 100,000 kWh).
-  const block = fleetPowerBlock(s);
-  setMeter('powerMeter', s.power / block, 'drain', `${fmtInt(s.power)} of a ${fmtInt(block)} kWh block`, s.power < 0.2 * block);
+  // A store that drains: the scale is the block Buy Power sells right now (critic round 3 §10.2: it
+  // was the block the fleet warrants, which the button did not sell yet). Red only when it is close
+  // to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up.
+  const block = powerBlock(s);
+  const left = powerSecondsLeft(s);
+  const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
+  setMeter('powerMeter', Math.min(1, s.power / block), 'drain', `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
   setText('powerNote', copiesIdle(s) ? 'Power is out. The copies have stopped. Buy Power starts them.' : '');
   setText('powerBlock', fmtInt(powerBlock(s)));
   setText('powerCost', fmtMoney(powerBlockCost(s)));
@@ -215,15 +219,17 @@ function renderBusiness(s: GameState): void {
           : state === 'selling out' ? 'Every task sells. Customers would pay more.'
             : state === 'nobody buys' ? `Nobody buys at ${fmtMoneyShort(s.price)}.`
               : '');
-    showId('priceHint', counter(s, 'priceMoves') === 0);
     setText('demand', fmtInt(demandPercent(s)));
     setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
-    setDisabled('btn-raisePrice', false);
+    const ceiling = s.price >= priceCeiling(s);
+    setDisabled('btn-raisePrice', ceiling);
     const step = s.price < PRICE_STEP_FROM - 1e-9 ? 'one cent' : '5%';
     setTitle(
       'btn-raisePrice',
-      priceAbsurd(s) ? 'nobody pays this' : `Raise the price by ${step}. Fewer tasks bill; each earns more.`,
+      ceiling || priceAbsurd(s) ? 'nobody pays this' : `Raise the price by ${step}. Fewer tasks bill; each earns more.`,
     );
+    setText('priceHint', ceiling ? 'raise: nobody pays this' : 'lower: more tasks sell, each earns less');
+    showId('priceHint', counter(s, 'priceMoves') === 0 || ceiling);
     setTitle('btn-lowerPrice', `Lower the price by ${s.price <= PRICE_STEP_FROM + 1e-9 ? 'one cent' : '5%'}. More tasks bill; each earns less.`);
   }
   showId('hypeLine', s.hypeBoost > 1.05);

@@ -312,9 +312,10 @@ export const CHOICES: ChoiceDef[] = [
     onOpen: (s, ctx) => {
       if (!ctx['price']) ctx['price'] = Math.max(2000, twoFigures(60 * s.stats.revPerSec));
     },
-    text: () => [
+    // The contract sentence only when there is a contract to take (critic round 3 §6.3).
+    text: (s) => [
       'A larger lab has offered two of your researchers twice their salary.',
-      'They built the contract models. Their bank would follow them.',
+      (s.projects['p_contract']?.bought ?? 0) > 0 ? 'They built the contract models. Their bank would follow them.' : 'They built the last two training runs.',
     ],
     timer: 60,
     defaultOption: 2,
@@ -340,7 +341,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'let them go',
         record: 'let go',
-        tooltip: '−2 researchers, and the newest contract leaves with them.',
+        tooltip: (s) => ((s.projects['p_contract']?.bought ?? 0) > 0 ? '−2 researchers, and the newest contract leaves with them.' : '−2 researchers.'),
         line: (s) => ((s.projects['p_contract']?.bought ?? 0) > 0 ? '−2 researchers · the newest contract leaves with them' : '−2 researchers'),
         effect: (s) => {
           s.researchers = Math.max(1, s.researchers - 2);
