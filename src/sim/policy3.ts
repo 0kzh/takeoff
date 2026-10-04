@@ -3,11 +3,11 @@ import type { Actions } from '../engine/tick.js';
 import type { BotMemory } from './policy.js';
 import {
   trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct, runDelaySeconds,
-  trainSlotFree, EXPERIMENTS_MAX,
+  trainSlotFree, EXPERIMENTS_MAX, gpusShort,
 } from '../engine/training.js';
 import {
   LOT_SIZES_S3, orderReasonS3, lotCostOf, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost,
-  nuclearCost, reactorQueueFull, needsSite2,
+  nuclearCost, reactorQueueFull, needsSite2, standingOrderOn,
 } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { seats, lobbyCost, counterintelCost, approvalTargetS3, paymentsLevel, PAYMENT_APPROVAL } from '../engine/world3.js';
@@ -28,6 +28,7 @@ import { canPay } from '../engine/state.js';
 /** Per-stage bookkeeping the Stage 3 policies keep (on BotMemory). */
 export interface S3Memory {
   paymentsPressed?: boolean;
+  standingOn?: boolean;
   warnSeen?: number;
   trainings0: number;
   alignBudget: number;
@@ -369,6 +370,19 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
   if (hallUrgent(s) && s.buildFund >= datacenterCost(s)) a.buildDatacenter(s);
   if (reactorUrgent(s) && s.buildFund >= nuclearCost(s)) a.buyNuclear(s);
+  // The first-timers keep the Standing order on, as they do in Stage 2 (a start that inherits it off
+  // from the bot's hand-buying has it switched back on, once).
+  if (!greedy && !trainfirst && isBought(s, 'p_standing_order') && !standingOrderOn(s) && mem3(s, mem).standingOn !== true) {
+    mem3(s, mem).standingOn = true;
+    a.toggleStanding(s);
+  }
+  // The Train row names the fix when the run is short of GPUs (`Needs 600,000 GPUs. 541,000 free.`):
+  // the first-timer buys the largest lot the build fund covers, as the critic's harness does by the
+  // lot row's reason. With its Standing order off (the bot's Stage 2 hand-buys) nothing else would.
+  if (!greedy && !trainfirst && trainSlotFree(s) && gpusShort(s)) {
+    const n = [...LOT_SIZES_S3].reverse().find((k) => !orderReasonS3(s, k) && s.buildFund >= lotCostOf(s, k));
+    if (n) a.buyGpuBatch(s, n);
+  }
   // A new button is pressed once, as a new card is bought: Payments goes up a level when it appears,
   // and again when an approval warning names it (the console's advice, to level 3 at most).
   const m3 = mem3(s, mem);

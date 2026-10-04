@@ -213,11 +213,16 @@ function enterTakeoff(s: GameState): void {
     s.alignmentTrue = Math.max(0, s.alignmentTrue - 3);
     s.flags['whistleblowRisk'] = counter(s, 'whistleblowRisk') + 1;
   }
+  // Research has no ceiling now: copies a full lab had parked come back to research, a fifth at least
+  // (stage3.md §1.1 sizes the arrival at 20 %; a Stage 2 left at the cap's 10 % starved every run).
+  if (s.researchAlloc < 0.2) {
+    s.researchAlloc = 0.2;
+    logNews(s, 'With no ceiling on research, a fifth of the copies go back to it.');
+  }
   for (const id of STAGE3_GRANTS) {
     if (isBought(s, id)) continue;
     projectState(s, id).bought = 1;
     if (id === 'p_ai_assistants') {
-      s.researchAlloc = Math.max(s.researchAlloc, 0.15);
       s.revealed['allocation'] = true;
     }
     if (id === 'p_auto_evals') s.revealed['evalLine'] = true;
