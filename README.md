@@ -101,10 +101,12 @@ toggles it. Flags are set by:
   first task, `compute` at $3, `fleet` at the first GPU, `power` at the third GPU or 20 s later,
   `buyPower` at 800 kWh, `pricing` when unsold tasks pile up, `marketing` after the first price
   move; beats 4–8 in that order and at least 30 s apart), then `research` at the first Trust
-  milestone, `expandLab` when research nears the cap, `projects` 40 s after `research`, `quota` at
-  60 rented, `log` (the Developments column and the date) from 3:30,
-* engine events (the first training run sets `copies`, the first release sets `focus`),
-* project effects (Training Pipeline sets `training`),
+  milestone, `projects` 40 s after `research` (with its first card and `Research buys projects.`),
+  `expandLab` with the first Trust awarded 40 s after that with the lab full (never while Trust is 0),
+  `training` once the Training Pipeline is bought and not before 5:00, `focus` 30 s after the first
+  release, `quota` at 60 rented but not during a run's first cycle (Focus, the first event and the
+  quota line are 30 s apart at least), `log` (the Developments column and the date) from 3:30,
+* engine events (the first training run sets `copies`; from Stage 2 a release sets `focus`),
 * stage `enter()` functions, which also hide panels (Stage 2 hides `power`, `buyPower`, `compute`).
 
 A few lines are shown or hidden by plain state rather than a flag (the manual power row while the
@@ -136,15 +138,22 @@ border), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the scr
 `revealFunds` / `revealResearch` (a price of at least that many seconds of revenue or research,
 fixed when the card first shows; research never above 85 % of the lab). A triggered project joins
 the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 one a minute until the
-Training panel, then every 30 s, at most four on screen (a card that has waited 140 s comes out
-anyway); Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
+Training panel (only the first lab's four cards, in order: Better Prompting, Grid Contract, Blue-sky
+Research, Training Pipeline), then every 30 s, at most four on screen (after 140 s with nothing new
+one more may come out); an empty panel gets its next card 10 s after its last one was bought, and is
+not drawn without a card; a card already paid for when it would come out waits up to 60 s for a
+purchase to take the balance below it; Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
 160 s with nothing new, one or two more may join, eight at most). These skip the wait: `rescue`
 (also uncapped, drawn dashed), `pinned` (the stage goal), `urgent(s)` (a wall's named fix while it
 holds), `ignoresCap` (Stage 2's G6 pre-order), `chain` (the next step of a series, at once when
 there is room); Stage 1 `sideline` offers drip in but never fill the cap. A card never appears
 within 4 s of a modal opening, nor a modal within 4 s of anything new (`BEAT_GAP_SECONDS`). Stage 1
 projects mostly cost research or insight, as Paperclips' cost operations; money is for compute,
-marketing, training and First Datacenter.
+marketing, training and First Datacenter. A Stage 1 run costs dollars only (`$290 × c^13`, two
+figures: $290 / $1,300 / $5,300 / $23,000 / $100,000) and needs its GPUs; research buys cards. While
+the next run (at the wall, First Datacenter) waits for money, Marketing, Rent GPU and dollar cards
+print the delay they cause when it is 10 s or more (`· Sage-1.4 0:55 later`), and Train, pressed
+short of money, arms. A card the lab cannot hold says so (`needs a lab that holds 2,000 — Expand Lab`).
 
 Stage 3 projects live in `src/data/projects3.ts` and its content table (`src/data/stage3.ts`) orders
 them with the panels, buttons and modals the stage reveals. Extra options there: `grant` (an autonomy
@@ -166,8 +175,11 @@ also print a `console` line, fire a `crisis` or open a `choice`.
 `timer` plus `defaultOption`, and `valid(s, ctx)` (a queued modal that no longer applies is
 dropped). Open it with `openChoice(s, id, context)` or from a development. Modals open at least
 150 s apart (`MODAL_SPACING`); later ones wait in `choiceQueue`. A modal the player's own click
-causes (`PLAYER_MODALS`: the open-issues confirm, Sage-2) opens at once. Stage 1's modals are a
-calendar of dated developments about 3¼ minutes apart, plus the training gamble when it fits. The
+causes (`PLAYER_MODALS`: the open-issues confirm, Sage-2) opens at once. Stage 1's six events are a
+queue (`calendar` developments): the first a minute after the first release, each later one 2:36
+after the last was answered, never while a run waits for its evaluation, Red-team or Release, in
+table order, one whose condition fails giving its slot to the next; plus the training gamble when it
+fits. Stage 1's options list the timer's default first, then the costly ones, cheapest first. The
 game does not pause while a modal is open, and neither does the page: the event panel catches no
 clicks outside itself, takes keyboard focus when it opens, and Escape takes the default. Every
 event carries a timer with a harmless default, so an unanswered one never holds the stage up.
@@ -220,10 +232,12 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 7; versions
-1–6 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 9; versions
+1–8 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
 Datacenter, and the opening's new flags are set; version 7 adds Stage 3's fields: shipments,
-autonomy, drift and rogue copies, interpretability, the Committee, the ending). The game saves every 15 s,
+autonomy, drift and rogue copies, interpretability, the Committee, the ending; version 8 the build
+fund; version 9 `marketingBought`, the Marketing levels paid for, estimated for an older save from its
+level less the levels rounds, cards and events gave). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -265,18 +279,20 @@ Six policies play through `actions` only:
 * **bot** (default) — a reasonable player: the first-timer's purchase loop with judgment on top.
   It prices every second (Dynamic pricing once offered), answers each modal with the careful
   option (waiting for a greyed one it can afford soon), takes the leaderboard only when ahead, is
-  patient with side offers while the next run's money is there, trains Capability while rented
-  compute still teaches the model and Efficiency after, red-teams to zero, releases.
+  patient with side offers, presses Train once the run's GPUs are there (short of money it waits
+  armed), and in Stage 1 reads the delay a dollar purchase prints for the waiting run (at the wall,
+  First Datacenter), declining once its purchases would have put it 0:30 later (a GPU the run still
+  needs prints none); red-teams to zero, releases.
 * **naive** — the critic's first-timer: clicks at 4/s until the copies make 8 tasks/s, buys
-  anything affordable while keeping one power block in reserve, lowers the price only when the
+  anything affordable while keeping one power block in reserve (each control once a pass, as the
+  harness sweeps: Marketing before the next GPU), starts a run it can pay for, lowers the price only when the
   backlog exceeds 30 s of production and grows (raises after four near-zero checks, 8 s
-  cool-down), answers every modal with its first enabled option, never touches Focus, red-teams
-  to zero, and stops the GPU and marketing drip to save once First Datacenter is on screen (the
-  bot saves from the wall: the first run the cloud's GPUs cannot train).
+  cool-down), answers every modal with its first enabled option (the timer's default), never touches Focus, red-teams
+  to zero, and stops the GPU and marketing drip to save once First Datacenter is on screen.
 * **greedy** — the naive player without restraint: rents a GPU whenever one is affordable, buys
   everything else the moment it can, and never saves (the rental quota is what stops it).
-* **trainfirst** — the naive player who presses Train whenever it is enabled before saving for
-  anything else: the critic harness's first-timer, in the sim. From the
+* **trainfirst** — the naive player who presses Train whenever it is lit (arming it when short)
+  before buying anything else: the critic harness's first-timer, in the sim. From the
   Stage 2 arrival naive, greedy and trainfirst all play this way (greedy pressing the
   Infrastructure buttons up to fifteen times a check); its Infrastructure follows the main lot's
   reason (a lot when it is enabled, the cheapest power per MW at "no power", a hall at "no
@@ -314,9 +330,15 @@ the lots saving its price once the fleet is half again what it needs (the game's
 a wider market first; other cards in table order, the next run's money lent for 30 s of
 revenue at most; the largest GPU lot that fits, the main lot's hundreds when none does; Trust; the
 slider at 20 %). The Stage 1 summary
-adds the reveal → purchase latency, the densest six minutes of first-time reveals and the exit
+adds the reveal → purchase latency, the densest six minutes of first-time reveals, the exit
 state (capability, alignment, Trust, staff, marketing, contracts, revenue, price, GPUs,
-incidents). The Stage 2 summary block adds the A1–A19 acceptance numbers
+incidents), and round 3's measures (`s1x` in `--json`): the run starts and the longest gap between
+them, Train blocked by cause (money, GPUs, the quota, the wall, an evaluation month; research and
+the lab never), Train disabled with nothing training before the wall, First Datacenter's time on
+screen before its purchase and its share of the stage, purchases that delayed the waiting run 10 s
+or more and those with no delay printed, research at the cap and the empty Projects panel before the
+Training panel, Marketing grey from 5:00, the longest gap between dollar purchases from the card to
+the wall, and the console lines in the densest 26 s of the first training cycle. The Stage 2 summary block adds the A1–A19 acceptance numbers
 (duration, reveal and mechanic gaps, training runs, the intervals between their starts and the
 GPUs each needed, the share of the stage with Train blocked for GPUs alone, governor pulls, modals,
 visible cards and queue waits, first power / datacenter / AI assistants, GPU presses before the
@@ -353,8 +375,12 @@ greedy, trainfirst), longest reveal gap ≤ 180 s, the longest stretch with Trai
 alone ≤ 4:00, the bot buying First Datacenter 60–150 s after the wall (trainfirst within 240 s),
 capability 1.5–1.8× at the transition, at most 9 modals and never two automatic ones within 150 s,
 ≤ 2 idle rescues and none at 0 tasks, the first GPU by 0:16 at one and a half clicks a second.
-Decision variants (naive, seeds 1–3): best vs worst modal answers ≥ 3 min apart, red-team to zero
-vs never ≥ 3 min, price tracked vs never ≥ 5 min.
+Round 3 (stage1-round3-fixes.md): five runs for every seed, the first by 6:45, starts ≤ 5:00 apart
+for the bot and ≤ 8:00 for a player who buys everything lit; research never blocks Train; Train
+disabled with nothing training ≤ 60 s before the wall; First Datacenter on screen ≥ 8:00 before its
+purchase and ≤ half the stage, wall to purchase ≤ 4:00. Decision variants (naive, seeds 1–3): best
+vs worst modal answers ≥ 3 min apart, red-team to zero vs never ≥ 3 min, price tracked vs never
+≥ 5 min.
 
 ## Browser smoke test
 
@@ -372,7 +398,11 @@ autoplay, the reveal order, beats 4–8 in order ≥ 30 s apart, no beat in the 
 adding more than 2 controls or 4 numbers (later: 3 and 8), a greyed goal on screen from the first
 purchase (G3 as amended), no `undertrained` or `Train now` anywhere, the Train row naming its GPU
 shortfall and fix, numbers / controls / words at minutes 0/1/3/5/10/20/end and the minute-10 budget
-(≤ 38 numbers, ≤ 15 controls, ≤ 230 words), a save → reload during a training run, the transition
+(≤ 48 numbers, ≤ 16 controls, ≤ 250 words: round 2's 38 / 15 / 230 plus round 3's Focus trades,
+capacities and printed delays), round 3's rows (the Train row costs money only and arms when short;
+a printed delay; First Datacenter's two status lines before and at the wall; the power and quota rows
+with their capacity; Focus's three trades and `Next run:`; each event's default listed first; no
+`… first` hold), a save → reload during a training run, the transition
 narration and arrival, no horizontal overflow at 390 px, and no page or console errors through the
 Stage 2 arrival. Screenshots go to
 `agent-tools/shots/stage1/` (gitignored); it exits non-zero on any failure.
