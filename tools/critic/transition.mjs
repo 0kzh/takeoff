@@ -41,7 +41,7 @@ const md = [
   `\`node tools/critic/transition.mjs ${process.argv.slice(2).join(' ')}\` → stepped run \`${meta.prefix}\` (seed ${meta.seed}${meta.fixture ? `, fixture ${meta.fixture}` : ''}${meta.autoplay ? ', Autoplay' : ''}), stage change ${meta.stageEnd != null ? `at ${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : 'not reached'}.`,
   fixture
     ? 'The fixture is a cheated save (tools/critic/make-fixtures.mjs, see tools/critic/README.md); only the last ~15 s before the change are played.'
-    : `Played from ${stage > 1 ? `the start of Stage ${stage}${meta.boot && meta.boot.preset ? ` (${meta.boot.preset})` : ""}` : 'a new game'} by the scripted policy.`,
+    : `Played from ${flags.preset ? `the named start ${flags.preset}${meta.boot && meta.boot.preset ? ` (${meta.boot.preset})` : ''}` : stage > 1 ? `the start of Stage ${stage}${meta.boot && meta.boot.preset ? ` (${meta.boot.preset})` : ""}` : 'a new game'} by ${meta.autoplay ? "the game's own Autoplay" : 'the scripted policy'}.`,
   '',
 ].join('\n');
 fs.writeFileSync(`${prefix}.md`, md);

@@ -9,8 +9,8 @@
 // Stage-aware: `--stage N` (or `label:N`) takes Stage N of a run that reaches it, timed from that stage's
 // start; a run started with --stage N needs nothing. From Stage 2 on, repeat purchases also count as
 // drip: Paperclips' drones, farms, batteries, probe launches and Processors/Memory bought with swarm
-// gifts; Takeoff's GPU lots, power plants and datacenters (policy tag 'infra') and Stage 3's repeatable
-// sinks (Experiments, Lobby, Counter-intelligence, Re-image the fleet).
+// gifts; Takeoff's GPU lots, power plants and datacenters (policy tag 'infra'), Stage 3's repeatable
+// sinks (Experiments, Lobby, Counter-intelligence, Re-image the fleet) and Stage 4's (Housing, Hold a hearing).
 // (Ported from the round-2 critic's tools/critic-r2/decisions.mjs; Stage 1 numbers are unchanged.)
 import { loadRun, sliceStage } from './lib/analysis.mjs';
 import { resolvePrefix, mmss, median, parseArgs } from './lib/util.mjs';
@@ -18,7 +18,7 @@ import { resolvePrefix, mmss, median, parseArgs } from './lib/util.mjs';
 const DRIP = /Rent GPU|AutoClippers|MegaClippers|Buy Power|^Wire$|^lower$|^raise$/;
 const SKIP_WHY = new Set(['mash', 'mash-stop', 'consumable', 'price-lower', 'price-raise', 'first-automation', 'automation']);
 const LATE_SKIP_WHY = new Set(['build', 'power', 'storage', 'infra']);
-const LATE_DRIP = /^Launch Probe$|^Processors$|^Memory$|^Experiments$|^Lobby$|^Counter-intelligence$|^Re-image/;
+const LATE_DRIP = /^Launch Probe$|^Processors$|^Memory$|^Experiments$|^Lobby$|^Counter-intelligence$|^Re-image|^Housing$|^Hold a hearing$/;
 
 const { pos, flags } = parseArgs(process.argv.slice(2));
 if (!pos.length) {

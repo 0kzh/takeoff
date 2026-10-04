@@ -1,6 +1,6 @@
 // Takeoff adapter: everything the harness knows about Takeoff specifically. Buttons are discovered
 // generically from the DOM (any visible <button>), so new buttons/projects need no changes here.
-import { INFRA, LOT_RE, KEEP_INTERNAL, SEND_BACK, RELEASE_KEYS, END_SCREEN, PLANT_KEYS_RE, priceAuto, trainStep, shipStep, standingStep, infraStep } from './takeoff-late.mjs';
+import { INFRA, LOT_RE, KEEP_INTERNAL, SEND_BACK, RELEASE_KEYS, END_SCREEN, STAGE4_NEVER, PLANT_KEYS_RE, priceAuto, trainStep, shipStep, standingStep, infraStep } from './takeoff-late.mjs';
 
 export default {
   name: 'takeoff',
@@ -95,6 +95,10 @@ export default {
       buildFund: s.buildFund,
       autonomy: s.autonomy,
       endingTitle: seen('endingTitle'),
+      // Stage 4 (absent before it): generations landed / read, treaty progress, the fleet, the exit kind.
+      ...(s.s4 && s.stage >= 4
+        ? { generations: s.s4.generations, verifiedGens: s.s4.verifiedGens, genPhase: s.s4.gen ? s.s4.gen.phase : '', treaty: s.s4.treaty, robots: s.robots, materials: s.s4.materials, exitKind: (s.flags && s.flags.exitKind) || '' }
+        : {}),
     };
   },
 
@@ -131,9 +135,14 @@ export default {
      * reasons), and the end screen's buttons.
      */
     skip: ['btn-redteam', ...RELEASE_KEYS, KEEP_INTERNAL, SEND_BACK, INFRA.lot, INFRA.datacenter, INFRA.standing, ...END_SCREEN],
-    /** Every GPU-lot row and power plant (any "+N MW" button) is bought by the infrastructure rule only. */
+    /**
+     * Every GPU-lot row and power plant (any "+N MW" button) is bought by the infrastructure rule only.
+     * Stage 4: "Sign a halt instead" and "Revoke a grant" are not bought (takeoff-late.mjs STAGE4_NEVER).
+     */
     veto(c) {
-      return c.buttons.filter((b) => b.kind === 'button' && (PLANT_KEYS_RE.test(b.l) || LOT_RE.test(b.k))).map((b) => b.k);
+      const keys = c.buttons.filter((b) => b.kind === 'button' && (PLANT_KEYS_RE.test(b.l) || LOT_RE.test(b.k))).map((b) => b.k);
+      if ((c.m.stage || 1) >= 4) keys.push(...STAGE4_NEVER);
+      return keys;
     },
     /** Stage 2: AUTO pricing is left on; lower/raise are not touched while it is. */
     priceHold(c) {
@@ -158,10 +167,15 @@ export default {
   stageEnded(m, startStage) {
     return (m.stage ?? startStage) > startStage || !!m.ending;
   },
-  /** How the stage ended, for the record: "Stage 4", or "ending: The Pause" (the end screen's title). */
+  /**
+   * How the stage ended, for the record: "Stage 4", "Stage 5 (fleet granted)" (Stage 4's exits: treaty
+   * signed, fleet granted, fleet taken), or "ending: The Pause" (the end screen's title).
+   */
   endedHow(m, startStage) {
     if (m.ending) return `ending: ${m.endingTitle || m.ending}`;
-    return (m.stage ?? startStage) > startStage ? `Stage ${m.stage}` : '';
+    if ((m.stage ?? startStage) <= startStage) return '';
+    const kind = { treaty: 'treaty signed', granted: 'fleet granted', taken: 'fleet taken' }[m.exitKind];
+    return `Stage ${m.stage}${kind ? ` (${kind})` : ''}`;
   },
 
   /**

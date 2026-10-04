@@ -133,6 +133,7 @@ const TAKEOFF = [
   {
     name: 'release-open-issues',
     title: 'Release with open issues and watch for an incident',
+    stages: { 1: true, 2: true, 3: true, other: 'Stages 1–3 only: from Stage 4 the generations arrive and deploy by themselves; there is no Release or Approve' },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       // No red-team/release logic. From Stage 2 the player still trains and builds (takeoff-late.mjs).
@@ -198,6 +199,7 @@ const TAKEOFF = [
   {
     name: 'reload-mid-training',
     title: 'Reload the page mid-training',
+    stages: { 1: true, 2: true, 3: true, other: 'Stages 1–3 only: from Stage 4 there is no training run (see reload-mid-generation)' },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       const pol = kit.policy();
@@ -222,6 +224,36 @@ const TAKEOFF = [
       const sB = await kit.snap();
       await kit.shot('reload-mid-training');
       out.push(`Before reload (${mmss(kit.t)}): training ${a.name} ${a.pct}%, ${a.remaining} remaining; tasks ${fmtN(a.m.tasks)}, funds ${money(a.m.funds)}; console "${a.con}"; panels ${panelsA}.`, `After reload: training ${b.name ?? '—'} ${b.pct ?? '—'}%, ${b.remaining ?? '—'} remaining; tasks ${fmtN(b.m.tasks)}, funds ${money(b.m.funds)}; console "${b.con}"; panels ${sB.panels.map((p) => p.l).join(', ')}.`, '', `Recovery: ${b.pct === a.pct && b.remaining === a.remaining && b.m.tasks === a.m.tasks ? 'the run resumes exactly where it was (nothing lost)' : 'state differs after reload (see numbers above)'}.`);
+    },
+  },
+  {
+    name: 'reload-mid-generation',
+    title: 'Reload the page while a generation trains or is read (Stage 4)',
+    stages: { 4: true, other: 'Stage 4 only: generations arrive by themselves from Stage 4' },
+    async run(kit, out) {
+      const pol = kit.policy();
+      let mid = null;
+      await kit.run(1500, async (t, s) => {
+        await pol.pass(t);
+        const line = await text(kit, '#genStatus');
+        // A generation in progress after the first minute: being read ("is reading"), or training.
+        if (t >= 60 && (/is reading/.test(line || '') || s.m.genPhase === 'training')) {
+          mid = s;
+          return 'stop';
+        }
+        return undefined;
+      });
+      need(mid, 'no generation in progress within 25 minutes');
+      const grab = async () => {
+        const m = (await kit.snap()).m;
+        return { line: await text(kit, '#genStatus'), con: await text(kit, '#readout1'), m };
+      };
+      const a = await grab();
+      await kit.reload();
+      const b = await grab();
+      await kit.shot('reload-mid-generation');
+      const same = (k) => (a.m[k] === b.m[k] ? 'same' : `${fmtN(a.m[k], 1)} → ${fmtN(b.m[k], 1)}`);
+      out.push(`Before reload (${mmss(kit.t)}): "${a.line}"; generations ${a.m.generations}, research ${fmtN(a.m.research)}, robots ${fmtN(a.m.robots)}, materials ${fmtN(a.m.materials)} t, treaty ${fmtN(a.m.treaty, 1)}%; console "${a.con}".`, `After reload: "${b.line}"; generations ${b.m.generations}, research ${same('research')}, robots ${same('robots')}, materials ${same('materials')}, treaty ${same('treaty')}; console "${b.con}".`, '', `Recovery: ${a.line === b.line && a.m.generations === b.m.generations && a.m.research === b.m.research ? 'the generation resumes exactly where it was (nothing lost)' : 'state differs after reload (see the numbers above)'}.`);
     },
   },
 ];
@@ -346,7 +378,7 @@ if (isMain) {
   const prefix = resolvePrefix(flags.out ?? `softlock-${game}${preset ? `-p${preset}` : stage > 1 ? `-s${stage}` : ''}`);
   const list = SCENARIOS[game].filter((s) => !flags.scenario || s.name === flags.scenario);
   const from = preset ? `the named start ${preset} (__game.loadPreset('${preset}'))` : stage > 1 ? `the start of Stage ${stage}${game === 'takeoff' ? ` (__game.loadPreset(${stage}))` : ` (fixture ${game}-stage${stage})`}` : 'a new game';
-  const md = [`# Soft-lock probes: ${adapter.title}${stage > 1 ? `, Stage ${stage}` : ''}`, '', `Game dir \`${path.relative(process.cwd(), gameDir)}\`, seed ${flags.seed ?? 1}, stepped mode (2-s steps), each scenario from ${from}. Times are game time${stage > 1 ? ' from that start' : ''}.`, ''];
+  const md = [`# Soft-lock probes: ${adapter.title}${preset ? `, preset ${preset}` : stage > 1 ? `, Stage ${stage}` : ''}`, '', `Game dir \`${path.relative(process.cwd(), gameDir)}\`, seed ${flags.seed ?? 1}, stepped mode (2-s steps), each scenario from ${from}. Times are game time${stage > 1 ? ' from that start' : ''}.`, ''];
   for (const sc of list) {
     process.stdout.write(`${sc.name} … `);
     const out = [];

@@ -19,6 +19,14 @@ export const KEEP_INTERNAL = 'btn-releaseInternal';
 export const SEND_BACK = 'btn-sendBack';
 /** The end screen's buttons: never pressed (a new game would wipe the run). */
 export const END_SCREEN = ['btn-newGame', 'btn-endingTask'];
+/**
+ * Stage 4: the two cards the first-timer does not buy — "Sign a halt instead" (it ends the game in The
+ * Pause the moment it is lit, from 12:00) and "Revoke a grant" (it takes back the grant the first-timer
+ * just accepted, which the sweep then buys again: a loop). The game's own first-timer skips the same two.
+ */
+export const STAGE4_NEVER = ['proj-p_halt', 'proj-p_revoke'];
+/** Stage 4: the fleet's exit card ("Grant the fleet autonomy"), lit once the fleet has asked. */
+export const FLEET_GRANT_CARD = 'proj-p_autonomy';
 
 const find = (c, k) => c.buttons.find((b) => b.k === k);
 /** Power sources: any button whose label offers megawatts ("Gas turbines (+20 MW)", "Reactor (+1,000 MW)"). */

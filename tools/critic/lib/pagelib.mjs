@@ -151,18 +151,33 @@ export function pageLib() {
    * own text, or in a note/reason beside it in the same row. null when none is printed.
    */
   const LATER = /(?:(\d+):(\d\d)|\bmuch)\s+later\b/;
+  // Takeoff Stage 4's wording: "· delays Steward-3 by 1:30", "· delays Treaty talks by 0:45".
+  const DELAYS = /\bdelays\b[^·]*?\bby\s+(?:(\d+):(\d\d)|much\b)/;
+  const delayIn = (text) => LATER.exec(text) || DELAYS.exec(text);
   function laterOf(el) {
-    let m = LATER.exec(norm(el.textContent));
+    let m = delayIn(norm(el.textContent));
     const row = el.parentElement;
     if (!m && row) {
       for (const r of row.querySelectorAll('.note, .reason')) {
         if (r.closest('button')) continue;
-        m = LATER.exec(norm(r.textContent));
+        m = delayIn(norm(r.textContent));
         if (m) break;
       }
     }
     if (!m) return null;
     return m[1] != null ? Number(m[1]) * 60 + Number(m[2]) : Infinity;
+  }
+  /**
+   * One option of a selector: a button in a row of buttons one of which shows as selected (Takeoff
+   * Stage 4's Fleet goal, Approval to hold, Negotiator's stance). Buttons the adapter already lists as
+   * ambient (Takeoff's Focus) are left as they were.
+   */
+  function isSelectorOption(el) {
+    if (el.classList.contains('selected')) return true;
+    const row = el.parentElement;
+    if (!row) return false;
+    for (const sib of row.children) if (sib !== el && sib.tagName === 'BUTTON' && sib.classList.contains('selected')) return true;
+    return false;
   }
   function reasonOf(el) {
     const row = el.parentElement;
@@ -197,6 +212,10 @@ export function pageLib() {
       // A setting, not a purchase: a toggle (class or aria-pressed), an ON/OFF/AUTO label, or a
       // "Name: value" label on a non-project button. Settings are ambient (like Takeoff's Grid toggle).
       if (kind === 'button' && isSetting(el, l)) {
+        b.t = 1;
+        b.a = 1;
+      }
+      if (kind === 'button' && !b.a && isSelectorOption(el)) {
         b.t = 1;
         b.a = 1;
       }
