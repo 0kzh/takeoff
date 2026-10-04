@@ -1,4 +1,4 @@
-import { GameState, Cost, canPay, isBought, addFunds, say, counter } from '../engine/state.js';
+import { GameState, Cost, canPay, isBought, addFunds, say, counter, buildFundOpen, DEFAULT_BUILD_SHARE } from '../engine/state.js';
 import { enterStage, STUCK } from '../engine/stages.js';
 import {
   researchCap, gpuCost, fleetPowerBlock, bestCapability, researchRate, nextContractWeight,
@@ -120,11 +120,18 @@ export function project(def: ProjectInput): ProjectDef {
   };
 }
 
-/** `seconds` of revenue, to two significant figures; the figure fixed at the reveal once there is one. */
+/**
+ * `seconds` of the income that fills funds, to two significant figures; the figure fixed at the reveal
+ * once there is one. In Stage 2 funds get what the build share leaves (arc G34), counted at the default
+ * share so that moving the share never reprices a card: a card priced in seconds of all revenue cost
+ * twice the wait it was written for, and a player who bought every card lit waited 8–9 minutes for a run.
+ * Stage 3's prices were set with the share in place and keep seconds of revenue.
+ */
 export function revealPrice(s: GameState, id: string, seconds: number): number {
   const fixed = s.flags[`price:${id}`];
   if (typeof fixed === 'number') return fixed;
-  return twoFigures(seconds * Math.max(1, s.stats.revPerSec));
+  const toFunds = s.stage === 2 && buildFundOpen(s) ? 1 - DEFAULT_BUILD_SHARE : 1;
+  return twoFigures(seconds * Math.max(1, s.stats.revPerSec * toFunds));
 }
 
 /**

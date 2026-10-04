@@ -17,12 +17,12 @@ const BENCH_WEIGHT = [0.9, 0.6, 0.5, 0.55, 0.3, 0.35];
 export const MAJOR_TIERS = [2, 4, 10];
 /** Stage 3 rounds a run that lands within 3 % under a named rung up to it (arc G33's 3 %). */
 export const S3_RUNGS = [10, 25];
-export const NEAR_MISS_S3 = 0.97;
+/** A run this close below a named tier or rung is called it (arc G33: within 3 %, Stages 2 and 3). */
+export const NEAR_MISS = 0.97;
+export const NEAR_MISS_S3 = NEAR_MISS;
 export const FRONTIER_SCORE = 32;
 /** Insight each public release brings the lab (critic round 2 §6.7: insight was dead UI for an efficient player). */
 export const RELEASE_INSIGHT = 6;
-/** A run this close below a named tier is called the tier (Stage 2). */
-export const NEAR_MISS = 0.98;
 export const LEADERBOARD_SCORE = 36;
 export const RED_TEAM_SECONDS = 8;
 export const RED_TEAM_SECONDS_EVALS = 5;
@@ -99,11 +99,12 @@ export function fundsFor(c: number): number {
 export const S2_FUNDS_EXPONENT = 7;
 
 /**
- * Scale-1 base of a Stage 2 run (stage2.md has $25,000). Owner feedback 1's knob after the 600: at
- * $32,000 the harness's first-timer takes 38 minutes and the sim's train-first player 39–44; the
- * reasonable bot (32–38) barely moves with it, its stage being half training and half saving.
+ * Scale-1 base of a Stage 2 run (stage2.md has $25,000; the round-2 knob, `stage2-round2-fixes.md` §1).
+ * $44,000 since the wallet rule: the run no longer borrows from lots, the first run is not starved and
+ * cards cost seconds of what fills funds, so the stage came 3–5 minutes shorter at $32,000. The
+ * reasonable bot moves least with it, its stage being more than half training.
  */
-export const S2_RUN_BASE = 32000;
+export const S2_RUN_BASE = 44000;
 
 export function fundsForS2(c: number): number {
   return Math.round(S2_RUN_BASE * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
@@ -721,8 +722,8 @@ export function focusBase(s: GameState, run: TrainingRun): number {
 function computeResults(s: GameState, run: TrainingRun): void {
   const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.capMult;
   run.capAfter = run.capBefore * (1 + gain);
-  // Within 2 % below a named tier, the evaluators call it the tier (Stage 2: no 4-minute run for a
-  // hair at 3.97×). The rename below prints "good enough to be called Sage-N".
+  // Within 3 % below a named tier, the evaluators call it the tier (Stage 2: no 4-minute run for a
+  // hair at 3.9×; arc G33). The rename below prints "good enough to be called Sage-N".
   if (s.stage === 2) {
     const tier = MAJOR_TIERS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
     if (tier) run.capAfter = tier;

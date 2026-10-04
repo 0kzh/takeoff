@@ -100,14 +100,22 @@ function uncapped(s: GameState, def: ProjectDef): boolean {
   return def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
+/** Seconds into Stage 2 after which priced cards appear whether or not the first run has started. */
+export const FIRST_RUN_WAIT_S2 = 240;
+
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
   // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6), except
   // the carried cards (their `stages` name Stage 3: code review, honesty evals, the second campus).
   if (s.stage >= 3 && def.late && !def.stages.includes(s.stage)) return false;
-  // Stage 2's first run comes first (stage2-round2-fixes.md item 1): a card priced in research waits
-  // for it to start, unless it answers a wall, so the arrival's research goes into the first model.
-  if (s.stage === 2 && counter(s, 'runsS2') < 1 && !exempt(s, def) && !def.stages.includes(1) && (def.cost(s).research ?? 0) > 0) return false;
+  // Stage 2's first run comes first (stage2-round2-fixes.md item 1): a priced card waits for it to
+  // start, unless it answers a wall, so the arrival's money and research go into the first model. The
+  // cards carried from Stage 1 wait too (their research floors took the run's 35,000 in the first
+  // minute); four minutes in they come regardless, for a lab that has not trained.
+  if (s.stage === 2 && counter(s, 'runsS2') < 1 && s.stats.timeInStage < FIRST_RUN_WAIT_S2 && !exempt(s, def)) {
+    const c = def.cost(s);
+    if ((c.research ?? 0) > 0 || (c.funds ?? 0) > 0) return false;
+  }
   // Before the Research panel, only rescues can appear (their prices are not in research).
   return def.rescue === true || s.revealed['research'] === true;
 }

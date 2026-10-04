@@ -432,6 +432,13 @@ export function simulate(args: Args): SimResult {
   let handsChecks = 0;
   let handsNone = 0;
   let lotLit = 0;
+  // A whole lot is lit when the build fund covers one that fits. A player who buys it at once sees it lit
+  // for a moment only, so a check counts the window since the last one: lit at any tick, or a lot bought.
+  let lotLitWindow = false;
+  const windowEnabled = new Set<string>();
+  let batchesAtCheck = s.gpuBatches;
+  const lotLitNow = () =>
+    lotSizes(s).some((k, row) => (row === 0 || s.revealed[row === 1 ? 'lot5' : 'lot25']) && lotFits(s, k) && s.buildFund >= lotCostOf(s, k));
   let trainIdleChecks = 0;
   let trainReady = 0;
   let handsTwo = 0;
@@ -517,11 +524,20 @@ export function simulate(args: Args): SimResult {
   };
 
   for (let i = 0; i < totalTicks; i++) {
+    // The critic's harness looks every 2 s and then acts; a policy here acts every few ticks, so what it
+    // bought at once was still lit to it. A check counts every purchase enabled since the last check.
+    if (s.stage === 2 && s2Start !== null && s.stats.timePlayed - s2Start >= 178) {
+      for (const k of enabledPurchases(s)) windowEnabled.add(k);
+      if (!lotLitWindow && s.revealed['infrastructure'] && lotLitNow()) lotLitWindow = true;
+    }
     if (s.stage === 2 && i % 20 === 0 && s2Start !== null && s.stats.timePlayed - s2Start >= 180) {
-      const n = enabledPurchases(s).length;
+      const n = windowEnabled.size;
+      windowEnabled.clear();
       handsChecks++;
       if (n === 0) handsNone++;
-      if (lotSizes(s).some((k, row) => (row === 0 || s.revealed[row === 1 ? 'lot5' : 'lot25']) && lotFits(s, k) && s.buildFund >= lotCostOf(s, k))) lotLit++;
+      if (lotLitWindow || s.gpuBatches > batchesAtCheck) lotLit++;
+      lotLitWindow = false;
+      batchesAtCheck = s.gpuBatches;
       // Train on screen and idle (no run training, a free slot): pressable or armed (G34: ≥ 80 %).
       if (s.revealed['training'] && trainSlotFree(s) && !trainingRun(s)) {
         trainIdleChecks++;

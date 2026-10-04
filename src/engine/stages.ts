@@ -1,4 +1,4 @@
-import { GameState, say, narrate, logNews, isBought, counter, projectState } from './state.js';
+import { GameState, say, narrate, logNews, isBought, counter, projectState, DEFAULT_BUILD_SHARE } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
@@ -105,7 +105,7 @@ function enterScale(s: GameState): void {
   const rented = s.gpus;
   const deposit = rentDeposit(s);
   s.buildFund = Math.round((s.buildFund + deposit) * 100) / 100;
-  s.buildShare = 0.5;
+  s.buildShare = DEFAULT_BUILD_SHARE;
   // Hire and Expand Lab leave (stage2-round2-fixes.md item 5): the copies do the research and cards
   // size the lab; Trust buys only what names it.
   hide(s, ['hireResearcher', 'expandLab']);
@@ -500,7 +500,8 @@ const REVEAL_RULES: RevealRule[] = [
   },
   {
     id: 'expandLab',
-    stages: [1, 2],
+    // Stage 1 only: Stage 2's arrival takes Expand Lab away for good (stage2-round2-fixes.md item 5).
+    stages: [1],
     // When the lab is full and something on screen (or the next run) needs more than it holds.
     when: (s) => s.revealed['research'] === true && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s),
     then: (s) => say(s, `The lab is full at ${fmtInt(researchCap(s))}. Expand Lab makes room for more research.`),

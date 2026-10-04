@@ -533,7 +533,7 @@ export function newGame(seed: number = Date.now()): GameState {
     standingBudget: 0.5,
     standingPool: 0,
     buildFund: 0,
-    buildShare: 0.5,
+    buildShare: DEFAULT_BUILD_SHARE,
     gulfExposure: 0,
 
     hypeLevel: 1,
@@ -709,6 +709,9 @@ export function press(s: GameState, verb: string): void {
 export function addFunds(s: GameState, amount: number): void {
   s.funds = Math.round((s.funds + amount) * 100) / 100;
 }
+
+/** The build share on arrival in Stage 2 (and after a restore without one): half of income builds. */
+export const DEFAULT_BUILD_SHARE = 0.5;
 
 /** Stages 2–3 have two dollar purses (arc G34): the build fund takes its share of every dollar earned. */
 export function buildFundOpen(s: GameState): boolean {
@@ -891,7 +894,7 @@ function migrateV7(raw: Record<string, unknown>): Record<string, unknown> {
   const training = { ...((raw['training'] as Record<string, unknown>) ?? {}), armed: false };
   const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
   if (revealed['infrastructure'] === true) revealed['buildShare'] = true;
-  return { ...raw, training, revealed, funds: funds - moved, buildFund: moved, buildShare: 0.5, standingPool: 0 };
+  return { ...raw, training, revealed, funds: funds - moved, buildFund: moved, buildShare: DEFAULT_BUILD_SHARE, standingPool: 0 };
 }
 
 const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7];
