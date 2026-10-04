@@ -5,7 +5,7 @@
   "description": "An incremental browser game about an AI lab racing to superintelligence.",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/package-site.mjs",
     "watch": "tsc --watch --preserveWatchOutput",
     "serve": "node scripts/serve.mjs",
     "dev": "tsc && node scripts/serve.mjs",

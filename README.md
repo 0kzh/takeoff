@@ -19,7 +19,7 @@ npm run watch        # in a second terminal: recompile on save
 
 | Script | What it does |
 | --- | --- |
-| `npm run build` | `tsc`: compiles `src/` to `dist/` (ES2022 modules, no bundler) |
+| `npm run build` | compiles `src/` to `dist/` (ES2022 modules, no bundler), then packages the static site in `public/` |
 | `npm run watch` | `tsc --watch` |
 | `npm run serve` | zero-dependency static server (`scripts/serve.mjs`) on port 8731, `Cache-Control: no-store` |
 | `npm run dev` | build, then serve |
@@ -27,6 +27,13 @@ npm run watch        # in a second terminal: recompile on save
 
 The browser loads `dist/main.js` as a native ES module, which is why every TypeScript import uses
 an explicit `.js` extension. `dist/` is gitignored.
+
+## Vercel
+
+`vercel.json` runs `npm run build` and publishes `public/`. The build copies
+`index.html`, `styles.css`, and the compiled `dist/` modules into that directory,
+preserving the browser's module URLs. Both `dist/` and `public/` are generated and
+gitignored. Local development and the headless simulator continue to use `dist/`.
 
 ## Architecture
 
