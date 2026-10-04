@@ -18,6 +18,17 @@ Stage 1*. Ten play styles ended within 31–35 minutes in the same state. The ch
    `alignedAtHandover` inputs, the four end screens. The rule of §4 itself is unchanged.
 4. `stage3.md` is patched to the new guardrails (its own amendment list says where).
 
+## Amendments after the Stage 2 critic (Takeoff 7.4, Paperclips 6.7)
+
+Stage 2 won on cadence and lost the two rows that ask what the player's hands and eyes are doing: from the
+Standing order to the gate there was nothing to press and no way to spend toward the thing being waited for.
+
+1. §6 gains **G24–G33** ("hands and eyes"), with the critic's measures as thresholds, and G23's repeat interval
+   becomes 180 s. G17 now covers standing switches (Focus, Verify, goal selectors), not only modal options.
+2. §7 "every stage ships" gains the hands block; every stage spec opens with a section **What the player's hands do**.
+3. §8's rule about the model taking verbs away gains its other half: each removal hands over a heavier lever.
+4. `stage3.md`, `stage4.md` and `stage5.md` are patched to these; each lists its changes at the top.
+
 ## 1. Requirements checklist
 
 Every feature in the original prompt, the stage that delivers it, and the mechanic. "S2" = Stage 2, etc.
@@ -217,13 +228,23 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G13 | No wall is carried across a transition | Next training run affordable in cap terms; Trust ≥ 0; ≥ 1 affordable action | `enter()` pre-flight |
 | G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage | Playwright count at 5-min marks |
 | G16 | Decisions decide | Every framed choice axis of a stage (each modal, each standing switch or slider, each grant taken or refused) moves the stage's length by ≥ 3 min, or moves an exit variable a later stage reads by a stated margin: true alignment ≥ 8, lead ≥ 1 month, relations ≥ 10, approval ≥ 10, or a branch or ending flag | Sim variants on seeds 1–3, each the reasonable bot with one thing changed (`--variant modals-first`, `modals-last`, `modals-never`, one per switch extreme). The stage spec lists its axes and the spread expected. An axis that fails is cut or stops being framed as a choice |
-| G17 | Stakes on the button | Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
+| G17 | Stakes on the button | A standing switch (Focus, Verify, a goal selector) prints its trade under its buttons the same way. Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
 | G18 | Goals, not a conveyor belt | Median time from a project's first appearance to its purchase ≥ 90 s for the reasonable bot; ≤ 20 % bought within 10 s; nothing refunds its own price. Engine backstop: at reveal a price is raised to 90 s of its currency's current rate when the list price is lower; a prerequisite gates the purchase, not the appearance | Sim: reveal → purchase table; `FLOOR` lines on ≤ 30 % of rows |
 | G19 | Text budget | ≤ 260 words on screen outside the console and log (≤ 200 in Stage 1); ≤ 2.5 console lines and ≤ 1.5 Developments lines a minute over any five minutes; one flavour line per training run; a console line carries a number, a name or an instruction; ≤ 14 first-time reveals in any six minutes; projects drip 30 s apart for the first five minutes of a stage | Playwright word count at 5-min marks; sim line counter |
 | G20 | Modals never block input | A modal is a card docked in the page. Everything behind it stays clickable, focus moves into it, Escape or its timer takes the stated default, and one without a timer can be left open | Playwright clicks a button behind an open modal |
 | G21 | The promised number moves first | Each transition's narration names one number. Within 30 s of arrival it has moved as promised, no console line contradicts it, and routine console lines are held for 10 s so the narration stays on screen | Sim and Playwright at each preset |
 | G22 | Levers reach the income | After the first five minutes of a stage at least 70 % of income (of the score rate, once money is gone) responds to levers the stage has taught. Any quota or ceiling shows `x / cap` from the first unit | Sim: income by source at 5-min marks |
-| G23 | Walls repeat, rescues diagnose, nothing is dead | A wall or warning line re-arms every 120 s while it holds. The idle rescue names the cause before it offers help and never offers less than the cheapest thing on screen. No line reads "none" and no card sits unaffordable for more than 10 min for the reasonable bot, hazard counters and the stage goal excepted | Sim: wall-line log; dead-line scan |
+| G23 | Walls repeat, rescues diagnose, nothing is dead | A wall or warning line re-arms every 180 s while it holds (see G31). The idle rescue names the cause before it offers help and never offers less than the cheapest thing on screen. No line reads "none" and no card sits unaffordable for more than 10 min for the reasonable bot, hazard counters and the stage goal excepted | Sim: wall-line log; dead-line scan |
+| G24 | Something to buy | After the first 3 minutes of a stage, at most 50 % of 2-second checks find no enabled purchase (Stage 2 as built: 85–88 %; Paperclips: 1 %) | Harness: the first-timer policy samples every enabled, affordable control each 2 s (`explore-sN.mjs baseline`, seeds 1–3). Sim: the same count from `noveltyKeys`, in the stage block |
+| G25 | A choice of purchases | Two or more distinct affordable things in at least 25 % of checks (Stage 2: 4–5 %; Paperclips: 97 %) | Same samples; "distinct" = different controls with different printed returns |
+| G26 | Hands stay busy | After the first 10 minutes, at most 35 % of the time lies inside stretches of 30 s or more without a click (Stage 2: 63–69 %; Paperclips: 28 %). The number the stage's goal is stated in moves at least every 5:30 | Harness click log; sim press log for the reasonable bot; sim: intervals between changes of the goal number |
+| G27 | Sinks print their return | Every repeatable purchase, slider and standing switch prints, beside the control and not in a hover, what one more unit or one more notch returns, and what it costs in the thing being waited for. Each stage has at least two repeatable, player-steered sinks enabled at all times, drawing on one resource, so their returns compete | Playwright: text beside every repeatable control; sim: list of enabled repeatables at each 5-min mark |
+| G28 | A removal hands over a heavier lever | When a grant, a transition or the model removes a control, a control one level up (a budget, a target, a goal) appears in the same beat. The only exception is the Silence skin's last three minutes | Sim logs `REMOVED <ids> → GAINED <ids>` for every removal; an empty right side fails |
+| G29 | No dead grey, no dead advice | No control is greyed in 100 % of a stage's checks (hide it instead). A console line never names a verb that is not on screen and enabled or one purchase away. No line prints more than six times a stage or twice in 3 minutes | Sim: enabled share per control; a console linter over the stage's lines |
+| G30 | Meters bite | Every meter on screen has at least one consequence the player can see in each of its bands, inside the stage where it appears, and the band edges are printed in its panel (`−30: permits slow · −40: riots`) | The stage spec's meter table; sim: each band's consequence fires in at least one variant |
+| G31 | Walls repeat and point | A wall line repeats every 180 s while the wall holds and names the card or control that answers it. A card that answers a standing wall, or without which the stage cannot proceed, is drawn in the `urgent` style from its first appearance | Sim wall log; Playwright class check |
+| G32 | Nothing changes silently | No number on screen changes at a transition, a clamp, an exit or a grant without a console line that gives the old and the new value | Sim: visible numbers before and after each `enterStage`, clamp and grant, against the narration |
+| G33 | Thresholds are generous | A result within 3 % below a threshold the screen names (a rung, a gate, a ceiling) is rounded up to it | Unit test on each named threshold |
 | G15 | Modals are rationed | ≤ 9 per stage; unprompted modals ≥ 150 s apart (one that comes due inside the window waits); a modal the player opens with their own click is exempt from the spacing; the idle rescue is outside the budget | The built pacer (`cadence.lastModalAt`); sim count per stage |
 
 The **cadence governor** enforces G1: if no first-time reveal has happened for 150 s, the engine reveals the next item
@@ -269,6 +290,8 @@ Every stage ships, before its critic round:
   reasonable bot and the naive policy on seeds 1–5, from a new game and from the stage preset;
 * the two presets (its own start, the next stage's start) and a dev-overlay button for each;
 * the decision-variant block (G16): one sim variant per framed axis, with its spread on seeds 1–3;
+* the hands block (G24–G29): share of checks with nothing to buy, with two things to buy, time in 30-s click
+  gaps, goal-number intervals, the removal log and the console linter's report;
 * its rows in `endStats()`, its `SAVE_VERSION` bump and `migrate()` defaults;
 * updated `docs/stages.md` and `README.md`; ids in earlier stages unchanged.
 
@@ -296,7 +319,10 @@ projects are missions that cost only time, and its last project is not marked as
 Three rules the sketches share:
 
 * The model takes one more verb away in each stage (pricing in S2, hiring and training in S3, money and the task button
-  in S4, everything in S5), and each removal is narrated as in §7.
+  in S4, everything in S5), and each removal is narrated as in §7. Each removal also hands the player a heavier
+  lever in the same beat (G28): a budget where there was a button, a target where there was a slider, a goal where
+  there was a split. Paperclips trades clip-making for drone balancing and then for probe design; a stage whose
+  answer to "what do the hands do" is "wait for the next automatic run" fails, however many reveals arrive.
 * What is hidden stays hidden until the player builds the instrument: `alignmentTrue` is never shown before
   interpretability 3, and the log never says which branch the run is on.
 * Every crisis has a mitigation that was visible, greyed or not, at least five minutes before the crisis could fire.

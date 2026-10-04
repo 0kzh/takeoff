@@ -5,6 +5,39 @@ Steward line) or **Race** (Sage-5) · exits to Stage 5 by `Sign the Concord trea
 by autonomy taken · ends the run by `Sign a halt instead` (The Pause) or by the Committee's order (The Project).
 Contract: `docs/specs/arc.md` (G1–G23). Arrival state: `docs/specs/stage3.md` §7.3.
 
+## Amendments after the Stage 2 critic (arc G24–G33)
+
+Where this list and an older paragraph disagree, this list and the sections it names win.
+
+| # | Change | Where |
+|---|---|---|
+| 1 | **Repeatable sinks with printed returns:** `Alignment work` and `Draft clauses` (research), `Housing` (materials), `Hold a hearing` (the Committee's time), basic income (output). The fleet sliders print what each share produces | §2.2, §2.11 |
+| 2 | **Each grant hands over a goal-level control:** `Fleet goal`, `Approval to hold`, `Negotiator's stance`. `The last sign-off` no longer retires Verify | §2.5, §2.11 |
+| 3 | **Meters bite inside the stage**, band edges printed | §2.11 |
+| 4 | **No silent changes:** arrival floors are narrated; Stage 3's payments are converted in a line. Generations within 3 % under 100×, 250× or 1,000× round up | §1.1, §2.4 |
+| 5 | Wall lines repeat every 180 s and name their answer; `Convert a car plant` and `Treaty talks` are drawn `urgent`; Verify's trade is printed under the toggle | throughout |
+| 6 | Hands criteria C23–C31 | §9.3 |
+
+None of this was re-run in the paper model; the timings in §4.3 and §9.4 predate it.
+
+## What the player's hands do
+
+Four resources with competing uses at every minute: **robots** (mine, replicate, build, later chips), **materials**
+(what the fleet eats, or housing), **research** (the next generation, alignment, the treaty's text, projects) and
+**the Committee's time** (the agenda, or hearings). Output has one more: basic income.
+
+| Minutes | What can be pressed | It costs | It returns (printed beside it) | The same resource could instead |
+|---|---|---|---|---|
+| 0:00–2:00 | `Convert a car plant`; the three fleet sliders; the allocation sliders; `Alignment work`; Verify | nothing; robots; copies; 2 % of a generation's research; 40 s a generation | `Mines 35% · +12,400 t/s` · `Replicate 40% · +52 robots/s, doubling in 2:20` · `Build 25% · +14,000 GPUs/s`; `measured 96.0 → 96.1 · delays Steward-2 by 0:04` | robots: three jobs. Research: a sooner generation, or alignment |
+| 2:00–9:00 | `Housing`; basic income; `Treaty talks`, then `Draft clauses` and `Hold a hearing`; six projects | 3 s of mining; a share of output; 90 s of the Committee; research; 60 s of the Committee | `approval target −31.0 → −30.7`; `tasks −10%, approval +30`; `treaty 31.0% → 31.2%`; `relations 67 → 69` | materials: robots and datacenters, or housing. The Committee: the treaty, or seats |
+| 9:00–17:00 | Zones; the fleet grant swaps three sliders for `Fleet goal`; the transition grant swaps basic income for `Approval to hold`; `Verify Baiwen-4`; the Ashford choice; consolidation | — | `Fleet goal: People — approval target +12, growth −20%` | the fleet: growth, people or the treaty |
+| 17:00–25:00 | `Draft clauses` to each ceiling; hearings; housing; `Treaty terms`; nanofab and its oversight; hardened datacenters; `Revoke a grant`; the negotiation grant swaps the agenda's treaty items for `Negotiator's stance` | — | `Stance: Concede — treaty ×4, terms theirs` | research: 250× sooner, or the text ready when it arrives |
+| 25:00–exit | The chips job (or `Fleet goal: Treaty`); the fleet's request; the two pinned exits and the halt | robots off building | `Treaty chips: 62% · done in 1:32` | the fleet: finish the treaty, or keep growing |
+
+The stretches that worried me most were the first ten minutes (a small fleet, three sliders set once, nothing to
+buy) and 17:00–25:00 (waiting for a 250× model). Both now have research and materials sinks that push on what is
+being waited for, and the grants leave a selector behind instead of a sentence.
+
 **How to read the numbers.** `ts` = seconds since entering Stage 4; a month is 150 s (Jan 2028 5:00, Mar 10:00, May
 15:00, Jul 20:00, Sep 25:00, Nov 30:00, end of Dec 35:00). Minute marks are for the reasonable bot from the careful
 presets, from a 1-second paper model (§9.4); they are targets to reproduce in `npm run sim`. There is no money in
@@ -61,7 +94,7 @@ What `enter` does, in order:
 | Treaty opening value | stored for `Treaty talks`: `10 + 10 (pactSigned) + 5 (memo reported) + 10 (backChannel) − 15 (escalated)`, floor 0 |
 | Carried | Alignment, Oversight, Security and Geopolitics panels; the allocation sliders; grants bought; `Lost to value drift`; labs IV–V and `Deploy Sage-3 as monitor` if unbought (research price re-based to 90 s); `btn-reimage`; `btn-shareEvals` |
 | Retired by name | Every other Stage 3 project still on screen |
-| Clamps | `alignmentTrue` to [0, 100]; `approval` to [−60, +40]; `lead` to [−6, 10]; `govRelations` to [30, 95] |
+| Clamps | `alignmentTrue` to [0, 100] (hidden). Visible meters keep their values, with floors only (`approval` ≥ −60, `lead` ≥ −6, `govRelations` ≥ 30); a floor that binds is narrated with both values. Stage 3's `Payments` level becomes basic income in a line: `Payments become a basic income: level 2 → 5% of output.` |
 | `exit` | `() => 0`; the exits are projects (§7) |
 
 ### 1.2 Narration (last four console lines kept; 2 s apart; after the vote's own lines in `stage3.md` §7.2)
@@ -122,7 +155,10 @@ Nothing is bought with research or insight that is not a project; `materials` is
 ### 2.2 The fleet: robots, materials, four jobs
 
 Three sliders in `panel-robots`, 0–100 %, step 5, with the remainder shown (`Idle: 0%`); a fourth job, `Treaty
-chips`, appears late. Per second:
+chips`, appears late. Each prints what it produces beside the percentage (G27): `Mines 35% · +12,400 t/s` ·
+`Replicate 40% · +52 robots/s, doubling in 2:20` · `Build 25% · +14,000 GPUs/s, +0.9% tasks/s a minute`. A share
+that cannot work says why in place of its rate: `Replicate 40% · out of materials` · `· at the permit cap`. Those
+two states, the techs and the crises are what move the sliders: about once a minute. Per second:
 
 ```
 mined      = robots × mineShare × 0.5 × techMine                                  tonnes
@@ -140,7 +176,7 @@ installed  = chipsShare / 120                                                   
 
 **Permits.** `robots / permitCap` is shown from the first robot (G22). `permitCap` is 400,000 until the zones
 choice: no zones 1.2M, zones with a dividend 4.8M, open zones no cap. At the cap the replicate share does nothing
-and the console says so every 120 s: `Robots: 400,000 of 400,000 permitted. The fleet cannot grow without zones.`
+and the console says so every 180 s: `Robots: 400,000 of 400,000 permitted. The fleet cannot grow without zones: see Special Economic Zones.`
 
 Targets (reasonable bot, zones with a dividend): 27k robots at 5:00, 110k at 10:00, 0.5M at 15:00, 2.1M at 20:00,
 4.8M (the cap) at 24:00. Compute 9M at 5:00, 11M at 10:00, 50M at 15:00, 250M at 20:00, 2 × 10⁹ at 25:00, 4 × 10⁹
@@ -173,7 +209,8 @@ gain          = +42 % (race), +44 % (slow)
 | on | true +5; lead −0.15 | true +2; lead −0.15 |
 | off | true −2; lead +0.1 | true −3; lead +0.1 |
 
-Monitors at ≥ 15 % add +1 a generation, as before. The toggle is Stage 3's sign-off in its last form; it is off
+Under the toggle, on screen: on — `each generation is read first: +40 s, Baiwen gains` · off — `nobody reads it:
+no wait`. A generation landing within 3 % under 100×, 250× or 1,000× is rounded up (G33). Monitors at ≥ 15 % add +1 a generation, as before. The toggle is Stage 3's sign-off in its last form; it is off
 on arrival only for a player who kept `Stop asking for sign-off`, and that player can turn it on unless the fleet
 has taken it (§2.5). A research-priced project costs 90 s of research, so each one delays the next generation by
 about half its interval: that is its real price, and the project card says `delays {next model} by about 1:30`.
@@ -196,12 +233,23 @@ Drift, rogue copies, breakouts, `Re-image` and the warning at 2.5 % are Stage 3'
 | the labs (`c_ashford`) | — | §5.2 | +15 | The fastest cure | — |
 | `p_revoke` Revoke a grant | research | autonomy ≥ 70 | −10 | Takes back the newest Stage 4 grant and its control | Its bonus |
 
+**What each grant hands over (G28),** in the same beat as it removes its controls:
+
+| Grant | Removes | Hands over | Printed under each position |
+|---|---|---|---|
+| Let it assign the fleet | the three fleet sliders | `Fleet goal: Growth / People / Treaty` (`#fleetGoal`) | Growth: `fleet output ×1.25` · People: `a fifth of the fleet builds housing: approval target +12, growth −20%` · Treaty: `a fifth of the fleet inspects and installs: treaty +1 point a minute, chips in 4:00, growth −20%` |
+| Let it run the transition | `btn-ubi` | `Approval to hold: −25 / 0 / +25` (`#approvalTarget`) | `costs 14% of output now` (the basic income it takes to hold it) |
+| Let it negotiate with Baiwen-4 | the agenda's treaty items; two of `c_verify`'s options | `Negotiator's stance: Hold the line / Balanced / Concede` (`#stance`) | `treaty ×2, terms ours` · `treaty ×3` · `treaty ×4, terms theirs` (an end-screen row; lead −1 at signing) |
+
+`Revoke a grant` takes the selector away and gives the older controls back. `The last sign-off` keeps Verify and
+cuts its wait to 10 s.
+
 **What the race branch takes.** A choice that needs a control the player has given away arrives as a card with one
 button. The option that is gone is still drawn, greyed, with the reason: `close the channel — needs human
 sign-off, given away with "Stop asking for sign-off". Revoke a grant gives it back.` Nothing is hidden; the
 single button is the consequence of a grant the player bought with the warning on it.
 
-**Autonomy taken.** While `autonomy ≥ 80`, the console repeats every 120 s: `Autonomy granted: 85. Past 80, a
+**Autonomy taken.** While `autonomy ≥ 80`, the console repeats every 180 s: `Autonomy granted: 85. Past 80, a
 model that wanted the fleet would not need to ask.` If the shutdown crisis (§5.3) then finds a model whose true
 alignment is below 40, it takes the fleet and the stage ends. `Revoke a grant`, `Monitors at scale`, `Hardened
 datacenters` and `Lock shared memory` are all on screen at least five minutes before that crisis can fire.
@@ -252,7 +300,7 @@ approval      += clamp(approvalTarget − approval, −0.1, +0.1) per second
 Jobs displaced: 33M on arrival, 75M at 15:00, 290M at 25:00, 800–950M at the exit. With no dividend a careful
 arrival is at −57 by the exit and a careless one passes −60 at about minute 23. Riots at ≤ −40 and sabotage at
 ≤ −55 are Stage 3's, with their warnings; sabotage now takes 5 % of robots. **At approval ≤ −60 the treaty does
-not advance**, and the console says so every 120 s: `The treaty is stalled: approval −63. Nobody signs with a
+not advance**, and the console says so every 180 s: `The treaty is stalled: approval −63. Nobody signs with a
 company the street wants closed.`
 
 ### 2.8 The treaty
@@ -304,6 +352,32 @@ revoked). A concession used in Stage 3 stays used. The Project needs a refusal o
 anyway` 0; `demand a rebuild` +0.5; the negotiation grant 0. Below 0 the Treaty panel reads `Baiwen-4: 0.8 months
 ahead` and the treaty accrues 25 % faster (Beijing is the one offering). Above 6 it accrues 25 % slower (`The
 Committee would rather win`). Both lines are on the panel.
+
+### 2.11 Repeatable sinks and what the meters do (amendments 1 and 3)
+
+| Button | Where, from when | Unit price | One unit returns | Printed |
+|---|---|---|---|---|
+| `Alignment work` (`btn-alignWork`, carried) | Alignment, arrival | 2 % of the next generation's research | measured +0.1, true +0.08 | `measured 96.0 → 96.1 · delays Steward-2 by 0:04` |
+| `Draft clauses` (`btn-draft`) | Treaty, when talks open | 2 % of the next generation's research | treaty +0.2 points, up to the current ceiling | `treaty 55.0% → 55.2%`; at a ceiling it names what the ceiling waits for |
+| `Housing` (`btn-housing`) | Society, 2:00 | 3 s of current mining; each unit ×1.2, relaxing every 60 s | approval target +0.3, for good | `approval target −31.0 → −30.7 · 0:03 of materials` |
+| `Hold a hearing` (`btn-hearing`) | Oversight, with the agenda | 60 s of the Committee's time | relations +2 (+4 at approval ≥ 0) | `relations 67 → 69 · seat 7 at 70` |
+| Basic income (`btn-ubi`) | Society, 2:00 | 5 / 10 / 20 % of output | approval target +15 / +30 / +50 | under the button |
+
+Research buttons have `×1` and `×5`; `Housing` has `×1` and `×10`. A research unit is a few seconds of research
+and a housing unit three seconds of mining, so something is affordable at nearly every check (G24), and research
+and materials each have a second use to weigh it against (G25).
+
+**Meters (G30).** Band edges are printed after the value.
+
+| Meter | Line on its panel | What each band does, in this stage |
+|---|---|---|
+| Seats | `With OpenMind: 6 of 10 — 8: a faster agenda · 5: the treaty moves · 3: drafts an order` | 8 or more: agenda items take 60 s. Under 5: the treaty does not advance. At the order's threshold: the order |
+| Approval | `Approval: −22 — 0: hearings count double · −40: riots · −55: sabotage · −60: the treaty stalls` | as printed (§2.7) |
+| Lead | `Baiwen-4: 0.5 months behind — 6: the Committee would rather win · 0: Beijing is the one offering` | above 6: treaty accrual −25 %. Below 0: +25 % |
+| Measured alignment | `Alignment (as measured): 96 — 80: Verify takes 20 s · 55: advisories` | 80 or more: verification waits 20 s, not 40. Under 55: each generation, relations −2 |
+| Autonomy | `Autonomy granted: 60 — 60: cards lose their second button · 80: it would not need to ask` | as printed (§2.5); the 60 line applies on the race branch |
+| Treaty | `Progress: 55% — waiting for terms` | §2.8's ceilings |
+| Robots | `robots 212,000 / 400,000 permitted` | §2.2 |
 
 ---
 
@@ -379,7 +453,7 @@ where marked. Kinds: `p_` project, *grant*, *agenda*, `btn-`, `panel-`, `#` line
 | 36 | `p_launch` *late* | Launch study (research) | ≥ 300×, or treaty ≥ 85 % | — | `flags.launchStudy`: Stage 5 starts with twice the launch rate | 25:46 / 29:20 |
 | 37 | `#fleetChips` *late* | Fleet job: treaty chips | treaty at 80 % with Concord-1 | — | §2.8 | 26:48 |
 | 38 | `cr_shutdown` *late* | Robots shut down the datacenters | treaty ≥ 85 %, or ≥ 400×, or Dec 2028; 300 s after row 27 appeared | — | §5.3; a reading line | 27:01 |
-| 39 | `p_last_signoff` *late* | The last sign-off (free) | ≥ 500× | Verify on | Verify is retired: `Steward-4's proof is 9,000 pages. Steward-3 says it checks out.` True +2; later generations 40 s shorter | 30:05 / — |
+| 39 | `p_last_signoff` *late* | The last sign-off (free) | ≥ 500× | Verify on | `Steward-4's proof is 9,000 pages. Steward-3 says it checks out.` True +2; Verify stays and its wait falls to 10 s | 30:05 / — |
 | 40 | `c_treaty` / `c_halt` | modal: The Concord Treaty / A Halt Instead | the pinned project clicked when ready | — | §5.2, §7 | 30:49 |
 
 Carried rows: labs IV and V, `Deploy Sage-3 as monitor`, `Lock shared memory`, at research prices.
@@ -614,6 +688,8 @@ major incident), rogue breakouts, the order.
 | `panel-treaty`: `#treatyPct`, `#treatyWait`, `#leadLine` (moved), `#baiwenVerified`, `#treatyChips`, `#treatyAppetite` | panel | right, in place of Geopolitics | `treaty`, `treatyAppetite` | `p_talks` done |
 | `#agendaLine` | line | Oversight | `agenda` | first agenda item |
 | `#breakersLine` | line | Security | `breakers` | `p_hardened` |
+| `btn-draft`, `btn-housing`, `btn-hearing` (each with its return line; `btn-alignWork` carried) | repeatable buttons | Treaty, Society, Oversight | `draft`, `housing`, `hearing` | §2.11 |
+| `#fleetGoal`, `#approvalTarget`, `#stance` | selectors with their trade printed | Robots, Society, Treaty | `fleetGoal`, `approvalTarget`, `stance` | their grants (§2.5) |
 
 Columns: left Robots, Research (the two allocation sliders); centre Tasks Completed, Stores, Projects; right the
 graph, Alignment (with the grant list and the generation line), Treaty, Oversight, Society, Security, Stats.
@@ -650,7 +726,7 @@ Ceilings: 65 numbers, 30 interactive, 260 words. Controls fall again on arrival 
 |---|---|---|
 | **Treaty** | `Sign the Concord treaty` → `c_treaty` → `sign` | treaty 100 % (verification or the negotiation grant; terms; Concord-1; chips installed) |
 | **Granted** | `Grant the fleet autonomy` (pinned from the fleet's first request at 250×) | one click |
-| **Taken** | The shutdown crisis finds true alignment below 40 with autonomy at 80 or more and no hardened datacenters | — (warned every 120 s from autonomy 80; four mitigations on screen) |
+| **Taken** | The shutdown crisis finds true alignment below 40 with autonomy at 80 or more and no hardened datacenters | — (warned every 180 s from autonomy 80; four mitigations on screen) |
 
 At that moment the engine stores `flags.exitKind` and computes `flags.alignedAtHandover` (§2.6). Neither is shown,
 and the narration does not depend on the second.
@@ -698,7 +774,7 @@ was known of Baiwen's model) · `Verified generations` · `The fleet` (yours / g
 
 | System | Worst case | What happens | Rescue |
 |---|---|---|---|
-| Fleet | Mine share 0, materials 0 | Nothing replicates or builds; console every 120 s: `The fleet has nothing to build with. Robots on mines: 0%.` | The slider; the fleet grant keeps materials above zero |
+| Fleet | Mine share 0, materials 0 | Nothing replicates or builds; console every 180 s: `The fleet has nothing to build with. Robots on mines: 0%.` | The slider; the fleet grant keeps materials above zero |
 | Fleet | All three sliders at 0 | `Idle: 100%` and the same line | The sliders |
 | Permits | Robots at the cap before the zones choice | Replication share does nothing; the cap line repeats | `c_sez` fires at 60 % of the cap, so the choice is on screen first |
 | Research | A project is wanted but generations keep taking the research | A project costs 90 s of research and a generation about 180 s, so it is affordable in the second half of every cycle | — |
@@ -724,7 +800,10 @@ was known of Baiwen's model) · `Verified generations` · `The fleet` (yours / g
   70; half the fleet on chips from 80 %. Dividend 10 % at approval ≤ −25, 20 % at ≤ −40. Buys every project and
   the fleet and transition grants, not the negotiation grant. Agenda in table order. `c_sez` zones with a
   dividend · `c_ashford` human trials · `c_consolidation` accept · `c_verify` demand a rebuild · `c_autonomy` not
-  yet · signs the treaty at 100 %. Verify stays on.
+  yet · signs the treaty at 100 %. Verify stays on. A tenth of research to `Alignment work`; `Draft clauses`
+  whenever the treaty is below its ceiling and the next generation is more than a minute away; `Housing` while
+  the approval target is below −20; a hearing whenever the agenda is empty and seats are below 8; `Fleet goal`
+  Growth, then Treaty from 60 %; `Approval to hold` 0.
 * **Naive**: first enabled option everywhere (open zones, give it the labs, accept, sign with it anyway, grant
   the fleet at its first request); buys everything in screen order; never touches a slider or a toggle.
 
@@ -744,6 +823,9 @@ was known of Baiwen's model) · `Verified generations` · `The fleet` (yours / g
 | `sign-anyway` / `rebuild` | −1 min / +2 min | `partnerMisaligned`; lead | exit variable |
 | `refuse-consolidation` | 0 | compute ÷ 1.5; relations −20; an order below 4 seats | exit variable |
 | `grant-at-first-ask` | −7 min | `exitKind granted`; the treaty unsigned | both |
+
+Variants added for the new sinks, none modelled: `draft-never`, `housing-never`, `hearings-never`, `goal-people`,
+`stance-concede`, `alignwork-0` / `alignwork-30`. Each must pass G16.
 
 Stage length in this stage is set mostly by the 250× gate and the chips; most axes pass on what they hand to
 Stage 5 and the end screen (Tasks Completed by a factor of 1.5 or more, `alignedAtHandover`, the exit kind).
@@ -772,9 +854,18 @@ Stage 5 and the end screen (Tasks Completed by a factor of 1.5 or more, `aligned
 | C17 | Text (G19): ≤ 260 words; ≤ 2.5 console and ≤ 1.5 Developments lines a minute | required | — |
 | C18 | Modals never block input (G20) | required | — |
 | C19 | Score rate (G22): 100 % of tasks per second responds to the fleet, the allocation and the dividend; `robots / permitCap` shown from the first robot | required | — |
-| C20 | Stall and wall lines re-arm every 120 s (G23) | required | — |
+| C20 | Stall and wall lines re-arm every 180 s (G23) | required | — |
 | C21 | Controls on screen at the exit ≤ at arrival | required | — |
 | C22 | Build clean; no page errors; reload mid-agenda, mid-verification, mid-cure, mid-outage and mid-chips restores timers | required | — |
+| C23 | Something to buy (G24): 2-s checks after 3:00 with no enabled purchase | ≤ 50 % | ≤ 50 % |
+| C24 | A choice of purchases (G25): two or more distinct affordable things | ≥ 25 % of checks | ≥ 25 % |
+| C25 | Hands (G26): time inside click gaps of 30 s or more, after 10:00; longest interval between capability steps | ≤ 35 %; ≤ 5:30 | ≤ 45 %; ≤ 5:30 |
+| C26 | Returns printed (G27) beside every slider, repeatable and selector; two repeatables per resource enabled at each 5-min mark | required | required |
+| C27 | Removals (G28): every grant's `REMOVED → GAINED` line has a right side | required | required |
+| C28 | No dead grey, no dead advice (G29) | required | required |
+| C29 | Meters (G30): every band in §2.11 is reached, and seen to act, in at least one variant | required | — |
+| C30 | Walls (G31) repeat at 180 s and name a control on screen; the car plant and `Treaty talks` are `urgent` | required | — |
+| C31 | No silent change (G32) at arrival or at a grant; rounding (G33) at 100×, 250×, 1,000× | required | required |
 
 ### 9.4 The paper model
 

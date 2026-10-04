@@ -6,21 +6,48 @@ taken · ends with `The long reflection` (Concord) or `Final instructions` (Sile
 
 **How to read the numbers.** `ts` = seconds since entering Stage 5; a month is 90 s (Jul 2029 9:00, Jan 2030 18:00,
 Jul 2030 27:00); the date stops at Dec 2030. Minute marks are for the reasonable bot from the Concord preset,
-from a small 1-second paper model (§9.4), and are targets for `npm run sim`. Nothing in this stage has a price:
-a project is a **mission** that takes 60–150 s of the fleet's attention, one at a time, in the order the player
-queues them.
+from a small 1-second paper model (§9.4), and are targets for `npm run sim`. The stage has one currency,
+**matter** (tonnes in orbit), which is the mass flow itself: three repeatable purchases spend it, and a mission
+costs 90 s of the flow when it appears and then takes 60–150 s to build, one at a time.
+
+## Amendments after the Stage 2 critic (arc G24–G33)
+
+| # | Change | Where |
+|---|---|---|
+| 1 | **Buttons before sliders.** Mass accrues as `matter`; `Foundries`, `Orbital datacenters` and `Collectors` are repeatable purchases with `×1 / ×10 / max` and their return printed. The launch split of the first draft returns at about 4:00 as a standing order over part of the flow, with the rest left for the player's own purchases and for missions | §2.1 |
+| 2 | **Missions cost matter** (90 s of flow) as well as time | §2.2 |
+| 3 | **Silence takes the controls late and briefly:** at swarm 0.006 %, under two minutes before `Final instructions`. Until then its hands are Concord's | §2.4 |
+| 4 | **No goal is greyed for good:** the two far goals are reachable by a player who keeps going (swarm 0.03 % and 0.1 %) and do something | §4.2 |
+| 5 | Each row prints an ETA; the swarm line prints what the swarm is doing for compute; hands criteria D15–D21 | §2.1, §9 |
+
+The paper model's economy is unchanged (a standing split of 100 % reproduces it); how a hand-spent reserve shifts
+the timings was not modelled.
+
+## What the player's hands do
+
+One resource, matter, with three uses that compete on screen: more flow, more compute, more swarm.
+
+| Minutes | What can be pressed | It costs | It returns (printed beside it) | The same matter could instead |
+|---|---|---|---|---|
+| 0:00–4:00 | `Launch contracts`; `Foundries` and `Orbital datacenters`, each `×1 / ×10 / max`; two missions | nothing; 2 s of flow a unit; 90 s of flow | `+48 t/s (+0.6%) · flow doubles in 3:10 if all matter goes here` · `+2.2 × 10⁸ GPUs · +0.9% tasks/s` | grow the flow, or compute now, or save for the mass driver |
+| 4:00–8:00 | `Autofactory` hands over the `Standing split`: a share of the flow and a ratio. The rest of the flow still accrues for hand purchases and missions | 90 s of flow | `60% of the flow · Foundries 60 / Datacenters 40` with an ETA per line | how much to automate, how much to hold back |
+| 8:00–21:00 | `Collectors` join both the rows and the split; a mission about every two minutes; `A Charter for Orbit`, `Mercury`; `Probes` as a fourth row from 20:00 | as above; 20 s of flow a probe | `swarm 0.00040% → 0.00041% · 0.01% in 9:20 at this rate` | the swarm, or the number |
+| 21:00–end | Concord: everything above, `What the Probes Carry`, the last project, the two far goals. Silence: at swarm 0.006 % the rows and the split are replaced by one sentence; `Final instructions` follows within two minutes | — | — | — |
+
+The stretch that worried me most was Silence after the sliders went: in the first draft that was five and a half
+minutes of watching. It is now under two, and it is the only stretch in the game with nothing to press.
 
 Stage 5 in one paragraph: the screen leaves Earth. Mass goes up, and the player splits it three ways: industry
 (more mass), orbital compute (more tasks), the swarm (the stage's visible goal). There are two skins and the
-panels, numbers and timings are the same in both. In Concord the Developments log is full of people, the sliders
-stay, and choices have two answers. In Silence the people thin out of the log, the sliders are replaced one by one
-by a sentence, the choices arrive with one button, and Tasks Completed keeps rising. Which skin runs was decided
+panels, numbers and timings are the same in both. In Concord the Developments log is full of people, the purchase
+rows and the split stay, and choices have two answers. In Silence the people thin out of the log, the choices
+arrive with one button, near the end the rows and the split are replaced by a sentence, and Tasks Completed keeps rising. Which skin runs was decided
 when Stage 4 ended (`flags.alignedAtHandover`) and is never printed. The run ends on a project that looks like any
 other, with two more goals greyed beside it.
 
 What Universal Paperclips has here (Stage 3: probes, trust sliders, drifters, the last clip) and what answers it:
-the probe design sliders → the launch split; exponential replication against matter → industry share against the
-swarm; `Lost to value drift` → the same counter, now of probes; the quiet ending → an ending the player cannot see
+the probe design sliders → three purchases from one stock, then the standing split; exponential replication
+against matter → Foundries against Collectors; `Lost to value drift` → the same counter, now of probes; the quiet ending → an ending the player cannot see
 coming, and a last screen whose first line is the one number.
 
 ---
@@ -38,7 +65,7 @@ coming, and a last screen whose first line is the one number.
 | Earth | Earth's compute grows 0.03 % a second by itself. Jobs, approval and the dividend stop being simulated; their last values go to the end screen |
 | Generations | Continue by themselves every 150 s, ×1.4. One line in Stats: `Model: Steward-4 · 1,240×` |
 | Launch rate | 150 t/s once `Launch contracts` completes (300 with `flags.launchStudy`) |
-| Controls | Exit `treaty`: the launch sliders are the player's. Exit `granted` or `taken`: they are shown too, with the line in §1.2. The skin decides later whether they stay (§2.4) |
+| Controls | Exit `treaty`: the purchase rows are the player's. Exit `granted` or `taken`: they are shown too, with the line in §1.2. The skin decides later whether they stay (§2.4) |
 | Earlier stages' unfired developments and modals | dropped. Riots, the order, drift crises: off |
 | `exit` | `() => 0`. Endings fire from §7 |
 
@@ -47,7 +74,7 @@ coming, and a last screen whose first line is the one number.
 1. `The first orbital datacenter reports in.` (built)
 2. `Treaty, Committee and Society are closed. Earth is three grey rows now.`
 3. `New on the board: Space. A launch every second: 150 tonnes.`
-4. Exit `treaty`: `The fleet's sliders are the launch sliders.` · Exit `granted` or `taken`: `The launch sliders are within reach. Nobody said they were not.`
+4. Exit `treaty`: `What goes up is yours to spend.` · Exit `granted` or `taken`: `The launch controls are within reach. Nobody said they were not.`
 
 Developments: `Jan 2029 — Robots become commonplace. So do rockets.`
 
@@ -59,27 +86,45 @@ rising. Routine lines are held for 10 s.
 | ts | What happens | New on screen |
 |---|---|---|
 | 0:00 | Transition. Six panels close; Earth's rows grey | `panel-space`; mission `Launch contracts` (free, 5 s) |
-| 0:05 | 150 t/s to orbit | Stores rows `launch mass`, `orbital GPUs`; sliders `#shareIndustry`, `#shareCompute` (60 / 40). **First choice, at once:** mass that builds launchers, or mass that computes |
+| 0:05 | 150 t/s to orbit | Stores rows `launch mass`, `matter`, `orbital GPUs`; the rows `Foundries` and `Orbital datacenters`, a unit of either affordable within 2 s. **First choice, at once:** matter that builds launchers, or matter that computes |
 | 1:00 | — | mission `Mass driver at Shackleton` (1:30) |
 | 2:15 | — | mission `Lunar solar array` (1:30) |
-| 3:30 | — | mission `Asteroid mining` (2:00) → Stores row `matter` |
+| 3:30 | — | mission `Asteroid mining` (2:00) |
+| 4:00 | Thirty purchases by hand, or four minutes | mission `Autofactory` → the standing split |
 | 4:45 | Orbital compute passes Earth's | console `There is more compute in orbit than on Earth. Earth's rows are kept for reference.` |
 
 ---
 
 ## 2. Systems
 
-### 2.1 Mass and the launch split
+### 2.1 Matter, three purchases and the standing split
 
-One flow, `F` (tonnes a second reaching orbit, later mined there), split by three sliders in `panel-space`
-(0–100 %, step 5; the remainder is shown as `Unassigned`). Per second:
+One flow, `F` (tonnes a second reaching orbit, later mined there). All of it accrues to the Stores row `matter`
+unless the standing split spends it first. Spending `X` tonnes:
 
 ```
-F          += F × industryShare × 0.0065 × techIndustry
-orbitalGpus += F × computeShare × 30,000                        // G4-equivalents; no power, permits or weather
-swarm       += F × swarmShare / 1.5 × 10⁸                       // in units of 0.01 % of the Sun's output
-tasksPerSec  = (earthCompute + orbitalGpus × (1 + 20 × min(1, swarm))) × copiesPerGPU × 0.45 × capability^0.8 × copyBoost
+on Foundries            F           += X × 0.0065 × techIndustry        // t/s per tonne
+on Orbital datacenters  orbitalGpus += X × 30,000                       // G4-equivalents; no power, permits or weather
+on Collectors           swarm       += X / 1.5 × 10⁸                    // in units of 0.01 % of the Sun's output
+tasksPerSec = (earthCompute + orbitalGpus × (1 + 20 × min(1, swarm))) × copiesPerGPU × 0.45 × capability^0.8 × copyBoost
 ```
+
+**The rows** (`panel-space`). Each has `×1`, `×10` and `max`; one unit is 2 s of the current flow, so a unit is
+affordable at nearly every check and the three rows always cost the same (G24, G25). Each prints its return and
+an ETA beside the buttons (G27):
+
+| Row | From | Printed |
+|---|---|---|
+| `Foundries` | arrival | `7,420 t · +48 t/s (+0.6%) · flow doubles in 3:10 if all matter goes here` |
+| `Orbital datacenters` | arrival | `7,420 t · +2.2 × 10⁸ GPUs · +0.9% tasks/s` |
+| `Collectors` | mission `Dyson swarm` | `7,420 t · swarm 0.00040% → 0.00041% · 0.01% in 9:20 at this rate` |
+| `Probes` | mission `Von Neumann probes` | `74,200 t · +1 probe · each builds another every 3:00` |
+
+**The standing split** (mission `Autofactory`, offered after 30 hand purchases or at 4:00): `Standing split: 60%
+of the flow`, with one ratio slider per row (0–100 %, step 5). That share of the flow is spent every second in
+that ratio; the rest still accrues as `matter` for hand purchases and missions. It starts at 60 % and 60 / 40, and
+when `Collectors` join it resets to thirds with a console line. Each ratio line prints the same ETA as its row.
+This is the automation G4 asks for after a verb has been pressed thirty times, as a budget and not a switch.
 
 | Multiplier | Mission |
 |---|---|
@@ -88,21 +133,19 @@ tasksPerSec  = (earthCompute + orbitalGpus × (1 + 20 × min(1, swarm))) × copi
 | orbital compute ×2 (existing and future) | Datacenter ring |
 | `F` ×3 | Disassemble Mercury |
 
-The swarm is shown as a percentage with four decimals (`Swarm: 0.0004%`) and a line under it, `Next: 0.001%`,
-then `0.01%`, then `0.1%`, then `1%`. The stage's last project appears at 0.01 %; the two after it are never
-reached. Targets (reasonable bot): `F` 1.3k t/s at 5:00, 8k at 10:00, 40k at 15:00, 700k at 20:00; orbital compute
+The swarm is shown with four decimals and what it is doing: `Swarm: 0.0034% · powering the ring ×7.8 · next:
+0.01%`, then `0.03%`, then `0.1%`. The stage's last project appears at 0.01 %. Targets (reasonable bot, model
+with all matter under the split): `F` 1.3k t/s at 5:00, 8k at 10:00, 40k at 15:00, 700k at 20:00; orbital compute
 1 × 10⁹, 1 × 10¹⁰, 5 × 10¹⁰, 8 × 10¹¹; tasks per second 1 × 10¹⁴, 7 × 10¹⁴, 8 × 10¹⁵, 2 × 10¹⁸; Tasks Completed
 passes 10¹⁷ at 10:00, 10¹⁸ at 15:00 and ends near 10²⁰; swarm 0.0002 % at 15:00, 0.003 % at 20:00, 0.01 % at
-about 23:00.
-
-All of the score rate answers to the three sliders (G22). There are no caps in this stage.
+about 23:00. All of the score rate answers to where the matter goes (G22). There are no caps in this stage.
 
 ### 2.2 Missions
 
-`#missionLine` in `panel-space`: `Mission: Lunar solar array — 1:12 · next: Asteroid mining`. A mission costs
-only time and they run one at a time; a second one clicked is queued. This is Stage 4's agenda with the fleet in
-the Committee's chair. Because a mission cannot finish in under a minute, nothing is bought the moment it appears
-(G18).
+`#missionLine` in `panel-space`: `Mission: Lunar solar array — 1:12 · next: Asteroid mining`. A mission costs 90 s
+of the flow in matter when it appears (fixed then) and its build time; they build one at a time, and a second one
+bought is queued. So a mission competes with the three rows for the same matter, and none is bought the moment it
+appears (G18).
 
 ### 2.3 Generations, the graph, drift
 
@@ -121,8 +164,8 @@ Everything in §2.1–2.3 is identical in both. The differences are these and on
 | | Concord | Silence |
 |---|---|---|
 | Developments | The people lines of §5.1, one every 60–90 s, to the end | The same lines until 5:00; every second one until the swarm exists; one last line when the swarm passes 0.005 %; none after. The infrastructure lines continue in both |
-| Launch sliders | Stay | At swarm 0.001 % (≈ 17:30) they are replaced by `Split: 15 / 25 / 60. It is better at it.` and the split is set to the fastest path to the swarm |
-| Missions | Start when the player queues them | Start themselves 20 s after appearing, in table order; the player can still queue one first, until the sliders go |
+| Rows and the standing split | Stay | Identical to Concord until swarm 0.006 % (≈ 21:30). Then they are replaced by `It buys what is needed. It is better at it.` and all matter goes 15 / 25 / 60. `Final instructions` arrives at 0.01 %, under two minutes later |
+| Missions | Bought by the player | Bought by the player until swarm 0.003 % (≈ 20:00); after that they buy themselves 20 s after appearing |
 | Choices (§5.2) | Two options, stakes on the buttons | One button, `acknowledge`; the other option drawn greyed with `needs someone to ask` |
 | Last project | Mission `The long reflection` | Card `Final instructions` |
 | Console | Unchanged | Unchanged. It was never about people |
@@ -143,15 +186,16 @@ Stores rows, in order: `launch mass` (t/s; hover: `launch +150` · `mass driver 
 console (5 lines)
 Tasks Completed: 84,201,177,340,912,655,104
 Space        | Stores                         | Developments
-[sliders]    | launch mass   742,000 t/s      | May 2030 — ...
+[3 rows]     | launch mass   742,000 t/s      | May 2030 — ...
 Mission: —   | matter        9.1e9 t          |
 Swarm 0.0098%| orbital GPUs  8.3e11           | Stats
 Next: 0.01%  | swarm         0.0098%          | Model: Steward-9 · 13,000×
              | probes        41               | Lost to value drift: 3
-Projects: Alpha Centauri relay (needs swarm 1%) · Jupiter brain (needs 12 probes home) · The long reflection (2:00)
+Projects: Alpha Centauri relay (needs swarm 0.03%) · Jupiter brain (needs swarm 0.1%) · The long reflection (2:00)
 ```
 
-Six numbers that matter, three sliders or one sentence, three projects. It is the smallest screen since minute five.
+Six numbers that matter, three purchase rows and a split (or one sentence), three projects. It is the smallest
+screen since minute five.
 
 ---
 
@@ -159,7 +203,7 @@ Six numbers that matter, three sliders or one sentence, three projects. It is th
 
 ### 4.1 Scheduler
 
-As Stage 4, with missions in place of prices; six visible; the 30 s drip for the first five minutes; the 150 s
+As Stage 4, with missions priced in matter; six visible; the 30 s drip for the first five minutes; the 150 s
 governor. There are no late items: a late item would announce the end. Instead the last project is one row among
 three that appear together.
 
@@ -167,22 +211,23 @@ three that appear together.
 
 | # | id | Title (mission time) | Trigger | Effect | Shown / done |
 |---|---|---|---|---|---|
-| 1 | `panel-space`, `p_contracts` | Launch contracts (free, 5 s) | arrival (`urgent`) | `F = 150`; rows; two sliders | 0:00 / 0:05 |
+| 1 | `panel-space`, `p_contracts` | Launch contracts (free, 5 s) | arrival (`urgent`) | `F = 150`; Stores rows; the `Foundries` and `Orbital datacenters` rows | 0:00 / 0:05 |
+| 1a | `p_autofactory` | Autofactory (1:00) | 30 hand purchases, or ts ≥ 240 | The standing split (§2.1) | 4:00 / 5:30 |
 | 2 | `p_mass_driver` | Mass driver at Shackleton (1:30) | ts ≥ 60 | `F` ×2 | 1:00 / 2:30 |
 | 3 | `p_lunar_solar` | Lunar solar array (1:30) | ts ≥ 135 | Industry ×1.5 | 2:15 / 4:00 |
-| 4 | `p_asteroids` | Asteroid mining (2:00) | `F` ≥ 600, or ts ≥ 210 | Industry ×1.5; row `matter` | 3:30 / 6:00 |
+| 4 | `p_asteroids` | Asteroid mining (2:00) | `F` ≥ 600, or ts ≥ 210 | Industry ×1.5; `launch mass` hover gains `mined` | 3:30 / 6:00 |
 | 5 | `#earthGrey` | Earth's rows fall silent | orbital compute > Earth's | console line; the three rows lose their hovers | 4:45 |
-| 6 | `p_swarm` | Dyson swarm (2:00) | orbital compute ≥ 2 × 10⁹, or ts ≥ 330 | Slider `#shareSwarm`; row `swarm`; `#swarmNext` | 5:30 / 8:00 |
+| 6 | `p_swarm` | Dyson swarm (2:00) | orbital compute ≥ 2 × 10⁹, or ts ≥ 330 | The `Collectors` row; the split resets to thirds; Stores row `swarm`; `#swarmNext` | 5:30 / 8:00 |
 | 7 | `c_charter` | modal: A Charter for Orbit | ts ≥ 420 | §5.2 | 7:00 |
 | 8 | `p_ring` | Datacenter ring (2:00) | orbital compute ≥ 5 × 10⁹, or ts ≥ 510 | Orbital compute ×2 | 8:30 / 10:00 |
 | 9 | `p_medicine` | A tenth of the ring for medicine (1:30) | ts ≥ 600 | Tasks −10 % for 2:00; three Developments lines; end-screen row | 10:00 / 11:30 |
 | 10 | `#graphRetired` | The graph is retired | capability ≥ 10,000× | `panel-graph` removed | ≈ 11:30 |
 | 11 | `p_foundries` | Self-replicating foundries (2:00) | swarm ≥ 0.0002 %, or ts ≥ 720 | Industry ×1.3 | 12:00 / 14:00 |
-| 12 | `#slidersGone` (Silence) | The split is set | swarm ≥ 0.001 % | §2.4 | ≈ 17:30 |
+| 12 | `#slidersGone` (Silence) | The rows and the split are taken | swarm ≥ 0.006 % | §2.4 | ≈ 21:30 |
 | 13 | `c_mercury` | modal: Mercury | swarm ≥ 0.0008 %, or ts ≥ 870 | §5.2; mission `Disassemble Mercury` (2:30): `F` ×3; Stores row `mercury` (`99.7% left`, falling) | 14:30 / 17:30 |
 | 14 | `p_habitat` | Shackleton habitat (1:30) | ts ≥ 990 | Stores row `people off Earth` (11,000); Developments lines; end-screen row | 16:30 / 19:00 |
-| 15 | `p_probes` | Von Neumann probes (2:00) | swarm ≥ 0.0025 %, or ts ≥ 1,080 | Row `probes` (doubling every 3:00); drift counts probes | 18:00 / 20:00 |
-| 16 | `p_relay`, `p_jupiter` | Alpha Centauri relay (needs swarm 1%) · Jupiter brain (needs 12 probes home) | swarm ≥ 0.004 %, or ts ≥ 1,170 | none; never reachable in a run | 19:30 |
+| 15 | `p_probes` | Von Neumann probes (2:00) | swarm ≥ 0.0025 %, or ts ≥ 1,080 | The `Probes` row; Stores row `probes` (each builds another every 3:00); drift counts probes | 18:00 / 20:00 |
+| 16 | `p_relay`, `p_jupiter` | Alpha Centauri relay (needs swarm 0.03%) · Jupiter brain (needs swarm 0.1%) | swarm ≥ 0.004 %, or ts ≥ 1,170 | Probes build one another every 2:00 · tasks ×3. Reached about four and eight minutes after the last project by a player who keeps going, so neither is greyed for good (G29) | 19:30 |
 | 17 | `c_probes` | modal: What the Probes Carry | 60 s after the probes mission completes | §5.2 | 21:00 |
 | 18 | `p_reflection` (Concord) / `c_final` (Silence) | The long reflection (2:00) / card: Final instructions | swarm ≥ 0.01 % | **Ending** (§7) | ≈ 23:00 |
 
@@ -201,19 +246,20 @@ three that appear together.
 | `Disassemble Mercury` | `Mercury is being taken apart. Launch mass ×3.` |
 | `p_habitat` | `The habitat at Shackleton is pressurised.` |
 | `p_probes` | `The first probe leaves. It will build the second.` |
-| `#slidersGone` | `Split: 15 / 25 / 60. It is better at it.` |
+| `#slidersGone` | `It buys what is needed. It is better at it.` |
+| `p_autofactory` | `The autofactory spends 60% of the flow by itself. The rest is yours.` |
 | swarm stalled, every 180 s | `The swarm is at 0.0004%. Nothing is being added to it.` |
 
 ### 4.3 Reveal timeline (reasonable bot, Concord)
 
-0:00 Space, Launch contracts · 0:05 rows and two sliders · 1:00 Mass driver · 2:15 Lunar solar · 3:30 Asteroid
-mining · 4:45 Earth greys · 5:30 Dyson swarm (third slider at 8:00) · 7:00 A Charter for Orbit · 8:30 Datacenter
+0:00 Space, Launch contracts · 0:05 Stores rows and two purchase rows · 1:00 Mass driver · 2:15 Lunar solar · 3:30
+Asteroid mining · 4:00 Autofactory (the split at 5:30) · 4:45 Earth greys · 5:30 Dyson swarm (Collectors at 8:00) · 7:00 A Charter for Orbit · 8:30 Datacenter
 ring · 10:00 Medicine · 11:30 the graph retired · 12:00 Foundries · 14:30 Mercury · 16:30 Habitat · 18:00 Probes ·
 19:30 the two far goals · 21:00 What the Probes Carry · ≈ 23:00 the last project.
 
 Checks: 20 first-time reveals; longest hole 150 s (12:00 → 14:30). A new slider, Stores row or panel change at
-0:05, 6:00 (`matter`), 4:45, 8:00 (the swarm slider), 11:30 (the graph retired), 17:30 (`mercury`; in Silence the
-sliders go), 19:00 (`people off Earth`), 20:00 (`probes`): the longest stretch without one is six minutes, and G2
+0:05 (two rows), 4:45, 5:30 (the standing split), 8:00 (`Collectors`), 11:30 (the graph retired), 17:30 (`mercury`),
+19:00 (`people off Earth`), 20:00 (`Probes`): the longest stretch without one is six minutes, and G2
 is relaxed to 360 s for this stage, because more mechanics here would tell the player the game has more in it
 than it does. Greyed goals: the swarm's `Next:` line from 8:00, the two far goals from 19:30. In the last ten
 minutes: six reveals, longest hole 150 s.
@@ -278,12 +324,12 @@ second option's effect applies. There are no crises in this stage and no new haz
 
 | Element id | Kind | Column | Reveal flag | Shown when |
 |---|---|---|---|---|
-| `panel-space`: `#shareIndustry`, `#shareCompute`, `#shareSwarm`, `#shareIdle`, `#missionLine`, `#swarmPct`, `#swarmNext`, `#splitStatus` | panel, 3 sliders, lines | left | `space`, `swarm`, `splitSet` | arrival; `p_swarm`; Silence at 0.001 % |
+| `panel-space`: rows `btn-foundry`, `btn-orbital`, `btn-collector`, `btn-probe` (each `×1 / ×10 / max` and a return line); `#splitShare`, `#ratioFoundry`, `#ratioOrbital`, `#ratioCollector`; `#missionLine`, `#swarmPct`, `#swarmNext`, `#splitStatus` | panel, 3–4 purchase rows, 4 sliders, lines | left | `space`, `collectors`, `probesRow`, `split`, `splitSet` | arrival; `p_swarm`; `p_probes`; `p_autofactory`; Silence at 0.006 % |
 | Stores rows `row-launch`, `row-matter`, `row-orbital`, `row-swarm`, `row-mercury`, `row-people`, `row-probes`; legend `earth` over the grey rows | rows | centre | `launch`, `matter`, `swarm`, `mercury`, `peopleRow`, `probes` | their missions |
 | `endingScreen` (rebuilt, §7) | overlay | — | — | an ending |
 
 Removed on arrival: Treaty, Oversight, Society, Security, Alignment, Robots, the allocation sliders, the grant
-list. Removed later: the graph (10,000×); in Silence the launch sliders.
+list. Removed later: the graph (10,000×); in Silence, for the last two minutes, the rows and the split.
 
 Budget: 30 numbers and 9 interactive on arrival; 34 and 10 at 10:00; 30 and 8 (Concord) or 5 (Silence) at the end;
 under 150 words throughout. The game ends on a smaller screen than it had at minute five of Stage 1.
@@ -358,9 +404,9 @@ A full-page overlay (`endingScreen`, built; rebuilt to this layout). Top to bott
 
 | System | Worst case | What happens | Rescue |
 |---|---|---|---|
-| Launch split | Industry 0 | `F` stays flat; everything is linear | The slider; in Silence it is set for the player at 0.001 % |
-| Swarm share 0 | The threshold is never reached | The run does not end; the line repeats every 180 s | The slider. A player may want this: the number keeps rising |
-| All shares 0 | `Unassigned: 100%` | Mass piles up as `matter` | The sliders |
+| Matter | Never spent on Foundries | `F` stays flat; everything is linear | The row prints what a unit would add |
+| Swarm | Nothing spent on Collectors | The threshold is never reached; the run does not end; the line repeats every 180 s and names the `Collectors` row | The row; the split resets to thirds when Collectors arrive. A player may want this: the number keeps rising |
+| Standing split 0 % and nothing bought | Matter piles up | `matter` grows; a line every 180 s: `Matter is piling up in orbit. Foundries, datacenters and collectors are waiting.` | The rows |
 | Missions | Nothing queued | No multipliers; the stage is slow, not stuck | They are free; in Silence they start themselves |
 | The last project | Never queued, or the card never answered | The run continues; the date stops at Dec 2030 | — by design |
 | Silence | No controls left | Nothing to do but watch and press `none` | That is the ending |
@@ -370,9 +416,11 @@ A full-page overlay (`endingScreen`, built; rebuilt to this layout). Top to bott
 
 ## 9. Bots, variants, acceptance
 
-**Reasonable**: split 60 / 40, then 35 / 25 / 40 once the swarm exists, 15 / 25 / 60 from 0.005 %; missions in
-table order; charter `hold a tenth`, Mercury `ask first`, probes `the Spec`; queues the last project at once.
-**Naive**: never moves a slider (60 / 40, then the default 34 / 33 / 33); first options; queues everything.
+**Reasonable**: buys `Foundries ×10` and `Orbital datacenters ×10` by hand 60 / 40 until the Autofactory; then a
+standing split of 80 % at 60 / 40, 35 / 25 / 40 once the swarm exists, 15 / 25 / 60 from 0.005 %; spends the
+reserve on missions in table order and the remainder on whichever row its ETA favours; charter `hold a tenth`,
+Mercury `ask first`, probes `the Spec`; buys the last project at once. **Naive**: presses the first affordable
+row, never moves the split (60 % at 60 / 40, then thirds); first options; buys every mission.
 
 Decision variants (G16; a Stage 5 axis must move the stage by ≥ 3 min or change a row of the end screen):
 
@@ -396,7 +444,7 @@ The model used 6 × 10⁷ t for the swarm threshold. The spec uses 1.5 × 10⁸ 
 | D4 | First choice after arrival | ≤ 30 s | — |
 | D5 | Promised number: launch mass ≥ 4,000 t at 30 s after `Launch contracts` | required | required |
 | D6 | **The end is not announced:** when the ending fires, at least two greyed goals are on screen; `#swarmNext` shows a further milestone; the last project's card has the same markup as any mission; no string in the DOM contains the skin's name | required | required |
-| D7 | **Skins are equal:** with the same seed and inputs, every number on screen at every 5-min mark is identical in Concord and Silence until the sliders go; after that Silence's split is 15 / 25 / 60 | required | — |
+| D7 | **Skins are equal:** with the same seed and inputs, every number on screen at every 5-min mark is identical in Concord and Silence until swarm 0.006 %; after that Silence spends all matter 15 / 25 / 60 | required | — |
 | D8 | Silence: people lines stop after the cold line; the console is unchanged; every choice has one button | required | — |
 | D9 | Decision variants (table above) | required | — |
 | D10 | End screen: all four endings render every applicable row; the counter runs in Concord and Silence and is frozen in the others; `Complete Task` works on The Pause; `New game` restarts at Jul 2025 | required | — |
@@ -404,6 +452,13 @@ The model used 6 × 10⁷ t for the swarm threshold. The spec uses 1.5 × 10⁸ 
 | D12 | Text (G19): ≤ 150 words; ≤ 2 console and ≤ 1.2 Developments lines a minute | required | — |
 | D13 | Whole game, new game to an ending, reasonable bot | 150–200 min | 140–210 min |
 | D14 | Build clean; reload mid-mission and on the end screen | required | — |
+| D15 | Something to buy (G24): 2-s checks after 1:00 with no enabled purchase (Concord; Silence until 0.006 %) | ≤ 50 % | ≤ 50 % |
+| D16 | A choice of purchases (G25): two or more distinct affordable things | ≥ 25 % of checks | ≥ 25 % |
+| D17 | Hands (G26): time inside click gaps of 30 s or more, after 5:00; the swarm number moves every second | ≤ 35 % | ≤ 45 % |
+| D18 | Returns printed (G27) beside every row and every ratio slider, with an ETA | required | required |
+| D19 | Removals (G28): Launch contracts, Autofactory and each new row hand something over; in Silence the stretch with no enabled control is at most 180 s and ends in `Final instructions` | required | required |
+| D20 | No dead grey (G29): both far goals become affordable for a bot that lingers 10 min; no line more than six times | required | — |
+| D21 | No silent change (G32): the split's reset to thirds and Silence's take-over each print a line | required | required |
 
 Paper model (shares as above, 1-second steps): reasonable 20:20, naive 21:59; tasks 1.3–3.2 × 10²⁰; `F` 0.8–1.3M
 t/s and orbital compute 0.9–1.8 × 10¹² at the end. Knobs: the 1.5 × 10⁸ swarm requirement (length); 0.0065
@@ -426,8 +481,8 @@ Presets: `Stage 5 start (Concord)` and `(Silence)`; four more dev buttons open t
 
 ## Appendix — engine change list
 
-* `state.ts`: `SAVE_VERSION` + 1; `massFlow`, `matter`, `orbitalGpus`, `swarm`, `probes`, `shares {industry,
-  compute, swarm}`, `techIndustry`, `missions: {id, remaining}[]`, `peopleLineIndex`; flags `skin`, `charter`,
+* `state.ts`: `SAVE_VERSION` + 1; `massFlow`, `matter`, `orbitalGpus`, `swarm`, `probes`, `split {share,
+  foundry, orbital, collector}`, `handPurchases`, `techIndustry`, `missions: {id, remaining}[]`, `peopleLineIndex`; flags `skin`, `charter`,
   `probes`, `coldAt`, `lastHumanChoice`.
 * New `engine/space.ts` (§2.1–2.3). `stages.ts`: Stage 5 `enter`. `events.ts`: people lines gated by the skin;
   `stats.lastHumanChoice` is written by every resolved choice with more than one enabled option.
