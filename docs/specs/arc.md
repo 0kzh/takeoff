@@ -29,6 +29,20 @@ Standing order to the gate there was nothing to press and no way to spend toward
 3. §8's rule about the model taking verbs away gains its other half: each removal hands over a heavier lever.
 4. `stage3.md`, `stage4.md` and `stage5.md` are patched to these; each lists its changes at the top.
 
+## Amendments after owner feedback 1 (`user-feedback-1.md`)
+
+The owner played the build of 2026-10-04. Where a note of theirs and a critic-driven rule disagree, the note wins.
+
+1. **Stage 1 opens one mechanic at a time:** the manual verb, then a GPU, then power, then price, then Marketing
+   (`user-feedback-1.md` (a)). G3, G5, G10 and G14 are amended in §6.
+2. **No undertrained runs, anywhere.** A run needs N GPUs (a function of capability, set per stage) or `Train` is
+   disabled and says why. The yield mechanic and `Train now` are withdrawn. Those GPUs are busy while it trains.
+3. **Stage 1 ends with one purchase, `First Datacenter`.** The Abilene ladder, its rungs, panel and countdown are
+   gone. Stage 1 targets 20–26 minutes at 240 s a month, with about five runs.
+4. **Capacities are meters** (`｢￭￭￭･･｣`, one style everywhere), and a row with a meter shows one number. GPUs
+   cannot be bought into no power or no room; the rows say that GPUs need power.
+5. The Pause needs a lead of 1 month, not 2 (the built Stage 2 ends at 1.4; `stage3.md`, as-built deltas).
+
 ## 1. Requirements checklist
 
 Every feature in the original prompt, the stage that delivers it, and the mechanic. "S2" = Stage 2, etc.
@@ -48,7 +62,7 @@ Every feature in the original prompt, the stage that delivers it, and the mechan
 | R11 | "The only number that matters is Tasks Completed" | all | `h2#tasksHeader` is always the first thing under the console; milestone lines report it; every ending prints it; in Silence it keeps rising |
 | R12 | Mid-2025 to the end of the world or the treaty, five stages, 3–4 hours | all | §2 |
 | R13 | Complete tasks → revenue → compute → copies → tasks | S1–S3 | S1 UP market; S2 market where revenue = 0.25·√(market × supply), so compute always pays; S3 the same until the business panel leaves |
-| R14 | Training and releasing a model is the loop repeated many times | S1–S4 | 40–45 runs per game: S1 ≈ 7, S2 9–12, S3 13–16, S4 8–12 (automatic) |
+| R14 | Training and releasing a model is the loop repeated many times | S1–S4 | 38–43 runs per game: S1 ≈ 5, S2 9–12, S3 13–16, S4 8–12 (automatic) |
 | R15 | Start training the next model before the previous is deployed, after a threshold | S2 | `p_parallel` Parallel pipelines; threshold = 4 Stage 2 releases and capability ≥ 2.2× |
 | R16 | Training never takes more than 1–2 minutes | all | Engine clamp: S1–S2 45–120 s, S3 30–60 s, S4 a status line |
 | R17 | Show the carrot: reveal on trigger, not affordability; a greyed-out goal always on screen | all | Guardrail G3; fallback lines `#nextTrust` (S1–S2) and `#nextTier` (S2+) |
@@ -79,15 +93,15 @@ Nothing in the original prompt is unplaced.
 
 | | 1 The Startup | 2 Scale | 3 Takeoff | 4 Superintelligence | 5 Beyond |
 |---|---|---|---|---|---|
-| Wall clock | 25–35 min | 35–45 min | 40–50 min | 30–40 min | 20–30 min |
+| Wall clock | 20–26 min | 35–45 min | 40–50 min | 30–40 min | 20–30 min |
 | Dates | Jul–Dec 2025 | Jan–Dec 2026 | Jan–Oct 2027 | Nov 2027–Dec 2028 | 2029–2030+ |
-| Seconds per month | 300 | 210 | 270 | 150 | 90 |
-| Entry | new game | buy `Break ground` | buy `Let Sage-3 write the code` | Committee choice made at ≥ 25× | treaty signed, or autonomy granted/taken |
-| Exit project (visible, greyed, ≥ 8 min early) | Break ground | Let Sage-3 write the code — needs a released 4.00× model | Slow down (Steward) / Race (Sage-5) — needs 25× | Sign the Concord treaty / Grant the fleet autonomy | The long reflection / Final instructions |
-| Training runs | ≈ 7 | 9–12 (naive 7–9) | 13–16 (naive 8–11) | 9–11, automatic, with a Verify toggle | automatic, one line in Stats |
+| Seconds per month | 240 | 210 | 270 | 150 | 90 |
+| Entry | new game | buy `First Datacenter` | buy `Let Sage-3 write the code` | Committee choice made at ≥ 25× | treaty signed, or autonomy granted/taken |
+| Exit project (visible, greyed, ≥ 8 min early) | First Datacenter | Let Sage-3 write the code — needs a released 4.00× model | Slow down (Steward) / Race (Sage-5) — needs 25× | Sign the Concord treaty / Grant the fleet autonomy | The long reflection / Final instructions |
+| Training runs | ≈ 5 | 9–12 (naive 7–9) | 13–16 (naive 8–11) | 9–11, automatic, with a Verify toggle | automatic, one line in Stats |
 | UP stage the critic compares | Stage 1 | Stage 2 (power management) | Stage 2, late | Stage 3 | Stage 3 |
 
-Total 150–200 min of play; 3–4 h with reading. The date never passes the stage's end month + 2 before the exit.
+Total 145–195 min of play; 3–4 h with reading. The date never passes the stage's end month + 2 before the exit.
 
 ### B. Scale at each boundary (for presets; ± a factor of 2 is fine after S2)
 
@@ -113,7 +127,7 @@ S1→S2 is the built Stage 1 (`npm run sim`); S2→S3 is the Stage 2 paper model
 
 | Transition | Added | Removed | What the player loses | Affordable on arrival |
 |---|---|---|---|---|
-| S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), the Abilene panel, the Contracts line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); new custom contracts (the signed ones keep paying); Stage-1-only projects are retired by name | `Buy GPUs (1,000)`, paid by the returned deposit |
+| S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), the Contracts line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); new custom contracts (the signed ones keep paying); Stage-1-only projects are retired by name | `Buy GPUs (1,000)`, paid by the returned deposit |
 | S2→S3 | Alignment (measured alignment, autonomy grants, `Lost to value drift`); the Monitors slider; later Geopolitics, Oversight (in place of Government); Stores rows `monitors`, `rogue copies` | Marketing, Hire Researcher, Expand Lab, Researchers / Lab Space lines, price buttons, `+1 Trust at`, Stores rows `trust` and `data`, the research cap, gas and solar buttons, Release / Keep internal (one `Approve`) | Hiring; marketing; Trust as a currency; then, by the player's own grants, Train, Red-team, Approve and the Infrastructure buttons. The human share line stays until it rounds to zero | `Deploy Sage-2 as monitor` (free) |
 | S3→S4 | Robots (the fleet's sliders); Stores as the main panel with `materials`, `robots`; then Society (the dividend), Treaty, the Committee's agenda | Business panel, Training panel (one status line), Infrastructure, Complete Task, Stores rows `funds` and `chips on order`, Focus, Approve / Send back / Hold | Money; the Train button; the manual verb. "The model runs the business now." On the race branch, the second button on some cards | `Convert a car plant` (free) |
 | S4→S5 | Space (the launch split, missions); Stores rows `launch mass`, `orbital GPUs`, later `matter`, `swarm`, `probes` | Treaty, Oversight, Society, Security, Alignment, Robots (its sliders become the launch sliders), the allocation, the grant list | Earth as the subject of the screen; in Silence, later, the sliders and the second button | `Launch contracts` (free) |
@@ -147,7 +161,7 @@ Where each cross-stage variable starts, everything that moves it, and what it ga
 | `govRelations` | 0–100, start 50 | S2 hearing → `panel-government` | S2 list in `stage2.md` §2.8; S3 share evals +, lobby +, bury memo −, leak −; S4 proofing | S2: defense offer ≥ 40, nuclear discount ≥ 60, subpoena < 30. S3: treaty talks and the Pause ≥ 60. Nationalisation < 20 (< 35 with `defenseContract`) at ≥ 10×. S4: proofing ≥ 70 |
 | `approval` | −100…+100, start 0 | S2 `panel-public` | − jobs, gas plants, incidents, mini release, Gulf, defense, leak; + free tier, job fund, community agreement, pact, cures, UBI | S2 protest ≤ −20, riot ≤ −40; S3 riots and sabotage < −40; S4 treaty impossible < −60 |
 | `jobsDisplaced` | millions, never falls | S2 `panel-public` | `0.12·√(tasks/s ÷ 10⁶)·(capability/2)^1.5`, saturating at the world workforce (3,400M) | Approval; developments; S4 UBI appears at ≥ 40M |
-| `lead` (over Baiwen) | months | S2 graph legend → S3 Geopolitics | S2 list in `stage2.md` §2.7; S3 theft sets it to ≤ 0, Slow down −4, SL4/5 +, neuralese + | S3: the Pause needs ≥ 2; treaty terms; race pressure events at < 1 |
+| `lead` (over Baiwen) | months | S2 graph legend → S3 Geopolitics | S2 list in `stage2.md` §2.7; S3 theft sets it to ≤ 0, Slow down −4, SL4/5 +, neuralese + | S3: the Pause needs ≥ 1 (was 2; the built Stage 2 ends at 1.4); treaty terms; race pressure events at < 0.5 |
 | `gulfExposure` | 0/1 | S2 `c_gulf` | The choice | S3 Iran strike: Al-Marsa's 1,000 MW and 10 % of compute are lost |
 | `flags.defenseContract` | bool | S2 `c_defense` | The choice | Raises the nationalisation threshold from gov < 20 to gov < 35; revenue floor |
 | `flags.internalReleases` | count | S2 | Each internal-only release | Leak severity in S3 (approval and gov hit × (1 + 0.25 n)) |
@@ -175,7 +189,7 @@ Checked in this order every tick once `stage ≥ 3`; the first true one ends the
 | Ending | Flag | Fires when | Mitigations (all visible before the trigger) |
 |---|---|---|---|
 | **The Project** (nationalised), S3 or S4 | `nationalized` | S3: every route goes through the modal `The Committee drafts an order` (`stage3.md` §2.11), which opens at ≥ 10× when (a) `govRelations` is below the threshold (20; 35 with `defenseContract`; 10 lower at SL5), (b) three major incidents have been counted (rogue breakout, sabotage, the leak), or (c) a buried memo leaks with `govRelations` < 50. The first order can be answered with a free concession, the second with $5B. The ending fires only when an order is refused, or a third is drawn up, and its 1:30 runs out with the cause unfixed. (d) S4: refuse consolidation with `govRelations` < 40 | Policy team, Brief the administration, Share evals, SL5, Report the memo, Nationalisation-proofing |
-| **The Pause** (halt treaty), S3 or S4 | `pauseSigned` | Player picks it: (a) S3 `Sign the Pause`, offered 45 s into the Committee's session when the memo was reported, `govRelations` ≥ 60 and `lead` ≥ 2; (b) S4 `Sign a halt instead`, pinned from treaty progress ≥ 50 % with `approval` ≥ −60 | It is a choice, never forced |
+| **The Pause** (halt treaty), S3 or S4 | `pauseSigned` | Player picks it: (a) S3 `Sign the Pause`, offered 45 s into the Committee's session when the memo was reported, `govRelations` ≥ 60 and `lead` ≥ 1; (b) S4 `Sign a halt instead`, pinned from treaty progress ≥ 50 % with `approval` ≥ −60 | It is a choice, never forced |
 | **Concord** (aligned prosperity), S5 | `longReflection` | Stage 5 reached with `alignedAtHandover`, then the project `The long reflection` | — |
 | **Silence** (misaligned), S5 | `finalInstructions` | Stage 5 reached without `alignedAtHandover` (autonomy granted, or taken when `autonomy` ≥ 80 and `alignmentTrue` < 40, or a treaty signed by a misaligned model); the log stops mentioning people; `Final instructions` arrives with one button | Everything that raises `alignmentTrue`; Monitors at scale is the last exit |
 
@@ -197,7 +211,7 @@ The resource that binds, in order, and the fix that is on screen when it binds.
 
 | Stage | Binding resource, in order | Always-visible fix |
 |---|---|---|
-| 1 | power (kWh) → funds → demand → compute → research cap → funds (site ladder) | Buy Power / Grid Contract; lower the price, Marketing; Rent GPU; Hire, Expand Lab; the ladder rung |
+| 1 | power (kWh) → funds → demand → compute → research cap → GPUs for the next run (First Datacenter) | Buy Power / Grid Contract; lower the price, Marketing; Rent GPU; Hire, Expand Lab; First Datacenter |
 | 2 | supply vs market (price falls) → power (MW) → research rate → datacenter room → data → market again → power again → training compute → funds | Agent platform, release; gas / solar / nuclear / Gulf; AI research assistants + slider; Build Datacenter; crawl → licences → synthetic → flywheel; International, Sage-mini; Build + Buy GPUs; all of the above |
 | 3 | research (the model does it) → funds, for the first eight minutes only → **alignment you cannot see** (drift, rogue copies) → lead → chips (Taiwan) → power (Iran, if Gulf) → government → approval | The allocation, autonomy grants; datacenters and reactors; monitors, interpretability, Re-image; security levels; stockpile, second source; reactors; share evals, lobby, the conceded order; impact payments, clinics |
 | 4 | robots → materials → approval (jobs) → treaty progress → monitor compute | Atlas factories; robot mines; UBI, cures; Verify Baiwen; Monitors at scale |
@@ -215,18 +229,18 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 |---|---|---|---|
 | G1 | No hole between first-time reveals | ≤ 180 s, from arrival to exit, last 10 min included | Sim: `LONGEST REVEAL GAP` per stage |
 | G2 | A new panel or mechanic (a new verb, toggle, slider, Stores row or instrument line) | about every 4 min; never more than 270 s (360 s in Stage 5, which must not promise more than it has) | Sim: gaps between `REVEAL` events of kind panel/button/toggle/slider/row |
-| G3 | A greyed-out goal is on screen | ≥ 99 % of ticks; ≥ 2 distinct greyed goals throughout the last 10 min of a stage | Sim: visible unaffordable projects and buttons; `#nextTrust` / `#nextTier` count as one |
+| G3 | A greyed-out goal is on screen | ≥ 99 % of ticks, counted from the first purchase; ≥ 2 distinct greyed goals throughout the last 10 min of a stage. In Stage 1's first three minutes the next unit of the newest mechanic (a GPU, a power block) counts, lit or grey (owner feedback 1) | Sim: visible unaffordable projects and buttons; `#nextTrust` / `#nextTier` count as one |
 | G4 | No chore | No verb pressed more than twice in any 60 s once its automation exists; automation offered within 8 presses or 4 min | Sim: per-verb press log |
-| G5 | No disclosure spike | ≤ 8 new on-screen numbers and ≤ 3 new interactive elements in any beat | Engine: the reveal scheduler (15 s between projects); Playwright snapshot diff |
+| G5 | No disclosure spike | ≤ 8 new on-screen numbers and ≤ 3 new interactive elements in any beat. Stage 1's first five minutes: one mechanic a beat, ≤ 4 new numbers and ≤ 2 new controls, beats ≥ 30 s apart after the first GPU (owner feedback 1) | Engine: the reveal scheduler (15 s between projects); Playwright snapshot diff |
 | G6 | Every wait is named | A console line with the name and the time left within 2 s of the wait starting | Unit test per timer |
 | G7 | Every transition is narrated | ≥ 3 console lines over ~6 s saying what was lost, what replaced it and what the new number means; previous 4 lines kept; ≥ 1 affordable action | Sim + Playwright at each preset |
 | G8 | Every resource that can hit zero has a rescue | Rescue reachable within 60 s without the missing resource | `stageN.md` soft-lock table; sim "worst choice" seeds |
 | G9 | Training never exceeds two minutes | 120 s hard clamp | Engine assert |
-| G10 | First meaningful choice after arrival | ≤ 90 s | Sim: first tick with ≥ 2 affordable non-ambient actions competing for one resource, or a modal |
+| G10 | First meaningful choice after arrival | ≤ 90 s. A new game: ≤ 120 s (naive ≤ 150 s), because the opening teaches one thing at a time (owner feedback 1) | Sim: first tick with ≥ 2 affordable non-ambient actions competing for one resource, or a modal |
 | G11 | The exit goal is visible early | ≥ 8 min before it is reachable | Sim: exit project `shown` time vs exit time |
 | G12 | Idle rescues | ≤ 1 per stage for the reasonable bot | Sim counter |
 | G13 | No wall is carried across a transition | Next training run affordable in cap terms; Trust ≥ 0; ≥ 1 affordable action | `enter()` pre-flight |
-| G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage | Playwright count at 5-min marks |
+| G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage. A new game: ≤ 1 / 4 / 6 / 11 / 17 / 22 numbers at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00. A row with a meter shows one number (owner feedback 1) | Playwright count at 5-min marks |
 | G16 | Decisions decide | Every framed choice axis of a stage (each modal, each standing switch or slider, each grant taken or refused) moves the stage's length by ≥ 3 min, or moves an exit variable a later stage reads by a stated margin: true alignment ≥ 8, lead ≥ 1 month, relations ≥ 10, approval ≥ 10, or a branch or ending flag | Sim variants on seeds 1–3, each the reasonable bot with one thing changed (`--variant modals-first`, `modals-last`, `modals-never`, one per switch extreme). The stage spec lists its axes and the spread expected. An axis that fails is cut or stops being framed as a choice |
 | G17 | Stakes on the button | A standing switch (Focus, Verify, a goal selector) prints its trade under its buttons the same way. Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
 | G18 | Goals, not a conveyor belt | Median time from a project's first appearance to its purchase ≥ 90 s for the reasonable bot; ≤ 20 % bought within 10 s; nothing refunds its own price. Engine backstop: at reveal a price is raised to 90 s of its currency's current rate when the list price is lower; a prerequisite gates the purchase, not the appearance | Sim: reveal → purchase table; `FLOOR` lines on ≤ 30 % of rows |

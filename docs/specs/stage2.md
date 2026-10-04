@@ -1,8 +1,16 @@
 # Stage 2 — "Scale" (implementation spec)
 
-Jan 2026 → Dec 2026 · target 35–45 min · enter by buying `Break ground` · exit by buying `Let Sage-3 write the code`
+Jan 2026 → Dec 2026 · target 35–45 min · enter by buying `First Datacenter` · exit by buying `Let Sage-3 write the code`
 (needs a released model at ≥ 4.00×). Contract: `docs/specs/arc.md`. Patched on 2026-10-03 for the Stage 1 that was
 actually built. Where this file and the code disagree about a Stage 1 id or number, the code wins.
+
+## Amendment after owner feedback 1 (`user-feedback-1.md`)
+
+| # | Change | Where |
+|---|---|---|
+| 1 | **No undertrained runs.** A run needs `N(c) = 600 × (c/1.6)^7` G4-equivalents (two significant figures; a third fewer with Distributed training) or `Train` is disabled and says what is missing. There is no yield: gains are in full. `Train now` is withdrawn. The N GPUs are busy while the run trains; nothing else is diverted | §2.5, §8 |
+| 2 | Entry is `First Datacenter`, one purchase; Stage 1 has no ladder and is 20–26 minutes. The arrival below is rebuilt from the sim once Stage 1 is retuned | header, §1 |
+| 3 | GPU room and power are meters in the Stores box; a lot row says what it draws and a plant row what it runs; a lot is never sold into no power or no room | §2.1, §2.13; `user-feedback-1.md` B3 |
 
 ## As-built deltas (read first)
 
@@ -103,7 +111,7 @@ Developments (built): `OpenMind owns its first datacenter. The rented GPUs go ba
 | 0:45 | 3,000 GPUs = 60 % of 5 MW | `btn-turbines` greyed; console `Power draw is 60% of the substation. Gas turbines can be on site in a week.` |
 | 1:00 | First real choice: the next lot or Research cluster | project `Research cluster` |
 | 2:15 | 5,000 GPUs. `Buy GPUs` greys with the inline reason `no power` | console `No power for more GPUs — 5.0 of 5 MW in use. Gas is fast; solar is cheap.` |
-| 2:40–3:20 | Research cluster bought; the first Stage 2 run starts when research allows (`Compute: 5,000 of 1,260 GPUs wanted · est. 60 s`) | project `Web crawl` at the run's start, or at 3:00 |
+| 2:40–3:20 | Research cluster bought; the first Stage 2 run starts when research allows (`Needs 740 GPUs for 1:00`) | project `Web crawl` at the run's start, or at 3:00 |
 | 4:10 | Gas turbines bought: 25 MW. GPU buying resumes | `btn-solar` 30 s later; `btn-datacenter` at 6,000 GPUs |
 | 4:30 | Anthrosoft ships Cadence-7 | `panel-graph` (or at the player's first Stage 2 release, whichever is first) |
 | 4:45 | Sage-1.7 released at ≈ 1.8–1.9× | project `AI research assistants`; +15 s `Series B`; +30 s `Agent platform` |
@@ -254,11 +262,11 @@ eval/red-team), not on the run count, so every mix of focuses pays the same tota
 research R(c) = 21,000 × (c/1.6)^5
 funds    F(c) = $25,000 × (c/1.6)^8 × S2_FUNDS_SCALE
 data     D(c) = 2.0 T × (c/1.6)^3          (0 until flags.dataEra, i.e. from the second Stage 2 run)
-compute  N(c) = 1,000 × (c/1.6)^7.5        G4-equivalents wanted
+compute  N(c) = 600 × (c/1.6)^7            G4-equivalents needed: a hard gate (owner feedback 1)
 
 have     = effGpus (active)                 // the whole fleet; computeShare and flags.trainingCompute are not used
-yield    = clamp(√(have / N), 0.3, 1)
-duration = clamp(120 × √(N / have), 45, 120) seconds
+(no yield: with fewer than N free GPUs the run does not start; with them it gains in full)
+duration = clamp(60 + 8 × log2(N / 1,000), 60, 110) seconds
 ```
 
 **Built already.** `researchFor`, `fundsFor`, `computeFor`, `MIN_YIELD` and the 45–120 s clamp in `training.ts` are these
@@ -266,28 +274,28 @@ functions for the whole game (steeper below the 1.6× knee, which Stage 2 never 
 S2_FUNDS_SCALE` from `stage ≥ 2`; the data cost; `have` as above; the gains below. `Ship With Open Issues?` was asked
 once in Stage 1 and does not return.
 
-| c | Research | Funds | Data | GPUs wanted |
+| c | Research | Funds | Data | GPUs needed |
 |---|---|---|---|---|
-| 1.65 | 24,500 | $32k | 2.2 T | 1,260 |
-| 1.8 | 37,800 | $64k | 2.8 T | 2,420 |
-| 2.0 | 64,100 | $149k | 3.9 T | 5,330 |
-| 2.2 | 103k | $319k | 5.2 T | 10,900 |
-| 2.4 | 159k | $641k | 6.7 T | 20,900 |
-| 2.6 | 238k | $1.22M | 8.6 T | 38,100 |
-| 2.8 | 345k | $2.20M | 10.7 T | 66,500 |
-| 3.0 | 487k | $3.82M | 13.2 T | 112k |
-| 3.2 | 672k | $6.40M | 16.0 T | 181k |
-| 3.4 | 910k | $10.4M | 19.2 T | 285k |
-| 3.6 | 1.21M | $16.4M | 22.8 T | 438k |
-| 3.8 | 1.59M | $25.3M | 26.8 T | 657k |
+| 1.65 | 24,500 | $32k | 2.2 T | 740 |
+| 1.8 | 37,800 | $64k | 2.8 T | 1,400 |
+| 2.0 | 64,100 | $149k | 3.9 T | 2,900 |
+| 2.2 | 103k | $319k | 5.2 T | 5,600 |
+| 2.4 | 159k | $641k | 6.7 T | 10,000 |
+| 2.6 | 238k | $1.22M | 8.6 T | 18,000 |
+| 2.8 | 345k | $2.20M | 10.7 T | 30,000 |
+| 3.0 | 487k | $3.82M | 13.2 T | 49,000 |
+| 3.2 | 672k | $6.40M | 16.0 T | 77,000 |
+| 3.4 | 910k | $10.4M | 19.2 T | 120,000 |
+| 3.6 | 1.21M | $16.4M | 22.8 T | 180,000 |
+| 3.8 | 1.59M | $25.3M | 26.8 T | 260,000 |
 
 * **Gains in Stage 2** (smaller and more even than Stage 1, so runs come every 3–5 min instead of alternating 2 and 7):
-  Capability `rand(0.10, 0.14) × yield`; Efficiency `0.07 × yield` and `copiesPerGPU × 1.25`; Safety `0.07 × yield`,
+  Capability `rand(0.10, 0.14)`; Efficiency `0.07` and `copiesPerGPU × 1.25`; Safety `0.07`,
   apparent +8, true +5, and −0.5 to the issue rate for good. Frontier bonus +0.02 stays; the gamble's bonus drops to
   +0.04. Result: 8 runs all-Capability, 10–11 mixed, 13 all-Efficiency.
-* Training still diverts 50 % of copies during the training phase only. Idle readout:
-  `Cost: 103,000 research, $319,000, 5.2 T data` · `Compute: 15,000 of 10,900 GPUs wanted · est. 102 s`, or
-  `… 45,000 of 66,500 GPUs wanted · undertrained (82%)`. Focus tooltips state the gains.
+* The run's N GPUs are busy during the training phase only. Idle readout:
+  `Cost: 103,000 research, $319,000, 5.2 T data` · `Needs 5,600 GPUs for 1:20`, or, when short, `Needs 18,000 GPUs.
+  14,200 free.` with `Train` disabled. Each Focus button prints its gain.
 * Eval 5 s. Issues `Poisson(max(0.3, 2 + capAfter/3 − safetyInvestment))`. Red-team 8 s per issue (4 s after
   Automated evals). +1 Trust per public release.
 * **Parallel pipelines** (`p_parallel`): `training.run` becomes two slots — one run in `training`, one in
@@ -988,7 +996,7 @@ Stage 3's `enter` applies the arc clamps (true alignment 30–75, gov 25–85, a
 | Research rate | Player never buys AI research assistants | Human rate (≥ 10/s) cannot fund runs past ≈ 2.2× | The project is funds-priced and governed; if still unbought at ts 900, its funds price halves and the console says `The Research Plateau — at this rate the next run is 9 minutes away. The model could help.` |
 | Research cap | Next run costs more than the lab holds | Train greyed, reason `lab holds 216,000` | Cap projects cost funds; Expand Lab costs Trust; if neither is affordable for 120 s, grant +1 Lab Space: `The lab borrows the cafeteria.` |
 | Data | Crawl gone, no funds for a licence, no AI assistants | Train greyed `needs 5.6 T data` | "fight it" is free (+5 T); `p_beg_data` after 240 s (`A university offers its corpus for a seat on the safety board.`, 1 Trust, may go negative) |
-| Training compute | Tiny fleet, large model | Run is undertrained; yield floor 0.3, so every run still gains ≥ 2 % | Build. The readout names the number of GPUs wanted |
+| Training compute | Tiny fleet, large model | `Train` is disabled and names the GPUs missing; nothing is lost | Buy GPUs: a lot is always on screen, and the requirement is about half of a normal fleet |
 | Insight | Never at the cap | 10 % accrual below the cap after Research cluster; Stage 2 needs ≤ 150 at once | — |
 | Trust | Spent on hires that do nothing | SL3 needs 3, Policy team 2 | ≈ 35 Trust arrive in the stage; milestones continue |
 | Slider, Alignment compute | Slider at 50 % or 0 %; alignment at 10 % | Revenue −29 % or research human-only; −5 % revenue | No lock; `Human share` and revenue show the cost |
