@@ -517,6 +517,9 @@ function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
 
 /** The Focus for the next Stage 2 run: the cycle, with the variants' Safety count. */
 function focusFor(s: GameState, mem: BotMemory): (typeof FOCUS_CYCLE)[number] {
+  // Variants `focus-efficiency` / `focus-safety`: every Stage 2 run trains with that Focus.
+  if (mem.variant === 'focus-efficiency') return 'efficiency';
+  if (mem.variant === 'focus-safety') return 'safety';
   const focus = FOCUS_CYCLE[runsS2(s) % FOCUS_CYCLE.length]!;
   if (mem.variant === 'safety-0' && focus === 'safety') return 'capability';
   if (mem.variant === 'safety-2') {
