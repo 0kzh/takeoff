@@ -104,7 +104,7 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   const def = active ? choiceById(active.id) : undefined;
   if (!active || !def) return false;
   const enabled = def.options.map((_, i) => i).filter((i) => choiceOptionEnabled(s, def, i));
-  if (mem.variant === 'modals-ignore') return true;
+  if (mem.variant === 'modals-ignore' || mem.variant === 'ignore-modals') return true;
   if (mem.variant === 'modals-last') {
     if (enabled.length) a.resolveChoice(s, enabled[enabled.length - 1]!);
     return true;
@@ -405,14 +405,14 @@ const CHOICE_POLICY_S2: Record<string, number[]> = {
 /** Capability, Efficiency, Capability, Efficiency, Safety (§9.1 step 4). */
 const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
 
-/** Training compute the bot waits for before a run: have / wanted ≥ 0.72. */
-export const TRAIN_COMPUTE_GATE = 0.72;
+/** Training compute the bot waits for before a run: have / wanted ≥ 0.6 (the run keeps ≥ 77 % of its gain). */
+export const TRAIN_COMPUTE_GATE = 0.6;
 
 function runsS2(s: GameState): number {
   return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
 }
 
-/** The publishers' licence, while the bot holds the offer open for the money (≤ 60 s). */
+/** The publishers' licence, while the bot holds the offer open for the money (≤ 60 s of its 90). */
 function publishersWait(s: GameState, mem: BotMemory): number {
   const a = s.activeChoice;
   if (!a || a.id !== 'c_publishers') return 0;
@@ -447,6 +447,11 @@ function gulfWait(s: GameState, mem: BotMemory): number {
 
 function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
   const id = s.activeChoice!.id;
+  // Ignore / last: the same handling as Stage 1 (ignored events run out their timers to the default).
+  if (mem.variant === 'modals-ignore' || mem.variant === 'ignore-modals' || mem.variant === 'modals-last') {
+    answerVariant(s, a, mem);
+    return;
+  }
   if (mem.variant === 'modals-best' || mem.variant === 'modals-worst') {
     if (mem.variant === 'modals-best' && publishersWait(s, mem) > 0) return;
     answerChoice(s, a, mem.variant === 'modals-best' ? CHOICES_BEST : CHOICES_WORST);
@@ -465,7 +470,7 @@ function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
     a.resolveChoice(s, s.approval > -15 ? 0 : 1);
     return;
   }
-  // The publishers' modal has no timer: hold it for up to a minute while the licence money comes in.
+  // The publishers' modal: hold it (60 s of its 90) while the licence money comes in.
   if (publishersWait(s, mem) > 0) return;
   answerChoice(s, a, CHOICE_POLICY_S2);
 }
@@ -561,7 +566,10 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   // A run waiting for compute is waiting for GPU lots: no reserve until the cluster is nearly there.
   // A run waiting only for its data keeps its money too: the data fix is saved for beside it.
   const runReserve = slot && s.research >= 0.6 * runResearch && computeRatio(s) >= 0.9 * TRAIN_COMPUTE_GATE ? runFunds : 0;
-  const reserve = Math.max(runReserve, urgentFix <= 180 * rev ? urgentFix : 0, wallFixPrice(s, rev), publishersWait(s, mem), gulfWait(s, mem));
+  // Walls and named fixes are saved for in full; the next run's money may lend 30 s of revenue to a card.
+  const wallReserve = Math.max(urgentFix <= 180 * rev ? urgentFix : 0, wallFixPrice(s, rev), publishersWait(s, mem), gulfWait(s, mem));
+  const reserve = Math.max(runReserve, wallReserve);
+  const cardReserve = Math.max(runReserve - 30 * rev, wallReserve);
   const buy = (p: ProjectDef) => {
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   };
@@ -590,6 +598,8 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     // binding wall is fixed with power that arrives now (gas, or nuclear when cheaper per MW).
     let kind = cheapestPower(s);
     if (kind === 'solar' && s.powerQueue.some((o) => o.kind === 'solar')) kind = cheapestInstantPower(s);
+    // A reactor out of reach for now: turbines that are within half a minute of revenue go in today.
+    if (kind === 'nuclear' && s.funds - nuclearCost(s) < reserve && s.revealed['gasButton'] && gasCost(s) <= 30 * rev) kind = 'gas';
     if (kind && s.funds >= powerCostOf(s, kind) && (kind !== 'nuclear' || s.funds - powerCostOf(s, kind) >= reserve)) buyPowerKind(s, a, kind);
   } else if (
     s.revealed['solarButton'] && !s.powerQueue.some((o) => o.kind === 'solar') &&
@@ -599,9 +609,12 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   }
   if ((reason === 'no room' || (standingOrderOn(s) && freeSlots(s) < 1000)) && s.revealed['dcButton'] && s.funds >= datacenterCost(s)) {
     a.buildDatacenter(s);
+  } else if (s.revealed['dcButton'] && freeSlots(s) < 0.2 * gpuCapacity(s) && s.funds - datacenterCost(s) >= reserve) {
+    // The hall fills: the next one goes up before the last slot does, when the run's money allows.
+    a.buildDatacenter(s);
   }
 
-  // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 72 % of the compute wanted.
+  // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 60 % of the compute wanted.
   if (slot && canStartTraining(s) && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE) {
     a.setFocus(s, focusFor(s, mem));
     a.startTraining(s);
@@ -618,13 +631,18 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   // A named fix (the wall's own card) goes before the rest of the table.
   const step5 = stage2First(visibleProjects(s));
   step5.sort((x, y) => Number(y.urgent?.(s) === true) - Number(x.urgent?.(s) === true));
+  // A full shelf (six cards, the goal included): a card worth up to a minute of revenue goes before more GPUs.
+  const shelfFull = step5.filter((p) => !p.rescue).length >= 6;
   for (const p of step5) {
     if (!p.canAfford(s)) continue;
     const c = p.cost(s);
     if (c.insight && p.stages.includes(1) && s.insight - c.insight < insightHeld) continue;
     const named = p.urgent?.(s) === true;
-    if (c.funds && !named && s.funds - c.funds < reserve) continue;
-    if (c.funds && !named && computeBound && c.funds > 20 * rev) continue;
+    // A wider market pays for itself in a minute or two: it goes before more GPUs.
+    const payback = MARKET_CARDS.includes(p.id) && (c.funds ?? 0) <= 60 * rev;
+    // The run's money may wait 30 s for a card; GPUs wait for cards worth under 60 s of revenue (90 s on a full shelf).
+    if (c.funds && !named && !payback && s.funds - c.funds < cardReserve) continue;
+    if (c.funds && !named && !payback && computeBound && c.funds > (shelfFull ? 90 : 60) * rev) continue;
     if (c.research && c.research > 0.15 * runResearch && otherwiseReady && s.research - c.research < runResearch) continue;
     if (c.trust && !trustSpare(s, c.trust, p.id)) continue;
     buy(p);
@@ -687,6 +705,9 @@ function nextProjectPrice(s: GameState, rev: number, reserve: number): number {
   }
   return 0;
 }
+
+/** Stage 2 cards that widen the market (a reasonable player buys them as soon as they pay back fast). */
+const MARKET_CARDS = ['p_agent_platform', 'p_international', 'p_free_tier'];
 
 /** Stage 2 projects in table order, then the carried Stage 1 ones. */
 function stage2First(list: ProjectDef[]): ProjectDef[] {
