@@ -1,9 +1,9 @@
 import { GameState, say, narrate, logNews, addFunds, isBought, counter, projectState } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight } from './economy.js';
+import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota } from './economy.js';
 import { withdrawProject } from './reveal.js';
-import { trainCost, atPlateau, nextRunName, runOtherwiseReady } from './training.js';
+import { trainCost, atPlateau, nextRunName } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
 import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW, lotCostOf } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
@@ -28,7 +28,7 @@ export interface StageDef {
 }
 
 /** Stage 1 projects that make no sense once ground is broken, retired without a line. */
-const QUIET_RETIRE = ['p_contractor', 'p_cooling', 'p_expedite', 'p_soundwall', 'p_desks', 'p_contract'];
+const QUIET_RETIRE = ['p_cooling', 'p_soundwall', 'p_abatement', 'p_ppa', 'p_desks', 'p_contract'];
 /** The rented fleet's deposit comes back at the transition: $400 a GPU, at least the first lot. */
 export const DEPOSIT_PER_GPU = 400;
 export const MIN_DEPOSIT = 25000;
@@ -76,7 +76,7 @@ function enterScale(s: GameState): void {
   s.choiceQueue = [];
 
   // Power, its price and the grid toggle stay frozen as they were; the engine stops using them.
-  hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'site', 'contracts', 'interconnect', 'powerMW']);
+  hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'contracts']);
   show(s, ['infrastructure', 'stores', 'autoPrice']);
   s.autoPrice = true;
   s.datacenters = Math.max(1, s.datacenters);
@@ -93,6 +93,11 @@ function enterScale(s: GameState): void {
     s.labSpace += 1;
     roomAdded = true;
   }
+  // The new site's evaluation cluster: most of the next run's research is done on arrival, so the
+  // first run on owned hardware does not wait out minutes of research (owner feedback U3).
+  const firstRun = trainCost(s).research ?? 0;
+  const researchGift = Math.max(0, Math.round(0.75 * firstRun - s.research));
+  s.research += researchGift;
 
   const rented = s.gpus;
   const firstLot = Math.round(1000 * G4_PRICE * S2_FUNDS_SCALE);
@@ -110,9 +115,9 @@ function enterScale(s: GameState): void {
 
   // Five lines, the console's height; they stay whole for 10 s before routine lines follow.
   const lines: [number, string][] = [
-    [0.1, 'Ground broken outside Abilene.'],
+    [0.1, 'First Datacenter online outside Abilene.'],
     [2, `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
-    [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW at Abilene. Power is bought in megawatts now.`],
+    [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW. Each MW powers 1,000 GPUs; power is bought in megawatts now.`],
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
     [2, 'Prices set themselves from here. Marketing ends; the market cards widen the market now.'],
   ];
@@ -123,6 +128,7 @@ function enterScale(s: GameState): void {
   }
   if (retired.length) logNews(s, `Retired with the rented fleet: ${retired.join(', ')}.`);
   if (roomAdded) logNews(s, 'The new site has room for a bigger lab.');
+  if (researchGift > 0) logNews(s, 'The new site\'s first experiments come back: most of the next run\'s research is done.');
 }
 
 /** Projects Stage 3 grants for free when a player arrives without them (stage3.md §1.1). */
@@ -196,10 +202,12 @@ export const STAGES: StageDef[] = [
     name: 'The Startup',
     startMonth: monthOf(2025, 7),
     endMonth: monthOf(2025, 12),
-    secondsPerMonth: 300,
+    // 240 s a month: July to December is 24 minutes (owner feedback 1, B2: Stage 1 in 20–26 minutes).
+    secondsPerMonth: 240,
     enter: (s) => {
-      show(s, ['console', 'task', 'power', 'buyPower']);
-      say(s, 'Welcome to OpenMind.');
+      // Beat 0 (owner feedback 1, (a)): one thing to do. Power, funds and the date arrive as beats.
+      show(s, ['console', 'task']);
+      say(s, 'Welcome to OpenMind. Customers are waiting.');
     },
     exit: () => 0,
   },
@@ -295,22 +303,102 @@ const sinceFlag = (s: GameState, key: string): number => {
  * Projects about 40 s later with the first project — one idea at a time. Stage 2's buttons and
  * panels are rows of its content table (data/stage2.ts, engine/reveal.ts).
  */
+/** Stage 1's opening beats 5–8 come at least this long after the beat before (owner feedback 1, (a)). */
+export const BEAT_SPACING = 30;
+
+/** The opening's last beat, for the spacing; beats 4–8 stamp it. */
+function beat(s: GameState): void {
+  s.flags['beatAt'] = s.stats.timePlayed;
+}
+
+const spaced = (s: GameState): boolean => s.stage > 1 || sinceFlag(s, 'beatAt') < 0 || sinceFlag(s, 'beatAt') >= BEAT_SPACING;
+
 const REVEAL_RULES: RevealRule[] = [
-  { id: 'business', stages: [1], when: (s) => s.tasks >= 1 },
+  // Beat 1: a task pays.
+  {
+    id: 'business',
+    stages: [1],
+    when: (s) => s.tasks >= 1,
+    then: (s) => say(s, `Task complete. The customer pays ${fmtMoneyShort(s.price)}.`),
+  },
+  // Beat 2: something to save for, the first greyed goal.
   {
     id: 'compute',
     stages: [1],
     when: (s) => s.funds >= 3 || s.tasks >= 20,
-    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of the model.'),
+    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of Sage.'),
   },
-  { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 300 },
-  // Greyed at $100 from the first sale (Paperclips shows it from second 0): always a goal in sight.
-  { id: 'marketing', stages: [1, 2], when: (s) => s.tasksSold >= 1 },
+  // Beat 3: a copy completes tasks without a click.
+  {
+    id: 'fleet',
+    stages: [1],
+    when: (s) => s.gpus >= 1,
+    then: (s) => {
+      s.flags['firstGpuAt'] = s.stats.timePlayed;
+      say(s, 'GPU rented. A copy of Sage completes a task every second.');
+    },
+  },
+  // Beat 4: copies burn power (the meter drains).
+  {
+    id: 'power',
+    stages: [1],
+    when: (s) => s.revealed['fleet'] === true && (s.gpus >= 3 || sinceFlag(s, 'firstGpuAt') >= 20),
+    then: (s) => {
+      beat(s);
+      say(s, 'Each task a copy completes burns 1 kWh. The meter drains.');
+    },
+  },
+  // Beat 5: power has to be kept on.
+  {
+    id: 'buyPower',
+    stages: [1],
+    when: (s) => s.revealed['power'] === true && (s.power <= 800 || STUCK(s)) && spaced(s),
+    then: (s) => {
+      beat(s);
+      say(s, 'Power is draining. Copies stop when it runs out.');
+    },
+  },
+  // Beat 6: supply can outrun demand; the price decides how much sells.
+  {
+    id: 'pricing',
+    stages: [1],
+    when: (s) => s.revealed['buyPower'] === true && s.unbilled >= 20 && s.unbilled > ((s.flags['unbilledSeen'] as number) ?? 0) && spaced(s),
+    then: (s) => {
+      beat(s);
+      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Unsold tasks are piling up.`);
+    },
+  },
+  // Beat 7: more customers at every price (and revenue per second with it).
+  {
+    id: 'marketing',
+    stages: [1, 2],
+    when: (s) => s.stage > 1 || (s.revealed['pricing'] === true && spaced(s) && (sinceFlag(s, 'firstPriceMoveAt') >= 30 || sinceFlag(s, 'beatAt') >= 45)),
+    then: (s) => {
+      s.revealed['revPerSec'] = true;
+      if (s.stage > 1) return;
+      beat(s);
+      say(s, 'Marketing brings more customers at every price.');
+    },
+  },
+  { id: 'revPerSec', stages: [2, 3], when: (s) => s.tasksSold >= 300 },
+  // The quota, from 60 rented: a meter and one line.
+  {
+    id: 'quota',
+    stages: [1],
+    when: (s) => s.gpus >= 60,
+    then: (s) => say(s, `The cloud will rent OpenMind ${fmtInt(rentQuota(s))} GPUs and no more.`),
+  },
+  // The Developments column (and the date) from 3:30 (owner feedback 1, beat 9).
+  { id: 'log', stages: [1, 2, 3, 4, 5], when: (s) => s.log.length > 0 && (s.stage > 1 || s.stats.timePlayed >= 210) },
+  // Beat 8: Trust hires researchers.
   {
     id: 'research',
     stages: [1, 2],
-    when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1,
+    // In Stage 1 after Marketing once the price lesson has begun (beats in order), never waiting on a
+    // backlog that has not formed.
+    when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1 && spaced(s) && (s.stage > 1 || !s.revealed['pricing'] || s.revealed['marketing'] === true),
     then: (s) => {
+      if (s.stage === 1) beat(s);
       show(s, ['hireResearcher']);
       s.flags['researchAt'] = s.stats.timePlayed;
       say(s, `Trust earned: ${fmtInt(s.trust)}. Each one hires a researcher.`);
@@ -340,6 +428,8 @@ export function updateReveals(s: GameState): void {
       rule.then?.(s);
     }
   }
+  // Beat 6 waits for a pile that is still rising.
+  if (s.stage === 1) s.flags['unbilledSeen'] = s.unbilled;
 }
 
 // ---------- Stage 2 housekeeping (slow tick) ----------
@@ -359,11 +449,6 @@ export function updateStage2(s: GameState): void {
   if (ts >= 30 && s.flags['arrivalPrice'] === undefined) {
     s.flags['arrivalPrice'] = s.price;
     s.flags['r0'] = Math.max(1, s.stats.revPerSec - s.contractIncome);
-  }
-  // The short run arrives the first time a run waits for money and nothing else (critic C3).
-  if (!s.revealed['trainNow'] && runOtherwiseReady(s) && s.funds < (trainCost(s).funds ?? 0)) {
-    s.revealed['trainNow'] = true;
-    say(s, 'Train now: a run can start on the money there is and keep that share of its gain.');
   }
   // The bigger GPU lots join the row as the fleet grows into them (critic C1: sizes side by side).
   if (!s.revealed['lot5'] && (s.gpus >= 3000 || s.funds >= lotCostOf(s, 5000))) s.revealed['lot5'] = true;

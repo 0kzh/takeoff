@@ -42,7 +42,9 @@ function load(host: DevHost, next: GameState): void {
 
 export function loadPreset(host: DevHost, n: number): GameState {
   const preset = presetFor(n);
-  load(host, preset.build(Date.now() % 100000));
+  // `?seed=N` makes a preset reproducible too (the smoke tests); otherwise a fresh seed each time.
+  const param = new URLSearchParams(location.search).get('seed');
+  load(host, preset.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
   if (!preset.ready || preset.stage !== n) {
     const latest = [...PRESETS].reverse().find((p) => p.ready && p.stage < n);
     host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage ${latest?.stage ?? 2} preset.` });

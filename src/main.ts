@@ -13,7 +13,8 @@ const seedParam = new URLSearchParams(location.search).get('seed');
 const state: GameState = loadSave() ?? newGame(seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) : Date.now());
 const saver = createSaver(state);
 
-let speed = 1;
+/** `?speed=0` boots paused, so a test that reloads mid-game gets no real-time frames before it takes over. */
+let speed = new URLSearchParams(location.search).get('speed') === '0' ? 0 : 1;
 let autoplay = false;
 let policy: PolicyName = 'bot';
 let bot = newBotMemory(policy);

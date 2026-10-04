@@ -1,6 +1,6 @@
 import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay } from './state.js';
 import { fmtInt, fmtClock } from './format.js';
-import { trainCost, trainSlotFree, computeYield, runOtherwiseReady } from './training.js';
+import { trainCost, trainSlotFree, runOtherwiseReady, gpusShort, gpusAvailable, gpusNeeded } from './training.js';
 import { visibleProjects } from './projects.js';
 import { choiceById, optionCost } from './events.js';
 
@@ -161,17 +161,21 @@ export function lotFits(s: GameState, n: number): boolean {
 /**
  * What the lot buttons keep in hand: the next run's price when only money is missing (a free slot,
  * its research and data, most of its compute), and an open offer the lab cannot pay yet. The row
- * says so ("the run first — 0:40"); Train now is the other way through (critic C1/C3).
+ * says so ("the run first"; the Train row carries the wait) (critic C1/C3).
  */
 export function lotHold(s: GameState): number {
   return Math.max(runHold(s), offerOnTable(s), wallFix(s)?.price ?? 0, urgentCard(s)?.price ?? 0);
 }
 
-/** The run's compute yield from which the lots save for it rather than grow the cluster toward it. */
-export const RUN_HOLD_YIELD = 0.7;
+/**
+ * Once the run has its research and data and the fleet is half again what it needs (so a third keeps
+ * serving while it trains), the lots save its price; short of that, they buy GPUs.
+ */
+export const RUN_HOLD_FLEET = 1.5;
 
 function runHold(s: GameState): number {
-  return runOtherwiseReady(s) && computeYield(s) >= RUN_HOLD_YIELD ? trainCost(s).funds ?? 0 : 0;
+  if (!runOtherwiseReady(s) || gpusAvailable(s) < RUN_HOLD_FLEET * gpusNeeded(s)) return 0;
+  return trainCost(s).funds ?? 0;
 }
 
 /**
@@ -222,9 +226,9 @@ export function lotHoldReason(s: GameState, n: number): string {
   const hold = lotHold(s);
   const need = n === LOT_SIZES[0] ? lotCostOf(s, 100) : lotCostOf(s, n);
   if (hold <= 0 || s.funds - need >= hold) return '';
-  const eta = (hold + need - s.funds) / Math.max(1, s.stats.revPerSec);
-  const what = holdName(s, hold);
-  return eta < 600 ? `${what} — ${fmtClock(eta)}` : what;
+  // The row names what it keeps the money for; the wait is on that thing's own row (the Train row's
+  // `short $181,000 — about 0:28`, the hall's or the plant's price).
+  return holdName(s, hold);
 }
 
 function holdName(s: GameState, hold: number): string {
@@ -344,7 +348,7 @@ export function buyGpuBatch(s: GameState, size: number = LOT_SIZES[0]): boolean 
  */
 export function standingReserve(s: GameState): number {
   let run = 0;
-  if (s.revealed['training'] && trainSlotFree(s) && computeYield(s) >= RUN_HOLD_YIELD) {
+  if (s.revealed['training'] && trainSlotFree(s) && !gpusShort(s)) {
     const cost = trainCost(s);
     if (s.research >= 0.6 * (cost.research ?? 0)) run = cost.funds ?? 0;
   }

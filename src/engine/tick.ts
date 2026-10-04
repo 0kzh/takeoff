@@ -1,9 +1,9 @@
 import { GameState, say, printLine } from './state.js';
 import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
-  powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck, updateInterconnect,
+  powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck,
+  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota,
 } from './economy.js';
 import {
   buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
@@ -14,10 +14,10 @@ import {
   updateData, dataWallCheck, dataWall, updateWorld, buySL3, toggleJobFund, toggleShareEvals, cycleAlignShare,
 } from './world.js';
 import {
-  updateTraining, startTraining, trainNow, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames,
+  updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames, needsDatacenter, nextRunName, gpusNeeded,
 } from './training.js';
-import { buyProject, visibleProjects, projectById } from './projects.js';
-import { farRung, rungHelper, rungRelief } from '../data/projects.js';
+import { buyProject, visibleProjects } from './projects.js';
+import { datacenterAtWall } from '../data/projects.js';
 import { updateProjects, updateStageContent, noteReveals } from './reveal.js';
 import {
   updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
@@ -25,7 +25,7 @@ import {
 import { updateReveals, checkStageExit, updateStage2 } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
-import { fmtInt, fmtNum, fmtDuration, fmtMoneyShort } from './format.js';
+import { fmtInt, fmtNum, fmtDuration } from './format.js';
 
 export const TICK_MS = 100;
 export const SLOW_TICK_EVERY = 10;
@@ -83,7 +83,6 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
-  updateInterconnect(s, dt);
 
   updateReveals(s);
   updateProjects(s);
@@ -124,8 +123,7 @@ function slowStats(s: GameState): void {
   taskMilestones(s);
   bottleneckMessages(s);
   researchWall(s);
-  rungWatch(s);
-  rungRelief(s);
+  wallStage1(s);
   trustPace(s);
   wallWatch(s);
   hireFadeCheck(s);
@@ -227,22 +225,6 @@ function researchWall(s: GameState): void {
 }
 
 /**
- * Stage 1: a pinned rung more than four minutes away at the current income names the card that
- * shortens it (drawn urgent), again every three minutes while that holds (critic C13, arc G31).
- */
-function rungWatch(s: GameState): void {
-  const far = farRung(s);
-  const helper = far ? rungHelper(s) : '';
-  if (!far || !helper) return;
-  const now = s.stats.timePlayed;
-  if (now - ((s.flags['rungWatchAt'] as number) ?? -999) < 180) return;
-  s.flags['rungWatchAt'] = now;
-  const rung = projectById(far.id)?.title ?? 'The next rung';
-  const card = projectById(helper)?.title ?? 'A revenue card';
-  say(s, `${rung} is ${Math.ceil(far.seconds / 60)} minutes away at ${fmtMoneyShort(Math.round(s.stats.revPerSec))}/s. ${card} shortens it.`);
-}
-
-/**
  * Stage 2: a wall in front of the next run (the lab's research cap, the data wall) that has stood for
  * three minutes is named again with the cards that answer it, every three minutes (critic C9, G31).
  */
@@ -273,6 +255,19 @@ function wallWatch(s: GameState): void {
     const fix = fixes ? ` ${fixes} close${fixes.includes(',') ? '' : 's'} it.` : '';
     say(s, `The Data Wall, ${minutes} minutes on — the next run needs ${fmtNum((cost.data ?? 0) - s.data, 1)} T more.${fix}`);
   }
+}
+
+/**
+ * Stage 1 at the wall (owner feedback 1, B1): First Datacenter is re-priced once to what four minutes
+ * of income reach, and the wall's line repeats every 180 s while it stands (arc G31).
+ */
+function wallStage1(s: GameState): void {
+  datacenterAtWall(s);
+  if (!needsDatacenter(s) || !trainSlotFree(s)) return;
+  const now = s.stats.timePlayed;
+  if (now - ((s.flags['wallLineAt'] as number) ?? -999) < 180) return;
+  s.flags['wallLineAt'] = now;
+  say(s, `${nextRunName(s)} needs ${fmtInt(gpusNeeded(s))} GPUs. The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`);
 }
 
 /**
@@ -309,7 +304,6 @@ export const actions = {
   toggleShareEvals,
   cycleAlignShare,
   startTraining,
-  trainNow,
   setFocus,
   redTeam,
   release,

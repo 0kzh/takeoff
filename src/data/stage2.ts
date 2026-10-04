@@ -22,7 +22,7 @@ export type RowKind = 'project' | 'flag' | 'choice';
 export const MECHANIC_FLAGS = [
   'stores', 'infrastructure', 'autoPrice', 'gasButton', 'dataRow', 'graph', 'allocation', 'dcButton', 'solarButton',
   'queue', 'standingOrder', 'releaseInternal', 'government', 'secondPipeline', 'security', 'public', 'nuclearButton',
-  'jobFund', 'stats', 'sl3Button', 'alignShare', 'shareEvals', 'chipsRow', 'trainNow',
+  'jobFund', 'stats', 'sl3Button', 'alignShare', 'shareEvals', 'chipsRow',
 ];
 
 export interface ContentRow {
@@ -107,7 +107,7 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_research_cluster'),
   flagRow('btn-turbines', 'gasButton', { mechanic: true,
     trigger: (s) => s.gpus >= 0.6 * s.powerCapacityMW * 1000 || ts(s) >= 120,
-    onReveal: (s) => say(s, 'Power draw is 60% of the substation. Gas turbines can be on site in a week.'),
+    onReveal: (s) => say(s, 'Power draw is 60% of the site\'s 5 MW. Gas turbines can be on site in a week.'),
   }),
   project('p_web_crawl'),
   flagRow('panel-graph', 'graph', { mechanic: true, trigger: (s) => releasesS2(s) >= 1 || s.flags['rivalS2'] === true }),

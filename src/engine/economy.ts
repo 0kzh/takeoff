@@ -1,6 +1,6 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, press, isBought, bump } from './state.js';
-import { trainingShare, trainCost } from './training.js';
+import { GameState, say, canPay, pay, press, isBought, bump, counter } from './state.js';
+import { busyGpus, trainCost } from './training.js';
 import { visibleProjects } from './projects.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
@@ -14,11 +14,12 @@ export const TICK_SECONDS = 0.1;
 export const MIN_PRICE = 0.01;
 /** The smallest power block; it grows with the fleet (see `powerBlock`). */
 export const POWER_BLOCK = 1000;
-/** The Abilene substation (Stage 1's last rung): 5 MW on site when Stage 2 opens. */
+/** First Datacenter's grid connection: 5 MW on site when Stage 2 opens. */
 export const GRID_MW = 5;
 
 /** Word of mouth: the market starts near half size and fills out as tasks get done. */
-export const MARKET_START = 1.55;
+/** The market's built full size from the first second (owner feedback 1: every task simply sells; no ramp). */
+export const MARKET_START = 3;
 export const MARKET_FULL = 3;
 export const MARKET_GROWTH_TASKS = 1500;
 
@@ -32,8 +33,6 @@ export const CONTRACT_WEIGHT_GROWTH = 1.15;
 /** Seconds an incident pauses every contract customer ("The bank pauses its pilot."). */
 export const CONTRACT_PAUSE_SECONDS = 90;
 
-/** The Abilene interconnect queue, in seconds. */
-export const INTERCONNECT_SECONDS = 240;
 
 // ---------- costs ----------
 
@@ -156,7 +155,8 @@ export function insightTrickle(s: GameState): number {
 
 /** Copies running: compute × copies per GPU, less what a training run diverts. */
 export function copies(s: GameState): number {
-  return Math.floor(effGpus(s) * (1 - trainingShare(s)) * s.copiesPerGPU);
+  // GPUs a run holds while it trains serve no tasks; the rest keep serving (owner feedback U1).
+  return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU);
 }
 
 /** Tasks per second per copy: `capability^0.8 × prompting boosts`. */
@@ -297,7 +297,7 @@ export function produce(s: GameState, dt: number): void {
       s.taskFrac = 0;
       if (!s.flags['powerOut']) {
         s.flags['powerOut'] = true;
-        say(s, 'Power exhausted — copies idle.');
+        say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
       }
       return;
     }
@@ -456,16 +456,6 @@ export function trackStuck(s: GameState, dt: number): void {
 
 // ---------- the Abilene site ----------
 
-/** The interconnect queue counts down in game time; the substation needs it done. */
-export function updateInterconnect(s: GameState, dt: number): void {
-  if (s.interconnectLeft <= 0) return;
-  s.interconnectLeft = Math.max(0, s.interconnectLeft - dt);
-  if (s.interconnectLeft <= 0) {
-    s.flags['interconnectDone'] = true;
-    say(s, 'Interconnect approved. The substation can be built.');
-  }
-}
-
 // ---------- trust & research ----------
 
 /** Fibonacci milestones on Tasks: 2,000, 3,000, 5,000, 8,000, 13,000 … (Trust retires in Stage 3). */
@@ -517,7 +507,10 @@ export function researchTick(s: GameState, dt: number): void {
 
 /** The one verb that always works: no power needed, never disabled. */
 export function clickTask(s: GameState): boolean {
+  // Stage 1 with nothing unsold: the customer pays for the click at once (owner feedback 1, beat 1).
+  const payNow = s.stage === 1 && s.unbilled <= 0;
   completeTasks(s, 1);
+  if (payNow) bill(s, 1);
   s.stats.secClicks += 1;
   s.flags['clicks'] = ((s.flags['clicks'] as number) || 0) + 1;
   return true;
@@ -536,7 +529,6 @@ export function rentGpu(s: GameState): boolean {
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.gpus += 1;
-  if (s.gpus === 1) say(s, 'GPU rented. A copy of the model is running.');
   if (s.gpus === 20) say(s, 'Power can now be bought 10,000 kWh at a time.');
   if (atRentQuota(s) && !s.flags[`quotaSaid${s.gpus}`]) {
     s.flags[`quotaSaid${s.gpus}`] = true;
@@ -560,19 +552,25 @@ export function priceDown(p: number): number {
 }
 
 /** Stage 1 only, and only by hand (Dynamic pricing hands the price to finance; Stage 2 prices itself). */
+/** The price buttons arrive with beat 6 (owner feedback 1): before it, every task sells at $0.25. */
+function priceMove(s: GameState): void {
+  if (counter(s, 'priceMoves') === 0) s.flags['firstPriceMoveAt'] = s.stats.timePlayed;
+  bump(s, 'priceMoves');
+}
+
 export function lowerPrice(s: GameState): boolean {
-  if (!s.revealed['business'] || s.stage >= 2 || s.autoPrice) return false;
+  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
   if (s.price <= MIN_PRICE + 1e-9) return false;
   s.price = priceDown(s.price);
-  bump(s, 'priceMoves');
+  priceMove(s);
   return true;
 }
 
 export function raisePrice(s: GameState): boolean {
-  if (!s.revealed['business'] || s.stage >= 2 || s.autoPrice) return false;
+  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
   s.price = priceUp(s.price);
   s.priceRaises += 1;
-  bump(s, 'priceMoves');
+  priceMove(s);
   return true;
 }
 
@@ -714,7 +712,8 @@ export function bottleneckMessages(s: GameState): void {
   const now = s.stats.timePlayed;
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
   if (s.stage >= 2) return;
-  if (s.revealed['business'] && s.unbilled > 20 && !s.autoPrice) {
+  // The price advice waits for the price to be on screen (owner feedback 1, beat 6).
+  if (s.revealed['pricing'] && s.unbilled > 20 && !s.autoPrice) {
     const made = Math.max(1, productionPerSec(s));
     if (priceAbsurd(s)) {
       if (ready('absurdAt')) {
@@ -731,7 +730,7 @@ export function bottleneckMessages(s: GameState): void {
       say(s, `Everything sells at ${fmtMoneyShort(s.price)}; the market would take ${fmtInt(Math.round(expectedSalesPerSec(s) / made))} times as much. Raise the price.`);
     } else if (s.unbilled > 200 && s.unbilled > 30 * made && marketState(s) === 'backlog growing' && ready('saturatedAt')) {
       s.flags['saturatedAt'] = now;
-      say(s, `Billing lags production at ${fmtMoneyShort(s.price)}. Lower the price or market.`);
+      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Lower the price${s.revealed['marketing'] ? ' or buy Marketing' : ''}.`);
     }
   }
   if (s.gpus > 0 && s.power < 1 && s.funds < powerBlockCost(s) && ready('brokeAt')) {

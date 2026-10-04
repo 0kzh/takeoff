@@ -12,7 +12,7 @@ import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
 } from '../engine/economy.js';
 import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
-import { trainCost, canStartTraining, trainingCompute, requiredCompute } from '../engine/training.js';
+import { trainCost, canStartTraining, gpusShort, trainSlotFree } from '../engine/training.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.js';
 import { PRESETS } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
@@ -83,11 +83,15 @@ export interface Summary {
   /** Stretches in Stage 1 where nothing was produced, or the copies sat without power, for 60 s+. */
   softLocks: [number, number][];
   reveals: number;
-  /** When each Abilene rung was bought (site, interconnect, substation, break ground). */
-  ladder: (number | null)[];
-  /** Training runs started in Stage 1, and the smallest share of its gain any of them kept. */
+  /** When First Datacenter was first shown (greyed), and seconds from the wall to its purchase (null: bought before the wall). */
+  datacenterShown: number | null;
+  wallToDc: number | null;
+  /** Training runs started in Stage 1, and the GPUs each needed. */
   runs: number;
-  minYield: number | null;
+  runGpus: number[];
+  /** Longest stretch in Stage 1 with a free slot and Train blocked by the GPU requirement (s), and when. */
+  gpuBlockedMax: number;
+  gpuBlockedAt: number;
   /** Modals opened in Stage 1 (every opening, gambles and rescues included). */
   modals: number;
   /** Smallest gap between two modals that opened on their own (player-caused confirms excluded). */
@@ -154,7 +158,8 @@ export interface Stage2Summary {
   intervalMax: number | null;
   durationMin: number | null;
   durationMax: number | null;
-  minYield: number | null;
+  /** The GPUs each Stage 2 run needed. */
+  runGpus: number[];
   longestRevealGap: number;
   longestRevealGapAt: [number, number];
   revealGapsOver120: [number, number][];
@@ -166,6 +171,8 @@ export interface Stage2Summary {
   mechanicGapAt: [number, number];
   reveals: number;
   greyedGoalPct: number;
+  /** Share of Stage 2 with Train blocked by the GPU requirement alone (bot ≤ 5 %, trainfirst ≤ 25 %). */
+  gpuBlockedPct: number;
   gpuPressesBeforeStanding: number;
   gpuPresses: number;
   powerPurchases: number;
@@ -315,7 +322,7 @@ function runBlocker(s: GameState): string {
   if ((c.research ?? 0) > s.research) return 'research';
   if ((c.data ?? 0) > s.data + 1e-9) return 'data';
   if ((c.funds ?? 0) > s.funds) return 'funds';
-  if (trainingCompute(s) / Math.max(1, requiredCompute(s)) < 0.72) return 'compute';
+  if (gpusShort(s)) return 'gpus';
   return 'ready';
 }
 
@@ -362,7 +369,10 @@ export function simulate(args: Args): SimResult {
   let modals = 0;
   const autoModalTimes: number[] = [];
   let runs = 0;
-  let minYield: number | null = null;
+  const runGpus1: number[] = [];
+  let gpuBlockedSince: number | null = null;
+  let gpuBlockedMax = 0;
+  let gpuBlockedAt = 0;
   let prevRunIds = new Set<number>();
   let transition: number | null = null;
   let capAtTransition: number | null = null;
@@ -389,13 +399,15 @@ export function simulate(args: Args): SimResult {
   const s2MechNames: [number, string][] = [];
   const s2TrainStarts: number[] = [];
   const s2Durations: number[] = [];
-  const s2Yields: number[] = [];
+  const s2RunGpus: number[] = [];
   let s2Modals = 0;
   const s2ModalIds: string[] = [];
   const s2AutoModals: number[] = [];
   let s2Rescues = 0;
   let s2GreyTicks = 0;
   let s2Ticks = 0;
+  /** Stage 2 ticks with a free slot and Train blocked only by the GPU requirement (owner feedback 1). */
+  let s2GpuBlockedTicks = 0;
   let maxVisible = 0;
   let maxVisibleCapped = 0;
   const queueSince = new Map<string, number>();
@@ -503,6 +515,24 @@ export function simulate(args: Args): SimResult {
     policyStep(s, tracked, mem);
     step(s);
     const t = s.stats.timePlayed;
+    // Stage 1: a free slot with Train blocked by the GPU requirement (owner feedback U1's measure).
+    if (s.stage === 1) {
+      const blocked = s.revealed['training'] === true && trainSlotFree(s) && s.training.cooldown <= 0 && gpusShort(s);
+      if (blocked && gpuBlockedSince === null) gpuBlockedSince = t;
+      if (!blocked && gpuBlockedSince !== null) {
+        if (t - gpuBlockedSince > gpuBlockedMax) {
+          gpuBlockedMax = t - gpuBlockedSince;
+          gpuBlockedAt = gpuBlockedSince - t0;
+        }
+        gpuBlockedSince = null;
+      }
+    } else if (gpuBlockedSince !== null) {
+      if (t - gpuBlockedSince > gpuBlockedMax) {
+        gpuBlockedMax = t - gpuBlockedSince;
+        gpuBlockedAt = gpuBlockedSince - t0;
+      }
+      gpuBlockedSince = null;
+    }
     if (s.stage === 2 && s2Start !== null && s.capability > lastCap + 1e-9) {
       if (t - lastCapAt > longestRelease) {
         longestRelease = t - lastCapAt;
@@ -580,11 +610,11 @@ export function simulate(args: Args): SimResult {
       prevRunIds.add(r.id);
       if (s.stage === 1) {
         runs++;
-        minYield = minYield === null ? r.computeYield : Math.min(minYield, r.computeYield);
+        runGpus1.push(r.gpus);
       } else if (s.stage === 2) {
         s2TrainStarts.push(t);
         s2Durations.push(r.duration);
-        s2Yields.push(r.computeYield);
+        s2RunGpus.push(r.gpus);
       }
     }
     if (prevRunIds.size > 50) prevRunIds = new Set([...prevRunIds].slice(-10));
@@ -605,7 +635,7 @@ export function simulate(args: Args): SimResult {
     if (phase !== prevPhase) {
       for (const r of [s.training.run, s.training.pending]) {
         if (!r || prevPhase.includes(`${r.name}:${r.phase}`)) continue;
-        const extra = r.phase === 'training' ? ` (${r.focus}, ${r.duration}s, yield ${r.computeYield.toFixed(2)})`
+        const extra = r.phase === 'training' ? ` (${r.focus}, ${r.duration}s, ${r.gpus} GPUs)`
           : r.phase === 'redteam' ? ` (cap ${r.capAfter.toFixed(2)}, score ${r.scores.reduce((x, y) => x + y, 0)}/40, issues ${r.issuesFound})` : '';
         out(t, `TRAIN ${r.name} → ${r.phase}${extra}`);
         if (r.phase === 'training') mark('firstTrainingStart', t);
@@ -725,6 +755,7 @@ export function simulate(args: Args): SimResult {
       };
       s2Ticks++;
       if (greyedGoal(s)) s2GreyTicks++;
+      if (s.revealed['training'] === true && trainSlotFree(s) && s.training.cooldown <= 0 && gpusShort(s)) s2GpuBlockedTicks++;
       const vis = visible.filter((p) => !p.pinned && !p.rescue);
       maxVisible = Math.max(maxVisible, vis.length);
       maxVisibleCapped = Math.max(maxVisibleCapped, vis.filter((p) => !p.sideline && !(p.urgent?.(s) ?? false) && !p.stages.includes(1)).length);
@@ -826,7 +857,7 @@ export function simulate(args: Args): SimResult {
       intervalMax: intervals.length ? Math.round(Math.max(...intervals)) : null,
       durationMin: s2Durations.length ? Math.min(...s2Durations) : null,
       durationMax: s2Durations.length ? Math.max(...s2Durations) : null,
-      minYield: s2Yields.length ? Math.round(Math.min(...s2Yields) * 100) / 100 : null,
+      runGpus: s2RunGpus,
       longestRevealGap: Math.round(g.gap),
       longestRevealGapAt: [rel(g.at[0]), rel(g.at[1])],
       revealGapsOver120: g.over.map(([x, y]) => [rel(x), rel(y)]),
@@ -836,6 +867,7 @@ export function simulate(args: Args): SimResult {
       mechanicGapAt: [rel(mg.at[0]), rel(mg.at[1])],
       reveals: s2Reveals.filter((x) => x <= stop).length,
       greyedGoalPct: s2Ticks ? Math.round((1000 * s2GreyTicks) / s2Ticks) / 10 : 0,
+      gpuBlockedPct: s2Ticks ? Math.round((1000 * s2GpuBlockedTicks) / s2Ticks) / 10 : 0,
       gpuPressesBeforeStanding,
       gpuPresses: presses['gpuLot'] ?? 0,
       powerPurchases: (presses['gas'] ?? 0) + (presses['solar'] ?? 0) + (presses['nuclear'] ?? 0) + (s.flags['gulfSigned'] === true ? 1 : 0),
@@ -909,17 +941,17 @@ export function simulate(args: Args): SimResult {
     softLocks: softLocks.map(([a, b]) => [Math.round(a), Math.round(b)]),
     reveals: revealTimes.filter((t) => t <= horizon).length,
     runs,
-    minYield: minYield === null ? null : Math.round(minYield * 1000) / 1000,
+    runGpus: runGpus1,
+    gpuBlockedMax: Math.round(Math.max(gpuBlockedMax, gpuBlockedSince !== null ? end - gpuBlockedSince : 0)),
+    gpuBlockedAt: Math.round(gpuBlockedAt),
     modals,
     minModalSpacing: autoModalTimes.length < 2 ? null
       : Math.round(Math.min(...autoModalTimes.slice(1).map((x, i) => x - autoModalTimes[i]!))),
     research: milestones['reveal:research'] ?? null,
     projects: milestones['reveal:projects'] ?? null,
     grid: milestones['buy:p_grid'] ?? null,
-    ladder: ['p_site', 'p_interconnect', 'p_substation', 'p_datacenter'].map((id) => {
-      const at = milestones[`buy:${id}`];
-      return at === undefined ? null : Math.round(at);
-    }),
+    datacenterShown: milestones['shown:p_datacenter'] === undefined ? null : Math.round(milestones['shown:p_datacenter']),
+    wallToDc: transition !== null && typeof s.flags['wallAt'] === 'number' ? Math.round(transition - (s.flags['wallAt'] as number)) : null,
     latencyMedian: s1Latency.length ? median(s1Latency.map(([, v]) => v)) : null,
     latencyWithin10Pct: s1Latency.length ? Math.round((100 * s1Latency.filter(([, v]) => v <= 10).length) / s1Latency.length) : 0,
     latencies: s1Latency,
@@ -970,11 +1002,12 @@ function printStage2(sum: Stage2Summary): void {
   console.log(`G26 hands idle ≥ 30 s     ${sum.clickGapPct}% of the time after 10:00   (≤ 35%)${ok(sum.clickGapPct <= 35)}`);
   console.log(`G26 longest release gap   ${clock(sum.longestRelease)} from ${clock(sum.longestReleaseAt)}   (≤ 5:30)${ok(sum.longestRelease <= 330)}`);
   console.log(`   mechanics              ${sum.mechanics.join(' · ')}`);
-  console.log(`A5 training runs          ${sum.runs}   (bot 9–12, naive 7–10)`);
-  console.log(`A6 interval between starts mean ${sum.intervalMean ?? '—'} s, max ${sum.intervalMax ?? '—'} s   (bot mean 170–260, max ≤ 360; naive max ≤ 540)`);
+  console.log(`A5 training runs          ${sum.runs}   (10–12)`);
+  console.log(`A6 interval between starts mean ${sum.intervalMean ?? '—'} s, max ${sum.intervalMax ?? '—'} s   (mean 180–300, max ≤ 330)`);
   console.log(`   training starts        ${sum.trainStarts.map((x) => fmtClock(x)).join(' ')}`);
   console.log(`   longest interval held by ${sum.longestIntervalBlockers || '—'}`);
-  console.log(`A7 run durations          ${sum.durationMin ?? '—'}–${sum.durationMax ?? '—'} s (min yield ${sum.minYield ?? '—'})   (45–120)`);
+  console.log(`A7 run durations          ${sum.durationMin ?? '—'}–${sum.durationMax ?? '—'} s; GPUs needed ${sum.runGpus.join(' / ')}   (60–110)`);
+  console.log(`   Train blocked for GPUs ${sum.gpuBlockedPct}% of the stage   (bot ≤ 5 %, trainfirst ≤ 25 %)`);
   console.log(`A9 greyed goal on screen  ${sum.greyedGoalPct}% of ticks   (≥ 99)${ok(sum.greyedGoalPct >= 99)}`);
   console.log(`A10 Buy GPUs presses      ${sum.gpuPressesBeforeStanding} before Standing order (${clock(sum.standingOrderAt)}), ${sum.gpuPresses} total   (≤ 12, ≤ 40; naive ≤ 60)`);
   console.log(`A11 power / datacenters   ${sum.powerPurchases} / ${sum.datacenters}   (≤ 20 / ≤ 9)`);
@@ -1022,10 +1055,8 @@ function main(): void {
     console.log(`first training start     ${fmt('firstTrainingStart')}`);
     console.log(`first release            ${fmt('firstRelease')}`);
     console.log(`Series A bought          ${fmt('buy:p_series_a')}`);
-    console.log(`Abilene site reserved    ${fmt('buy:p_site')}`);
-    console.log(`Interconnect queue       ${fmt('buy:p_interconnect')}`);
-    console.log(`Substation               ${fmt('buy:p_substation')}`);
-    console.log(`TRANSITION (Break ground) ${clock(sum.transition)}   (target bot 25:00–35:00, naive 26:00–40:00, greedy ≤ 40:00)`);
+    console.log(`First Datacenter shown   ${clock(sum.datacenterShown)}; bought ${sum.wallToDc === null ? 'before the wall' : `${sum.wallToDc} s after the wall`}   (bot 60–150 s, trainfirst ≤ 240 s)`);
+    console.log(`TRANSITION (First Datacenter) ${clock(sum.transition)}   (target bot 20:00–26:00, naive / greedy / trainfirst 22:00–30:00)`);
     console.log(`capability at transition ${sum.capabilityAtTransition ?? '—'}   (target 1.5–1.8)`);
     console.log(`LONGEST REVEAL GAP       ${sum.longestRevealGap} s (${span(sum.longestRevealGapAt)})   (target ≤ 180 s)`);
     console.log(`reveal gaps > 120 s      ${sum.revealGapsOver120.length ? sum.revealGapsOver120.map(span).join(', ') : 'none'}`);
@@ -1033,8 +1064,8 @@ function main(): void {
     console.log(`Buy Power presses        ${sum.powerPresses} (worst 5-min window ${sum.worstPressWindow})   (target ≤ 60, ≤ 10)`);
     console.log(`idle rescues             ${sum.idleRescues} (at 0 tasks: ${sum.rescuesAtZeroTasks})   (target ≤ 2, none at 0)`);
     console.log(`soft-locks               ${sum.softLocks.length ? sum.softLocks.map(span).join(', ') : 'none'}`);
-    console.log(`Abilene ladder           ${sum.ladder.map(clock).join(' → ')}   (Substation → Break ground target 2–4 min)`);
-    console.log(`training runs            ${sum.runs} (min yield ${sum.minYield ?? '—'})   (target: no run under 0.3)`);
+    console.log(`training runs            ${sum.runs}; GPUs needed ${sum.runGpus.join(' / ')}`);
+    console.log(`Train blocked by GPUs    longest ${clock(sum.gpuBlockedMax)} from ${clock(sum.gpuBlockedAt)}   (target ≤ 4:00)`);
     console.log(`modals                   ${sum.modals} (min spacing ${sum.minModalSpacing ?? '—'} s)   (target 7–9, ≥ 150 s apart)`);
     console.log(`reveal → purchase        median ${sum.latencyMedian ?? '—'} s, ${sum.latencyWithin10Pct}% within 10 s (${sum.latencies.length} projects)   (target bot ≥ 90, naive ≥ 60; ≤ 10 %)`);
     console.log(`densest six minutes      ${sum.maxReveals6min} first-time reveals from ${fmtClock(sum.maxReveals6minAt)}   (target ≤ 16)`);

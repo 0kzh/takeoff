@@ -5,6 +5,7 @@ import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, queueGulf } from '../engine/infrastructure.js';
 import { moveGov, moveLead } from '../engine/world.js';
 import { bestCapability, researchRate } from '../engine/economy.js';
+import { datacenterPrice } from './projects.js';
 
 type Ctx = Record<string, number | string>;
 
@@ -57,13 +58,7 @@ function twoFigures(raw: number): number {
   return Math.ceil(raw / unit) * unit;
 }
 
-/** The first unbought rung of the Abilene ladder, and its price. */
-function nextRungPrice(s: GameState): number {
-  for (const [id, price] of [['p_site', 40000], ['p_interconnect', 80000], ['p_substation', 120000], ['p_datacenter', 185000]] as const) {
-    if (!(s.projects[id]?.bought ?? 0)) return price;
-  }
-  return 185000;
-}
+
 
 const ctxNum = (ctx: Ctx, k: string, d = 0) => (typeof ctx[k] === 'number' ? (ctx[k] as number) : Number(ctx[k] ?? d));
 
@@ -228,9 +223,9 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_bridge',
     title: 'A Bridge Round',
-    // A quarter of the next Abilene rung, fixed when the offer arrives (critic round 2 §5).
+    // A twentieth of First Datacenter, fixed when the offer arrives (critic round 2 §5).
     onOpen: (s, ctx) => {
-      if (!ctx['amount']) ctx['amount'] = Math.round(0.25 * nextRungPrice(s));
+      if (!ctx['amount']) ctx['amount'] = Math.round((0.05 * datacenterPrice(s)) / 1000) * 1000;
     },
     text: (_s, ctx) => [
       `A fund offers ${fmtMoney(ctxNum(ctx, 'amount', 10000))} now, ahead of a proper round.`,

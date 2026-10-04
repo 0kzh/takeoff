@@ -4,12 +4,12 @@ import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
 } from '../engine/economy.js';
 import {
-  trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, trainingCompute, requiredCompute,
-  trainSlotFree, evalRun, canTrainNow,
+  trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, gpusShort, needsDatacenter,
+  trainSlotFree, evalRun, gpusAvailable, gpusNeeded,
 } from '../engine/training.js';
 import {
   lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost,
-  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, RUN_HOLD_YIELD } from '../engine/infrastructure.js';
+  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, RUN_HOLD_FLEET } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
@@ -22,8 +22,6 @@ import type { ProjectDef } from '../data/projects.js';
  */
 export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst';
 
-/** The stage goal: the Abilene site ladder, rung by rung. */
-export const LADDER = ['p_site', 'p_interconnect', 'p_substation', 'p_datacenter'];
 
 export interface BotMemory {
   policy: PolicyName;
@@ -61,10 +59,16 @@ export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false,
 /** The purchase that ends Stage 1. */
 const TRANSITION = 'p_datacenter';
 
-/** With `holdTransition`, Break ground's price is kept in hand once it is on screen. */
+/**
+ * With `holdTransition`, First Datacenter's price is kept in hand when the policy would be saving for
+ * it (the bot from the wall, the naive and the first-timer from the card), and once the money is
+ * there: the same moment the policy would buy it, left for the player to click.
+ */
 function heldGoalPrice(s: GameState, mem: BotMemory): number {
   if (!mem.holdTransition || !isVisible(s, TRANSITION)) return 0;
-  return projectById(TRANSITION)!.cost(s).funds ?? 0;
+  const price = projectById(TRANSITION)!.cost(s).funds ?? 0;
+  const saving = mem.policy === 'bot' ? needsDatacenter(s) : mem.policy !== 'greedy';
+  return saving || s.funds >= price ? price : 0;
 }
 
 /** Seconds a policy reads a modal before answering it (a 2-s snapshot sees every modal). */
@@ -167,10 +171,6 @@ function isVisible(s: GameState, id: string): boolean {
   return visibleProjects(s).some((p) => p.id === id);
 }
 
-/** The visible, unbought rung of the Abilene ladder, if any. */
-export function currentRung(s: GameState): ProjectDef | undefined {
-  return visibleProjects(s).find((p) => LADDER.includes(p.id));
-}
 
 /**
  * Stage 1 modals whose careful answer costs research, money or Trust: hold the modal open for up
@@ -319,11 +319,15 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
       if (!ok) break;
     }
   }
-  // The harness's goal rule: any project on screen priced at $10,000 and a minute of revenue or more.
-  const bigTicket = trainFirst ? harnessGoal(s) : !greedy && !!currentRung(s);
-  if (!bigTicket && s.stage < 2 && s.revealed['compute']) {
+  // The harness's goal rule: any project on screen priced at $10,000 and a minute of revenue or more
+  // (and First Datacenter, its static goal). The naive player saves once First Datacenter shows;
+  // the bot once the next run needs more GPUs than any cloud rents. A run short of GPUs that Rent
+  // GPU can fix is fixed (Train names the fix: owner feedback U1).
+  const bigTicket = trainFirst ? harnessGoal(s) || isVisible(s, TRANSITION) : greedy ? false : careful ? needsDatacenter(s) : isVisible(s, TRANSITION);
+  const rentable = s.stage < 2 && s.revealed['compute'];
+  if (rentable && (!bigTicket || (gpusShort(s) && !needsDatacenter(s)))) {
     let guard = 0;
-    while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {
+    while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && (!bigTicket || gpusShort(s)) && a.rentGpu(s)) {
       /* buy while affordable */
     }
   }
@@ -421,9 +425,6 @@ const CHOICE_POLICY_S2: Record<string, number[]> = {
 /** Capability, Efficiency, Capability, Efficiency, Safety (§9.1 step 4). */
 const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
 
-/** Training compute the bot waits for before a run: have / wanted ≥ 0.6 (the run keeps ≥ 77 % of its gain). */
-/** The compute ratio from which the bot trains: the game's run hold (the lots save for the run from there). */
-export const TRAIN_COMPUTE_GATE = RUN_HOLD_YIELD * RUN_HOLD_YIELD;
 
 function runsS2(s: GameState): number {
   return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
@@ -498,9 +499,6 @@ function dataReady(s: GameState): boolean {
   return s.data + 1e-9 >= need;
 }
 
-function computeRatio(s: GameState): number {
-  return trainingCompute(s) / Math.max(1, requiredCompute(s));
-}
 
 /** Every enabled release-slot action: red-team to zero, then release (publicly). */
 function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
@@ -585,7 +583,10 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     .reduce((m, p) => Math.max(m, p.cost(s).funds ?? 0), 0);
   // A run waiting for compute is waiting for GPU lots: no reserve until the cluster is nearly there.
   // A run waiting only for its data keeps its money too: the data fix is saved for beside it.
-  const runReserve = slot && s.research >= 0.6 * runResearch && computeRatio(s) >= 0.9 * TRAIN_COMPUTE_GATE ? runFunds : 0;
+  // The game's own rule for the lots (RUN_HOLD_FLEET): grow the fleet to half again what the run
+  // needs before saving its money, so a third keeps serving while it trains.
+  const fleetReady = gpusAvailable(s) >= RUN_HOLD_FLEET * gpusNeeded(s);
+  const runReserve = slot && s.research >= 0.6 * runResearch && fleetReady ? runFunds : 0;
   // Walls and named fixes are saved for in full; the next run's money may lend 30 s of revenue to a card.
   const wallReserve = Math.max(urgentFix <= 180 * rev ? urgentFix : 0, wallFixPrice(s, rev), publishersWait(s, mem), gulfWait(s, mem));
   const reserve = Math.max(runReserve, wallReserve);
@@ -637,20 +638,16 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     a.buildDatacenter(s);
   }
 
-  // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 60 % of the compute wanted;
-  //    a short run when only money is missing and the rest of it is more than 45 s away.
-  if (slot && canStartTraining(s) && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE) {
+  // 4. Train when a slot is free and the run has everything it needs (its GPUs among them).
+  if (slot && canStartTraining(s) && dataReady(s)) {
     a.setFocus(s, focusFor(s, mem));
     a.startTraining(s);
-  } else if (slot && canTrainNow(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE && (runFunds - s.funds) / rev > 45 && mem.variant !== 'full-runs') {
-    a.setFocus(s, focusFor(s, mem));
-    a.trainNow(s);
   }
 
   // 5. Other projects in table order: keep the run's money, and its research while it is otherwise ready.
-  const otherwiseReady = slot && s.funds >= runFunds && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE;
-  // A free slot waiting for compute: money goes to GPU lots before cards that are not named fixes.
-  const computeBound = slot && dataReady(s) && computeRatio(s) < TRAIN_COMPUTE_GATE && lotSize(s) >= 100;
+  const otherwiseReady = slot && s.funds >= runFunds && dataReady(s) && !gpusShort(s);
+  // A free slot waiting for GPUs: money goes to GPU lots before cards that are not named fixes.
+  const computeBound = slot && dataReady(s) && !fleetReady && lotSize(s) >= 100;
   // Insight is kept for the Stage 2 projects on screen before the shelf of Stage 1 leftovers.
   const insightHeld = ordered
     .filter((p) => !p.stages.includes(1))
@@ -800,11 +797,10 @@ export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
 }
 
-/** What the harness's sweep also presses in Stage 2 when it is enabled: the bigger lots, the short run. */
+/** What the harness's sweep also presses in Stage 2 when it is enabled: the bigger lots. */
 function sweepExtras(s: GameState, a: Actions): void {
   if (s.revealed['lot5']) a.buyGpuBatch(s, 5000);
   if (s.revealed['lot25']) a.buyGpuBatch(s, 25000);
-  if (canTrainNow(s)) a.trainNow(s);
 }
 
 function plantEnabled(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): boolean {
@@ -856,9 +852,9 @@ export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['marketing'] && s.funds >= marketingCost(s)) a.buyMarketing(s);
 }
 
-/** For the sim's summary: does the bot consider the run blocked by compute (have / wanted < gate)? */
+/** For the sim's summary: does the next run have the GPUs it needs? */
 export function computeGateOpen(s: GameState): boolean {
-  return computeRatio(s) >= TRAIN_COMPUTE_GATE;
+  return !gpusShort(s);
 }
 
 /** The run in the release slot, for the sim (re-exported so the runner needs one import). */

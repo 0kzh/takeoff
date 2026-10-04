@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -53,10 +53,8 @@ export interface TrainingRun {
   phase: RunPhase;
   elapsed: number;
   duration: number;
-  /** Fraction of the focus gain kept when the run had less compute than it needed. */
-  computeYield: number;
-  /** Stage 2: the share of the run's price paid when it was started short (`Train now`); 1 or absent: the full run. */
-  moneyYield?: number;
+  /** GPUs the run holds while it trains (the requirement it met when it started). */
+  gpus: number;
   evalElapsed: number;
   flavorShown: number;
   eventAt: number;
@@ -99,7 +97,6 @@ export interface RivalRecord {
 export interface TrainingState {
   focus: Focus;
   runIndex: number;
-  computeShare: number;
   run: TrainingRun | null;
   nextRunId: number;
   /** Seconds left on the red-team cooldown button (persisted so a reload cannot skip it). */
@@ -276,8 +273,6 @@ export interface GameState {
   /** Seconds the copies have been without power and the player without the money to buy it. */
   stuckFor: number;
 
-  /** Seconds left in the Abilene interconnect queue (a named wait); 0 when not waiting. */
-  interconnectLeft: number;
 
   gpus: number;
   gpuCostGrowth: number;
@@ -384,7 +379,6 @@ export function newTraining(): TrainingState {
   return {
     focus: 'capability',
     runIndex: 0,
-    computeShare: 0.5,
     run: null,
     nextRunId: 1,
     redTeamRemaining: 0,
@@ -466,7 +460,6 @@ export function newGame(seed: number = Date.now()): GameState {
     gridAuto: false,
     stuckFor: 0,
 
-    interconnectLeft: 0,
 
     gpus: 0,
     gpuCostGrowth: 1.1,
@@ -540,10 +533,11 @@ export function newGame(seed: number = Date.now()): GameState {
     projects: {},
     developments: {},
     // Buy Power is on screen, greyed out, from the first second: a goal before the first click.
-    revealed: { console: true, task: true, power: true, buyPower: true },
+    // Beat 0 (owner feedback 1, (a)): the console, the task count and one button.
+    revealed: { console: true, task: true },
     flags: {},
     log: [],
-    console: ['Welcome to OpenMind.'],
+    console: ['Welcome to OpenMind. Customers are waiting.'],
     consoleQueue: [],
     activeChoice: null,
     choiceQueue: [],
@@ -591,7 +585,6 @@ export function narrate(s: GameState, lines: [number, string][], holdAfter = 0):
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {
   s.log.push({ date: dateLabel(s.date), text, kind });
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
-  s.revealed['log'] = true;
 }
 
 export function counter(s: GameState, name: string): number {
@@ -744,7 +737,49 @@ function migrateV4(raw: Record<string, unknown>): Record<string, unknown> {
   return raw;
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4];
+/**
+ * v5 → v6 (owner feedback U1–U3): a run needs N GPUs instead of keeping part of its gain, and one
+ * purchase (First Datacenter) ends Stage 1. A Stage 1 save on the old ladder gets its rung money
+ * back and the pinned card is shown again with a price of its own; Train now is gone.
+ */
+function migrateV5(raw: Record<string, unknown>): Record<string, unknown> {
+  const projects = { ...((raw['projects'] as Record<string, ProjectState>) ?? {}) };
+  const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
+  const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
+  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
+  let refund = 0;
+  if (stage === 1) {
+    for (const [id, price] of [['p_site', 50000], ['p_interconnect', 100000], ['p_substation', 150000], ['p_contractor', 25000]] as const) {
+      if ((projects[id]?.bought ?? 0) > 0) refund += price;
+    }
+    if (!(projects['p_datacenter']?.bought ?? 0)) delete projects['p_datacenter'];
+    delete flags['price:p_datacenter'];
+    // The side offers hung on rungs come back keyed to the card's appearance.
+    for (const id of ['p_cooling', 'p_soundwall', 'p_abatement', 'p_ppa']) if (!(projects[id]?.bought ?? 0)) delete projects[id];
+  }
+  for (const id of ['p_site', 'p_interconnect', 'p_substation', 'p_expedite', 'p_contractor']) {
+    delete projects[id];
+  }
+  for (const id of ['site', 'interconnect', 'powerMW', 'trainNow']) delete revealed[id];
+  // The opening's new flags (owner feedback 1, (a)): a save from before the change has seen them all.
+  for (const id of ['fleet', 'pricing', 'quota']) revealed[id] = true;
+  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}) };
+  delete training['computeShare'];
+  for (const key of ['run', 'pending']) {
+    const run = training[key] as Record<string, unknown> | null | undefined;
+    if (run && typeof run === 'object') {
+      if (typeof run['gpus'] !== 'number') run['gpus'] = 0;
+      delete run['computeYield'];
+      delete run['moneyYield'];
+    }
+  }
+  const out: Record<string, unknown> = { ...raw, projects, revealed, flags, training };
+  delete out['interconnectLeft'];
+  if (refund > 0) out['funds'] = Math.round(((raw['funds'] as number) ?? 0) + refund);
+  return out;
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

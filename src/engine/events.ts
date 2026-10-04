@@ -9,10 +9,11 @@ import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
   LOT_SIZES, lotFits, lotCostOf, lotHoldReason, datacenterReason, plantReason,
 } from './infrastructure.js';
-import { canStartTraining, canRedTeam, canRelease, canTrainNow, trainCost, trainingRun } from './training.js';
+import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
 import { stageDef } from './stages.js';
+import { BEAT_GAP_SECONDS } from './reveal.js';
 import { rand, pick, chance } from './rng.js';
 
 export function developmentById(id: string): DevelopmentDef | undefined {
@@ -186,9 +187,14 @@ function modalFree(s: GameState): boolean {
   return !s.activeChoice && s.stats.timePlayed - s.cadence.lastModalAt >= MODAL_SPACING;
 }
 
+/** Nothing new appeared in the last few seconds: an unprompted modal is a beat of its own. */
+function beatClear(s: GameState): boolean {
+  return s.stats.timePlayed - s.cadence.lastRevealAt >= BEAT_GAP_SECONDS;
+}
+
 /** An unprompted modal would open right now (nothing open, nothing waiting, the spacing respected). */
 export function modalCanOpen(s: GameState): boolean {
-  return modalFree(s) && s.choiceQueue.length === 0;
+  return modalFree(s) && s.choiceQueue.length === 0 && beatClear(s);
 }
 
 function present(s: GameState, entry: ActiveChoice): void {
@@ -210,7 +216,8 @@ export function openChoice(s: GameState, id: string, context: Record<string, num
     present(s, entry);
     return true;
   }
-  if (modalFree(s) && s.choiceQueue.length === 0) {
+  // A passing offer (`onlyIfFree`) takes its moment or lapses; the rest wait out a fresh reveal.
+  if (modalFree(s) && s.choiceQueue.length === 0 && (beatClear(s) || opts.onlyIfFree)) {
     present(s, entry);
     return true;
   }
@@ -228,7 +235,7 @@ export function drainChoiceQueue(s: GameState): void {
       s.choiceQueue.shift();
       continue;
     }
-    if (!PLAYER_MODALS.includes(next.id) && s.stats.timePlayed - s.cadence.lastModalAt < MODAL_SPACING) return;
+    if (!PLAYER_MODALS.includes(next.id) && (s.stats.timePlayed - s.cadence.lastModalAt < MODAL_SPACING || !beatClear(s))) return;
     s.choiceQueue.shift();
     present(s, next);
   }
@@ -360,7 +367,6 @@ export function enabledPurchases(s: GameState): string[] {
   const out: string[] = [];
   for (const p of visibleProjects(s)) if (p.canAfford(s)) out.push(p.id);
   if (canStartTraining(s)) out.push('train');
-  if (canTrainNow(s)) out.push('trainNow');
   const run = s.training.run;
   if (run && run.phase === 'redteam' && canRedTeam(s)) out.push('redteam');
   if (run && run.phase === 'redteam' && canRelease(s)) out.push('release');
@@ -397,7 +403,6 @@ function namedWait(s: GameState): boolean {
     phase === 'training' ||
     phase === 'evaluating' ||
     !!trainingRun(s) ||
-    s.interconnectLeft > 0 ||
     s.powerQueue.length > 0 ||
     s.training.cooldown > 0 ||
     s.training.releaseWait > 0

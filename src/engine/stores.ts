@@ -5,9 +5,9 @@ import {
   taskShare, alignExtra, JOB_FUND_SHARE,
 } from './economy.js';
 import {
-  freeSlots, freePowerGpus, poweredGpus, effGpus, SUBSTATION_MW, GAS_MW, SOLAR_MW, NUCLEAR_MW, GULF_MW,
+  freeSlots, freePowerGpus, poweredGpus, SUBSTATION_MW, GAS_MW, SOLAR_MW, NUCLEAR_MW, GULF_MW,
 } from './infrastructure.js';
-import { trainCost, trainingShare } from './training.js';
+import { trainCost, busyGpus } from './training.js';
 import { crawlRate, synthRate, flywheelRate } from './world.js';
 
 /**
@@ -89,7 +89,7 @@ export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
       ];
     }
     case 'power': {
-      const rows: TipRow[] = [['substation', `${SUBSTATION_MW}`]];
+      const rows: TipRow[] = [['Abilene grid', `${SUBSTATION_MW}`]];
       if (s.gasPlants) rows.push([`gas (${s.gasPlants})`, fmtInt(s.gasPlants * GAS_MW)]);
       rows.push([`solar (${s.solarFarms})`, fmtInt(s.solarFarms * SOLAR_MW)]);
       if (s.reactors) rows.push([`nuclear (${s.reactors})`, fmtInt(s.reactors * NUCLEAR_MW)]);
@@ -103,7 +103,6 @@ export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
       return rows;
     }
     case 'copies': {
-      const all = Math.floor(effGpus(s) * s.copiesPerGPU);
       const running = copies(s);
       const onResearch = Math.floor(running * s.researchAlloc);
       const onAlign = Math.floor(running * alignExtra(s));
@@ -112,7 +111,7 @@ export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
         ['on research', fmtInt(onResearch)],
       ];
       if (onAlign > 0) rows.push(['on alignment', fmtInt(onAlign)]);
-      rows.push(['training', fmtInt(trainingShare(s) > 0 ? all - running : 0)]);
+      rows.push(['GPUs training', fmtInt(busyGpus(s))]);
       rows.push(['per GPU', fmtNum(s.copiesPerGPU, 2)]);
       return rows;
     }

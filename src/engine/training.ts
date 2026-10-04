@@ -1,11 +1,11 @@
-import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press } from './state.js';
+import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
-import { activeGpus, effGpus, S2_FUNDS_SCALE } from './infrastructure.js';
-import { researchCap, researchRate } from './economy.js';
+import { effGpus, S2_FUNDS_SCALE, poweredGpus } from './infrastructure.js';
+import { researchCap, researchRate, rentQuota, atRentQuota } from './economy.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
-import { fmtNum, fmtClock, fmtMoneyShort } from './format.js';
+import { fmtNum, fmtInt, fmtClock, fmtMoneyShort } from './format.js';
 import { visibleProjects } from './projects.js';
 import { crawlRate, synthRate, flywheelRate, moveGov } from './world.js';
 
@@ -41,12 +41,9 @@ export function majorFor(capability: number): number {
  * Training costs depend on the capability the run starts from, not on how many runs came before,
  * so every mix of focuses pays the same to reach a capability and nothing jumps at a stage
  * boundary (stage2.md §2.5). One continuous function of `c` per cost, for the whole game: the
- * Stage 2 spec's constants hold from `COST_KNEE` (1.6×) up; below it the compute and funds curves
- * are steeper, so a first run at 1.0× trains fully on the fleet a player has at minute six.
+ * Stage 2 spec's constants hold from `COST_KNEE` (1.6×) up; below it the funds curve is steeper.
  */
 export const COST_KNEE = 1.6;
-/** Every run keeps at least this share of its nominal gain, however little compute it had. */
-export const MIN_YIELD = 0.3;
 
 /** The run waiting in evaluation or red-team (the release slot), if any. */
 export function evalRun(s: GameState): TrainingRun | null {
@@ -75,9 +72,15 @@ export function startCapability(s: GameState): number {
   return Math.max(s.capability, s.training.internalCapability, waiting && waiting.capAfter > 0 ? waiting.capAfter : 0);
 }
 
-/** Research `21,000 × (c/1.6)^5`: ≈ 2,000 at 1.0×, 15,200 at 1.5×, 24,500 at 1.65×. */
-export function researchFor(c: number): number {
-  return Math.round(21000 * Math.pow(c / COST_KNEE, 5));
+/**
+ * Research `21,000 × (c/1.6)^5` to two significant figures (owner feedback 1's `Cost: 7,400
+ * research`): 2,000 at 1.0×, 15,000 at 1.5×, 25,000 at 1.65×. Stage 3's programs keep every digit.
+ */
+export function researchFor(c: number, stage = 1): number {
+  const raw = 21000 * Math.pow(c / COST_KNEE, 5);
+  if (stage >= 3 || raw < 100) return Math.round(raw);
+  const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
+  return Math.round(raw / unit) * unit;
 }
 
 /** Funds `$25,000 × (c/1.6)^8` from the knee up; exponent 9.5 below it: ≈ $290 at 1.0×, $13,500 at 1.5×. */
@@ -92,16 +95,20 @@ export function fundsFor(c: number): number {
  */
 export const S2_FUNDS_EXPONENT = 7;
 
-/** Scale-1 base of a Stage 2 run (stage2.md has $25,000; the held lots and Train now made the stage a minute or two short). */
-export const S2_RUN_BASE = 29000;
+/**
+ * Scale-1 base of a Stage 2 run (stage2.md has $25,000). Owner feedback 1's knob after the 600: at
+ * $32,000 the harness's first-timer takes 38 minutes and the sim's train-first player 39–44; the
+ * reasonable bot (32–38) barely moves with it, its stage being half training and half saving.
+ */
+export const S2_RUN_BASE = 32000;
 
 export function fundsForS2(c: number): number {
   return Math.round(S2_RUN_BASE * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
 }
 
 /**
- * Data `1.8 T × (c/1.6)^3` (Stage 2, from the second run): 2.6 T at 1.8×, 11.9 T at 3.0×.
- * stage2.md has 2.0 T; 1.8 keeps the mid-stage data wall to the length its paper model had.
+ * Data `1.5 T × (c/1.6)^3` (Stage 2, from the second run): 2.1 T at 1.8×, 9.9 T at 3.0×.
+ * stage2.md has 2.0 T; 1.5 keeps the mid-stage data wall to the length its paper model had.
  */
 export const DATA_BASE = 1.5;
 
@@ -110,55 +117,80 @@ export function dataFor(c: number): number {
 }
 
 /**
- * GPUs of training compute a run wants: `1,000 × (c/1.6)^7.5` from the knee up (≈ 1,260 at
- * 1.65×); exponent 10 below it (≈ 9 at 1.0×, 125 at 1.3×, 520 at 1.5×). Rented fleets top out
- * near a hundred GPUs, so late Stage 1 runs are undertrained — the case for owning compute.
+ * The GPUs a run needs, a hard requirement (owner feedback 1, B1: no yield): below the knee
+ * `10 × c^4.55` rounded to 5 — 10 / 15 / 30 / 45 / 80 at 1.00 / 1.12 / 1.25 / 1.40 / 1.57×, so a
+ * rented fleet trains about five models; from the knee the Stage 2 rule `600 × (c/1.6)^7`, two
+ * significant figures — 780 at 1.66×, 5,600 at 2.2×, 39,000 at 2.9×, 310,000 at 3.9× — more than
+ * any cloud rents (the wall). Stage 3's shell, provisionally, `300,000 × (c/4)^1.3`.
  */
-export function computeFor(c: number): number {
-  return 1000 * Math.pow(c / COST_KNEE, c >= COST_KNEE ? 7.5 : 10);
+export const GPU_NEED_BASE = 10;
+export const GPU_NEED_EXPONENT_S1 = 4.55;
+export const GPU_NEED_DC = 600;
+export const GPU_NEED_EXPONENT = 7;
+
+export function gpusFor(c: number): number {
+  const raw = c < COST_KNEE ? GPU_NEED_BASE * Math.pow(Math.max(1, c), GPU_NEED_EXPONENT_S1) : GPU_NEED_DC * Math.pow(c / COST_KNEE, GPU_NEED_EXPONENT);
+  return twoSig(raw);
+}
+
+/** Stage 3's shell (stage3.md, provisional): `300,000 × (c/4)^1.3`. */
+export function gpusForS3(c: number): number {
+  return twoSig(300000 * Math.pow(Math.max(1, c) / 4, 1.3));
+}
+
+function twoSig(raw: number): number {
+  if (raw < 100) return Math.max(GPU_NEED_BASE, Math.round(raw / 5) * 5);
+  const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
+  return Math.round(raw / unit) * unit;
 }
 
 export function trainCost(s: GameState): Cost {
   const c = startCapability(s);
   if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
   // Stage 3: runs are research programs (stage3.md §1.1); its build re-bases the price itself.
-  if (s.stage >= 3) return { research: researchFor(c) };
+  if (s.stage >= 3) return { research: researchFor(c, 3) };
   const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
 }
 
-/**
- * Stage 2's compute exponent (stage2.md §2.5 and §9.5's second knob: `N(c) = 1,000 × (c/1.6)^7.5`).
- * 7.2 keeps a player who trains the moment Train lights up from a tail of half-trained runs.
- */
-export const S2_COMPUTE_EXPONENT = 7.5;
-
-/** GPUs of training compute the next run wants. */
-export function requiredCompute(s: GameState): number {
-  const c = startCapability(s);
-  if (s.stage >= 2 && c >= COST_KNEE) return 1000 * Math.pow(c / COST_KNEE, S2_COMPUTE_EXPONENT);
-  return computeFor(c);
-}
-
-/**
- * GPUs the next run would get. Stage 1: the training share of the rented fleet, × Distributed
- * training. Stage 2: the whole active fleet in G4-equivalents (owned hardware trains on everything).
- */
-export function trainingCompute(s: GameState): number {
-  if (s.stage >= 2) return Math.max(1, effGpus(s));
+/** GPUs the next run needs: the capability curve above, a third fewer with Distributed training (Stages 1–2). */
+export function gpusNeeded(s: GameState): number {
+  if (s.stage >= 4) return 0;
+  if (s.stage === 3) return gpusForS3(startCapability(s));
+  const n = gpusFor(startCapability(s));
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
-  return Math.max(1, activeGpus(s) * s.training.computeShare * mult);
+  return mult > 1 ? twoSig(n / mult) : n;
 }
 
-/** Share of the nominal gain the run keeps: `clamp(√(have / wanted), 0.3, 1)`. */
-export function computeYield(s: GameState): number {
-  return Math.min(1, Math.max(MIN_YIELD, Math.sqrt(trainingCompute(s) / requiredCompute(s))));
+/**
+ * GPUs a run can use: Stage 1, the rented fleet; Stage 2, the powered fleet in G4-equivalents (a
+ * G5 does the work of one and a half), less what a run in training already holds.
+ */
+export function gpusAvailable(s: GameState): number {
+  const all = s.stage >= 2 ? Math.floor(effGpus(s)) : s.gpus;
+  return Math.max(0, all - busyGpus(s));
 }
 
-/** `clamp(120 × √(wanted / have), 45, 120)` seconds: a run with four times the compute it wants takes a minute. */
+/** GPUs held by the run in its training phase (they serve no tasks until it is done). */
+export function busyGpus(s: GameState): number {
+  const r = trainingRun(s);
+  return r && r.elapsed < r.duration ? r.gpus ?? 0 : 0;
+}
+
+/** The next run lacks GPUs (Train is blocked by the requirement). */
+export function gpusShort(s: GameState): boolean {
+  return gpusAvailable(s) < gpusNeeded(s);
+}
+
+/**
+ * Seconds a run takes, by the GPUs it uses: Stage 1 `45 + 10 × log2(N / 10)` (45–80 s), Stage 2
+ * `60 + 8 × log2(N / 1,000)` clamped to 60–110 s (G9).
+ */
 export function trainingDuration(s: GameState): number {
-  return Math.min(120, Math.max(45, 120 * Math.sqrt(requiredCompute(s) / trainingCompute(s))));
+  const n = Math.max(1, gpusNeeded(s));
+  if (s.stage < 2) return Math.min(80, Math.max(45, 45 + 10 * Math.log2(n / 10)));
+  return Math.min(110, Math.max(60, 60 + 8 * Math.log2(n / 1000)));
 }
 
 /** The Research Plateau: the next run costs more research than the lab can hold. */
@@ -173,15 +205,9 @@ export function plateauSeconds(s: GameState): number {
   return typeof at === 'number' ? s.stats.timePlayed - at : 0;
 }
 
-/** "Far beyond anything rentable": the run wants three times the compute it can get. */
-export function needsOwnedCompute(s: GameState): boolean {
-  return s.stage < 2 && requiredCompute(s) >= 3 * trainingCompute(s);
-}
-
-/** Training steals a share of compute while a run is in its training phase. */
-export function trainingShare(s: GameState): number {
-  const r = trainingRun(s);
-  return r && r.elapsed < r.duration ? s.training.computeShare : 0;
+/** Stage 1: the next run needs more GPUs than the cloud will ever rent (140 with every lease) — the wall. */
+export function needsDatacenter(s: GameState): boolean {
+  return s.stage < 2 && gpusNeeded(s) > MAX_RENT_QUOTA;
 }
 
 /** `Sage-2.4`: the next version after the latest model, counting one waiting in the release slot. */
@@ -220,6 +246,7 @@ export function trainWait(s: GameState): string {
   const cap = researchCap(s);
   const fixes = s.stage === 2 ? runFixNames(s) : '';
   if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}${fixes ? ` — ${fixes}` : ''}`;
+  // A run short of GPUs says so on its own line (trainGpuLine); this line names what else it waits for.
   const waits: [number, string][] = [];
   // Stage 1 names the resource and the time only (`research — about 0:45`: its cost line is right
   // above, and minute 10 stays at 38 numbers); from Stage 2 the shortfall too (critic follow-up B8).
@@ -228,7 +255,7 @@ export function trainWait(s: GameState): string {
     if (short <= 1e-9) return;
     const eta = rate > 0 ? short / rate : Infinity;
     const what = amounts ? `short ${label}` : word;
-    waits.push([eta, `${what}${Number.isFinite(eta) && eta < 3600 ? ` — about ${fmtClock(eta)}` : ''}`]);
+    waits.push([eta, `${what}${Number.isFinite(eta) && eta >= 1 && eta < 3600 ? ` — about ${fmtClock(eta)}` : ''}`]);
   };
   add((cost.research ?? 0) - s.research, researchRate(s), `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
   if (cost.data) add(cost.data - s.data, crawlRate(s) + synthRate(s) + flywheelRate(s), `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
@@ -240,6 +267,35 @@ export function trainWait(s: GameState): string {
   if (fixes && top.includes(' research')) return `${top} — ${fixes}`;
   return top;
 }
+
+/**
+ * The Train row's GPU line (owner feedback 1, B1): what the run needs and, when it is short, the
+ * purchase that fixes it — `Needs 35 GPUs for 1:03` · `Needs 45 GPUs. 38 rented. Rent 7 more.` ·
+ * `Needs 1,200 GPUs. The cloud will rent 80. Build the First Datacenter.` · `Needs 18,000 GPUs.
+ * 14,200 free.` · `Needs 18,000 powered GPUs. 6,000 are dark: add power.`
+ */
+export function trainGpuLine(s: GameState): string {
+  const need = gpusNeeded(s);
+  if (need <= 0) return '';
+  const have = gpusAvailable(s);
+  if (have >= need) return `Needs ${fmtInt(need)} GPUs for ${fmtClock(trainingDuration(s))}`;
+  if (s.stage < 2) {
+    if (needsDatacenter(s)) return `Needs ${fmtInt(need)} GPUs. The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`;
+    if (atRentQuota(s) || need > rentQuota(s)) {
+      const card = visibleProjects(s).find((p) => QUOTA_CARD_IDS.includes(p.id));
+      return `Needs ${fmtInt(need)} GPUs. The cloud rents ${fmtInt(rentQuota(s))}.${card ? ` ${card.title} adds 20.` : ''}`;
+    }
+    return `Needs ${fmtInt(need)} GPUs. ${fmtInt(have)} rented. Rent ${fmtInt(need - have)} more.`;
+  }
+  const dark = Math.max(0, s.gpus - poweredGpus(s));
+  if (dark > 0 && have + dark >= need) return `Needs ${fmtInt(need)} powered GPUs. ${fmtInt(dark)} are dark: add power.`;
+  return `Needs ${fmtInt(need)} GPUs. ${fmtInt(have)} free.`;
+}
+
+/** Every rent the cloud will ever allow: the base quota and the three lease cards. */
+export const MAX_RENT_QUOTA = 140;
+
+const QUOTA_CARD_IDS = ['p_compute_deal', 'p_region', 'p_reserved'];
 
 /** The cards that answer the wall in front of the next run, by id (drawn urgent while it stands). */
 const RUN_FIXES = ['p_research_cluster', 'p_exp_scheduler', 'p_checkpoint_farm', 'p_lab_cluster', 'p_floor', 'p_desks', 'p_ai_assistants', 'p_synth', 'p_license_code', 'p_license_archive', 'p_beg_data'];
@@ -261,15 +317,15 @@ export function trainSlotFree(s: GameState): boolean {
   return t.run.phase !== 'training' && isBought(s, 'p_parallel');
 }
 
-/** Everything but the money is there for the next run: a free slot, no cooldown, research and data. */
+/** Everything but the money is there for the next run: a free slot, no cooldown, research, data and GPUs. */
 export function runOtherwiseReady(s: GameState): boolean {
-  if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0) return false;
+  if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0 || gpusShort(s)) return false;
   const cost = trainCost(s);
   return s.research >= (cost.research ?? 0) && s.data + 1e-9 >= (cost.data ?? 0);
 }
 
 export function canStartTraining(s: GameState): boolean {
-  if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0) return false;
+  if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0 || gpusShort(s)) return false;
   return canPay(s, trainCost(s));
 }
 
@@ -281,59 +337,15 @@ export function setFocus(s: GameState, focus: Focus): boolean {
   return true;
 }
 
-/**
- * Stage 2's short run (critic C3): with everything else ready and at least this share of the money,
- * the run can start now on what the money buys and keep that share of its gain (it still spends all
- * its research and data). Waiting for the full price is the other choice.
- */
-export const TRAIN_NOW_SHARE = 0.4;
-/** Train now is offered only when the full run is at least this far away (seconds of income). */
-export const TRAIN_NOW_WAIT = 30;
-
-export function canTrainNow(s: GameState): boolean {
-  if (s.stage !== 2 || !s.revealed['trainNow'] || !runOtherwiseReady(s)) return false;
-  const price = trainCost(s).funds ?? 0;
-  if (!(price > 0 && s.funds < price && s.funds >= TRAIN_NOW_SHARE * price)) return false;
-  return fullRunWait(s) >= TRAIN_NOW_WAIT;
-}
-
-/** Seconds of income until the full run's price is in hand. */
-export function fullRunWait(s: GameState): number {
-  const price = trainCost(s).funds ?? 0;
-  return Math.max(0, price - s.funds) / Math.max(1, s.stats.revPerSec);
-}
-
-/**
- * The share of its gain a run on part of the money keeps: a smaller run is worth more than its
- * share of the price (the square root of it: 40 % of the money keeps 63 %), times the compute yield.
- */
-export function moneyShareYield(share: number): number {
-  return Math.sqrt(Math.max(0, Math.min(1, share)));
-}
-
-export function trainNowYield(s: GameState): number {
-  const price = trainCost(s).funds ?? 0;
-  return price > 0 ? moneyShareYield(s.funds / price) * computeYield(s) : 0;
-}
-
-export function trainNow(s: GameState): boolean {
-  if (!canTrainNow(s)) return false;
-  const cost = trainCost(s);
-  const paid = Math.floor(s.funds);
-  const share = moneyShareYield(paid / (cost.funds ?? 1));
-  const ok = startRun(s, { ...cost, funds: paid }, share);
-  if (ok) press(s, 'trainNow');
-  return ok;
-}
-
 export function startTraining(s: GameState): boolean {
   if (!canStartTraining(s)) return false;
-  return startRun(s, trainCost(s), 1);
+  return startRun(s, trainCost(s));
 }
 
-function startRun(s: GameState, cost: Cost, moneyYield: number): boolean {
+function startRun(s: GameState, cost: Cost): boolean {
   const t = s.training;
-  const yieldNow = computeYield(s);
+  const gpus = gpusNeeded(s);
+  const serving = Math.max(0, gpusAvailable(s) - gpus);
   const duration = Math.round(trainingDuration(s));
   const capBefore = startCapability(s);
   const version = nextVersion(s);
@@ -346,8 +358,7 @@ function startRun(s: GameState, cost: Cost, moneyYield: number): boolean {
     phase: 'training',
     elapsed: 0,
     duration,
-    computeYield: yieldNow,
-    moneyYield,
+    gpus,
     evalElapsed: 0,
     flavorShown: 0,
     eventAt: chance(s, 0.3) ? rand(s, 0.35, 0.7) : -1,
@@ -377,12 +388,7 @@ function startRun(s: GameState, cost: Cost, moneyYield: number): boolean {
   // (from Stage 2; in Stage 1 the Training panel's own line says half the GPUs are training).
   if (s.stage >= 2) s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  if (moneyYield < 0.999) {
-    say(s, `Training ${run.name} now, on ${fmtMoneyShort(cost.funds ?? 0)}: it keeps ${Math.round(moneyYield * yieldNow * 100)}% of its gain.`);
-  } else {
-    say(s, `Training ${run.name}. Half the compute is diverted.`);
-    if (yieldNow < 0.999) say(s, `Not enough compute: this run trains to ${Math.round(yieldNow * 100)}%.`);
-  }
+  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.`);
   if (s.stage >= 2) startedInStage2(s, run);
   return true;
 }
@@ -533,19 +539,19 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
 }
 
 /**
- * Stage 1: Capability focus +12–18 %; Efficiency and Safety +5 % (their real payoff is copies per
- * GPU and alignment, applied at release). Stage 2 (smaller, more even steps, so runs come every
- * 3–5 minutes): Capability +10–14 %, Efficiency and Safety +7 %.
+ * Stage 1: Capability focus +10–14 %; Efficiency and Safety +5 % (their real payoff is copies per
+ * GPU and alignment, applied at release): about five models on the rented fleet to 1.5–1.8×.
+ * Stage 2: Capability +7–10 %, Efficiency and Safety +7 % — every run has the GPUs it needs and
+ * keeps its whole gain, so the reasonable bot's Capability / Efficiency / Safety cycle and the
+ * first-timer's Capability-only runs both reach 4× in 10–12 runs.
  */
 export function focusBase(s: GameState, run: TrainingRun): number {
-  if (s.stage >= 2) return run.focus === 'capability' ? 0.10 + 0.02 * (rng(s) + rng(s)) : 0.07;
-  // Triangular on 14–20 %: the same swing as before, two points higher (a fast lab still reaches 1.5×).
-  return run.focus === 'capability' ? 0.14 + 0.03 * (rng(s) + rng(s)) : 0.05;
+  if (s.stage >= 2) return run.focus === 'capability' ? 0.07 + 0.015 * (rng(s) + rng(s)) : 0.07;
+  return run.focus === 'capability' ? 0.10 + 0.02 * (rng(s) + rng(s)) : 0.05;
 }
 
 function computeResults(s: GameState, run: TrainingRun): void {
-  // Everything a run gains — focus, lucky events, the frontier bonus — scales with its compute.
-  const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.computeYield * (run.moneyYield ?? 1) * run.capMult;
+  const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.capMult;
   run.capAfter = run.capBefore * (1 + gain);
   // Within 2 % below a named tier, the evaluators call it the tier (Stage 2: no 4-minute run for a
   // hair at 3.97×). The rename below prints "good enough to be called Sage-N".
@@ -809,14 +815,19 @@ function releasedInStage2(s: GameState, run: TrainingRun, isPublic: boolean): vo
  * What a run changes when it ships, for the evaluation line (critic C5): `copies per GPU 1.88 → 2.35`,
  * `measured alignment 62 → 70`, or the capability step itself.
  */
+/** Efficiency's copies-per-GPU step: ×1.25 in Stage 1, ×1.15 from Stage 2 (its copies compound into every later run's money). */
+export function efficiencyStep(s: GameState): number {
+  return s.stage >= 2 ? 1.15 : 1.25;
+}
+
 export function focusChange(s: GameState, run: TrainingRun): string {
-  if (run.focus === 'efficiency') return `copies per GPU ${fmtNum(s.copiesPerGPU, 2)} → ${fmtNum(s.copiesPerGPU * 1.25, 2)}`;
+  if (run.focus === 'efficiency') return `copies per GPU ${fmtNum(s.copiesPerGPU, 2)} → ${fmtNum(s.copiesPerGPU * efficiencyStep(s), 2)}`;
   if (run.focus === 'safety') return `measured alignment ${Math.round(s.alignmentApparent)} → ${Math.round(Math.min(100, s.alignmentApparent + 8))}`;
   return `capability ${fmtNum(run.capBefore, 2)}× → ${fmtNum(run.capAfter, 2)}×`;
 }
 
 function applyFocusRewards(s: GameState, run: TrainingRun): void {
-  if (run.focus === 'efficiency') s.copiesPerGPU *= 1.25;
+  if (run.focus === 'efficiency') s.copiesPerGPU *= efficiencyStep(s);
   if (run.focus === 'safety') {
     s.alignmentApparent = Math.min(100, s.alignmentApparent + 8);
     s.alignmentTrue = Math.min(100, s.alignmentTrue + 5);

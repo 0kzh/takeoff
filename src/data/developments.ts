@@ -29,11 +29,6 @@ const num = (s: GameState, k: string): number => {
   return typeof v === 'number' ? v : 0;
 };
 
-/** Seconds since a timestamp flag was set, or −1. */
-const sinceFlag = (s: GameState, k: string): number => {
-  const v = s.flags[k];
-  return typeof v === 'number' ? s.stats.timePlayed - v : -1;
-};
 
 export const DEVELOPMENTS: DevelopmentDef[] = [
   // ---- Stage 1: Jul 2025 → Dec 2025 ----
@@ -82,7 +77,7 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
-  // ---- The modal calendar: six choices about 3¼ minutes apart (MODAL_SPACING is 2½). ----
+  // ---- The modal calendar: six choices 2:36 apart from about 8:50 at 240 s a month (MODAL_SPACING is 2½). ----
   {
     id: 'd_rival',
     stage: 1,
@@ -94,7 +89,7 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_outage',
     stage: 1,
     crisis: 'cr_outage',
-    month: monthOf(2025, 10) + 0.2,
+    month: monthOf(2025, 10) + 0.5,
   },
   {
     id: 'd_benchmark',
@@ -113,20 +108,13 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_abilene',
     stage: 1,
     text: 'OpenMind is said to be looking at land in West Texas. Nobody at OpenMind will say where.',
-    trigger: (s) => s.projects['p_site']?.shown === true,
+    trigger: (s) => s.projects['p_datacenter']?.shown === true,
   },
   {
     id: 'd_hyperscaler',
     stage: 1,
     text: 'A hyperscaler announces a campus the size of a small city. The press release has no date in it.',
     month: monthOf(2025, 10),
-    trigger: (s) => s.projects['p_site']?.bought === 1,
-  },
-  {
-    id: 'd_interconnect_done',
-    stage: 1,
-    text: 'The utility signs off on the Abilene interconnect. Two other applicants withdraw.',
-    trigger: (s) => s.flags['interconnectDone'] === true,
   },
   {
     id: 'd_journalist',
@@ -147,7 +135,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     text: 'Nimbus reports a record quarter. Next year\'s chips are already sold.',
     month: monthOf(2025, 11),
-    trigger: (s) => s.projects['p_interconnect']?.bought === 1,
   },
   {
     id: 'd_spec',
@@ -176,17 +163,10 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     month: monthOf(2025, 12) + 0.45,
   },
   {
-    id: 'd_neighbour',
-    stage: 1,
-    text: 'The rancher next to the Abilene site says the substation hums all night. His cattle have stopped sleeping.',
-    trigger: (s) => sinceFlag(s, 'substationAt') >= 100,
-  },
-  {
     id: 'd_senate',
     stage: 1,
     text: 'A Senate hearing on frontier AI. Three labs send the same written answer.',
     month: monthOf(2025, 12),
-    trigger: (s) => s.projects['p_substation']?.bought === 1,
   },
   {
     id: 'd_honesty',
