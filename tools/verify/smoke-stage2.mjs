@@ -11,7 +11,8 @@
  * capability graph drawn; every Stage 2 panel appears; the event panel (two-line options, focus,
  * click-through, Escape takes the default); reload mid-run, mid-queue and mid-cooldown restore
  * their timers; numeric tokens, controls and words on screen at each 5-minute mark against
- * stage2.md §6.3; the Stage 3 narration and a usable dev overlay; no horizontal overflow at 390 px.
+ * stage2.md §6.3; owner feedback 1 (no yield wording, the Stores meters, the Train row's GPU
+ * shortfall); the Stage 3 narration and a usable dev overlay; no horizontal overflow at 390 px.
  * Screenshots go to agent-tools/shots/stage2/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
@@ -117,6 +118,11 @@ const SNAPSHOT = () => {
     revPerSec: s.stats.revPerSec,
     unbilled: s.unbilled,
     revealed: Object.keys(s.revealed).filter((k) => s.revealed[k]),
+    // Owner feedback 1: no yield wording; the Train row names a GPU shortfall; the Stores meters.
+    banned: /undertrained|Train now/i.test(text),
+    trainShort: vis(document.getElementById('trainGpuMeter')) ? document.getElementById('trainGpus').innerText : '',
+    gpuRow: vis(document.getElementById('row-gpus')) ? document.getElementById('row-gpus').innerText : '',
+    powerRow: vis(document.getElementById('row-power')) ? document.getElementById('row-power').innerText : '',
   };
 };
 
@@ -129,7 +135,7 @@ async function freshPage(label, viewport = { width: 1280, height: 900 }) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   watch(page, label);
-  await page.goto(`${BASE}?seed=${SEED}`);
+  await page.goto(`${BASE}?seed=${SEED}&speed=0`);
   await page.waitForFunction(() => !!window.__game);
   await page.evaluate(() => window.__game.setSpeed(0));
   return { context, page };
@@ -159,9 +165,9 @@ try {
 
   // ===== 1. Arrival: five lines, held whole for 10 s; revenue up; no backlog =====
   const narration = [
-    'Ground broken outside Abilene.',
+    'First Datacenter online outside Abilene.',
     'rented GPUs go back',
-    'Power is bought in megawatts now.',
+    'power is bought in megawatts now.',
     'Tasks per second',
     'Prices set themselves from here.',
   ];
@@ -213,6 +219,9 @@ try {
   const reloads = { run: null, queue: null, cooldown: null };
   let graphDrawn = false;
   let stage3 = null;
+  let bannedAt = null;
+  const shortLines = new Set();
+  const meterRows = { gpu: '', power: '' };
   for (let step = 0; step < (MAX_MINUTES * 60 * 1000) / STEP_MS; step++) {
     const snap = await page.evaluate((ms) => {
       window.__game.tick(ms);
@@ -222,6 +231,10 @@ try {
     for (const p of snap.panels) panelsSeen.add(p);
     const bad = snap.console.find((l) => STAGE1_LINES.test(l));
     if (bad && !stage1Line) stage1Line = `${clock(ts)} ${bad}`;
+    if (snap.banned && bannedAt === null) bannedAt = ts;
+    if (snap.stage === 2 && snap.trainShort) shortLines.add(snap.trainShort);
+    if (snap.stage === 2 && !meterRows.gpu && snap.gpuRow) meterRows.gpu = snap.gpuRow;
+    if (snap.stage === 2 && !meterRows.power && snap.powerRow) meterRows.power = snap.powerRow;
 
     // The event panel, on the first timed modal: two lines per option, focus inside, the page
     // behind still clickable, Escape takes the default.
@@ -304,6 +317,12 @@ try {
   }
 
   check('Stage 2 reaches the Stage 3 arrival', !!stage3, stage3 ? `exit at ${clock(stage3.t)}` : `not in ${MAX_MINUTES} min`);
+  check('no "undertrained" and no "Train now" anywhere on screen', bannedAt === null, bannedAt === null ? '' : `seen at ${clock(bannedAt)}`);
+  const meterGlyph = /[｢\[][￭･■□]{10}[｣\]]/;
+  check('Stores: the GPU and power rows carry a meter', meterGlyph.test(meterRows.gpu) && meterGlyph.test(meterRows.power), `${meterRows.gpu.replace(/\s+/g, ' ')} | ${meterRows.power.replace(/\s+/g, ' ')}`);
+  const lines = [...shortLines];
+  check('a Train short of GPUs names the shortfall (free or dark GPUs)', lines.every((l) => /^Needs [\d,]+ GPUs\. [\d,]+ free\.$/.test(l) || /^Needs [\d,]+ powered GPUs\. [\d,]+ are dark: add power\.$/.test(l)),
+    lines.length ? lines.slice(0, 4).join(' | ') : 'never short (the bot builds ahead)');
   for (const id of PANELS) check(`panel appears: ${id}`, panelsSeen.has(id));
   check('capability graph is drawn', graphDrawn);
   check('no Stage 1 diagnosis line in Stage 2', !stage1Line, stage1Line);
@@ -357,6 +376,39 @@ try {
     check('Stage 3 preset loads into the Stage 3 shell', info.stage === 3 && info.cap >= 4, JSON.stringify(info));
     await shot(p3, '22-stage3-preset');
     await c3.close();
+  }
+
+  // ===== 5b. The Train row short of GPUs (owner feedback 1, B1): forced from the Stage 2 preset =====
+  {
+    const { context: cs, page: ps } = await freshPage('train-short');
+    const read = () => ({
+      line: document.getElementById('trainGpus').innerText,
+      meter: document.getElementById('trainGpuMeter').checkVisibility() ? document.getElementById('trainGpuMeter').innerText : '',
+      train: !document.getElementById('btn-train').disabled,
+    });
+    const free = await ps.evaluate((r) => {
+      window.__game.loadPreset(2);
+      const s = window.__game.state;
+      s.funds = 1e9;
+      s.research = s.labSpace * 1000 * s.labMult;
+      s.capability = 2.2;
+      s.training.internalCapability = 2.2;
+      window.__game.tick(1000);
+      return new Function(`return (${r})();`)();
+    }, read.toString());
+    await shot(ps, '23-train-short-free');
+    const dark = await ps.evaluate((r) => {
+      const s = window.__game.state;
+      s.capability = 2.4;
+      s.training.internalCapability = 2.4;
+      s.gpus = 9000;
+      window.__game.tick(1000);
+      return new Function(`return (${r})();`)();
+    }, read.toString());
+    await shot(ps, '24-train-short-dark');
+    check('Train short, Stage 2: `Needs N GPUs. M free.` with a meter, Train disabled', /^Needs [\d,]+ GPUs\. [\d,]+ free\.$/.test(free.line) && free.meter && !free.train, JSON.stringify(free));
+    check('Train short of power: `Needs N powered GPUs. K are dark: add power.`', /^Needs [\d,]+ powered GPUs\. [\d,]+ are dark: add power\.$/.test(dark.line) && !dark.train, JSON.stringify(dark));
+    await cs.close();
   }
 
   // ===== 6. 390 px: no horizontal overflow =====
