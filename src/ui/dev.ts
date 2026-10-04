@@ -3,6 +3,7 @@ import { actions, tick } from '../engine/tick.js';
 import { researchCap } from '../engine/economy.js';
 import { GAS_MW } from '../engine/infrastructure.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
+import { setSkin } from '../engine/space.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
@@ -159,6 +160,21 @@ export function mountDev(host: DevHost): void {
     }),
   );
 
+  // Stage 5 (stage5.md §9): flip the verdict Stage 4 left (the skin follows it), and open each end screen.
+  const endRow = row(
+    btn('dev-skin', 'Flip skin', () => {
+      setSkin(host.state, host.state.flags['alignedAtHandover'] !== true);
+      host.saver.markDirty();
+      host.render();
+    }),
+    ' End ',
+    ...['concord', 'silence', 'pause', 'project'].map((id) => btn(`dev-end-${id}`, id, () => {
+      actions.forceEnding(host.state, id);
+      host.saver.saveNow();
+      host.render();
+    })),
+  );
+
   const hidden = make('div', { id: 'devHidden' });
   hidden.style.display = 'none';
   const hiddenToggle = btn('dev-show-hidden', 'Show hidden', () => {
@@ -186,7 +202,7 @@ export function mountDev(host: DevHost): void {
     }),
   );
 
-  root.append(make('b', {}, 'dev'), stageRow, speedRow, grants, eventRow, saveRow, text, hidden);
+  root.append(make('b', {}, 'dev'), stageRow, speedRow, grants, eventRow, endRow, saveRow, text, hidden);
 
   const refresh = () => {
     speedButtons.forEach((b, i) => b.classList.toggle('devActive', SPEEDS[i] === host.getSpeed()));

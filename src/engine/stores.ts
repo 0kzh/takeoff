@@ -12,14 +12,19 @@ import { crawlRate, synthRate, flywheelRate } from './world.js';
 import {
   materialsTerms, replicatedPerSec, builtPerSec, permitsOpen, fleetAuto, chipsRate,
 } from './fleet.js';
-import { fmtShortNum } from './format.js';
+import { fmtShortNum, fmtBig, fmtSmallPct } from './format.js';
+import {
+  flowTerms, matterRate, byHandShare, splitOn, fundRate, boardCost, orbitalEffective, swarmFactor, swarmRate, swarmPct,
+  MERCURY_TONNES, probeDoubling, probeDriftPerMin, rowsTaken, EARTH_GROWTH,
+} from './space.js';
 
 /**
  * The Stores hover (stage2.md §2.13): for one row, every source and sink per second and a bold
  * total, as `[label, text, kind]` rows. DOM-free, so the sim and tests can read it.
  */
 export type StoreKey = 'funds' | 'research' | 'insight' | 'trust' | 'gpus' | 'power' | 'copies' | 'data' | 'chips'
-  | 'materials' | 'robots' | 'treatyChips' | 'monitors' | 'rogue';
+  | 'materials' | 'robots' | 'treatyChips' | 'monitors' | 'rogue'
+  | 'launch' | 'matter' | 'missionFund' | 'orbital' | 'swarm' | 'mercury' | 'people' | 'probes' | 'earthRobots' | 'earthGpus' | 'earthPower';
 export type TipRow = [string, string, ('total' | 'note')?];
 
 /** `+$2,148/s`, `−$43/s`, `+$1.2M/s`: whole dollars in a hover. */
@@ -80,7 +85,71 @@ function storeBreakdown4(s: GameState, key: StoreKey): TipRow[] | null {
   }
 }
 
+/**
+ * Stage 5's rows (stage5.md §2.5): the flow by where it comes from; where matter goes; what fills the
+ * fund; what orbital compute is made of; the swarm; Mercury; the probes. Earth's three rows say they grow
+ * by themselves, and lose their hovers once orbit passes them.
+ */
+function storeBreakdown5(s: GameState, key: StoreKey): TipRow[] | null {
+  if (s.stage !== 5) return null;
+  const f = s.s5;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  const rate = (v: number) => `+${fmtShortNum(v)} t/s`;
+  switch (key) {
+    case 'launch': {
+      const rows: TipRow[] = flowTerms(s).map(([k, v]) => [k, rate(v)]);
+      if (f.flowGrowth > 0) rows.push(['self-replicating', `+${fmtSmallPct(f.flowGrowth * 100)}%/s`]);
+      rows.push(['total', rate(f.massFlow), 'total']);
+      return rows;
+    }
+    case 'matter': {
+      const into = matterRate(s);
+      const rows: TipRow[] = [['reaching orbit', rate(into)]];
+      if (splitOn(s)) rows.push(['the autofactory spends', pct(1 - byHandShare(s))], ['by hand', pct(byHandShare(s))]);
+      if (rowsTaken(s)) rows.push(['spent by the model', 'all of it']);
+      return rows;
+    }
+    case 'missionFund':
+      return [
+        ['fills while a mission waits', rate(fundRate(s))],
+        ['the board costs', `${fmtShortNum(boardCost(s))} t`],
+        ['it never holds more', '', 'note'],
+      ];
+    case 'orbital':
+      return [
+        ['datacenters', fmtBig(f.orbitalGpus)],
+        ...(f.orbitalMult > 1 ? [['the ring', `×${f.orbitalMult}`] as TipRow] : []),
+        ['the swarm', `×${swarmFactor(s).toFixed(1)}`],
+        ['total', fmtBig(orbitalEffective(s)), 'total'],
+      ];
+    case 'swarm':
+      return [
+        ['collectors', `${fmtShortNum(f.swarm)} t`],
+        ['adding', rate(swarmRate(s))],
+        ['of the Sun\'s output', `${fmtSmallPct(swarmPct(s))}%`, 'total'],
+      ];
+    case 'mercury':
+      return [['taken', `${fmtShortNum(f.mercuryTaken)} t of ${fmtShortNum(MERCURY_TONNES)} t`]];
+    case 'people':
+      return [['Shackleton', fmtInt(f.peopleOffEarth)]];
+    case 'probes': {
+      const rows: TipRow[] = [['each builds another every', fmtClock(probeDoubling(s))], ['launched or built', fmtBig(f.probesTotal)]];
+      if (probeDriftPerMin(s) > 0) rows.push(['stop reporting', `${fmtNum(probeDriftPerMin(s) * 100, 1)}% a minute`]);
+      return rows;
+    }
+    case 'earthRobots':
+    case 'earthGpus':
+    case 'earthPower':
+      // Kept for reference once orbit passes Earth: no hover (§4.2 row 5).
+      return s.revealed['earthGrey'] ? [] : [['growing by itself', `+${fmtSmallPct(EARTH_GROWTH * 100)}%/s`]];
+    default:
+      return null;
+  }
+}
+
 export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
+  const s5 = storeBreakdown5(s, key);
+  if (s5) return s5;
   const s4 = storeBreakdown4(s, key);
   if (s4) return s4;
   switch (key) {

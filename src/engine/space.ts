@@ -396,15 +396,16 @@ function missionTick(s: GameState, dt: number): void {
   const head = f.missions[0];
   if (head) {
     head.remaining -= dt;
-    if (head.remaining <= 0) {
+    // A hundredth of a second of float error must not cost a tick (5 s builds in 5 s).
+    if (head.remaining <= 1e-6) {
       f.missions.shift();
       completeMission(s, head.id);
     }
   }
   if (f.beside.length) {
     for (const m of f.beside) m.remaining -= dt;
-    const done = f.beside.filter((m) => m.remaining <= 0);
-    f.beside = f.beside.filter((m) => m.remaining > 0);
+    const done = f.beside.filter((m) => m.remaining <= 1e-6);
+    f.beside = f.beside.filter((m) => m.remaining > 1e-6);
     for (const m of done) completeMission(s, m.id);
   }
 }
@@ -441,7 +442,12 @@ export function missionStatus(s: GameState): string {
   const head = f.missions[0];
   if (head) parts.push(`${title(head.id)} — ${fmtClock(Math.ceil(head.remaining))}${f.missions[1] ? ` · next: ${title(f.missions[1].id)}` : ''}`);
   for (const m of f.beside) parts.push(`${title(m.id)} — ${fmtClock(Math.ceil(m.remaining))}`);
-  return parts.length ? `Mission: ${parts.join(' · ')}` : 'Mission: none building';
+  if (parts.length) return `Mission: ${parts.join(' · ')}`;
+  // Nothing building: the next mission the fund will cover, or nothing to say (the line hides).
+  const next = nextMission(s);
+  if (!next) return '';
+  const eta = missionEta(s, next);
+  return `Mission: ${next.title}, when the fund covers it${Number.isFinite(eta) && eta < 36000 ? ` — ${fmtClock(Math.ceil(eta))}` : ''}`;
 }
 
 // ---------- probes (§2.3) ----------
@@ -630,6 +636,7 @@ function silenceSlow(s: GameState): void {
     const since = now - taken;
     if ((since >= FINAL_AFTER_MIN && swarmReached(s, LAST_PROJECT_AT)) || since >= FINAL_AFTER_MAX) {
       s.flags['opened:c_final'] = true;
+      s.flags['finalOpenedAt'] = now;
       openChoice(s, 'c_final', {});
     }
   }
@@ -751,13 +758,35 @@ export function swarmGoal(s: GameState): number {
   return 100;
 }
 
+/** A named goal as it is written: `0.01`, `0.1`, `0.3`, `1`. */
+export function goalLabel(goal: number): string {
+  return String(goal);
+}
+
 /** `0.01% in 9:20 at this rate`, or that nothing is adding to it. */
 function swarmEta(s: GameState, rate: number): string {
   const goal = swarmGoal(s);
   const need = (goal / 0.01) * SWARM_TONNES - s.s5.swarm;
-  if (rate <= 0) return `${fmtSmallPct(goal)}%: nothing is adding to it`;
+  if (rate <= 0) return `${goalLabel(goal)}%: nothing is adding to it`;
   const secs = need / rate;
-  return `${fmtSmallPct(goal)}% in ${secs < 36000 ? fmtClock(secs) : 'a long while'} at this rate`;
+  return `${goalLabel(goal)}% in ${secs < 36000 ? fmtClock(secs) : 'over ten hours'} at this rate`;
+}
+
+/** Two percentages written with as many figures as it takes to tell them apart (at most four). */
+function pctPair(a: number, b: number): [string, string] {
+  for (let sig = 2; sig <= 4; sig++) {
+    const fa = toSig(a, sig);
+    const fb = toSig(b, sig);
+    if (fa !== fb || sig === 4) return [fa, fb];
+  }
+  return [toSig(a, 2), toSig(b, 2)];
+}
+
+function toSig(p: number, sig: number): string {
+  if (!Number.isFinite(p) || p <= 0) return '0';
+  if (p >= 10) return fmtNum(p, 0);
+  const decimals = Math.min(8, Math.max(1, -Math.floor(Math.log10(p)) + sig - 1));
+  return p.toFixed(decimals);
 }
 
 /** The swarm's tonnes a second now (the average over the last half-minute, or the slider's rate). */
@@ -782,9 +811,9 @@ export function rowLine(s: GameState, row: BuyRow): string {
     return `${head} · +${fmtBig(gpus)} GPUs · ${signedPct(tasksGainPct(s, gpus * swarmFactor(s)))} tasks/s`;
   }
   if (row === 'collector') {
-    const after = ((f.swarm + unit) / SWARM_TONNES) * 0.01;
+    const [before, after] = pctPair(swarmPct(s), ((f.swarm + unit) / SWARM_TONNES) * 0.01);
     const gain = swarmTasksPct(s, unit);
-    return `${head} · swarm ${swarmPctLabel(s)} → ${fmtSmallPct(after)}%${gain >= 0.05 ? ` · ${signedPct(gain)} tasks/s` : ''} · ${swarmEta(s, swarmRate(s))}`;
+    return `${head} · swarm ${before}% → ${after}%${gain >= 0.05 ? ` · ${signedPct(gain)} tasks/s` : ''} · ${swarmEta(s, swarmRate(s))}`;
   }
   return `${head} · +1 probe · each builds another every ${fmtClock(probeDoubling(s))}`;
 }
@@ -824,7 +853,7 @@ export function shareLine(s: GameState): string {
 export function swarmLine(s: GameState): { pct: string; next: string } {
   return {
     pct: `${swarmPctLabel(s)} · powering orbit ×${fmtNum(swarmFactor(s), 1)}`,
-    next: `next: ${fmtSmallPct(swarmGoal(s))}%`,
+    next: `next: ${goalLabel(swarmGoal(s))}%`,
   };
 }
 

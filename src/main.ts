@@ -22,7 +22,8 @@ let policy: PolicyName = 'bot';
 let bot = newBotMemory(policy);
 
 function advance(dtMs: number): void {
-  if (!autoplay) {
+  // After an ending only the counter moves (Concord and Silence keep counting): no policy plays.
+  if (!autoplay || state.ending) {
     tick(state, dtMs);
     return;
   }

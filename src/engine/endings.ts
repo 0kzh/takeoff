@@ -209,7 +209,7 @@ export function endStats(s: GameState): [string, string][] {
   add(1, 'Peak tasks per second', fmtInt(st.peakTasksPerSec));
   add(1, 'Time played', fmtDuration(st.timePlayed));
   add(1, 'Date reached', dateLabel(s.date));
-  add(1, 'Final model', `${s.training.modelName} (${fmtNum(bestCapability(s), 2)}×)`);
+  add(1, 'Final model', `${s.training.modelName} (${fmtNum(bestCapability(s), bestCapability(s) >= 100 ? 0 : 2)}×)`);
   add(1, 'Generations trained', fmtInt(st.trainings));
   add(1, 'Public releases', fmtInt(st.publicReleases));
   add(3, 'Humans in research at the end', `${fmtNum(humanShare(s) * 100, 2)}%`);
@@ -219,7 +219,7 @@ export function endStats(s: GameState): [string, string][] {
   // Paid in both of Stage 5's skins to the end; in Silence the table says until when anyone noticed.
   const ubiUntil = s.stage >= 5 && s.ending === 'silence' ? `, until ${dateLabel(coldDate(s))}` : s.stage >= 5 && s.s4.ubiShare > 0 ? `; ${fmtInt(Math.round(s.s4.ubiShare * 100))}% to the end` : '';
   add(4, 'Universal basic income paid', `${fmtInt(Math.round((100 * (s.s4?.ubiSeconds ?? 0)) / Math.max(1, s4Time)))}% of output${ubiUntil}`);
-  add(2, 'Approval at the end', fmtNum(s.approval, 0));
+  add(2, 'Approval at the end', fmtNum(Math.round(s.approval) || 0, 0));
   if (typeof s.flags['leadAtVote'] === 'number') add(3, 'Lead over Baiwen at the vote', `${fmtNum(s.flags['leadAtVote'] as number, 1)} months`);
   if (s.revealed['oversight'] === true || s.flags['committeeAt'] !== undefined) add(3, 'Committee seats at the end', fmtInt(seats(s)));
   add(1, 'Alignment as measured', fmtNum(s.alignmentApparent, 0));

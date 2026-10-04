@@ -89,6 +89,11 @@ export function renderStores(s: GameState): void {
     return;
   }
   const rows = storeBreakdown(s, openKey);
+  // A row with nothing to say has no hover (Stage 5's Earth rows, once orbit passes them).
+  if (rows.length === 0) {
+    close();
+    return;
+  }
   const key = JSON.stringify(rows);
   const tip = byId('storeTip');
   if (key !== lastTip) {
