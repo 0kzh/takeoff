@@ -60,6 +60,17 @@ The owner played the build of 2026-10-04. Where a note of theirs and a critic-dr
 2. G27 counts a standing share as a sink. G14: a capacity row prints its meter, the amount and the capacity.
 3. Train can be armed in Stages 1 and 2 (one press a run); the permanent version is Stage 3's grant.
 
+## Amendments after the Stage 5 as-built patch (`stage5.md`, as-built deltas)
+
+1. **G34 in Stage 5.** The rows are paid from `matter` and missions from a `mission fund` that fills only while a
+   mission is waiting; `Industry share: 50 / 75 / 90 %` sets the split. The share is exempt from G34's test that
+   its ends lie 4:00 apart: what it does not take goes to one-off cards, whose appetite is bounded, and on paper
+   it moves the stage by under two minutes. The decision that test protects is carried by the three rows' ratios.
+2. G28's exception is 60–120 s in Silence, not three minutes. Stage 5's generations change capability and nothing
+   else: alignment is fixed at Stage 4's exit.
+3. The whole game for the reasonable bot is about 157 minutes: 132 through the built Stages 1–4, and Stage 5 at
+   25:29 on paper (22:36 in Silence).
+
 ## 1. Requirements checklist
 
 Every feature in the original prompt, the stage that delivers it, and the mechanic. "S2" = Stage 2, etc.
@@ -147,7 +158,7 @@ S1→S2 is the built Stage 1 (`npm run sim`); S2→S3 is the Stage 2 paper model
 | S1→S2 | Stores, Infrastructure (GPU lots, datacenters, plants), pricing AUTO; later Graph, Security, Government, Public, Stats | Power (kWh) line, Buy Power, Grid Contract, Compute panel (Rent GPU), the Contracts line, the cloud-credit rescue | Renting; buying power by the block; hand-set prices (AUTO is on, can be switched off); new custom contracts (the signed ones keep paying); Stage-1-only projects are retired by name | `Buy GPUs (1,000)`, paid by the returned deposit |
 | S2→S3 | Alignment (measured alignment, autonomy grants, `Lost to value drift`); the Monitors slider; later Geopolitics, Oversight (in place of Government); Stores rows `monitors`, `rogue copies` | Marketing, Hire Researcher, Expand Lab, Researchers / Lab Space lines, price buttons, `+1 Trust at`, Stores rows `trust` and `data`, the research cap, gas and solar buttons, Release / Keep internal (one `Approve`) | Hiring; marketing; Trust as a currency; then, by the player's own grants, Train, Red-team, Approve and the Infrastructure buttons. The human share line stays until it rounds to zero | `Deploy Sage-2 as monitor` (free) |
 | S3→S4 | Robots (the fleet's sliders); Stores as the main panel with `materials`, `robots`; then Society (the dividend), Treaty, the Committee's agenda | Business panel, Training panel (one status line), Infrastructure, Complete Task, Stores rows `funds` and `chips on order`, Focus, Approve / Send back / Hold | Money; the Train button; the manual verb. "The model runs the business now." On the race branch, the second button on some cards | `Convert a car plant` (free) |
-| S4→S5 | Space (the launch split, missions); Stores rows `launch mass`, `orbital GPUs`, later `matter`, `swarm`, `probes` | Treaty, Oversight, Society, Security, Alignment, Robots (its sliders become the launch sliders), the allocation, the grant list | Earth as the subject of the screen; in Silence, later, the sliders and the second button | `Launch contracts` (free) |
+| S4→S5 | Space (purchase rows, missions with their own fund, later the standing split); Stores rows `launch mass`, `matter`, `orbital GPUs`, later `swarm`, `probes` | Treaty, Oversight, Society, Public, Security, Geopolitics, Research, Alignment, Robots (its slider component returns as the standing split), the allocation, the grant list | Earth as the subject of the screen; in Silence, later, the sliders and the second button | `Launch contracts` (free) |
 
 Every transition follows §7.
 
@@ -276,7 +287,7 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G31 | Walls repeat and point | A wall line repeats every 180 s while the wall holds and names the card or control that answers it. A card that answers a standing wall, or without which the stage cannot proceed, is drawn in the `urgent` style from its first appearance | Sim wall log; Playwright class check |
 | G32 | Nothing changes silently | No number on screen changes at a transition, a clamp, an exit or a grant without a console line that gives the old and the new value | Sim: visible numbers before and after each `enterStage`, clamp and grant, against the narration |
 | G33 | Thresholds are generous | A result within 3 % below a threshold the screen names (a rung, a gate, a ceiling) is rounded up to it | Unit test on each named threshold |
-| G34 | The wallet rule | (1) A control is grey only because its purse cannot pay (it prints the shortfall and a clock) or because a stated requirement is unmet; nothing is reserved, held back or shrunk for the player. (2) A repeatable purchase at a flat price never shares a purse with a run or a stage goal: it has its own purse, filled by a share of income the player sets, and the share prints both clocks. (3) Any other purchase from a purse that a waiting run or a needed card draws on stays lit and prints the delay it causes when that is 10 s or more. (4) A price never disables Train: with its requirements met it can be pressed, and waits armed | Harness: rows greyed by a reservation 0 %; a whole unit of each flat-price sink lit in ≥ 35 % of checks; stage length ≥ 4:00 apart between the share's ends; the run's clock logged before and after every purchase (no unprinted delay of 10 s or more); Train pressable or armed for ≥ 80 % of its idle time |
+| G34 | The wallet rule | (1) A control is grey only because its purse cannot pay (it prints the shortfall and a clock) or because a stated requirement is unmet; nothing is reserved, held back or shrunk for the player. (2) A repeatable purchase at a flat price never shares a purse with a run or a stage goal: it has its own purse, filled by a share of income the player sets, and the share prints both clocks. (3) Any other purchase from a purse that a waiting run or a needed card draws on stays lit and prints the delay it causes when that is 10 s or more. (4) A price never disables Train: with its requirements met it can be pressed, and waits armed | Harness: rows greyed by a reservation 0 %; a whole unit of each flat-price sink lit in ≥ 35 % of checks; stage length ≥ 4:00 apart between the share's ends (Stage 5's `Industry share` is exempt: its other purse buys one-off missions); the run's clock logged before and after every purchase (no unprinted delay of 10 s or more); Train pressable or armed for ≥ 80 % of its idle time |
 | G15 | Modals are rationed | ≤ 9 per stage; unprompted modals ≥ 150 s apart (one that comes due inside the window waits); a modal the player opens with their own click is exempt from the spacing; the idle rescue is outside the budget | The built pacer (`cadence.lastModalAt`); sim count per stage |
 
 The **cadence governor** enforces G1: if no first-time reveal has happened for 150 s, the engine reveals the next item
@@ -333,7 +344,7 @@ Constraints, not designs. Each later spec turns its column into a content table 
 All three columns are now specified (`stage3.md`, `stage4.md`, `stage5.md`); where this table and those files differ,
 the files win. The main differences: Stage 4 has no money, so its prices are materials, half a generation of
 research, or the Committee's time; its exits are the treaty, the fleet granted, or the fleet taken; Stage 5's
-projects are missions that cost only time, and its last project is not marked as the last.
+projects are missions priced in matter from their own fund, and its last project is not marked as the last.
 
 | | 3 Takeoff | 4 Superintelligence | 5 Beyond |
 |---|---|---|---|
