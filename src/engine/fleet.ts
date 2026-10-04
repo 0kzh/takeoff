@@ -40,10 +40,16 @@ export function fleetAuto(s: GameState): boolean {
   return s.flags['fleetAuto'] === true;
 }
 
-/** Growth ×1.25 under the Growth goal; a fifth less growth under People or Treaty (§2.5). */
+/** Output ×1.25 under the Growth goal; a fifth of the fleet elsewhere under People or Treaty (§2.5). */
 function goalOutput(s: GameState): number {
   if (!fleetAuto(s)) return 1;
   return s.s4.fleetGoal === 'growth' ? 1.25 : 1 - GOAL_SHARE;
+}
+
+/** Replication under a goal: a fifth of the fleet elsewhere under People or Treaty; Growth is output. */
+function goalGrowth(s: GameState): number {
+  if (!fleetAuto(s)) return 1;
+  return s.s4.fleetGoal === 'growth' ? 1 : 1 - GOAL_SHARE;
 }
 
 /** What the fleet's jobs would produce a second at today's shares (no materials or permit limits). */
@@ -57,9 +63,14 @@ export function minedPerSec(s: GameState): number {
  */
 export const OPEN_ZONES_CEILING = 30e6;
 
+/**
+ * Robots made a second at today's split. The zones and the Growth goal multiply what the fleet
+ * produces (materials, compute); how fast a robot builds a robot is Atlas Mk II's and the fleet grant's
+ * (§2.2's techRep), so a fleet doubles in about 2.3 minutes whatever the zones (§2.2's targets).
+ */
 export function replicateWant(s: GameState): number {
   const crowding = permitsOpen(s) ? Math.max(0, 1 - s.robots / OPEN_ZONES_CEILING) : 1;
-  return s.robots * s.s4.replicate * REPLICATE_RATE * s.s4.techRep * s.s4.zoneMult * goalOutput(s) * crowding;
+  return s.robots * s.s4.replicate * REPLICATE_RATE * s.s4.techRep * goalGrowth(s) * crowding;
 }
 
 export function buildWant(s: GameState): number {
@@ -226,7 +237,7 @@ export function fleetWalls(s: GameState): void {
   }
 }
 
-/** Housing (§2.11): three seconds of current mining a unit, each ×1.2, relaxing every 60 s. */
+/** Housing (§2.11): three seconds of current mining a unit, each ×1.2, relaxing a step every 25 s. */
 export const HOUSING_SECONDS = 3;
 export const HOUSING_HEAT = 1.2;
 export const HOUSING_APPROVAL = 0.3;
@@ -251,9 +262,11 @@ export function buildHousing(s: GameState, units = 1): boolean {
   return true;
 }
 
-/** The heat relaxes a step every 60 s. */
+/** The heat relaxes a step every 25 s (at its steady price a unit is about half a minute of mining). */
+export const HOUSING_RELAX_SECONDS = 25;
+
 export function relaxHousing(s: GameState): void {
-  if (s.s4.housingHeat > 0 && s.stats.timePlayed - s.s4.housingAt >= 60) {
+  if (s.s4.housingHeat > 0 && s.stats.timePlayed - s.s4.housingAt >= HOUSING_RELAX_SECONDS) {
     s.s4.housingHeat -= 1;
     s.s4.housingAt = s.stats.timePlayed;
   }

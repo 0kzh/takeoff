@@ -20,6 +20,7 @@ import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.
 import { presetByKey } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
 import { Stage3Tracker, Stage3Summary, printStage3 } from './stage3sim.js';
+import { Stage4Tracker, Stage4Summary, printStage4 } from './stage4sim.js';
 
 /** The only Node global the sim needs; avoids a dependency on @types/node. */
 declare const process: { argv: string[]; exitCode?: number };
@@ -120,6 +121,7 @@ export interface Summary {
   s2: Stage2Summary | null;
   /** Stage 3 block (null when the run never reached Stage 3). */
   s3: Stage3Summary | null;
+  s4: Stage4Summary | null;
 }
 
 /** stage1-round3-fixes.md acceptance, as the sim can see it. Times are seconds from the start. */
@@ -501,6 +503,7 @@ export function simulate(args: Args): SimResult {
   let longestRelease = 0;
   let longestReleaseAt = 0;
   const t3 = new Stage3Tracker();
+  const t4 = new Stage4Tracker();
   // Stage 1 round-3 measures: dollar purchases (for the delay audit and the gaps between them).
   let delayedBuys = 0;
   let unprintedBuys = 0;
@@ -651,6 +654,7 @@ export function simulate(args: Args): SimResult {
     replyLines += (s.stats.consoleLines ?? 0) - linesBefore;
     step(s);
     t3.tick(s, actionTimes);
+    t4.tick(s, actionTimes);
     // An ending stops the run (tick() would; the sim steps directly).
     if (s.ending) break;
     const t = s.stats.timePlayed;
@@ -1172,6 +1176,7 @@ export function simulate(args: Args): SimResult {
     choices1: s1Choices,
     s2,
     s3: t3.summary(s, actionTimes),
+    s4: t4.summary(s, actionTimes),
   };
   return { state: s, milestones, idleGaps, lines, summary };
 }
@@ -1296,6 +1301,7 @@ function main(): void {
   }
   if (sum.s2) printStage2(sum.s2);
   if (sum.s3) printStage3(sum.s3, args.policy);
+  if (sum.s4) printStage4(sum.s4, args.policy, args.preset);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
 }
 

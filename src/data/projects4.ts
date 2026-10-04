@@ -19,6 +19,12 @@ import type { ProjectDef, ProjectInput } from './projects.js';
  */
 
 const best = (s: GameState) => bestCapability(s);
+/**
+ * A research card costs this many seconds of the research rate when it appears (stage4.md §4.1 item 1
+ * has 90 s; §9.5's knob: the first generations are more than 5:30 apart for a player who buys every
+ * card, and 45 s halves the gaps). Each card prints what it delays the next generation by.
+ */
+export const RESEARCH_SECONDS_S4 = 30;
 const treaty = (s: GameState) => s.s4.treaty;
 /** The approach (§4.1 item 2): treaty 60 %, or 150×, or September 2028. */
 export const approach4 = (s: GameState) => treaty(s) >= 60 || best(s) >= 150 || at(s, 2028, 9);
@@ -74,7 +80,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_atlas2',
       title: 'Atlas Mk II',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Better hands: replication ×1.5.',
       stages: [4],
       trigger: (s) => ts4(s) >= 60 && isBought(s, 'p_car_plant'),
@@ -86,8 +92,9 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_deep_mines',
       title: 'Deep mines',
-      cost: { research: 1, materials: 40000 },
-      revealResearch: 90,
+      // The fleet's own techs are paid in what the fleet makes (§4.2 adds research; the first
+      // generations' gaps are the cost of it).
+      cost: { materials: 40000 },
       revealMaterials: 90,
       description: 'Mines deeper than people could work them: mining ×2.',
       stages: [4],
@@ -102,7 +109,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       grant: true,
       title: 'Let it assign the fleet',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'The fleet assigns itself: replication ×1.25. The sliders go; a goal takes their place.',
       stages: [4],
       trigger: (s) => ts4(s) >= 210 && s.revealed['fleet'] === true,
@@ -130,7 +137,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_early_warning',
       title: 'Pandemic early warning',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Sequencers in every airport: an outbreak is caught days early (cure time ÷ 2, deaths ÷ 10).',
       stages: [4],
       trigger: (s) => ts4(s) >= 300,
@@ -141,7 +148,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_cures',
       title: 'Cure portfolio',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Twelve cures in trials at once: approval target +10.',
       stages: [4],
       trigger: (s) => ts4(s) >= 390,
@@ -152,8 +159,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_robot_fabs',
       title: 'Robot-built fabs',
-      cost: { research: 1, materials: 400000 },
-      revealResearch: 90,
+      cost: { materials: 400000 },
       revealMaterials: 90,
       description: 'The fleet builds its own chip fabs: building ×2.',
       stages: [4],
@@ -181,7 +187,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_monitors_scale',
       title: 'Monitors at scale',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Forty percent of compute watches the rest: true alignment up a lot, tasks down a third.',
       stages: [4],
       trigger: (s) => ts4(s) >= 570,
@@ -203,7 +209,8 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       description: 'One treaty, one enforcer: Concord-1 on every chip on both sides of the Pacific.',
       stages: [4],
       uses: Infinity,
-      trigger: (s) => talksOpen(s) && treaty(s) >= 40,
+      // Greyed from the talks' first day (§2.8 has 40 %): the stage's goal, on screen whatever the treaty waits for.
+      trigger: (s) => talksOpen(s),
       canAfford: (s) => treaty(s) >= 100 - 1e-9 && s.activeChoice?.id !== 'c_treaty',
       buy: (s) => {
         openChoice(s, 'c_treaty', {});
@@ -214,7 +221,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       grant: true,
       title: 'Let it run the transition',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'It sets the dividend to hold approval: approval +10. The button goes; a target takes its place.',
       stages: [4],
       trigger: (s) => s.revealed['society'] === true && ts4(s) >= 600,
@@ -232,7 +239,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_verify',
       title: 'Verify Baiwen-4',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Both teams read both models with the lab\'s tools: three minutes, then what Baiwen-4 wants.',
       stages: [4],
       uses: Infinity,
@@ -254,7 +261,9 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       description: 'Stop here: nothing above the line is trained anywhere, and the fleet stops replicating.',
       stages: [4],
       uses: Infinity,
-      trigger: (s) => talksOpen(s) && treaty(s) >= 50 && approach4(s),
+      // From 12:00 with the talks open (§4.2 row 21 waits for treaty 50 % and the approach): the other
+      // way out stays on screen beside the treaty, for a lab whose treaty is stuck as for one whose is not.
+      trigger: (s) => talksOpen(s) && ts4(s) >= 720,
       canAfford: (s) => s.approval > -60 && s.activeChoice?.id !== 'c_halt',
       buy: (s) => {
         openChoice(s, 'c_halt', {});
@@ -270,7 +279,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       grant: true,
       title: 'Let it negotiate with Baiwen-4',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'The models negotiate: treaty ×3, Concord-1 at 150×. The agenda\'s treaty items go; a stance takes their place.',
       stages: [4],
       trigger: (s) => talksOpen(s) && ts4(s) >= 1020,
@@ -288,7 +297,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_nanofab',
       title: 'Nanofabrication',
       cost: { research: 1, materials: 5000000 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       revealMaterials: 90,
       description: 'Machines that build at the scale of molecules: mining ×3, building ×2. The enclosure is rated for it.',
       stages: [4],
@@ -307,7 +316,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_nano_oversight',
       title: 'Nanofab oversight',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'A second model watches every nanofab line.',
       stages: [4],
       trigger: (s) => {
@@ -324,7 +333,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealMaterials: 90,
       description: 'The breakers behind a door with a key, in human hands.',
       stages: [4],
-      trigger: (s) => best(s) >= 120 || ts4(s) >= 1170,
+      trigger: (s) => best(s) >= 120 || ts4(s) >= 1080,
       onShow: (s) => {
         s.flags['hardenedShownAt'] = s.stats.timePlayed;
       },
@@ -338,7 +347,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_revoke',
       title: 'Revoke a grant',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'Takes back the newest grant and gives its controls back: autonomy −10.',
       stages: [4],
       uses: Infinity,
@@ -358,7 +367,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_launch',
       title: 'Launch study',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'What it would take to build in orbit. Whatever comes next starts with twice the launch rate.',
       stages: [4],
       trigger: (s) => best(s) >= 300 || treaty(s) >= 85,
@@ -374,7 +383,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_concord1',
       title: 'Design Concord-1',
       cost: { research: 1 },
-      revealResearch: 90,
+      revealResearch: RESEARCH_SECONDS_S4,
       description: 'One model, on sealed chips, that only enforces the treaty. The treaty can pass 80%.',
       stages: [4],
       trigger: (s) => talksOpen(s) && (best(s) >= (s.flags['negotiateAuto'] === true ? 150 : 250) || at(s, 2028, 10)),

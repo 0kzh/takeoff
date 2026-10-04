@@ -229,9 +229,13 @@ export const GEN_SECONDS = 50;
 export const VERIFY_SECONDS = 40;
 export const VERIFY_SECONDS_TRUSTED = 20;
 export const VERIFY_SECONDS_LAST = 10;
-/** `G(c) = G₀ × (c / c₀)^2.25`, G₀ = 110 s of the arrival's research potential, c₀ the arriving frontier. */
-export const GEN_EXPONENT = 2.25;
-export const GEN_BASE_SECONDS = 110;
+/**
+ * `G(c) = G₀ × (c / c₀)^2.5`, G₀ = 95 s of the arrival's research potential, c₀ the arriving frontier
+ * (stage4.md §2.4 has 2.25 and 110 s; §9.5's knobs: with every card bought the first generations were
+ * more than 5:30 apart and the last ones under two minutes; the steeper curve evens the cadence).
+ */
+export const GEN_EXPONENT = 2.5;
+export const GEN_BASE_SECONDS = 95;
 /** The rungs a generation is rounded up to within 3 % (G33), and where the major version steps. */
 export const S4_RUNGS = [100, 250, 1000];
 
@@ -241,7 +245,12 @@ export function slowBranch(s: GameState): boolean {
 
 /** The research the next generation costs, three significant figures. */
 export function generationCost(s: GameState): number {
-  const c = Math.max(1, s.capability);
+  return generationCostAt(s, s.capability);
+}
+
+/** What a generation trained from a `cap`× model costs. */
+export function generationCostAt(s: GameState, cap: number): number {
+  const c = Math.max(1, cap);
   const raw = Math.max(1, s.s4.genBase) * Math.pow(c / Math.max(1, s.s4.genCap0), GEN_EXPONENT);
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 2));
   return Math.round(raw / unit) * unit;
@@ -645,12 +654,16 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
     return Math.max(0, after - before);
   }
   if (s.stage === 4) {
-    // Stage 4: research spent now pushes the next generation back while it waits for research.
-    if (!cost.research || s.s4.gen) return 0;
-    const need = generationCost(s);
+    // Stage 4: research spent now pushes the next generation back. While one trains, the next starts
+    // when it lands and research covers it; what the research in hand would have covered by then counts.
+    if (!cost.research) return 0;
     const rate = Math.max(1, researchRate(s) * (1 - researchDiverted(s)));
-    const before = Math.max(0, need - s.research) / rate;
-    const after = Math.max(0, need - (s.research - cost.research)) / rate;
+    const g = s.s4.gen;
+    const need = g ? generationCostAt(s, g.capAfter) : generationCost(s);
+    const wait = g ? g.remaining + (g.phase === 'training' && s.s4.verifyOn ? verifySeconds(s) : 0) : 0;
+    const have = s.research + rate * wait;
+    const before = Math.max(0, need - have) / rate;
+    const after = Math.max(0, need - (have - cost.research)) / rate;
     return Math.max(0, after - before);
   }
   if (!s.revealed['training'] || s.stage >= 4 || !trainSlotFree(s) || s.training.cooldown > 0) return 0;

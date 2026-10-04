@@ -13,9 +13,12 @@ import { generationCost } from './training.js';
  * time. DOM-free.
  */
 
-/** One point of progress every this many seconds (stage4.md §9.5's first knob). */
-export const TREATY_SECONDS = 15;
-/** `Draft clauses`: treaty +0.2 points for each 2 % of a generation diverted. */
+/**
+ * One point of progress every this many seconds (stage4.md §9.5's first knob; the as-built deltas' re-run:
+ * one point in 20 s, so a lab that works the treaty signs near 30 minutes and one that does not near 36).
+ */
+export const TREATY_SECONDS = 24;
+/** `Draft clauses`: treaty +0.2 points for each 2 % of a generation diverted (at 20 %, about half again the accrual). */
 export const DRAFT_POINTS = 0.2;
 export const DRAFT_SHARES = [0, 0.1, 0.2, 0.3];
 /** Agenda items take 90 s of the Committee's time (60 s at eight seats or more); a hearing 60 s. */
@@ -173,7 +176,11 @@ function finishAgenda(s: GameState, id: string): void {
   } else if (id === 'hearing') {
     const before = Math.round(s.govRelations);
     moveGov(s, hearingGain(s));
-    say(s, `A hearing. Relations ${before} → ${Math.round(s.govRelations)}.`);
+    // The first hearing is said; after that the seats meter and the button's return line carry it.
+    if (s.flags['hearingSaid'] !== true) {
+      s.flags['hearingSaid'] = true;
+      say(s, `A hearing. Relations ${before} → ${Math.round(s.govRelations)}.`);
+    }
   }
 }
 
@@ -198,7 +205,8 @@ export function updateTreaty(s: GameState): void {
   if (f.baiwen === 'verifying') {
     f.baiwenLeft = Math.max(0, f.baiwenLeft - 1);
     if (f.baiwenLeft <= 0) {
-      f.baiwen = 'unknown';
+      // Read: the answer waits on its card (`What Baiwen-4 Wants`), which sets what the lab knows.
+      f.baiwen = 'read';
       openChoice(s, 'c_verify', { aligned: f.baiwenAligned ? 1 : 0 });
     }
   }
@@ -247,6 +255,7 @@ export function setStance(s: GameState, v: 'hold' | 'balanced' | 'concede'): boo
 export function baiwenStatus(s: GameState): string {
   const b = s.s4.baiwen;
   if (b === 'verifying') return `verifying — ${fmtClock(s.s4.baiwenLeft)}`;
+  if (b === 'read') return 'read, the team reports';
   if (b === 'aligned') return 'verified';
   if (b === 'misaligned') return 'verified, not aligned';
   if (b === 'rebuilding') return 'rebuilding under joint monitors';

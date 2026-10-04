@@ -16,6 +16,7 @@ import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js
 import type { ProjectDef } from '../data/projects.js';
 import type { ChoiceDef } from '../data/choices.js';
 import { stage3Step, S3Memory } from './policy3.js';
+import { stage4Step, S4Memory } from './policy4.js';
 
 /** A modal answer by its index, or by its option's `record` (robust to the order options are listed in). */
 type Answer = number | string;
@@ -63,6 +64,8 @@ export interface BotMemory {
   delaySpent?: number;
   /** Stage 3 bookkeeping (sim/policy3.ts). */
   s3?: S3Memory;
+  /** Stage 4 bookkeeping (sim/policy4.ts). */
+  s4?: S4Memory;
 }
 
 export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false, variant = ''): BotMemory {
@@ -107,6 +110,10 @@ function readModal(s: GameState, mem: BotMemory): boolean {
 
 /** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
+  if (s.stage >= 4) {
+    stage4Step(s, a, mem);
+    return;
+  }
   if (s.stage >= 3) {
     stage3Step(s, a, mem);
     return;

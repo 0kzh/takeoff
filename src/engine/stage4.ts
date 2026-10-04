@@ -117,7 +117,8 @@ export function arriveStage4(s: GameState): { lines: string[]; news: string[] } 
   f.ubiShare = ubiFromPayments(level);
   if (level > 0) lines.push(`Payments become a universal basic income: level ${level} → ${Math.round(f.ubiShare * 100)}% of output.`);
   s.flags['payments'] = 0;
-  // Approval's new formula starts where Stage 3 ended.
+  // Approval's new formula starts where Stage 3 ended (§1.1): the jobs term and the dividend the
+  // payments became are taken out of the base, so the target on arrival is the approval Stage 3 left.
   f.approvalBase = s.approval - jobsTerm(s) - ubiTerm(f.ubiShare);
   f.treatyOpening = treatyOpening(s);
   f.baiwenAligned = rng(s) < 0.3;
@@ -186,11 +187,18 @@ export function updateGenerations(s: GameState, dt: number): void {
     f.gen.remaining = secs;
     f.gen.total = secs;
     f.gen.verified = true;
-    say(s, `${s.training.modelName} is reading ${f.gen.name} — ${fmtClock(secs)}.`);
+    // The read is taught once in the console; after that the generation line carries it.
+    if (s.flags['readSaid'] !== true) {
+      s.flags['readSaid'] = true;
+      say(s, `${s.training.modelName} is reading ${f.gen.name} — ${fmtClock(secs)}.`);
+    }
     return;
   }
   landGeneration(s);
 }
+
+/** What a verified generation adds to measured alignment (and a fifth of what it trails the real thing by). */
+export const VERIFY_MEASURED = 3;
 
 /** The rung names on the graph (stage4.md §3). */
 export const RUNG_NAMES: Record<number, string> = {
@@ -217,6 +225,8 @@ function landGeneration(s: GameState): void {
   if (g.verified) {
     f.verifiedGens += 1;
     s.alignmentTrue = clamp100(s.alignmentTrue + (slow ? 5 : 2));
+    // Read first, it is measured as it is: the measured number gains 3, and a fifth of what it trails by.
+    s.alignmentApparent = clamp100(s.alignmentApparent + VERIFY_MEASURED + 0.2 * Math.max(0, s.alignmentTrue - s.alignmentApparent));
     moveLead4(s, -0.15);
     const marks = typeof s.flags['verifyMarks'] === 'string' ? (s.flags['verifyMarks'] as string) : '';
     s.flags['verifyMarks'] = `${marks}${marks ? '|' : ''}${Math.round(s.date * 100) / 100}`;

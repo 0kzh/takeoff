@@ -337,7 +337,7 @@ export interface Stage4State {
   genCap0: number;
   /** Baiwen-4: aligned (rolled once), and what the lab knows. */
   baiwenAligned: boolean;
-  baiwen: 'unknown' | 'verifying' | 'aligned' | 'misaligned' | 'rebuilding' | 'rebuilt';
+  baiwen: 'unknown' | 'verifying' | 'read' | 'aligned' | 'misaligned' | 'rebuilding' | 'rebuilt';
   baiwenLeft: number;
   /** Seconds of no treaty progress (a rebuild under joint monitors). */
   treatyFrozen: number;
