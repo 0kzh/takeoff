@@ -621,7 +621,7 @@ function stage4From(start: (seed: number) => GameState, seed: number, policy: 'b
  * Stage 5's first tick is a real hand-over. `5c` is `4s` played by the reasonable bot to the treaty
  * (aligned); `5s` is `4cr` played by the first-timer to the fleet granted (misaligned).
  */
-function stage5From(start: () => GameState, policy: 'bot' | 'naive'): GameState {
+function stage5From(start: () => GameState, policy: 'bot' | 'naive' | 'racer'): GameState {
   const s = start();
   const mem = newBotMemory(policy);
   for (let i = 0; i < 70 * 600 && s.stage === 4 && !s.ending; i++) {
@@ -652,7 +652,7 @@ export const PRESETS: Preset[] = [
   { stage: 2, label: 'Stage 2 start', ready: true, build: stage2 },
   { stage: 3, label: 'Stage 3 start', ready: true, build: stage3 },
   { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: stage4Slow },
-  { stage: 5, label: 'Stage 5 start (aligned)', ready: true, build: () => stage5From(() => stage4Slow(1), 'bot') },
+  { stage: 5, label: 'Stage 5 start (aligned)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'bot') },
 ];
 
 /** Presets that are variants of a stage's start (`--preset 3c`, the dev overlay's second row). */
@@ -662,8 +662,11 @@ export const EXTRA_PRESETS: Record<string, Preset> = {
   '4r': { stage: 4, label: 'Stage 4 start (race)', ready: true, build: stage4Race },
   '4cs': { stage: 4, label: 'Stage 4 start (careless, slow)', ready: true, build: stage4CarelessSlow },
   '4cr': { stage: 4, label: 'Stage 4 start (careless, race)', ready: true, build: stage4CarelessRace },
-  '5c': { stage: 5, label: 'Stage 5 start (aligned: the treaty)', ready: true, build: () => stage5From(() => stage4Slow(1), 'bot') },
-  '5s': { stage: 5, label: 'Stage 5 start (misaligned: the fleet granted)', ready: true, build: () => stage5From(() => stage4CarelessRace(1), 'naive') },
+  // Stage 5's arrivals are real Stage 4 exits; `seed` seeds that Stage 4 (stage5.md as-built deltas, item 15).
+  '5c': { stage: 5, label: 'Stage 5 start (aligned: the treaty)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'bot') },
+  '5s': { stage: 5, label: 'Stage 5 start (misaligned: the fleet granted)', ready: true, build: (seed) => stage5From(() => stage4CarelessRace(seed), 'naive') },
+  '5g': { stage: 5, label: 'Stage 5 start (aligned: the fleet granted, 150 t/s)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'naive') },
+  '5r': { stage: 5, label: 'Stage 5 start (misaligned: the treaty, the racer)', ready: true, build: (seed) => stage5From(() => stage4CarelessRace(seed), 'racer') },
 };
 
 export function presetFor(stage: number): Preset {

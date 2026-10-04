@@ -452,7 +452,8 @@ export class Stage4Tracker {
       genLandings: this.genLandings.map(rel),
       intervalMean: intervals.length ? Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length) : null,
       intervalMax: intervals.length ? Math.round(Math.max(...intervals)) : null,
-      capabilityAtExit: Math.round(bestCapability(s) * 10) / 10,
+      // At the exit, not at the end of the run (the run goes on into Stage 5, where capability keeps rising).
+      capabilityAtExit: this.exitState?.capability ?? Math.round(bestCapability(s) * 10) / 10,
       reveals: this.reveals.length,
       longestRevealGap: Math.round(g.gap),
       longestRevealGapAt: [rel(g.at[0]), rel(g.at[1])],

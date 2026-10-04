@@ -21,11 +21,15 @@ import { presetByKey } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
 import { Stage3Tracker, Stage3Summary, printStage3 } from './stage3sim.js';
 import { Stage4Tracker, Stage4Summary, printStage4 } from './stage4sim.js';
+import { Stage5Tracker, Stage5Summary, printStage5, printWholeGame, screenValues } from './stage5sim.js';
+import { setSkin, swarmReached, ROWS_TAKEN_AT } from '../engine/space.js';
 
 /** The only Node global the sim needs; avoids a dependency on @types/node. */
 declare const process: { argv: string[]; exitCode?: number };
 
 interface Args {
+  /** `--skin-test`: the preset twice, the verdict flipped in one, the answers Silence applies in both (D7). */
+  skinTest?: boolean;
   minutes: number;
   seed: number;
   quiet: boolean;
@@ -48,6 +52,7 @@ function parseArgs(argv: string[]): Args {
     if (k === '--variant' && v) args.variant = v;
     if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy' || v === 'trainfirst' || v === 'racer' || v === 'cautious')) args.policy = v;
     if (k === '--quiet') args.quiet = true;
+    if (k === '--skin-test') args.skinTest = true;
     if (k === '--json') args.json = true;
   }
   return args;
@@ -122,6 +127,7 @@ export interface Summary {
   /** Stage 3 block (null when the run never reached Stage 3). */
   s3: Stage3Summary | null;
   s4: Stage4Summary | null;
+  s5: Stage5Summary | null;
 }
 
 /** stage1-round3-fixes.md acceptance, as the sim can see it. Times are seconds from the start. */
@@ -408,6 +414,15 @@ export function simulate(args: Args): SimResult {
   const preset = presetByKey(args.preset);
   const s = args.preset !== '1' && preset ? preset.build(args.seed) : newGame(args.seed);
   const mem = newBotMemory(args.policy, false, args.variant);
+  // `--variant flip`: Stage 5 runs in the other skin (the dev switch; D7's comparison).
+  const flip = args.variant.split(',').includes('flip');
+  let flipped = false;
+  const flipNow = () => {
+    if (!flip || flipped || s.stage !== 5) return;
+    flipped = true;
+    setSkin(s, s.flags['alignedAtHandover'] !== true);
+  };
+  flipNow();
   const lines: string[] = [];
   const milestones: Record<string, number> = {};
   const idleGaps: [number, number][] = [];
@@ -504,6 +519,7 @@ export function simulate(args: Args): SimResult {
   let longestReleaseAt = 0;
   const t3 = new Stage3Tracker();
   const t4 = new Stage4Tracker();
+  const t5 = new Stage5Tracker();
   // Stage 1 round-3 measures: dollar purchases (for the delay audit and the gaps between them).
   let delayedBuys = 0;
   let unprintedBuys = 0;
@@ -655,6 +671,8 @@ export function simulate(args: Args): SimResult {
     step(s);
     t3.tick(s, actionTimes);
     t4.tick(s, actionTimes);
+    flipNow();
+    t5.tick(s, actionTimes);
     // An ending stops the run (tick() would; the sim steps directly).
     if (s.ending) break;
     const t = s.stats.timePlayed;
@@ -1177,6 +1195,7 @@ export function simulate(args: Args): SimResult {
     s2,
     s3: t3.summary(s, actionTimes),
     s4: t4.summary(s, actionTimes),
+    s5: t5.summary(s, actionTimes),
   };
   return { state: s, milestones, idleGaps, lines, summary };
 }
@@ -1249,8 +1268,39 @@ function printStage2(sum: Stage2Summary): void {
   }
 }
 
+/**
+ * D7, the skins are equal: the same preset and seed twice, the verdict flipped in the second, both giving
+ * at each card the option Silence applies. Every number on screen at every five-minute mark must match
+ * until the swarm reaches 0.006 %; then Silence spends all matter 15 / 25 / 60.
+ */
+function skinTest(args: Args): void {
+  const variant = [args.variant, 'answers-silence'].filter(Boolean).join(',');
+  const a = simulate({ ...args, variant, quiet: true });
+  const b = simulate({ ...args, variant: `${variant},flip`, quiet: true });
+  const sa = a.summary.s5?.screens ?? [];
+  const sb = b.summary.s5?.screens ?? [];
+  const n = Math.min(sa.length, sb.length);
+  let same = 0;
+  const diffs: string[] = [];
+  for (let k = 0; k < n; k++) {
+    if (sa[k]!.values === sb[k]!.values) same++;
+    else diffs.push(`${fmtClock(sa[k]!.t)}: ${sa[k]!.values}\n      ${sb[k]!.values}`);
+  }
+  console.log(`\n== D7 the skins are equal (preset ${args.preset}, seed ${args.seed}): ${a.summary.s5?.skin} and ${b.summary.s5?.skin} ==`);
+  console.log(`   five-minute marks before swarm 0.006%: ${same} of ${n} identical${diffs.length ? '  <-- MISS' : ''}`);
+  for (const d of diffs) console.log(`   ${d}`);
+  console.log(`   endings: ${a.summary.s5?.ending} at ${fmtClock(a.summary.s5?.duration ?? 0)}; ${b.summary.s5?.ending} at ${fmtClock(b.summary.s5?.duration ?? 0)}`);
+  void screenValues;
+  void swarmReached;
+  void ROWS_TAKEN_AT;
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
+  if (args.skinTest) {
+    skinTest(args);
+    return;
+  }
   const result = simulate(args);
   const sum = result.summary;
   if (args.json) {
@@ -1302,6 +1352,8 @@ function main(): void {
   if (sum.s2) printStage2(sum.s2);
   if (sum.s3) printStage3(sum.s3, args.policy);
   if (sum.s4) printStage4(sum.s4, args.policy, args.preset);
+  if (sum.s5) printStage5(sum.s5, args.policy, args.variant);
+  if (args.preset === '1' && result.state.stage >= 2) printWholeGame(result.state);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
 }
 
