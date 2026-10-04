@@ -136,14 +136,16 @@ retired with a console line), `uses` (default 1; `Infinity` for repeatables, wit
 for rescues), `repeatable` (a standing offer such as the Custom model contract, drawn with a double
 border), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the screen),
 `revealFunds` / `revealResearch` (a price of at least that many seconds of revenue or research,
-fixed when the card first shows; research never above 85 % of the lab). A triggered project joins
+fixed when the card first shows; research never above 85 % of the lab; in Stage 2, seconds of what
+fills funds, the revenue less the default build share). A triggered project joins
 the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 one a minute until the
 Training panel (only the first lab's four cards, in order: Better Prompting, Grid Contract, Blue-sky
 Research, Training Pipeline), then every 30 s, at most four on screen (after 140 s with nothing new
 one more may come out); an empty panel gets its next card 10 s after its last one was bought, and is
 not drawn without a card; a card already paid for when it would come out waits up to 60 s for a
 purchase to take the balance below it; Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
-160 s with nothing new, one or two more may join, eight at most). These skip the wait: `rescue`
+160 s with nothing new, one or two more may join, eight at most), and a card more than three minutes
+of income from its purse is not drawn (grey is for goals; the stage goal excepted). These skip the wait: `rescue`
 (also uncapped, drawn dashed), `pinned` (the stage goal), `urgent(s)` (a wall's named fix while it
 holds), `ignoresCap` (Stage 2's G6 pre-order), `chain` (the next step of a series, at once when
 there is room); Stage 1 `sideline` offers drip in but never fill the cap. A card never appears
@@ -185,16 +187,25 @@ clicks outside itself, takes keyboard focus when it opens, and Escape takes the 
 event carries a timer with a harmless default, so an unanswered one never holds the stage up.
 Each option prints its effect and cost under its label (`line` in `data/choices.ts`; stakes are
 sized when the modal opens, in `onOpen`'s context); a greyed option says what it needs (`needs`,
-or its price).
+or its price). A priced option, like a card, prints the delay it causes a run waiting for money
+(`· Sage-2.5 0:41 later`, from 10 s: `delayNote` in `engine/training.ts`).
+
+**The wallet rule** (arc G34) holds everywhere: the game never holds the player's money. A row is
+grey only when its purse cannot pay (it prints the shortfall and a clock) or a stated requirement
+is unmet; a purchase a waiting run draws on stays lit and prints its delay; a price never blocks
+Train (pressed short, it is armed and starts when paid for; pressed again it stands down). A
+repeatable sink at a flat price gets its own purse: in Stages 2–3 the build share of income fills
+`buildFund`, which pays for lots, plants and halls (`creditIncome` / `payBuild` in `engine/state.ts`).
 
 ## Dev overlay
 
 Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 
 * **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at First
-  Datacenter (bot, seeds 1–5, rebuilt after owner feedback 1; seed 3's records, 24:32), run through
-  the arrival; Stage 3 is the median Stage 2 exit (bot from the Stage 2 preset, seeds 1–5; seed 2's
-  records, 34:59, with the four cards every current exit has bought) run through the Stage 3
+  Datacenter (bot, seeds 1–5, rebuilt after the wallet rule and Stage 1's round 3: seed 2's state at
+  20:31, the median of the income the five bring into Stage 2), run through the arrival; Stage 3 is
+  the median Stage 2 exit (bot from the Stage 2 preset, seeds 1–5: every number the median of the
+  five, the records the median run's, seed 2 at 36:46 of 35:52–39:09) run through the Stage 3
   arrival; Stage 4 is a real Stage 3 exit: the bot plays the Stage 3 preset (median seed) until the
   session is ready and the slow-down motion is brought. Stage 5 says `preset pending`.
 * **A second row** of named starts: `Stage 3 start (careless)` (the same exit after a Stage 2 played
@@ -235,9 +246,10 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 `localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 9; versions
 1–8 are migrated on load; a version-5 save keeps its screen, its Abilene ladder becomes First
 Datacenter, and the opening's new flags are set; version 7 adds Stage 3's fields: shipments,
-autonomy, drift and rogue copies, interpretability, the Committee, the ending; version 8 the build
-fund; version 9 `marketingBought`, the Marketing levels paid for, estimated for an older save from its
-level less the levels rounds, cards and events gave). The game saves every 15 s,
+autonomy, drift and rogue copies, interpretability, the Committee, the ending; version 8 the wallet
+rule's: the build fund and the build share and an armed Train, a Stage 2 standing pool moved into the
+build fund; version 9 `marketingBought`, the Marketing levels paid for, estimated for an older save
+from its level less the levels rounds, cards and events gave). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -266,11 +278,12 @@ starts). `--variant` plays the policy with one decision fixed. Both stages:
 for a greyed careful one), `modals-last`, `modals-ignore` (alias `ignore-modals`: every event runs
 out its timer to the default), `redteam-never`, `focus-efficiency` / `focus-safety` (every run).
 Stage 1: `price-never` (the opening price is never touched). Stage 2: `slider-N` (copies on research
-fixed at N %), `safety-0` / `safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`. Stage 3
+fixed at N %), `share-25` / `share-50` / `share-75` (the bot's build share pinned), `safety-0` /
+`safety-2` (Safety runs), `gulf-sign` / `gulf-domestic`. Stage 3
 (`stage3.md` §9.3): `neuralese`, `focus-capability` / `focus-safety`, `research-20` … `research-70`,
 `monitors-0`, `grants-none`, `memo-bury`, `mini-everyone` / `mini-inside`, `committee-open` /
 `committee-counsel`, `blockade-escort` / `blockade-channel`, `modals-first` / `modals-last` /
-`modals-never`, `sendback-always`, `alignwork-0` / `alignwork-30`, `budget-0` … `budget-100`,
+`modals-never`, `sendback-always`, `alignwork-0` … `alignwork-30` (the Alignment work share), `budget-0` … `budget-100`,
 `lobby-never`, `payments-0` / `payments-5`, `step-small` / `step-large`, `pause` (signs the Pause when
 offered) and `refuse` (refuses the Committee's order: The Project). Variants combine with commas.
 
@@ -305,9 +318,11 @@ Six policies play through `actions` only:
 In Stage 3 (`stage3.md` §9.1–§9.2) the bot answers each modal with the careful option (keep it in
 English, brief quarterly, enterprise only, report, concede) and brings Slow down when its best reading
 of true alignment is under 60 or it has none; it keeps research at 40 % and monitors at 10–15 %, buys
-the monitor, every grant but `Let Sage revise the Spec` and then the cards in table order, never
-spends more than a run's price on research, red-teams to zero, and feeds a seventh of research to
-Alignment work. The first-timer buys everything affordable in screen order, never touches a slider,
+the monitor, every grant but `Let Sage revise the Spec` and then the cards in table order, reads the
+printed delays (a research card that would hold the waiting run 0:30 or more waits; instruments and
+urgent fixes do not), red-teams to zero, sets Alignment work to 10 %, keeps the build share at 50 %
+(`budget-0` / `budget-100` pin 25 / 75 %) and buys lots by hand from the build fund. The first-timer buys everything affordable in screen order, keeps the Standing order on, buys the
+largest lot the build fund covers when the Train row asks for GPUs, never touches a slider,
 and takes the first option of every modal; greedy presses every enabled purchase; trainfirst follows
 the lot row's reason, then presses everything enabled once, as the critic harness does.
 
@@ -323,13 +338,15 @@ every gap over 120 s,
 worst 5-minute window, Stage 1 idle rescues (and any at 0 tasks), and soft-lock stretches (60 s+
 without production in Stage 1). `--json` prints the summary only, as one line.
 
-In Stage 2 the bot follows `stage2.md` §9.1 (modals; free and cheap cards; the binding wall —
-power when under a thousand GPUs' worth is left, then room, with turbines when a reactor is out of
-reach and the next hall built once the last one is 70 % full; training when the run has its GPUs,
-the lots saving its price once the fleet is half again what it needs (the game's own run hold);
-a wider market first; other cards in table order, the next run's money lent for 30 s of
-revenue at most; the largest GPU lot that fits, the main lot's hundreds when none does; Trust; the
-slider at 20 %). The Stage 1 summary
+In Stage 2 the bot follows `stage2.md` §9.1 under the wallet rule: modals; Train pressed as soon as
+the run's GPUs are there (it starts, or waits armed for its price); cards, Stage 2's own and a named
+fix first, unless the waiting run prints a delay of 0:30 or more on one (a market card that pays back
+in a minute, or a named fix, regardless); from the build fund the binding wall's fix (power when under
+two thousand GPUs' worth is left, the cheapest that comes now; then room, the next hall once the last
+one is 70 % full), then the largest whole lot that fits, by hand (its Standing order stays off); the
+build share at 75 % while the next run is short of GPUs, else 50 %; Trust; the slider at 20 %. The
+first-timers follow the critic harness: infrastructure by the lot row's reason, every other enabled
+purchase, the Standing order on once bought. The Stage 1 summary
 adds the reveal → purchase latency, the densest six minutes of first-time reveals, the exit
 state (capability, alignment, Trust, staff, marketing, contracts, revenue, price, GPUs,
 incidents), and round 3's measures (`s1x` in `--json`): the run starts and the longest gap between
@@ -346,8 +363,12 @@ Standing order, 5-minute marks), the reveal → purchase latency per card (media
 the modal answers, the exit state (capability, alignment true / apparent, government, approval,
 lead, funds, security level), and the critic's hands-and-eyes measures from 3:00 on (G24–G26): the
 share of 2-s checks with no enabled purchase and with two or more distinct ones (lot sizes count
-once), the share of the stage after 10:00 spent inside gaps of 30 s or more between the player's
-actions, and the longest interval between two model releases (from the arrival).
+once; a check counts everything enabled since the previous one, since the harness looks and then
+acts while a policy here buys within 200 ms), the share of the stage after 10:00 spent inside gaps
+of 30 s or more between the player's actions, and the longest interval between two model releases
+(from the arrival). The `G34` line adds the wallet rule's three: the share of checks in which the
+build fund covered a whole lot that fits (lit, or bought, since the last check), the share of Train's
+idle time it was pressable or armed, and the lot presses.
 
 The Stage 3 block prints the B1–B35 acceptance numbers of `stage3.md` §9.3 with `<-- MISS` beside a
 miss: duration and how the stage ended, reveal and mechanic gaps, runs and the intervals between their
@@ -368,7 +389,10 @@ Stage 2 targets (critic round 1 and owner feedback 1; the harness's first-timer 
 Train blocked for want of GPUs ≤ 5 % of the stage (bot), ≤ 25 % (trainfirst); capability
 4.0–4.7× at the exit; no enabled purchase in at most half of the checks; two or more affordable in
 at least a quarter; at most 35 % of the stage after 10:00 in click gaps of 30 s or more; no release
-interval over 5:30.
+interval over 5:30 for a player who reads the printed delays (8:00 for one who buys everything lit);
+the wallet rule's (`stage2-round2-fixes.md` §1): no row greyed by a reservation, a whole lot lit in
+35 % of checks, Train pressable or armed 80 % of its idle time, at most 250 lot presses, and the
+stage 4:00 apart between a 25 % and a 75 % build share.
 
 Stage 1 targets (seeds 1–5, owner feedback 1): transition 20:00–26:00 (bot) / 22:00–30:00 (naive,
 greedy, trainfirst), longest reveal gap ≤ 180 s, the longest stretch with Train blocked for GPUs
@@ -418,11 +442,14 @@ drawn, every Stage 2 panel appearing, the event panel (an effect line on every o
 focus inside it, the page behind still clickable, Escape taking a timed default), save → reload
 mid-run, mid-interconnect-queue and mid-cooldown, the Stores meters, no `undertrained` or `Train
 now`, the Train row short of GPUs (`Needs 3,700 GPUs. 1,000 free.` and, with GPUs unpowered,
-`Needs 6,700 powered GPUs. 4,000 are dark: add power.`), numbers / controls / words on screen at each
-5-minute mark (numbers ≤ 60 at 5:00, ≤ 70 at 10:00, ≤ 80 after, set against Paperclips' Stage 2:
-39 and 54 at 5:00 and 10:00 with a nearly empty early stage, 66–83 at the marks from 15:00;
-controls ≤ 30), the Stage 3 narration and dev overlay, the Stage 3 preset,
-and 390 px without horizontal overflow. Screenshots go to `agent-tools/shots/stage2/`.
+`Needs 6,700 powered GPUs. 4,000 are dark: add power.`), the wallet rule (no `… first` hold string
+on screen, the Build share and build fund rows, Train armed while short with `… starts when paid
+for`, a card printing the delay it causes, the GPU row's amount and capacity `1,000 of 10,000`, fewer
+than half the controls grey at every mark after 5:00), numbers / controls / words on screen at each
+5-minute mark (numbers ≤ 80, set against Paperclips' Stage 2: 39 and 54 at 5:00 and 10:00 with a
+nearly empty early stage, 66–83 at the marks from 15:00; controls ≤ 30), the Stage 3 narration and
+dev overlay, the Stage 3 preset, and 390 px without horizontal overflow. Screenshots go to
+`agent-tools/shots/stage2/`.
 
 ```sh
 node tools/verify/smoke-stage3.mjs [--seed 1] [--dump]
@@ -433,8 +460,11 @@ the arrival (the narration, the promised research number passed within 30 s, `Ap
 `Release`, no Stage 2 control left); every Stage 3 panel, the grants and their WARNING line, drift,
 the readings, the session and the motion; Stage 4's narration and its clean screen; save → reload
 mid-run, mid-shipment, mid-event and mid-session with the timers kept; numbers / controls / words at
-each 5-minute mark (counted as in `stage2.md` §6.3; controls ≤ 30; numbers held under 130, above the
-spec's 65, see `stage3.md` §6.3); the careless start played by the first-timer into Stage 4; the
-Pause (signed by the test when the bot is offered it) and the Project (the first-timer with
-`refuse`), each with the end screen; 390 px without horizontal overflow; and no page errors. `--dump` prints what it counted.
+each 5-minute mark (counted as in `stage2.md` §6.3: numbers ≤ 85, controls ≤ 30, words ≤ 350, what the
+build reaches; the spec's 65 numbers is not met); no `… first` hold string, the build share and fund
+on screen and Alignment work as a share; the careless start played by the first-timer into Stage 4;
+the Pause (signed by the test when the bot is offered it) and the Project (the first-timer with
+`refuse`), each with the end screen, which must cover the page (nothing of the game drawn behind it,
+the Choices list scrolling with it); 390 px without horizontal overflow; and no page errors. `--dump`
+prints what it counted.
 Screenshots go to `agent-tools/shots/stage3/`.

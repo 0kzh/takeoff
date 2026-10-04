@@ -34,9 +34,9 @@ const MAX_MINUTES = 70;
 /**
  * The on-screen budget (stage3.md §6.3, arc G14; the coordinator's round-3 load limits): 30 controls,
  * 85 numbers and 350 words at every five-minute mark. Explanations fold into hovers once read, band
- * edges print only when near, each fact has one home (the build reached 76–85 numbers and 212–298
- * words from the preset); the spec's 65 numbers is not met (rates beside the sliders and the
- * printed returns of G27 stay on screen).
+ * edges print only when near, each fact has one home (the build reaches 73–83 numbers and 206–293
+ * words from the rebuilt preset, 73–85 from the careless start); the spec's 65 numbers is not met
+ * (rates beside the sliders and the printed returns of G27 stay on screen).
  */
 const BUDGET = { numbers: 85, interactive: 30, words: 350 };
 /** The wallet rule (arc G34): no row is held back with a `… first` or `keeps …'s price` reason. */
