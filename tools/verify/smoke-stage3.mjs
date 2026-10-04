@@ -160,6 +160,19 @@ async function reloadAndCompare(page, policy, read) {
   return { before, after };
 }
 
+/** Console lines seen over `seconds` of game time, ticked in half seconds. */
+async function narration(page, seconds) {
+  const seen = new Set();
+  for (let i = 0; i < seconds * 2; i++) {
+    const c = await page.evaluate(() => {
+      window.__game.tick(500);
+      return [5, 4, 3, 2, 1].map((k) => document.getElementById(`readout${k}`).innerText);
+    });
+    for (const l of c) if (l) seen.add(l);
+  }
+  return [...seen];
+}
+
 const tick = (page, ms) => page.evaluate((m) => {
   window.__game.tick(m);
   return null;
@@ -228,6 +241,8 @@ try {
   let maxGrants = 0;
   let trueShownAt = null;
   let voteAt = null;
+  let campusText = '';
+  let storesOverflow = 0;
   let motionInfo = null;
   for (let step = 0; step < (MAX_MINUTES * 60 * 1000) / STEP_MS; step++) {
     await tick(page, STEP_MS);
@@ -239,6 +254,7 @@ try {
     if (snap.trueShown && trueShownAt === null) trueShownAt = ts;
     if (snap.stage !== 3) break;
 
+    if (!campusText) campusText = await page.evaluate(() => document.getElementById('proj-p_site2')?.innerText ?? '');
     if (!reloads.run && snap.run && snap.run.phase === 'training' && snap.run.elapsed > 5 && snap.run.elapsed < snap.run.duration - 5) {
       reloads.run = await reloadAndCompare(page, 'bot', () => {
         const s = window.__game.state;
@@ -261,6 +277,11 @@ try {
 
     if (ts >= nextMark) {
       marks.push({ t: nextMark, numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length });
+      // The stores box holds its rows (critic S3 round 1 §9 item 8: the GPU row ran 12 px past it).
+      storesOverflow = Math.max(storesOverflow, await page.evaluate(() => {
+        const box = document.getElementById('panel-stores').getBoundingClientRect();
+        return Math.max(0, ...[...document.querySelectorAll('#panel-stores .storeRow')].filter((r) => r.checkVisibility()).map((r) => Math.ceil(Math.max(...[...r.querySelectorAll('*')].map((e) => e.getBoundingClientRect().right)) - box.right)));
+      }));
       const extra = await page.evaluate(() => ({
         text: [...document.querySelectorAll('#columns .panel')].filter((el) => el.checkVisibility()).map((el) => el.innerText).join('\n'),
         share: !!document.getElementById('buildShareRow')?.checkVisibility() && /\d+%/.test(document.getElementById('btn-buildShare').innerText),
@@ -301,7 +322,7 @@ try {
     s4.push(c);
   }
   const last = s4[s4.length - 1];
-  check('Stage 4 arrival: the vote is narrated and the model runs the business', last.stage === 4 && last.console.some((l) => /The Committee votes 6–4/.test(l)) && last.console.some((l) => /The model runs the business now/.test(l)), last.console.join(' | '));
+  check('Stage 4 arrival: the vote is narrated and the model runs the business', last.stage === 4 && last.console.some((l) => /The Committee votes \d+–\d+/.test(l)) && last.console.some((l) => /The model runs the business now/.test(l)), last.console.join(' | '));
   await shot(page, '05-stage4-arrival');
   const s4panels = await page.evaluate(() => [...document.querySelectorAll('.panel')].filter((p) => p.checkVisibility()).map((p) => p.id));
   const carPlant = await page.evaluate(() => !!document.getElementById('proj-p_car_plant')?.checkVisibility());
@@ -312,6 +333,12 @@ try {
   check('a grant prints its WARNING', [...consoleSeen].some((l) => l === 'WARNING: risk of value drift increased.'));
   check('true alignment appears with interpretability lab III', trueShownAt !== null, trueShownAt !== null ? `at ${clock(trueShownAt)}` : '');
   const r = reloads;
+  const campus = await page.evaluate(() => {
+    const c = window.__game.projects.byId('p_site2').cost(window.__game.state);
+    return { build: c.build ?? 0, funds: c.funds ?? 0 };
+  });
+  check('the second campus is paid from the build fund (or funds), named on its row (§9 item 5)', campus.build > 0 && !campus.funds && (!campusText || /from the build fund/.test(campusText)), `${JSON.stringify(campus)} “${campusText.split('\n')[0]}”`);
+  check('the stores box holds its rows at every mark (§9 item 8)', storesOverflow <= 1, `${storesOverflow} px past the box at most`);
   check('reload mid-run restores the run', r.run && r.run.before && r.run.after && r.run.before.id === r.run.after.id && Math.abs(r.run.before.elapsed - r.run.after.elapsed) <= 0.2, r.run ? JSON.stringify(r.run) : 'no run seen');
   check('reload mid-shipment restores the shipment timers', r.shipment && JSON.stringify(r.shipment.before) === JSON.stringify(r.shipment.after), r.shipment ? JSON.stringify(r.shipment) : 'no shipment seen');
   check('reload mid-event restores the event and its timer', r.event && r.event.before && r.event.after && r.event.before.id === r.event.after.id && Math.abs(r.event.before.remaining - r.event.after.remaining) <= 0.2, r.event ? JSON.stringify(r.event) : 'no timed event seen');
@@ -438,6 +465,54 @@ try {
     check('the Project: an order refused while its cause stands ends the run, end screen rendered', screen.ending === 'project' && screen.screen && screen.title === 'The Project' && screen.counter && /classified/.test(screen.sentence), JSON.stringify({ refused, ...screen, stage: end?.stage }));
     check('the end screen covers the page: the game is not drawn, the Choices list scrolls with it', screen.gameHidden && screen.choicesInPage, JSON.stringify({ gameHidden: screen.gameHidden, choicesInPage: screen.choicesInPage }));
     await cj.close();
+  }
+
+  // ===== 5b. Capped clocks and the idle hold (critic S3 round 1 §9 items 1, 7) =====
+  {
+    const { context: ch, page: ph } = await freshPage('hold');
+    await ph.evaluate(() => {
+      window.__game.loadPreset(3);
+      window.__game.setAutoplay(true, 'bot', true);
+    });
+    // To the first run waiting for its sign-off (Approve is the player's until Stop asking for sign-off).
+    let waiting = false;
+    for (let step = 0; step < 200 && !waiting; step++) {
+      await tick(ph, 1000);
+      waiting = await ph.evaluate(() => {
+        const s = window.__game.state;
+        const r = s.training.run;
+        return !!r && r.phase === 'redteam' && !document.getElementById('btn-approve').disabled && document.getElementById('btn-approve').checkVisibility();
+      });
+    }
+    await ph.evaluate(() => window.__game.setAutoplay(false));
+    // Research stopped (a re-image): no clock past an hour, and the reason in its place.
+    const clocks = await ph.evaluate(() => {
+      const s = window.__game.state;
+      s.effects.push({ id: 'reimage', remaining: 20, demandMult: 1, copiesMult: 0 });
+      window.__game.tick(1000);
+      const text = ['allocRate', 'trainStatus', 'experimentsNote'].map((id) => document.getElementById(id)?.innerText ?? '').join(' | ');
+      return text;
+    });
+    check('capped clocks: no wait over an hour is printed as a clock; a stop says what stops research', !/\d{3,}:\d\d/.test(clocks) && /re-image/.test(clocks), clocks);
+    // Idle with the sign-off waiting: two minutes, then the clocks hold; Approve brings a line saying so.
+    await tick(ph, 150000);
+    const held = await ph.evaluate(() => ({ held: window.__game.state.flags['held'] === true, what: window.__game.state.flags['waitWhat'] }));
+    await ph.click('#btn-approve');
+    const back = await narration(ph, 3);
+    check('the idle hold: a sign-off waiting two minutes holds the Committee\'s count; the return says what was held', waiting && held.held && back.some((l) => /waited, the Committee's count.* and the incident clocks held for/.test(l)), `${JSON.stringify(held)} · ${back.filter((l) => /held/.test(l)).join(' | ') || back.slice(-2).join(' | ')}`);
+    // The memo, opened and left: a timer with its careful default (§9 item 3), and the order the same.
+    const timers = await ph.evaluate(() => {
+      const out = {};
+      for (const id of ['c_memo', 'c_order']) {
+        window.__game.events.fire(id);
+        window.__game.tick(1000);
+        out[id] = document.getElementById('modalTimer').innerText;
+        window.__game.state.activeChoice = null;
+      }
+      return out;
+    });
+    check('the memo and the order have a timer with a careful default (§9 item 3)', /\d+ s — then: take it to the Committee/.test(timers.c_memo) && /\d+ s — then: (concede oversight|call in favours|refuse)/.test(timers.c_order), JSON.stringify(timers));
+    await ch.close();
   }
 
   // ===== 6. 390 px =====

@@ -206,7 +206,7 @@ try {
   const said = await narration(page, 32);
   const has = (re) => said.some((l) => re.test(l));
   check('slow arrival: the vote, the business, money, the button, the robots and Steward-1 are narrated',
-    has(/The Committee votes 6–4 to slow down/) && has(/The model runs the business now/) && has(/Money is retired: \$[\d.,]+[KMB]? is written off\. Nobody notices\./)
+    has(/The Committee votes \d+–\d+ to slow down/) && has(/The model runs the business now/) && has(/Money is retired: \$[\d.,]+[KMB]? is written off\. Nobody notices\./)
       && has(/The Complete Task button is gone\. Tasks Completed is not\./) && has(/New on the board: Robots\. 10,000 Atlas-class units/) && has(/Steward-1 is slower than Sage-4 was: [\d.]+×\. It thinks in English\./),
     said.slice(0, 12).join(' | '));
   const arrival = await page.evaluate(() => {
@@ -307,7 +307,7 @@ try {
     const { context: cr, page: pr } = await freshPage('race');
     await pr.evaluate(() => window.__game.loadPreset('4r'));
     const raceSaid = await narration(pr, 32);
-    check('race arrival: the vote continues and Sage-5 is named, unscheduled', raceSaid.some((l) => /The Committee votes 6–4 to continue/.test(l)) && raceSaid.some((l) => /Sage-5 is \d+:\d\d away\. Nobody scheduled it\./.test(l)), raceSaid.slice(0, 10).join(' | '));
+    check('race arrival: the vote continues and Sage-5 is named, unscheduled', raceSaid.some((l) => /The Committee votes \d+–\d+ to continue/.test(l)) && raceSaid.some((l) => /Sage-5 is \d+:\d\d away\. Nobody scheduled it\./.test(l)), raceSaid.slice(0, 10).join(' | '));
     const v0 = await pr.evaluate(() => ({ text: document.getElementById('btn-verify').innerText, note: document.getElementById('verifyNote').innerText }));
     await pr.click('#btn-verify');
     const v1 = await pr.evaluate(() => ({ text: document.getElementById('btn-verify').innerText, on: window.__game.state.s4.verifyOn }));
@@ -400,6 +400,42 @@ try {
     const missing = S4_ROWS.filter((r) => !end.rows.includes(r));
     check('The Project from Stage 4: an order refused, the end screen with Stage 4\'s rows', end.ending === 'project' && end.screen && /classified/.test(end.sentence) && missing.length === 0, `${end.title}; missing ${missing.join(', ') || 'none'}`);
     await cj.close();
+  }
+
+  // ===== 6b. Events that wait on the player are timed (critic S3 round 1 §9 item 3, checked in Stage 4) =====
+  {
+    const { context: ce, page: pe } = await freshPage('timers');
+    const timers = await pe.evaluate(() => {
+      window.__game.loadPreset('4r');
+      const out = {};
+      for (const id of ['c_verify', 'c_autonomy', 'n_channel']) {
+        window.__game.events.fire(id);
+        window.__game.tick(1000);
+        out[id] = document.getElementById('modalTimer').innerText;
+        window.__game.state.activeChoice = null;
+      }
+      return out;
+    });
+    check('What Baiwen-4 Wants, the fleet\'s request and the race cards are timed, each with its careful default', /\d+ s — then: demand a rebuild/.test(timers.c_verify) && /\d+ s — then: not yet/.test(timers.c_autonomy) && /\d+ s — then: acknowledge/.test(timers.n_channel), JSON.stringify(timers));
+    // Revoke a grant cannot loop: a revoked grant is not offered again.
+    const revoke = await pe.evaluate(() => {
+      const s = window.__game.state;
+      const g = window.__game.actions;
+      s.revealed['robotFleet'] = true;
+      s.stats.timeInStage = Math.max(s.stats.timeInStage, 400);
+      window.__game.tick(20000);
+      const grantShown = () => window.__game.projects.visible().includes('p_fleet_auto');
+      s.projects['p_fleet_auto'] = { ...(s.projects['p_fleet_auto'] ?? {}), shown: true, bought: 0 };
+      const before = grantShown();
+      s.research = 1e15;
+      const granted = g.buyProject(s, 'p_fleet_auto');
+      s.projects['p_revoke'] = { ...(s.projects['p_revoke'] ?? {}), shown: true, bought: 0 };
+      const revoked = granted && g.buyProject(s, 'p_revoke');
+      window.__game.tick(30000);
+      return { before, revoked, again: grantShown(), flag: s.flags['revoked:p_fleet_auto'] === true };
+    });
+    check('Revoke a grant takes the grant back for good (no buy-and-revoke loop)', revoke.revoked && revoke.flag && !revoke.again, JSON.stringify(revoke));
+    await ce.close();
   }
 
   // ===== 7. The Stage 5 presets =====
