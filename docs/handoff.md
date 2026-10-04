@@ -13,12 +13,12 @@
 | 2 | Stage 1 polish pass (capability-based training costs, modal pacing, project drip, rental quota, fewer numbers) | Opus | **Done** — commits `ce41926`…`75874a7` |
 | 3 | Rebuild the critic harness (the old one was lost with the previous VM) | Opus | **Done** — `tools/critic/`; extension for Paperclips Stage 2/3 play in flight |
 | 4 | Stage 1 critic round 2 on a frozen snapshot | Fable critic | **Done** — `docs/critic-stage1-round2.md`: **Takeoff 8.1 vs Paperclips 7.7**. Takeoff wins narrowly |
-| 4b | Stage 1 round-2 fix pass: make decisions matter (contract income tied to the market, incident and modal stakes, Focus trade), slow the minute 3–10 firehose, rental quota in steps, price step, wall and console bugs (report §4–§6) | Opus | Queued — runs after the Stage 2 build, alongside the Stage 2 critic |
+| 4b | Stage 1 round-2 fix pass: make decisions matter (contract income tied to the market, incident and modal stakes, Focus trade), slow the minute 3–10 firehose, rental quota in steps, price step, wall and console bugs (report §4–§6) | Opus | In flight (same pass also fixes the Stage 2 builder's own reported misses) |
 | 5 | Arc contract + Stage 2 spec | Fable | **Done** — `docs/specs/arc.md`, `docs/specs/stage2.md` |
-| 6 | Stage 2 build from the spec, then its critic loop vs Paperclips Stage 2 | Opus / Fable | Build in flight (engine, content and UI committed; tuning) |
+| 6 | Stage 2 build from the spec, then its critic loop vs Paperclips Stage 2 | Opus / Fable | Build **done** — commits `6359aac`…`7fd0121` (new-game sim: Stage 2 in ≈ 39 min, 12 runs, exit ≈ 4.16×; smoke 30/31). Critic round 1 in flight on snapshot `s2-r1` → `docs/critic-stage2-round1.md` |
 | 7 | Stage 3 spec → build → critic loop | Fable / Opus / Fable | Spec **done** — `docs/specs/stage3.md`; build pending 6 |
-| 8 | Stage 4 spec → build → critic loop | | Spec in flight |
-| 9 | Stage 5 + endings + end-of-run stats → spec → build → critic loop | | Spec in flight |
+| 8 | Stage 4 spec → build → critic loop | | Spec **done** — `docs/specs/stage4.md`; build pending 7 |
+| 9 | Stage 5 + endings + end-of-run stats → spec → build → critic loop | | Spec **done** — `docs/specs/stage5.md`; build pending 8 |
 | 10 | Full-run critic pass (new game → an ending, ~3–4 h of game time), final polish, docs | | Not started |
 
 Each stage follows the same pipeline: **spec (Fable) → build (Opus) → frozen snapshot → critic (Fable, fresh context) → fixes (Opus) → critic again until the stage beats the matching Paperclips stage on the rubric.** The planner works one stage ahead of the builder; the critic plays a snapshot so the builder can keep going.
@@ -27,7 +27,7 @@ Each stage follows the same pipeline: **spec (Fable) → build (Opus) → frozen
 
 1. `docs/original-prompt.md` — the user's requirements.
 2. `docs/specs/arc.md` — cross-stage contract: requirement checklist (R1–R35), per-stage scale targets, persistent variables, exact ending conditions, pacing guardrails G1–G14, the transition contract.
-3. `docs/specs/stageN.md` — implementation-ready stage specs (Stage 2 written; Stage 3 being written).
+3. `docs/specs/stageN.md` — implementation-ready stage specs for Stages 2–5. Stage 3–5 numbers come from paper models and must be re-tuned in the sim; each spec gets an "as-built deltas" patch from the planner just before its build starts.
 4. `README.md` and the code — what is actually shipped.
 5. `docs/design.md`, `docs/stages.md` — the original design; superseded wherever the above disagree. `docs/stages.md` is kept in sync with each stage as it lands.
 6. `docs/reference-analysis.md` (6,909 lines) — the mined references: Universal Paperclips source and wiki, A Dark Room source, Game Dev Story, AI-2027 / Situational Awareness / Wait But Why / IABIED. Do not re-fetch; grep it.
@@ -50,7 +50,7 @@ Gitignored working folders under `agent-tools/`: `refs/` (clones of Universal Pa
 - Rubric (unchanged since round 1): time to first meaningful choice; seconds with nothing to do; cognitive load & progressive disclosure; cadence of reveals; greyed-out goal always on screen; clarity of the stage transition; soft-locks. The critic names the single biggest gap, specific enough to act on.
 - Round 1 (Stage 1): **Takeoff 5.6 vs Paperclips 7.9** — `docs/critic-stage1-round1.md`. Biggest gap: a 10–14 minute dead tail before the datacenter. All of its findings are addressed in step 1 above.
 - Round 2 (Stage 1): **Takeoff 8.1 vs Paperclips 7.7** — `docs/critic-stage1-round2.md`. The dead tail is fixed (longest reveal gap 150–162 s vs Paperclips' 876 s). Biggest remaining gap: "Nothing Stage 1 asks the player to decide changes Stage 1" — ten play styles all finish in 31–35 min in the same state. Its lessons (stakes printed on the buttons and sized to the economy, no conveyor-belt projects, a words budget, non-blocking modals) are being applied to every later stage and are being written into `docs/specs/arc.md` as guardrails.
-- Harness: `tools/critic/` (see its README). It serves a `--game-dir` snapshot on its own port, plays both games with the same scripted "curious first-time player", and can also drive Takeoff's own bot (`--autoplay`). Reports go in `docs/critic-stageN-roundM.md`.
+- Harness: `tools/critic/` (see its README). It plays Takeoff Stages 1–2 and Paperclips Stages 1–3 to their ends with a scripted first-timer; `explore.mjs` runs play-style variants and `decisions.mjs` measures decision gaps and reveal → purchase latency. Paperclips reference: Stage 2 takes 135:46 (longest reveal gap 2,198 s), Stage 3 103:58 (3,762 s). It serves a `--game-dir` snapshot on its own port, plays both games with the same scripted "curious first-time player", and can also drive Takeoff's own bot (`--autoplay`). Reports go in `docs/critic-stageN-roundM.md`.
 - To freeze a build for the critic: `git archive HEAD | tar -x -C agent-tools/snapshots/<label>`, build it with `./node_modules/.bin/tsc -p agent-tools/snapshots/<label>/tsconfig.json`, then delete its `docs/` and `tools/` so the critic cannot read the design notes.
 
 ## Fiction and tone (unchanged)
