@@ -1,8 +1,7 @@
 import { GameState, say, logNews, isBought, counter, press, canPay, pay } from './state.js';
 import { rand, pick } from './rng.js';
 import { fmtNum, fmtInt, fmtMoneyShort, monthOf } from './format.js';
-import { bestCapability, qualityMult } from './economy.js';
-import { secondsOfRevenue } from './infrastructure.js';
+import { bestCapability, qualityMult, pricingRevenue } from './economy.js';
 import { moveGov, recordRival, approvalTerms, RIVAL_LINES_S2 } from './world.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 
@@ -186,11 +185,18 @@ function approvalDiscount(s: GameState): number {
 }
 
 export function lobbyCost(s: GameState): number {
-  return Math.round(secondsOfRevenue(s, LOBBY_SECONDS) * Math.pow(HEAT, heatOf(s, 'lobbyHeat')) * approvalDiscount(s));
+  return Math.round(sinkSeconds(s, LOBBY_SECONDS) * Math.pow(HEAT, heatOf(s, 'lobbyHeat')) * approvalDiscount(s));
 }
 
 export function counterintelCost(s: GameState): number {
-  return Math.round(secondsOfRevenue(s, COUNTERINTEL_SECONDS) * Math.pow(HEAT, heatOf(s, 'ciHeat')) * approvalDiscount(s));
+  return Math.round(sinkSeconds(s, COUNTERINTEL_SECONDS) * Math.pow(HEAT, heatOf(s, 'ciHeat')) * approvalDiscount(s));
+}
+
+/** `seconds` of the slow revenue figure (a minute's, never a Re-image's), two significant figures. */
+function sinkSeconds(s: GameState, seconds: number): number {
+  const raw = seconds * Math.max(1, pricingRevenue(s));
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
+  return Math.round(raw / unit) * unit;
 }
 
 /** What one more unit of Lobby does to relations (tapered by `moveGov`): `78.3 → 78.6`. */

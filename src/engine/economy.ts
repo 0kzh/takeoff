@@ -794,6 +794,15 @@ export function setMonitorShare(s: GameState, pct: number): boolean {
 
 // ---------- bookkeeping ----------
 
+/** The slow revenue figure's time constant, seconds. */
+export const REV_SLOW_SECONDS = 60;
+
+/** Revenue a second for prices that must not follow a dip: the faster of the 10-s and the 60-s figures. */
+export function pricingRevenue(s: GameState): number {
+  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : 0;
+  return Math.max(s.stats.revPerSec, slow);
+}
+
 /** One-second bookkeeping: 10 s moving averages for the readouts. */
 export function averages(s: GameState): void {
   const st = s.stats;
@@ -808,6 +817,10 @@ export function averages(s: GameState): void {
   st.secClicks = 0;
   st.tasksPerSec = mean(st.taskHist);
   st.revPerSec = mean(st.revHist);
+  // A minute's revenue, slowly: what Stage 3's repeatable sinks are priced off, so a Re-image's or a
+  // kill switch's empty seconds do not sell them for a five-thousandth (critic S3 round 1 §4.9).
+  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : st.revPerSec;
+  s.flags['revSlow'] = slow + (st.revPerSec - slow) / REV_SLOW_SECONDS;
   st.soldPerSec = mean(st.soldHist);
   st.clicksPerSec = mean(st.clickHist);
   if (st.tasksPerSec > st.peakTasksPerSec) st.peakTasksPerSec = st.tasksPerSec;
