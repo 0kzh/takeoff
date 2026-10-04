@@ -7,7 +7,7 @@ import { openChoice, fireDevelopmentOnce, fireCrisis } from './events.js';
 
 /**
  * The Oversight Committee (stage3.md §2.11, §7): the count of major incidents, the order and its
- * 1:30, the memo's leak, the session that opens at 22×, the halt offer, the vote. DOM-free. The
+ * 1:30, the memo's leak, the session that opens at 21×, the halt offer, the vote. DOM-free. The
  * order can only end the run if the player refuses it (or a third is drawn up) and the cause still
  * stands when its 1:30 runs out (arc §4).
  */
@@ -21,8 +21,12 @@ export const SESSION_LEAK_AT = 30;
 export const SESSION_HALT_AT = 45;
 export const SESSION_HOLD_AT = 120;
 export const SESSION_READY_AT = 120;
-/** Capability the session opens at (with the memo answered) and the vote needs. */
-export const SESSION_CAP = 22;
+/**
+ * Capability the session opens at (with the memo answered) and the vote needs. Departure: §7.1 says
+ * 22×; at the built pace the last test (17.5×) and a 22× session were five minutes apart with nothing
+ * new between them (B4), so the Committee sits one run earlier.
+ */
+export const SESSION_CAP = 21;
 export const VOTE_CAP = 25;
 
 /** A breakout, sabotage or the leak: counted once per 240 s; two draw a warning, three an order. */
@@ -155,7 +159,7 @@ export function updateOversight(s: GameState): void {
     if (due) rollLeak(s);
   }
 
-  // The session opens at 22× once the memo has been answered (§7.1).
+  // The session opens at 21× once the memo has been answered (§7.1; see SESSION_CAP).
   const memoAnswered = s.flags['memo'] === 'reported' || s.flags['memo'] === 'buried' || s.flags['memo'] === 'leaked';
   if (!inSession(s) && best >= SESSION_CAP && memoAnswered && committeeSeated(s)) {
     s.flags['sessionAt'] = now;

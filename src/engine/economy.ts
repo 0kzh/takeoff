@@ -161,6 +161,17 @@ export function researchRate(s: GameState): number {
   return humanResearchRate(s) + aiResearchRate(s);
 }
 
+/**
+ * The research a second the lab would make with `alloc` of its copies on research and no run holding
+ * GPUs: what the Stage 3 arrival measures to price its runs (`arrivalRunScale` in engine/training.ts).
+ */
+export function researchCapacityAt(s: GameState, alloc: number): number {
+  if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return humanResearchRate(s);
+  const onResearch = effGpus(s) * s.copiesPerGPU * copiesOnline(s) * alloc;
+  return humanResearchRate(s)
+    + AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
+}
+
 /** `Human share of research: 17%`. */
 export function humanShare(s: GameState): number {
   const total = researchRate(s);

@@ -2,9 +2,9 @@ import { GameState, say, narrate, logNews, addFunds, isBought, counter, projectS
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota } from './economy.js';
+import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
-import { trainCost, atPlateau, nextRunName } from './training.js';
+import { trainCost, atPlateau, nextRunName, arrivalRunScale } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
 import { SUBSTATION_MW, lotCostOf } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
@@ -198,6 +198,8 @@ function enterTakeoff(s: GameState): void {
   s.rogueCopies = 0;
   s.flags['capMonthAgo'] = s.capability;
   s.flags['leadMonthAgo'] = s.lead;
+  // The run price follows the lab that arrives (engine/training.ts): its copies' research at 40 %.
+  s.flags['runScaleS3'] = arrivalRunScale(arrivalResearchPotential(s));
   s.cadence.lastRevealAt = now;
   s.cadence.lastMechanicAt = now;
   scheduleStage3(s);
@@ -218,6 +220,17 @@ function enterTakeoff(s: GameState): void {
   logNews(s, 'Sage-3 never stops learning. Its weights update every night on yesterday\'s work.');
   if (retired.length) logNews(s, `Retired: ${retired.join(', ')}.`);
   securityArrivalLine(s);
+}
+
+/**
+ * What the arriving lab's copies could research a second with the slider at 40 %, once it has the two
+ * cards every lab buys in its first minutes: Distillation (copies ×2) and code review (research ×1.5).
+ */
+function arrivalResearchPotential(s: GameState): number {
+  let r = researchCapacityAt(s, 0.4);
+  if (!isBought(s, 'p_distill')) r *= Math.SQRT2;
+  if (!isBought(s, 'p_code_review')) r *= 1.5;
+  return r;
 }
 
 /**

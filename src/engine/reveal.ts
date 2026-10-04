@@ -474,6 +474,9 @@ function lateDrip3(s: GameState, approach: boolean): void {
   }
 }
 
+/** How near its threshold a late row must be for the governor to pull it as a last resort. */
+const LATE_REACH = 0.85;
+
 function governor3(s: GameState): void {
   const c = s.cadence;
   const now = s.stats.timePlayed;
@@ -481,23 +484,34 @@ function governor3(s: GameState): void {
   const reveals = now - c.lastRevealAt >= GOVERNOR_SECONDS;
   const mechanics = now - c.lastMechanicAt >= MECHANIC_GOVERNOR_SECONDS;
   if (!reveals && !mechanics) return;
-  for (const row of STAGE3_TABLE) {
-    if (row.governed === false || rowDone3(s, row) || rowLate3(row)) continue;
-    if (!reveals && row.mechanic !== true) continue;
-    if (row.kind === 'project' && projectDef(row.id)?.grant) {
-      // A grant the governor pulls joins the list (it is still a grant).
-      const def = projectDef(row.id);
-      if (!def || !eligible(s, def) || visibleProjects(s).filter((p) => p.grant).length >= GRANTS_ON_OFFER) continue;
-      show(s, def);
-      c.lastGrantAt = now;
-    } else {
-      if (!rowPrereq(s, row)) continue;
-      if (!revealRow(s, row, OVERFLOW)) continue;
+  // The next row of the table that can come out; late rows wait for their threshold. When nothing
+  // else can come out, the last resort is the next late row within 15 % of its threshold (a slow
+  // lab otherwise sat four minutes at 13.6× with nothing new before the memo at 14×).
+  const best = bestCapability(s);
+  for (const lastResort of [false, true]) {
+    for (const row of STAGE3_TABLE) {
+      if (row.governed === false || rowDone3(s, row) || rowLate3(row) !== lastResort) continue;
+      if (lastResort && best < LATE_REACH * lateAtOf(row.id)) continue;
+      if (!reveals && row.mechanic !== true) continue;
+      if (row.kind === 'project' && projectDef(row.id)?.grant) {
+        // A grant the governor pulls joins the list (it is still a grant).
+        const def = projectDef(row.id);
+        if (!def || !eligible(s, def) || visibleProjects(s).filter((p) => p.grant).length >= GRANTS_ON_OFFER) continue;
+        show(s, def);
+        c.lastGrantAt = now;
+      } else {
+        if (!rowPrereq(s, row)) continue;
+        if (!revealRow(s, row, OVERFLOW)) continue;
+      }
+      c.governed.push(`${Math.round(now)}:${row.id}`);
+      c.lastRevealAt = now;
+      if (row.mechanic) c.lastMechanicAt = now;
+      if (lastResort) {
+        c.lastLateAt = now;
+        c.lateQueue = c.lateQueue.filter((q) => q !== row.id);
+      }
+      return;
     }
-    c.governed.push(`${Math.round(now)}:${row.id}`);
-    c.lastRevealAt = now;
-    if (row.mechanic) c.lastMechanicAt = now;
-    return;
   }
 }
 

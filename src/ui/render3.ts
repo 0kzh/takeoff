@@ -308,7 +308,8 @@ export function renderAlignment(s: GameState): void {
     const unit = researchUnit(s);
     setDisabled('btn-alignWork', s.research < unit);
     setDisabled('btn-alignWork5', s.research < 5 * unit);
-    setOff('btn-alignWork5', !(s.stats.pressCounts['alignWork'] > 0));
+    // One button, as with Experiments: the approach's shelf needs the place (arc G14's thirty controls).
+    setOff('btn-alignWork5', true);
     const after = Math.min(100, measured + ALIGN_WORK_MEASURED);
     // Once the weights can be read, the unit's return is the number that matters (the measured one moves too).
     const ret = s.interpretability >= 3

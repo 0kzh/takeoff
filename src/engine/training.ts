@@ -145,11 +145,34 @@ export function gpusForS3(c: number): number {
  * three figures — 18.0M for Sage-3.1, 35M at 5×, 144M at 8×, 281M at 10×, 4.4B at 25×. A re-base,
  * not a continuation: the arrival's narration names the number.
  */
-export const S3_RUN_BASE = 16800000;
+export const S3_RUN_BASE = 14000000;
 export const S3_RUN_EXPONENT = 3.15;
 
-export function researchForS3(c: number): number {
-  const raw = S3_RUN_BASE * Math.pow(Math.max(1, c) / 4, S3_RUN_EXPONENT);
+/**
+ * The run price follows the lab that arrives (a departure from §2.5's fixed base). `R(c)` is quoted
+ * for the median arrival, whose copies could make `S3_RUN_REF_RATE` research a second with the slider
+ * at 40 % once Distillation and code review (bought by every lab in its first minutes) are in. A lab
+ * that arrives weaker (a Stage 2 played on Capability alone has half the copies per GPU) pays in
+ * proportion; a stronger one pays more by the square root of the ratio only, since the shipments
+ * cap how fast any fleet grows. Within 0.5–1.5; measured once on arrival (`flags.runScaleS3`) and
+ * named by the narration's price.
+ */
+export const S3_RUN_REF_RATE = 167000;
+
+export function arrivalRunScale(potential: number): number {
+  const ratio = Math.max(1, potential) / S3_RUN_REF_RATE;
+  const raw = ratio < 1 ? ratio : Math.sqrt(ratio);
+  return Math.round(Math.min(1.5, Math.max(0.5, raw)) * 100) / 100;
+}
+
+/** The scale fixed on arrival (1 for a save from before it existed). */
+export function runScaleS3(s: GameState): number {
+  const v = s.flags['runScaleS3'];
+  return typeof v === 'number' && v > 0 ? v : 1;
+}
+
+export function researchForS3(c: number, scale = 1): number {
+  const raw = S3_RUN_BASE * scale * Math.pow(Math.max(1, c) / 4, S3_RUN_EXPONENT);
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 2));
   return Math.round(raw / unit) * unit;
 }
@@ -164,7 +187,7 @@ export function trainCost(s: GameState): Cost {
   const c = startCapability(s);
   if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
   // Stage 3: a run is a research program and nothing else (stage3.md §2.5): no money, no data.
-  if (s.stage >= 3) return { research: researchForS3(c) };
+  if (s.stage >= 3) return { research: researchForS3(c, runScaleS3(s)) };
   const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;

@@ -164,13 +164,19 @@ function stage2(seed: number): GameState {
 
 // ---------- Stage 3 start: the sim's median Stage 2 exit (bot, seeds 1–5 from the Stage 2 preset) ----------
 
-/** Stage 2 projects bought by the median run (seed 2, 34:59, after owner feedback 1) when Sage-3 shipped. */
+/**
+ * Stage 2 projects bought by the median run (seed 2, 34:59, after owner feedback 1) when Sage-3 shipped,
+ * with the four that every one of the current build's five exits has bought by then (checked
+ * 2026-10-04): Distillation, the Checkpoint farm, the flywheel and Behind-the-meter. The copies per
+ * GPU below already include Distillation's ×2, as they do at every real exit; a record without it
+ * handed Stage 3 twice the copies any player arrives with.
+ */
 const STAGE2_BOUGHT = [
   'p_alignment_team', 'p_recruiter', 'p_agents', 'p_safety_framework', 'p_workshop', 'p_research_cluster',
   'p_standing_order', 'p_web_crawl', 'p_ai_assistants', 'p_series_b', 'p_moe', 'p_keynote', 'p_scaffold', 'p_spec',
   'p_auto_evals', 'p_policy', 'p_sl2', 'p_parallel', 'p_agent_platform', 'p_synth', 'p_brief', 'p_free_tier',
   'p_international', 'p_g5', 'p_memory', 'p_license_code', 'p_exp_scheduler', 'p_dashboard', 'p_license_archive',
-  'p_series_c', 'p_superhuman_coder',
+  'p_series_c', 'p_superhuman_coder', 'p_distill', 'p_checkpoint_farm', 'p_flywheel', 'p_btm',
 ];
 
 const STAGE2_MODELS: ModelRecord[] = [
@@ -234,7 +240,7 @@ function stage2End(seed: number): GameState {
     g5: true,
     gpuBatches: 194,
     standingOrder: true,
-    btm: false,
+    btm: true,
     datacenters: 7,
     powerCapacityMW: 525,
     gasPlants: 8,
@@ -390,10 +396,11 @@ function stage3Careless(seed: number): GameState {
 
 /**
  * The median seed of the policy's five exits from its Stage 3 preset (seeds 1–5): the reasonable bot
- * from `Stage 3 start` (41:37–46:57, median seed 1), the naive player from the careless start.
+ * from `Stage 3 start` (41:03–44:05, median seed 2 at 42:57), the naive player from the careless
+ * start (44:47–46:51, median seed 5 at 45:51).
  */
-const S3_MEDIAN_SEED = 1;
-const S3_MEDIAN_SEED_CARELESS = 2;
+const S3_MEDIAN_SEED = 2;
+const S3_MEDIAN_SEED_CARELESS = 5;
 
 /**
  * Plays Stage 3 with the simulator's policy until a model has passed 25× and the session is ready,
