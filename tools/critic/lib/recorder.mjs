@@ -82,6 +82,7 @@ export class Recorder {
       log: raw.log,
       modal: raw.modal,
       numbers: raw.numbers,
+      words: raw.words,
       milestone: raw.milestone,
       m: raw.m,
     };

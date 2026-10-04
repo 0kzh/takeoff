@@ -18,7 +18,11 @@
 //   modalChoice(modal, enabledOptions, t) optional: which option answers a modal (null = leave it)
 // Every other visible, enabled, non-ambient button is "an upgrade/project/automation" and is bought
 // when affordable, least-bought first (ties in DOM order). Settings (toggles, ON/OFF or "Name: value"
-// buttons; lib/pagelib.mjs) are ambient: the buy loop never presses them.
+// buttons; lib/pagelib.mjs) are ambient: the buy loop never presses them. Two more things the screen
+// says are respected everywhere: a button that shows as already on or armed (b.on) is not pressed
+// again (that would switch it off or stand it down), and a repeat purchase — any button that is not a
+// project card — whose row prints the delay it causes the thing the player waits for ("· next run
+// 1:10 later", b.later) is not pressed.
 import { fmtN } from './util.mjs';
 
 export const MASH_PER_SEC = 4;
@@ -172,6 +176,7 @@ export class Policy {
       const veto = new Set(p.veto ? p.veto(c) : []);
       const ok = c.buttons.filter((b) => {
         if (!b.e || b.a || b.kind === 'modal' || b.kind === 'tab' || skip.has(b.k) || veto.has(b.k) || ctx.noop.has(b.k) || clicked.has(b.k)) return false;
+        if (b.on || (b.later != null && b.kind !== 'project')) return false;
         if (!affordableResources(b, m)) return false;
         if (goals.has(b.k)) return true;
         // Report §1: "stop the GPU/marketing drip and save" — only the drip is held back; training runs

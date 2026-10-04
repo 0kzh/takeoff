@@ -135,6 +135,35 @@ export function pageLib() {
     if (/^(on|off)$/i.test(label) || /^auto\b/i.test(label)) return true;
     return /^[A-Za-z][^:()]{1,40}:\s*[^:()]{1,12}$/.test(label);
   }
+  /**
+   * Shows as already on or armed: aria-pressed="true", a class "armed"/"on", a title that starts with
+   * "Armed", or a label ending in ": on" (pressing it again would switch it off or stand it down).
+   */
+  function isOn(el, label) {
+    if (el.getAttribute('aria-pressed') === 'true') return true;
+    if (el.classList.contains('armed') || el.classList.contains('on')) return true;
+    if (/^armed\b/i.test(el.title || '')) return true;
+    return /:\s*on$/i.test(label);
+  }
+  /**
+   * The delay a purchase prints for what the player waits for ("· Sage-2.5 0:41 later", "· next run
+   * 1:10 later", "+0.5 points · 1:10 later"), in seconds (Infinity for "much later"): in the button's
+   * own text, or in a note/reason beside it in the same row. null when none is printed.
+   */
+  const LATER = /(?:(\d+):(\d\d)|\bmuch)\s+later\b/;
+  function laterOf(el) {
+    let m = LATER.exec(norm(el.textContent));
+    const row = el.parentElement;
+    if (!m && row) {
+      for (const r of row.querySelectorAll('.note, .reason')) {
+        if (r.closest('button')) continue;
+        m = LATER.exec(norm(r.textContent));
+        if (m) break;
+      }
+    }
+    if (!m) return null;
+    return m[1] != null ? Number(m[1]) * 60 + Number(m[2]) : Infinity;
+  }
   function reasonOf(el) {
     const row = el.parentElement;
     if (!row) return '';
@@ -170,6 +199,13 @@ export function pageLib() {
       if (kind === 'button' && isSetting(el, l)) {
         b.t = 1;
         b.a = 1;
+      }
+      if (kind !== 'modal' && isOn(el, l)) b.on = 1;
+      // Drawn urgent by the game (a stalled wall's named fix).
+      if (el.classList.contains('urgent')) b.u = 1;
+      if (kind !== 'modal') {
+        const later = laterOf(el);
+        if (later != null) b.later = later === Infinity ? 'much' : later;
       }
       // Why a button is greyed, as the game prints it next to the button (<span class="reason">).
       const why = reasonOf(el);
@@ -256,6 +292,13 @@ export function pageLib() {
     }
     return { count, tokens };
   }
+  /** Words on screen: letter-led tokens in the page's rendered text, the excluded roots left out. */
+  const WORD = /[A-Za-z][A-Za-z'’-]*/g;
+  function countWords(roots, vis) {
+    let n = (String(document.body.innerText || '').match(WORD) || []).length;
+    for (const r of roots) if (vis(r)) n -= (String(r.innerText || '').match(WORD) || []).length;
+    return Math.max(0, n);
+  }
   function metrics() {
     try {
       return window.__harnessMetrics ? window.__harnessMetrics() : {};
@@ -286,6 +329,7 @@ export function pageLib() {
         logLines,
         modal: collectModal(sp, roots, vis),
         numbers: nums.count,
+        words: countWords(roots, vis),
         milestone: !!(ms && !isExcluded(ms, roots) && vis(ms)),
         m: metrics(),
       };

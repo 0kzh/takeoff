@@ -11,6 +11,11 @@
 //     sampled at minutes 0, 1, 3, 5, 10, 20 and stage end (+ minute 30, added for stages that run
 //     longer, e.g. Takeoff Stage 2; '—' when the stage ends before it).
 //   First meaningful choice: ≥ 2 distinct affordable non-ambient actions; a price decision; a modal.
+//   Words on screen (load table): letter-led tokens of the page's rendered text (the excluded roots
+//     left out), as the Stage 1 round-3 and Stage 2 round-2 critics counted them.
+//   Hands (handsOf, the Stage 2 critics' measures, same definitions): share of 2-s checks with no
+//     enabled thing / with two or more distinct ones (bulk sizes count once), clicks per minute (mash
+//     excluded), share of the window inside gaps of ≥ 30 s between clicks.
 import fs from 'node:fs';
 import { elementsOf } from './recorder.mjs';
 import { median, readJson } from './util.mjs';
@@ -125,7 +130,73 @@ function coverage(snaps, from, to) {
 function loadAt(s) {
   if (!s) return null;
   const interactive = s.buttons.length + s.sliders.length;
-  return { t: s.t, numbers: s.numbers, interactive, panels: s.panels.length, total: s.numbers + interactive + s.panels.length };
+  return { t: s.t, numbers: s.numbers, interactive, panels: s.panels.length, words: s.words ?? null, total: s.numbers + interactive + s.panels.length };
+}
+
+// ---- hands (the Stage 2 critics' measures; tools/critic/explore-s2r2.mjs handsOf, same definitions) ----
+/** Bulk sizes of one item count once (Takeoff's three lot rows; Paperclips' ×10/×100/×1000 buttons). */
+export function handsKey(b) {
+  if (/^btn-gpuBatch/.test(b.k)) return 'GPU lot';
+  if (/^btn-train(Now)?$/.test(b.k)) return 'Train';
+  const m = /^btn(?:Make)?(Harvester|WireDrone|Farm|Battery|Factory)/.exec(b.k);
+  if (m) return m[1];
+  return b.kind === 'project' ? `card:${b.k}` : b.k;
+}
+/** An enabled thing to buy or press: not a setting, not the ambient set, not an event option, not "Disassemble All". */
+const isThing = (b) => !!b.e && !b.a && b.kind !== 'modal' && b.kind !== 'tab' && !/Disassemble/i.test(b.l);
+/**
+ *   none / two   share of 2-s checks (snapshots, read before the player acts) with no enabled thing /
+ *                with two or more distinct enabled things
+ *   clicks       every player click (drip included, the main button's mash excluded)
+ *   gap30        share of the window spent inside gaps of ≥ 30 s between consecutive clicks
+ * Window: from `from` to `to` (default: the stage start to the stage end), stage snapshots only.
+ */
+export function handsOf(run, { from = 0, to = null } = {}) {
+  const { meta, snaps, actions } = run;
+  const end = to ?? meta.stageEnd ?? meta.endT;
+  const st = snaps.filter((s) => s.t >= from && s.t <= end && s.stage === meta.stageStart);
+  let none = 0;
+  let two = 0;
+  const counts = [];
+  const enabledAt = {};
+  for (const s of st) {
+    const set = new Set(s.buttons.filter(isThing).map(handsKey));
+    counts.push(set.size);
+    if (set.size === 0) none++;
+    if (set.size >= 2) two++;
+    for (const k of set) (enabledAt[k.startsWith('card:') ? 'a card' : k] ||= new Set()).add(s.t);
+  }
+  const clicks = actions.filter((a) => a.t >= from && a.t <= end && a.why !== 'mash' && a.why !== 'mash-stop');
+  const nClicks = clicks.reduce((n, a) => n + (a.count || 1), 0);
+  const times = [...new Set(clicks.map((a) => a.t))].sort((a, b) => a - b);
+  const pts = [from, ...times.filter((t) => t > from), end];
+  let inGap = 0;
+  let nGaps = 0;
+  let longest = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const g = pts[i] - pts[i - 1];
+    if (g >= 30) {
+      inGap += g;
+      nGaps++;
+    }
+    longest = Math.max(longest, g);
+  }
+  const span = Math.max(1, end - from);
+  const pct = (x) => (st.length ? (100 * x) / st.length : null);
+  return {
+    from,
+    end,
+    checks: st.length,
+    nonePct: pct(none),
+    twoPct: pct(two),
+    medianThings: median(counts),
+    clicks: nClicks,
+    perMin: nClicks / (span / 60),
+    gap30Pct: (100 * inGap) / span,
+    gaps30: nGaps,
+    longestGap: longest,
+    enabledShare: Object.fromEntries(Object.entries(enabledAt).map(([k, v]) => [k, pct(v.size)]).sort((a, b) => b[1] - a[1])),
+  };
 }
 
 export function analyze(run) {
@@ -261,6 +332,11 @@ export function analyze(run) {
     actions: actionSummary,
     counters,
     cadence: { panels: cadence('panel'), projects: cadence('project') },
+    hands: {
+      stage: handsOf(run, { to: endT }),
+      first10: handsOf(run, { to: Math.min(600, endT) }),
+      after10: endT > 600 ? handsOf(run, { from: 600, to: endT }) : null,
+    },
     totals: {
       reveals: reveals.length,
       consoleLines: events.filter((e) => e.type === 'console' && inStage(e.t)).length,

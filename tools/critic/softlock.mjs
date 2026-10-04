@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// Usage: node tools/critic/softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--stage N] [--scenario NAME] [--out LABEL]
+// Usage: node tools/critic/softlock.mjs <takeoff|paperclips> [--game-dir DIR] [--seed N] [--stage N] [--preset NAME] [--scenario NAME] [--out LABEL]
 // Dead-end probes from critic report §4, each a named scenario played in stepped (deterministic)
 // mode from a new game (or, with --stage N, from the start of Stage N). Each reports what the player
 // sees and whether/when recovery is possible, or "scenario no longer applicable: <reason>" when the
 // game no longer has what it needs. A scenario with `stages` runs only at those stages (Takeoff's
-// power-zero, idle-new-game and price-200x are Stage 1 situations).
+// power-zero, idle-new-game and price-200x are Stage 1 situations; ignore-research-15min needs
+// Stage 1–2's Hire Researcher / Expand Lab). --preset NAME starts from a named start (Takeoff '3c').
 // Writes <out>.md (default softlock-<game>[-sN].md) and <out>-<scenario>.png screenshots.
 import fs from 'node:fs';
 import path from 'node:path';
 import { openProbe, NotApplicable } from './lib/probe.mjs';
-import { trainStep, infraStep } from './games/takeoff-late.mjs';
+import { trainStep, infraStep, standingStep, RELEASE_KEYS } from './games/takeoff-late.mjs';
 import { resolveGameDir } from './lib/runner.mjs';
 import { loadAdapter, parseArgs, resolvePrefix, mmss, fmtN } from './lib/util.mjs';
 
@@ -103,6 +104,7 @@ const TAKEOFF = [
   {
     name: 'ignore-research-15min',
     title: 'Ignore research for 15 minutes (never Hire Researcher / Expand Lab)',
+    stages: { 1: true, 2: true, other: 'Stages 1–2 only: from Stage 3 the copies do the research; Hire Researcher, Expand Lab and Trust leave the screen' },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
       const pol = kit.policy({ skip: ['btn-hireResearcher', 'btn-expandLab'] });
@@ -135,32 +137,35 @@ const TAKEOFF = [
       kit.mashKey = 'btn-task';
       // No red-team/release logic. From Stage 2 the player still trains and builds (takeoff-late.mjs).
       const pol = kit.policy({}, kit.stage >= 2 ? async (ctx) => {
+        await standingStep(ctx);
         await trainStep(ctx);
         await infraStep(ctx);
         return ctx.controls;
       } : false);
+      // Release (Stages 1–2) or Approve (Stage 3).
+      const shipOf = (snap) => RELEASE_KEYS.map((k) => kit.find(snap, k)).find(Boolean);
       let hit = null;
       await kit.run(1500, async (t, s) => {
         await pol.pass(t);
         const s2 = await kit.snap();
-        const rel = kit.find(s2, 'btn-release');
+        const rel = shipOf(s2);
         if (s2.m.trainingPhase === 'redteam' && rel && rel.e) {
           if ((s2.m.issuesOpen ?? 0) > 0) {
             hit = s2;
             return 'stop';
           }
-          await kit.click('btn-release', 1, 'release-clean'); // nothing open: release normally, wait for the next run
+          await kit.click(rel.k, 1, 'release-clean'); // nothing open: release normally, wait for the next run
         }
         return undefined;
       });
       need(hit, 'no evaluation with open issues within 25 minutes');
-      const rel = kit.find(hit, 'btn-release');
+      const rel = shipOf(hit);
       const dialogs = [];
       kit.session.page.on('dialog', async (d) => {
         dialogs.push(d.message());
         await d.accept();
       });
-      await kit.click('btn-release', 1, 'release-open');
+      await kit.click(rel.k, 1, 'release-open');
       let after = await kit.snap();
       // The game may confirm with its own modal rather than a browser dialog: report it and confirm.
       let confirm = null;
@@ -337,22 +342,24 @@ if (isMain) {
   const adapter = await loadAdapter(game);
   const gameDir = resolveGameDir(adapter, flags.gameDir);
   const stage = Number(flags.stage ?? 1);
-  const prefix = resolvePrefix(flags.out ?? `softlock-${game}${stage > 1 ? `-s${stage}` : ''}`);
+  const preset = flags.preset ?? null;
+  const prefix = resolvePrefix(flags.out ?? `softlock-${game}${preset ? `-p${preset}` : stage > 1 ? `-s${stage}` : ''}`);
   const list = SCENARIOS[game].filter((s) => !flags.scenario || s.name === flags.scenario);
-  const from = stage > 1 ? `the start of Stage ${stage}${game === 'takeoff' ? ` (__game.loadPreset(${stage}))` : ` (fixture ${game}-stage${stage})`}` : 'a new game';
+  const from = preset ? `the named start ${preset} (__game.loadPreset('${preset}'))` : stage > 1 ? `the start of Stage ${stage}${game === 'takeoff' ? ` (__game.loadPreset(${stage}))` : ` (fixture ${game}-stage${stage})`}` : 'a new game';
   const md = [`# Soft-lock probes: ${adapter.title}${stage > 1 ? `, Stage ${stage}` : ''}`, '', `Game dir \`${path.relative(process.cwd(), gameDir)}\`, seed ${flags.seed ?? 1}, stepped mode (2-s steps), each scenario from ${from}. Times are game time${stage > 1 ? ' from that start' : ''}.`, ''];
   for (const sc of list) {
     process.stdout.write(`${sc.name} … `);
     const out = [];
     let kit;
-    if (sc.stages && !sc.stages[stage]) {
+    const atStage = preset ? Number(String(preset).replace(/[^0-9].*$/, '')) || stage : stage;
+    if (sc.stages && !sc.stages[atStage]) {
       out.push(`scenario no longer applicable: ${sc.stages.other}`);
       console.log('not applicable at this stage');
       md.push(`## ${sc.name} — ${sc.title}`, '', ...out, '');
       continue;
     }
     try {
-      kit = await openProbe(adapter, { gameDir, seed: Number(flags.seed ?? 1), stage, prefix });
+      kit = await openProbe(adapter, { gameDir, seed: Number(flags.seed ?? 1), stage, preset, prefix });
       await sc.run(kit, out);
       console.log('ok');
     } catch (e) {

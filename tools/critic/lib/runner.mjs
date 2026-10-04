@@ -31,8 +31,9 @@ export function loadFixture(adapter, { stage, fixture }) {
 }
 
 /**
- * opts: { game, prefix, gameDir, realtime, accelMinutes, autoplay, stage, seed, fixture,
+ * opts: { game, prefix, gameDir, realtime, accelMinutes, autoplay, stage, seed, fixture, preset,
  *         postStage, quiet, onSnapshot(ctx), onStageEnd({ t, session }), adapter, viewport }
+ * preset: a named start passed to the adapter's boot (Takeoff: __game.loadPreset(NAME), e.g. '3c').
  * Returns { prefix, meta, rec }.
  */
 export async function runGame(opts) {
@@ -51,7 +52,7 @@ export async function runGame(opts) {
   if (path.resolve(gameDir) === REPO_ROOT) log('warning: measuring the repo root (it may be mid-rebuild)');
 
   const wallStart = performance.now();
-  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture, viewport: opts.viewport });
+  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture, preset: opts.preset, viewport: opts.viewport });
   const startStage = session.bootInfo.stage ?? stageReq;
   const rec = new Recorder();
   const policy = opts.autoplay ? null : new Policy(adapter, session, rec, { startStage });
@@ -60,19 +61,22 @@ export async function runGame(opts) {
   const gate = new Set([...(adapter.policy.goal || []), ...(adapter.stageGate || [])]);
 
   let stageEnd = null;
+  let stageEndBy = null;
   let stopAt = capSeconds;
   let transitionShot = false;
   const shots = new Map(SHOT_MINUTES.map((m) => [m * 60, `t${m}`]));
   const shot = async (name) => session.screenshot(`${prefix}.${name}.png`).catch((e) => log(`screenshot ${name} failed: ${e.message}`));
 
-  const markStageEnd = async (t, how) => {
+  const markStageEnd = async (t, how, m) => {
     if (stageEnd != null) return;
     stageEnd = t;
+    // What the stage ended in (adapter.endedHow: Takeoff "Stage 4" or "ending: The Pause").
+    stageEndBy = (adapter.endedHow && m && adapter.endedHow(m, startStage)) || null;
     stopAt = Math.min(capSeconds, t + postStage);
     if (opts.onStageEnd) await opts.onStageEnd({ t, session });
-    rec.event({ t, type: 'stage-end', how });
+    rec.event({ t, type: 'stage-end', how, ...(stageEndBy ? { by: stageEndBy } : {}) });
     await shot('tend');
-    log(`  stage end at ${mmss(t)} (${how})`);
+    log(`  stage end at ${mmss(t)} (${how}${stageEndBy ? `; ${stageEndBy}` : ''})`);
     // Stepped mode: what the screen shows in the first 2 s after the change, every 250 ms
     // (inside the current 2-s step, so the snapshot grid is unchanged).
     if (!session.realtime) {
@@ -90,7 +94,7 @@ export async function runGame(opts) {
     const raw = await session.snapshot();
     const snap = rec.snapshot(t, phase, raw);
     if (shots.has(t)) await shot(shots.get(t));
-    if (stageEnd == null && adapter.stageEnded(raw.m || {}, startStage)) await markStageEnd(t, 'detected at snapshot');
+    if (stageEnd == null && adapter.stageEnded(raw.m || {}, startStage)) await markStageEnd(t, 'detected at snapshot', raw.m || {});
     if (stageEnd != null && !transitionShot && t >= stageEnd + 4) {
       transitionShot = true;
       await shot('transition');
@@ -114,7 +118,7 @@ export async function runGame(opts) {
     await policy.pass(t);
     if (stageEnd == null) {
       const m = await session.metrics();
-      if (adapter.stageEnded(m, startStage)) await markStageEnd(t, 'policy purchase');
+      if (adapter.stageEnded(m, startStage)) await markStageEnd(t, 'policy purchase', m);
     }
   };
 
@@ -191,11 +195,13 @@ export async function runGame(opts) {
     stageStart: startStage,
     stageRequested: stageReq,
     fixture: fixture ? fixture.name : null,
+    preset: opts.preset ?? null,
     realtime,
     accelMinutes: Number(opts.accelMinutes ?? 0),
     autoplay: !!opts.autoplay,
     phase1End,
     stageEnd,
+    stageEndBy,
     endT: rec.snaps.length ? rec.snaps[rec.snaps.length - 1].t : 0,
     snapshots: rec.snaps.length,
     boot: session.bootInfo,
@@ -239,7 +245,7 @@ function summary(meta, rec) {
     `| player | ${meta.autoplay ? "the game's own Autoplay bot" : 'scripted curious first-time player'} |`,
     `| phase 1 (real time) | ${meta.realtime} s |`,
     `| phase 2 (stepped) | ${mmss(meta.phase1End)} → ${mmss(meta.endT)} game time (cap ${meta.accelMinutes} min) |`,
-    `| stage end | ${meta.stageEnd != null ? mmss(meta.stageEnd) : 'not reached'} |`,
+    `| stage end | ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : 'not reached'} |`,
     meta.abort ? `| run ended at ${mmss(meta.endT)} | ${meta.abort} |` : null,
     `| snapshots | ${meta.snapshots} |`,
     `| reveals | ${count((e) => e.type === 'reveal')} (${count((e) => e.type === 'reveal' && e.what === 'panel')} panels, ${count((e) => e.type === 'reveal' && e.what === 'button')} buttons, ${count((e) => e.type === 'reveal' && e.what === 'project')} projects, ${count((e) => e.type === 'reveal' && e.what === 'modal')} modals) |`,

@@ -5,6 +5,7 @@
 //          --game-dir DIR [--seed N] [--minutes MIN] [--stage N] [--tag T]
 //   --stage N  start every run/probe at Stage N (Takeoff: __game.loadPreset(N); Paperclips: its
 //              stage fixture); probes written for Stage 1 report what they cannot find instead.
+//   --preset NAME  Takeoff: start from a named start (__game.loadPreset(NAME), e.g. 3c); labels get -pNAME.
 //   --tag T    output label prefix (default "x": x-<name>[-sN][-seedN]; round 2 used "r2x").
 //
 // Two kinds of scenario:
@@ -28,7 +29,7 @@ const MOBILE = { width: 390, height: 844 };
 /** Output label: <tag>-<name>[-sN][-seedN]. */
 const labelFor = (name, flags) => {
   const stage = Number(flags.stage ?? 1);
-  return `${flags.tag ?? 'x'}-${name}${stage > 1 ? `-s${stage}` : ''}${flags.seed && Number(flags.seed) !== 1 ? `-seed${flags.seed}` : ''}`;
+  return `${flags.tag ?? 'x'}-${name}${flags.preset ? `-p${flags.preset}` : stage > 1 ? `-s${stage}` : ''}${flags.seed && Number(flags.seed) !== 1 ? `-seed${flags.seed}` : ''}`;
 };
 
 /** Everything the player can read that the 2-s snapshot does not keep. */
@@ -60,6 +61,25 @@ const READ_SCREEN = () => {
       copiesOnResearch: txt('allocPct'),
       humanShare: txt('humanShare'),
       interconnectLine: txt('interconnectLine'),
+      // Stage 3 (absent or hidden before it).
+      trainStatus: txt('trainStatus'),
+      experiments: txt('experimentsNote'),
+      lobby: txt('lobbyNote'),
+      counterintel: txt('counterintelNote'),
+      reimage: txt('reimageNote'),
+      alignWork: txt('alignWorkNote'),
+      autonomy: txt('autonomyNote'),
+      rogue: txt('rogueNote'),
+      seats: txt('seatsNote'),
+      session: txt('sessionLine'),
+      order: txt('orderLine'),
+      memo: txt('memoLine'),
+      theft: txt('theftNote'),
+      shipment: txt('shipmentLine'),
+      buildout: txt('buildoutLine'),
+      standing: txt('standingNote'),
+      buildShare: txt('buildShareNote'),
+      ending: txt('endingTitle'),
     },
     modal: modalOpen
       ? {
@@ -212,6 +232,7 @@ async function runScenario(name, flags) {
     accelMinutes: Number(flags.minutes ?? 60),
     seed: Number(flags.seed ?? 1),
     stage: Number(flags.stage ?? 1),
+    preset: flags.preset,
     viewport: sc.viewport,
     quiet: true,
     async onSnapshot({ t, raw, session }) {
@@ -236,7 +257,7 @@ async function runScenario(name, flags) {
     },
   });
   for (const e of rec.events) if (e.type === 'console' || e.type === 'log') lines.push(`${mmss(e.t)} [${e.type}${e.novel ? '' : ', repeat'}] ${e.text}`);
-  const md = [`# Explore run: ${name} — ${sc.title}`, '', `Stage ${meta.stageStart} start, seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${meta.stageEnd != null ? mmss(meta.stageEnd) : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.`, ''];
+  const md = [`# Explore run: ${name} — ${sc.title}`, '', `Stage ${meta.stageStart} start${meta.preset ? ` (preset ${meta.preset})` : ''}, seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.`, ''];
   md.push('## Per minute', '', '| t | stage | funds | rev/s | tasks/s | sold/s | price | unbilled | GPUs | power | research | trust | researchers | lab | trainings | releases | incidents | rescues | numbers | page height | billing line |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const m of minutes) md.push(`| ${mmss(m.t)} | ${m.stage} | ${money(m.funds)} | ${money(m.revPerSec)} | ${fmtN(m.rate, 1)} | ${fmtN(m.soldPerSec, 1)} | ${money(m.price)} | ${fmtN(m.backlog)} | ${m.gpus} | ${fmtN(m.power)} | ${fmtN(m.research)} | ${m.trust} | ${m.researchers} | ${m.labSpace} | ${m.trainings} | ${m.releases} | ${m.incidents} | ${m.idleRescues} | ${m.numbers} | ${m.pageHeight} | ${m.billing ?? ''} |`);
   md.push('', '## Modals (first sight of each)', '');
@@ -246,7 +267,7 @@ async function runScenario(name, flags) {
   md.push('', '## Console and Developments lines', '', ...lines.map((l) => `- ${l}`), '');
   fs.writeFileSync(`${prefix}.explore.md`, md.join('\n'));
   fs.writeFileSync(`${prefix}.modals.json`, JSON.stringify(modals, null, 1));
-  console.log(`${name}: stage end ${meta.stageEnd != null ? mmss(meta.stageEnd) : `NOT REACHED by ${mmss(meta.endT)}`} · modals ${modals.length} · overflow ${maxOverflow} px · page errors ${meta.pageErrors.length} → ${path.relative(process.cwd(), prefix)}.explore.md`);
+  console.log(`${name}: stage end ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : `NOT REACHED by ${mmss(meta.endT)}`} · modals ${modals.length} · overflow ${maxOverflow} px · page errors ${meta.pageErrors.length} → ${path.relative(process.cwd(), prefix)}.explore.md`);
   return meta;
 }
 
@@ -695,9 +716,8 @@ async function runProbe(name, flags) {
   const out = [];
   let kit;
   try {
-    kit = await openProbe(base, { gameDir, seed: Number(flags.seed ?? 1), prefix, viewport: pr.viewport, stage });
+    kit = await openProbe(base, { gameDir, seed: Number(flags.seed ?? 1), prefix, viewport: pr.viewport, stage, preset: flags.preset });
     kit.gameDir = gameDir;
-    kit.stage = stage;
     await pr.run(kit, out);
     console.log(`${name}: ok`);
   } catch (e) {

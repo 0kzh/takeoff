@@ -14,7 +14,7 @@ export function headline(a) {
   const load = (k) => a.load.map((r) => r[k] ?? '—').join(' / ');
   return [
     ['player', a.meta.autoplay ? 'game Autoplay' : 'scripted policy'],
-    ['start → stage end', `Stage ${a.meta.stageStart} → ${a.stageEnd != null ? mmss(a.stageEnd) : `not reached (${mmss(a.meta.endT)})`}`],
+    ['start → stage end', `Stage ${a.meta.stageStart} → ${a.stageEnd != null ? `${mmss(a.stageEnd)}${a.meta.stageEndBy ? ` (${a.meta.stageEndBy})` : ''}` : `not reached (${mmss(a.meta.endT)})`}`],
     ['first automation', a.firstAutomation ? mmss(a.firstAutomation.t) : 'never'],
     ['first choice: ≥ 2 affordable actions', a.choice.twoAffordable ? mmss(a.choice.twoAffordable.t) : '—'],
     ['first choice: first price move', a.choice.firstPriceMove ? `${mmss(a.choice.firstPriceMove.t)} (${a.choice.firstPriceMove.why})` : '—'],
@@ -28,6 +28,9 @@ export function headline(a) {
     [`numbers on screen (${LOAD_MINUTES.join('/')}/end)`, load('numbers')],
     ['interactive elements', load('interactive')],
     ['panels', load('panels')],
+    ['words on screen', load('words')],
+    ['hands: nothing enabled / two or more things (% of checks)', `${pct(a.hands.stage.nonePct)} / ${pct(a.hands.stage.twoPct)}`],
+    ['hands: clicks per minute / inside ≥ 30-s click gaps after 10:00', `${a.hands.stage.perMin.toFixed(1)} / ${a.hands.after10 ? pct(a.hands.after10.gap30Pct) : '—'}`],
     ['reveals / distinct console lines / modals', `${a.totals.reveals} / ${a.totals.distinctConsole} / ${a.totals.modals}`],
     ['new panels: n, median gap', `${a.cadence.panels.n}, ${a.cadence.panels.medianGap != null ? Math.round(a.cadence.panels.medianGap) + ' s' : '—'}`],
     ['new projects: n, median gap', `${a.cadence.projects.n}, ${a.cadence.projects.medianGap != null ? Math.round(a.cadence.projects.medianGap) + ' s' : '—'}`],

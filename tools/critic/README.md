@@ -41,6 +41,21 @@ node tools/critic/softlock.mjs takeoff    --game-dir agent-tools/snapshots/<buil
 node tools/critic/softlock.mjs paperclips
 ```
 
+Takeoff Stages 1–3 on build `s123-r1` (seeds 1–3, stepped; `--preset 3c` is the careless Stage 3 start):
+
+```sh
+G=agent-tools/snapshots/s123-r1
+node tools/critic/run.mjs takeoff s123-s1-seedN --game-dir $G            --realtime 0 --accel-minutes 45 --seed N   # N = 1, 2, 3
+node tools/critic/run.mjs takeoff s123-s2-seedN --game-dir $G --stage 2  --realtime 0 --accel-minutes 70 --seed N
+node tools/critic/run.mjs takeoff s123-s3-seedN --game-dir $G --stage 3  --realtime 0 --accel-minutes 90 --seed N
+node tools/critic/run.mjs takeoff s123-p3c      --game-dir $G --preset 3c --realtime 0 --accel-minutes 90
+node tools/critic/run.mjs takeoff s123-s3-auto  --game-dir $G --stage 3  --realtime 0 --accel-minutes 90 --autoplay
+node tools/critic/transition.mjs takeoff --game-dir $G --stage 3        # Stage 3 → 4 (→ transition-takeoff-s3.md)
+node tools/critic/softlock.mjs takeoff   --game-dir $G --stage 3
+node tools/critic/explore.mjs baseline,modal-last,modal-ignore,toggles --game-dir $G --stage 3 --minutes 90
+node tools/critic/decisions.mjs s123-s3-seed1 s123-s3-seed2 s123-s3-seed3
+```
+
 Takeoff Stage 2 baselines (build `s2-r1`, seeds 1–3, stepped):
 
 ```sh
@@ -77,6 +92,7 @@ Run only one real-time run at a time (phase 1 is timing-sensitive); stepped runs
 | `--stage N` | start of Stage N: Takeoff `__game.loadPreset(N)`; Paperclips fixture `paperclips-stageN` (N = 2, 3) |
 | `--seed N` | default 1. Seeds `Math.random` (mulberry32) in every page; Takeoff's new game uses `newGame(N)` |
 | `--fixture NAME` | start from `tools/critic/fixtures/NAME.json` (localStorage save) |
+| `--preset NAME` | Takeoff: start from a named start, `__game.loadPreset(NAME)` (e.g. `3c`, the careless Stage 3 start); the stage is whatever it loads |
 | `--post-stage SEC` | keep playing SEC (default 30) after the stage ends, for the transition capture |
 
 Phase 1 runs the game on its own clock. Phase 2 steps 2 s of game time at a time: Takeoff with
@@ -90,7 +106,7 @@ while mashing). Outputs per run:
 
 | file | content |
 |---|---|
-| `<p>.snaps.json` | `{meta, snaps}`; snapshot = buttons `{k key, l label, e enabled, kind button/project/modal/tab, a ambient}`, sliders, panels `{k, l}`, newest console line, newest log entry, modal `{title, options}`, `numbers` (numeric tokens on screen), `milestone` (`#nextTrust` visible), `m` (game metrics from the adapter) |
+| `<p>.snaps.json` | `{meta, snaps}`; snapshot = buttons `{k key, l label, e enabled, kind button/project/modal/tab, a ambient, t setting, on shows on/armed, u drawn urgent, why reason printed beside it, later delay it prints for the waiting run (s, or "much")}`, sliders, panels `{k, l}`, newest console line, newest log entry, modal `{title, options}`, `numbers` (numeric tokens on screen), `words` (words on screen), `milestone` (`#nextTrust` visible), `m` (game metrics from the adapter). `meta.stageEndBy` says what the stage ended in (Takeoff: "Stage 4", "ending: The Pause") |
 | `<p>.events.json` | `reveal` (first time visible), `enabled`, `hidden`, `console`/`log` lines (`novel` = text not seen before), `modal`, `stage`, `stage-end`, `transition-samples` (250-ms console/panel samples for 2 s after a stage change) |
 | `<p>.actions.json` | every policy click `{t, key, label, why, detail}`; mash clicks aggregated per 2-s window (`why: 'mash', count`) |
 | `<p>.summary.md` | run metadata and counts |
@@ -102,10 +118,13 @@ while mashing). Outputs per run:
 `node tools/critic/analyze.mjs <label>` prints and writes `<label>.analysis.md` and `.analysis.json`:
 time to first automation; first-meaningful-choice candidates; nothing-to-do (loose) for the first
 5 minutes and the stage; novelty and reveal gaps (every gap > 120 s, the longest); reveal timeline;
-greyed-out-goal coverage; cognitive load at minutes 0/1/3/5/10/20/30/end (30 added for longer
-stages; '—' when the stage ends earlier) and the five largest
-single-beat disclosure spikes; action counts (+ game counters for Autoplay runs); panel and project
-cadence. Analysis windows run from the stage start to the stage change; for a run that starts at
+greyed-out-goal coverage; cognitive load (numbers, interactive elements, panels and words on screen)
+at minutes 0/1/3/5/10/20/30/end (30 added for longer stages; '—' when the stage ends earlier) and the
+five largest single-beat disclosure spikes; action counts (+ game counters for Autoplay runs); the
+**hands** measures for the whole stage, its first 10 minutes and after 10:00 (`handsOf` in
+`lib/analysis.mjs`, the Stage 2 critics' definitions: share of 2-s checks with nothing enabled / with
+two or more distinct things enabled, clicks per minute, share of the window inside ≥ 30-s click
+gaps; it reproduces `explore-s2r2.mjs hands` exactly); panel and project cadence. Analysis windows run from the stage start to the stage change; for a run that starts at
 Stage N (`--stage N`) t = 0 is that stage's start. `analyze.mjs <label> --stage M` analyses a later
 stage reached inside a run (window from its first snapshot, times re-based; writes
 `<label>.sM.analysis.md`). `compare.mjs A B […]` writes one side-by-side table (`label:M` for a later
@@ -113,15 +132,17 @@ stage of a run).
 
 ## Probes
 
-* `transition.mjs <game> [--stage N] [--fixture NAME]` — plays (stepped) until the stage changes and
-  writes `transition-<game>.md` plus `.tpre/.tend/.transition.png`.
+* `transition.mjs <game> [--stage N] [--preset NAME] [--fixture NAME]` — plays (stepped) until the
+  stage changes and writes `transition-<game>[-sN|-pNAME].md` plus `.tpre/.tend/.transition.png`
+  (default cap 60 min, 90 min from Takeoff's Stage 3 or a preset).
 * `softlock.mjs <game> [--scenario NAME] [--stage N]` — the §4 dead-end probes as named scenarios,
-  each from a new game (or the start of Stage N) in stepped mode; writes `softlock-<game>[-sN].md`
-  and `softlock-<game>[-sN]-<scenario>.png`. Takeoff: `power-zero`, `idle-new-game`, `price-200x`
-  (these three are Stage 1 situations and report "not applicable" under `--stage 2`),
-  `ignore-research-15min` (from Stage 2 it also reports the Train button's state and when the lab cap
-  first greyed it), `release-open-issues` (from Stage 2 the player keeps training and building while
-  it waits for an evaluation with open issues), `reload-mid-training`. Paperclips:
+  each from a new game (or the start of Stage N, or `--preset NAME`) in stepped mode; writes
+  `softlock-<game>[-sN].md` and `softlock-<game>[-sN]-<scenario>.png`. Takeoff: `power-zero`,
+  `idle-new-game`, `price-200x` (Stage 1 situations: "not applicable" from Stage 2),
+  `ignore-research-15min` (Stages 1–2; from Stage 2 it also reports the Train button's state and when
+  the lab cap first greyed it; "not applicable" in Stage 3, where Hire Researcher / Expand Lab are
+  gone), `release-open-issues` (from Stage 2 the player keeps training and building while it waits
+  for an evaluation with open issues; in Stage 3 it ships with Approve), `reload-mid-training`. Paperclips:
   `wire-out-low-price`, `absurd-price`, `reload`, `idle`. A scenario whose preconditions no longer
   hold reports `scenario no longer applicable: <reason>` instead of failing.
 * `determinism.mjs <game> [run flags]` — runs the same stepped run twice and diffs events, actions
@@ -156,14 +177,19 @@ stage of a run).
   `modal-hover`, `grid-off-broke`, `wall-flag`, `contracts-vs-price`, `tour` (screens at each first
   meeting, full text of every project card, clipped cards), `mobile-shots`. **Paperclips**
   reference runs: `pc-no-price`, `pc-proc-only`, `pc-mobile`. `--stage N` starts every run or probe
-  at Stage N (Takeoff preset, Paperclips fixture; labels get `-sN`); the probes were written for
-  Takeoff Stage 1 and say what they cannot find on other stages. `--tag` sets the label prefix
-  (default `x`; round 2 used `r2x`).
+  at Stage N (Takeoff preset, Paperclips fixture; labels get `-sN`), `--preset NAME` at a named
+  start (labels get `-pNAME`); the probes were written for Takeoff Stage 1 and say what they cannot
+  find on other stages. The `.explore.md` note log includes Stage 2–3's notes (Train status and
+  reason, release note, copies, interconnect, Experiments, Lobby, Counter-intelligence, Re-image,
+  Alignment work, autonomy, rogue share, seats, session, order, memo, theft, shipment, build-out,
+  Standing order, build share, the end screen's title). `--tag` sets the label prefix (default `x`;
+  round 2 used `r2x`).
 * `decisions.mjs <label[:N]…> [--stage N]` — gaps between non-drip decisions, and reveal → purchase
   latency of projects, for any run; `:N`/`--stage N` takes Stage N of a run, timed from its start.
   From Stage 2 on, repeat purchases count as drip too — Paperclips' drones, farms, batteries, probe
   launches and Processors/Memory bought with swarm gifts; Takeoff's GPU lots, plants and
-  datacenters (policy tag `infra`); Stage 1 numbers are unchanged.
+  datacenters (policy tag `infra`) and Stage 3's repeatable sinks (Experiments, Lobby,
+  Counter-intelligence, Re-image the fleet); Stage 1 numbers are unchanged.
 * Library hooks: `adapter.policy.modalChoice(modal, enabledOptions, t)` in `lib/policy.mjs`
   (default unchanged: first enabled option; return `null` to leave the modal open);
   `runGame({ adapter, viewport })` in `lib/runner.mjs` (a pre-built adapter instead of the one
@@ -312,7 +338,9 @@ left something open, the harness does this:
   first; settings are never pressed by this sweep, see below); while a big-ticket goal is visible
   (Takeoff Stage 1: funds-priced projects, see above) the drip
   (GPU/marketing) is held back until it is bought; a purchase that changes the stage ends the check
-  (the new screen is read at the next one). Takeoff: red-team until 0 open issues, then release.
+  (the new screen is read at the next one). Takeoff: red-team until 0 open issues, then release;
+  in Stage 1 Train goes through the sweep like a purchase, pressed once its price is in hand (so it
+  never arms).
   Paperclips: Memory (never Processors) while the cheapest visible project costs more ops than the
   cap, otherwise Trust goes through the generic loop; tournaments
   only with ops at the cap; toggles and "Disassemble All" never clicked. ADR: when nothing in view
@@ -367,34 +395,87 @@ left something open, the harness does this:
   ON/OFF or AUTO…, or reads "Name: value" with a short value ("Alignment compute: 1%"); the sweep
   never presses one. It also records a greyed button's inline reason (`why`, from a
   `<span class="reason">` in the same row). Paperclips' toggles are switched only by its own rules.
-* **Takeoff Stage 2 (Abilene)** — rules used only from Stage 2 on (`games/takeoff-late.mjs`).
-  Inputs are labels, the reasons printed next to greyed buttons, and numbers on screen.
-  * *Defaults are left alone.* A first-timer does not switch a newly offered setting: AUTO pricing
-    stays on (on at arrival), the Standing order stays on (switched on when its project is bought),
-    Share evals and the Job-transition fund stay off, alignment compute stays at 1%, and the copies
-    slider is never dragged. While a setting labelled AUTO (not "off") is on screen, lower/raise are
-    not touched (`policy.priceHold`); the Stage 1 backlog rule would apply if AUTO were off.
-    (`explore.mjs toggles` is the player who presses all of them.)
-  * *Train first:* Train is pressed whenever it is enabled, before anything else is bought. Then
-    red-team until 0 open issues and Release; "Keep internal" is never pressed (the release modal is
-    answered like any other: first enabled option, "release publicly").
-  * *Infrastructure follows the GPU lot's reason:* lot enabled → buy a lot; "no power" → the power
-    source (a button labelled "(+N MW)") with the lowest shown $ per MW; "no room" → a datacenter;
-    "standing order" (the order buys the lots) → room or power, whichever the Stores panel shows
-    nearer full ("GPUs X / Y" against "power A / B MW"). Up to three such purchases per check; plants
-    and datacenters are bought by this rule only (never by the sweep), and the game greys the ones it
-    calls "power to spare" / "room to spare".
+* **On or armed is not pressed again** (all games). A button that shows as already on or armed
+  (`on`: `aria-pressed="true"`, class `armed` or `on`, a title starting "Armed", a label ending
+  ": on") is never pressed by the sweep or by Takeoff's Train rule: pressing it would switch it off
+  or stand it down (Takeoff's Train arms when the money is short and stands down when pressed again).
+* **Printed delays** (all games). `later` = the delay a button's own text or a note/reason in its row
+  prints for what the player is waiting for ("· Sage-2.5 0:41 later", "· next run 1:10 later", "+0.5
+  points · 1:10 later"; "much later" counts as any). A repeat purchase — any button that is not a
+  project card — that prints one is not pressed by the sweep; cards are still bought when affordable.
+  The screen is read as printed: a delay under the game's printing threshold (10 s) is not seen.
+* **Words on screen** = letter-led tokens (`[A-Za-z][A-Za-z'’-]*`) in `document.body.innerText`, the
+  excluded roots (Takeoff's `#dev`/`#toast`, Paperclips' debug/save buttons) left out — the Stage 1
+  round-3 and Stage 2 round-2 critics' count.
+* **Takeoff Stage 2 (Abilene)** — rules used from Stage 2 on (`games/takeoff-late.mjs`). Inputs are
+  labels, the reasons and notes printed beside buttons, the Train row's GPU line, and numbers on
+  screen. Written for `s2-r1`, updated for `s123-r1` (the wallet rule: a build fund filled by a Build
+  share pays for lots, plants and halls; nothing greyed by a hold; Train arms when short of money;
+  purchases print the delay they cause the waiting run). The critics' sections above describe the
+  rules as they were shipped in their rounds.
+  * *Defaults are left alone.* A first-timer does not switch a newly offered setting, not even once:
+    AUTO pricing stays on, the Build share stays at 50%, the Standing order stays on once its card is
+    bought (the game switches it on), Share evals and the Job-transition fund stay off, alignment
+    compute stays at 1%, and the copies slider is never dragged. While a setting labelled AUTO (not
+    "off") is on screen, lower/raise are not touched (`policy.priceHold`). (`explore.mjs toggles` is
+    the player who presses all of them.)
+  * *Train first:* Train is pressed whenever it is enabled and not already armed (short of money it
+    arms and starts by itself; pressed again it would stand down). Then red-team until 0 open issues
+    and Release; "Keep internal" is never pressed (the release modal is answered like any other: first
+    enabled option, "release publicly").
+  * *Printed delays:* a repeat purchase whose row prints the delay it causes the waiting run is not
+    pressed (see above); cards are.
+  * *Infrastructure follows what the screen says* (up to three purchases a check; lots, plants and
+    halls never by the sweep): a wall on a lot row — "No power …" → the power source (a button
+    labelled "(+N MW)") with the lowest shown $ per MW, "No room …" → Build Datacenter (nothing when
+    the row says the build-out orders it or names a card); the Train row saying the run's GPUs are
+    dark ("Needs 6,700 powered GPUs. 4,000 are dark: add power.") → the same power rule; a hall or
+    plant the game draws urgent → that one; GPU lots: the largest lit lot when the Train row says the
+    run is short of GPUs ("Needs 18,000 GPUs. 14,200 free.") or when no Standing order is on (before
+    its card); otherwise the Standing order buys them from the build fund. On `s2-r1` the lot row
+    carried a "standing order" reason instead; that rule (room or power by the Stores meters) is gone.
   * *Modals:* first enabled option (`policy.modalChoice` overrides it). *Projects and the rest:*
     whatever is affordable, through the sweep (projects, Hire Researcher/Expand Lab with Trust,
-    Marketing, Security level 3).
+    Marketing, Air-gap the weights).
   * *No big-ticket saving from Stage 2 on* (`goalRule` returns nothing). Checked, not assumed: on
     `s2-r1`, seeds 1–3, with the Stage 1 rule the stage ended at the same times (41:26 / 38:30 / 38:38)
     with the same 9 runs, 24 GPU lots and 33–34 projects as without it; the rule held back only
     Marketing (1 press instead of 1–2) and moved a few plants/datacenters, so nothing that gates
     progress starves without it.
-  * Ids used: `btn-gpuBatch` (GPU lot), `btn-datacenter`, `btn-train`, `btn-redteam`, `btn-release`,
-    `btn-releaseInternal` (never pressed); plants by their "(+N MW)" label, AUTO by its label; the
-    Stores numbers from `#infraGpus`, `#gpuCapacity`, `#powerMW`, `#powerCapMW` (adapter metrics).
+  * Ids used: `btn-gpuBatch*` (the lot rows), `btn-datacenter`, `btn-standing`, `btn-train`,
+    `btn-redteam`, `btn-release`, `btn-releaseInternal` (never pressed); plants by their "(+N MW)"
+    label, AUTO by its label; the Train row's GPU line `#trainGpus`; the Stores numbers from
+    `#infraGpus`, `#gpuCapacity`, `#powerMW`, `#powerCapMW` (adapter metrics).
+* **Takeoff Stage 3 (Takeoff)** — the Stage 2 rules, and what Stage 3's screen adds (build `s123-r1`):
+  * *Settings, shares and sliders stay at their defaults:* Alignment work 0%, Red-team depth quick,
+    Step size normal, Training running (never Hold), Build-out lean, Payments level 0, the build
+    share, the research and monitor sliders. One exception: the Stage 3 presets come from the game's
+    bot, whose Stage 2 bought lots by hand, so the Standing order arrives "off"; the first-timer
+    switches it on once at the first check that shows it (its own Stage 2 would have left it on; the
+    game's own first-timer policy does the same). Every other setting press is 0.
+  * *Grants and cards:* the autonomy grants are cards ("Continual learning", "Sage red-teams Sage",
+    "Let Sage plan the build-out", …): bought when affordable like any card, in screen order — the
+    first-timer accepts every grant, as the game's first-timer policy does. So are the exit cards: a
+    motion card ("Slow down — the Steward program (ready)", the first in screen order) opens the
+    Committee's vote, answered "bring the motion"; "Sign the Pause" would be bought when offered.
+  * *Training:* Train by hand until Continual learning takes the button. Approve replaces Release:
+    red-team to zero while a Red-team button is on screen, then Approve; once a grant takes Red-team
+    away, Approve when it is lit (at the default "quick" depth the open issues ship, as its note
+    says). "Send back" is never pressed.
+  * *Repeatable sinks* (Experiments, Lobby, Counter-intelligence, Re-image the fleet): pressed by the
+    sweep when lit unless the row prints a delay for the waiting run. Experiments prints one only from
+    10 s a unit ("+0.5 points · 1:10 later"), so it is usually pressed to the run's cap ("Sage-4.2
+    takes no more"); Lobby and Counter-intelligence are paid in funds, which Stage 3's research-only
+    runs do not use, and print none. Checked, not assumed (seeds 1–3, preset `3`): the stage ends at
+    52:46 / 56:04 / 54:16 with these presses, 50:16 / 48:56 / 53:14 without Experiments, 54:20 / 54:22 /
+    54:48 without Lobby and Counter-intelligence, and 48:06 / 48:26 / 47:40 with none of the four
+    (the game's own first-timer policy, which presses none: 46:12 / 47:51 / 46:27).
+  * *Stage end:* the vote (into Stage 4), or an ending's end screen (`state.ending`); `meta.stageEndBy`
+    records which ("Stage 4"; checked with the first-timer that refuses the Committee's order: "ending:
+    The Project" at 43:02, seed 1, no click after it). The end screen's buttons ("New game", its
+    "Complete Task") are never pressed.
+  * Ids used beyond Stage 2's: `btn-approve`, `btn-sendBack` (never pressed), `btn-newGame` and
+    `btn-endingTask` (never pressed), the end screen's `#endingTitle`.
 * **Stage end**: Takeoff `state.stage` increases or `state.ending` is set; Paperclips Stage 1 ends
   when `humanFlag` drops to 0 (Release the HypnoDrones), Stage 2 when `spaceFlag` becomes 1 (Space
   Exploration), Stage 3 at "Universal Paperclips achieved" (milestone 15, the Emperor of Drift
@@ -405,6 +486,7 @@ left something open, the harness does this:
 ```
 run.mjs analyze.mjs compare.mjs transition.mjs softlock.mjs determinism.mjs make-fixtures.mjs setup.sh
 explore.mjs decisions.mjs   (round-2 additions)
+explore-s1r3.mjs            (Stage 1 round-3 addition: build s12-r4's Stage 1 play styles, probes, gate tables)
 explore-s2.mjs              (Stage 2 round-1 addition: Stage 2 play styles, probes, Paperclips Stage 2 probes)
 explore-s2r2.mjs            (Stage 2 round-2 addition: build s12-r4's first-timer, play styles, hands, Train-gate account, probes)
 lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG, Takeoff boot seed)
@@ -412,7 +494,7 @@ lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG,
        policy.mjs · recorder.mjs (events) · runner.mjs (phases, outputs) · analysis.mjs
        transition-report.mjs · probe.mjs (softlock kit) · util.mjs
 games/ takeoff.mjs · paperclips.mjs · adr.mjs   (selectors, ambient set, metrics, policy hooks, cheats)
-       takeoff-late.mjs (Takeoff Stage 2+ play rules) · paperclips-late.mjs (Paperclips Stage 2/3 play rules)
+       takeoff-late.mjs (Takeoff Stage 2–3 play rules) · paperclips-late.mjs (Paperclips Stage 2/3 play rules)
 fixtures/ paperclips-stage2.json · paperclips-stage3.json · paperclips-s1-end.json
 ```
 
@@ -433,3 +515,8 @@ fixtures/ paperclips-stage2.json · paperclips-stage3.json · paperclips-s1-end.
   holds back (one consumable purchase in reserve) counts as "something to do". Compare it only
   between runs of this harness.
 * Real-time (phase 1) runs are not reproducible by design; only stepped runs are.
+* Takeoff Stage 3: an untimed event left open (the memo, the order, the vote) keeps the vote from
+  opening (`explore.mjs modal-ignore --stage 3` does not reach Stage 4), and a player who answers the
+  vote "not yet" finds the motion card lit again at once (`modal-last` re-opens and declines it every
+  check). The shared changes of this round (settings/on/armed/delay flags, words, hands, presets)
+  leave Stage 1 on `s1-r2` and Paperclips' baselines (`pc-s2`, `pc-s3`) playing identically.

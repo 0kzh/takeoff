@@ -1,6 +1,6 @@
 // Takeoff adapter: everything the harness knows about Takeoff specifically. Buttons are discovered
 // generically from the DOM (any visible <button>), so new buttons/projects need no changes here.
-import { INFRA, KEEP_INTERNAL, PLANT_KEYS_RE, priceAuto, trainStep, infraStep } from './takeoff-late.mjs';
+import { INFRA, LOT_RE, KEEP_INTERNAL, SEND_BACK, RELEASE_KEYS, END_SCREEN, PLANT_KEYS_RE, priceAuto, trainStep, shipStep, standingStep, infraStep } from './takeoff-late.mjs';
 
 export default {
   name: 'takeoff',
@@ -36,6 +36,11 @@ export default {
       const el = document.getElementById(id);
       const mm = el && /-?[0-9][0-9,]*(?:\.[0-9]+)?/.exec(el.textContent || '');
       return mm ? parseFloat(mm[0].replace(/,/g, '')) : 0;
+    };
+    /** Text of an element as the player sees it ('' when it is not visible). */
+    const seen = (id) => {
+      const el = document.getElementById(id);
+      return el && el.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true }) ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '';
     };
     const bp = document.getElementById('btn-buyPower');
     const unitMatch = bp && /\(([0-9][0-9,]*)/.exec(bp.textContent || '');
@@ -85,6 +90,11 @@ export default {
       powerCapMW: shown('powerCapMW'),
       autoPrice: s.autoPrice ? 1 : 0,
       dataT: s.data,
+      // The Train row's GPU line ("Needs 18,000 GPUs. 14,200 free."), the build fund, the end screen.
+      trainGpus: seen('trainGpus'),
+      buildFund: s.buildFund,
+      autonomy: s.autonomy,
+      endingTitle: seen('endingTitle'),
     };
   },
 
@@ -116,38 +126,29 @@ export default {
       return c.buttons.filter((b) => b.kind === 'project' && ((b.costs && b.costs.funds) || 0) >= floor).map((b) => b.k);
     },
     /**
-     * Never clicked by the generic buy loop: red-team/release (special), "Keep internal" (the
-     * first-timer releases publicly), and Stage 2 infrastructure (bought by its on-screen reasons).
+     * Never clicked by the generic buy loop: red-team and release/approve (special), "Keep internal"
+     * and "Send back" (the first-timer ships), Stage 2+ infrastructure (bought by its on-screen
+     * reasons), and the end screen's buttons.
      */
-    skip: ['btn-redteam', 'btn-release', KEEP_INTERNAL, INFRA.lot, INFRA.datacenter],
-    /** Power plants (any "+N MW" button) are bought by the infrastructure rule only. */
+    skip: ['btn-redteam', ...RELEASE_KEYS, KEEP_INTERNAL, SEND_BACK, INFRA.lot, INFRA.datacenter, INFRA.standing, ...END_SCREEN],
+    /** Every GPU-lot row and power plant (any "+N MW" button) is bought by the infrastructure rule only. */
     veto(c) {
-      return c.buttons.filter((b) => b.kind === 'button' && PLANT_KEYS_RE.test(b.l)).map((b) => b.k);
+      return c.buttons.filter((b) => b.kind === 'button' && (PLANT_KEYS_RE.test(b.l) || LOT_RE.test(b.k))).map((b) => b.k);
     },
     /** Stage 2: AUTO pricing is left on; lower/raise are not touched while it is. */
     priceHold(c) {
       return priceAuto(c);
     },
     /**
-     * Stage 2+: Train first whenever it is enabled; then red-team until 0 open issues and release
-     * (publicly); then infrastructure by the lot row's reason (takeoff-late.mjs).
+     * Every stage: red-team until 0 open issues, then Release / Approve. Stage 2+ (takeoff-late.mjs):
+     * an inherited Standing order switched on once; Train first whenever it is enabled and not armed;
+     * then infrastructure by what the lot rows and the Train row say.
      */
     async special(ctx) {
       const late = (ctx.controls.m.stage || 1) >= 2;
+      if (late) await standingStep(ctx);
       if (late) await trainStep(ctx);
-      let c = ctx.controls;
-      const find = (k) => c.buttons.find((b) => b.k === k);
-      for (let guard = 0; guard < 3; guard++) {
-        const m = c.m;
-        if (m.trainingPhase !== 'redteam') break;
-        const rt = find('btn-redteam');
-        const rel = find('btn-release');
-        if ((m.issuesOpen ?? 0) > 0 && rt && rt.e) {
-          c = await ctx.click('btn-redteam', 'redteam', `${m.issuesOpen} open issues`);
-        } else if ((m.issuesOpen ?? 0) === 0 && rel && rel.e) {
-          c = await ctx.click('btn-release', 'release', '0 open issues');
-        } else break;
-      }
+      await shipStep(ctx);
       if (late) await infraStep(ctx);
       return ctx.controls;
     },
@@ -157,13 +158,19 @@ export default {
   stageEnded(m, startStage) {
     return (m.stage ?? startStage) > startStage || !!m.ending;
   },
+  /** How the stage ended, for the record: "Stage 4", or "ending: The Pause" (the end screen's title). */
+  endedHow(m, startStage) {
+    if (m.ending) return `ending: ${m.endingTitle || m.ending}`;
+    return (m.stage ?? startStage) > startStage ? `Stage ${m.stage}` : '';
+  },
 
   /**
    * New game with a fixed seed: the init script pins Date.now() to the seed until window.__game
    * exists (main.ts: `loadSave() ?? newGame(Date.now())`, storage is empty in a fresh context).
-   * Falls back to replaceState(newGame(seed)) through the engine module. --stage N → loadPreset(N).
+   * Falls back to replaceState(newGame(seed)) through the engine module. --stage N → loadPreset(N);
+   * --preset NAME → loadPreset(NAME) (a named start such as '3c'; the stage is what it loads).
    */
-  async boot(session, { seed, stage }) {
+  async boot(session, { seed, stage, preset }) {
     const { page } = session;
     await page.waitForFunction(() => !!(window.__game && window.__game.state), null, { timeout: 20000 });
     const info = { seedMethod: 'Date.now pinned during boot' };
@@ -183,7 +190,9 @@ export default {
       info.seedMethod = ok === true ? 'replaceState(newGame(seed)) via dist/engine/state.js' : `FAILED (${ok}); seed ${st.seed}`;
     }
     await page.evaluate(() => window.__game.setSpeed(0));
-    if (stage > 1) {
+    const named = preset != null && preset !== '' ? (/^[0-9]+$/.test(String(preset)) ? Number(preset) : String(preset)) : null;
+    if (stage > 1 || named != null) {
+      const which = named ?? stage;
       const got = await page.evaluate(
         ([sd, n]) => {
           const pinned = Date.now;
@@ -195,10 +204,10 @@ export default {
           }
           return window.__game.state.stage;
         },
-        [seed, stage],
+        [seed, which],
       );
-      info.preset = `loadPreset(${stage}) → state.stage ${got}`;
-      if (got !== stage) info.stageWarning = `preset for Stage ${stage} is not built yet; the game loaded Stage ${got}`;
+      info.preset = `loadPreset(${JSON.stringify(which)}) → state.stage ${got}`;
+      if (named == null && got !== stage) info.stageWarning = `preset for Stage ${stage} is not built yet; the game loaded Stage ${got}`;
     }
     st = await page.evaluate(() => ({ seed: window.__game.state.seed, stage: window.__game.state.stage, version: window.__game.version }));
     Object.assign(info, { stateSeed: st.seed, stage: st.stage, saveVersion: st.version });

@@ -14,7 +14,7 @@ export function renderAnalysis(a) {
   const gapLine = (g) => `${mmss(g.start)} → ${g.endLabel ? `${mmss(g.end)} (${g.endLabel})` : mmss(g.end)}: **${g.len} s**`;
   L.push(`# Analysis: ${m.prefix}`, '');
   L.push(`${m.title} · Stage ${m.stageStart}${m.fixture ? ` (fixture ${m.fixture})` : ''} · ${m.autoplay ? "game's own Autoplay" : 'scripted curious first-time player'} · seed ${m.seed} · ${m.realtime} s real time, then stepped to ${mmss(m.endT)} (cap ${m.accelMinutes} min).`);
-  L.push(`Stage end: **${a.stageEnd != null ? mmss(a.stageEnd) : `not reached (run ended ${mmss(m.endT)})`}**. Stage window used below: 0:00 → ${mmss(a.endT)}.`, '');
+  L.push(`Stage end: **${a.stageEnd != null ? `${mmss(a.stageEnd)}${m.stageEndBy ? ` (${m.stageEndBy})` : ''}` : `not reached (run ended ${mmss(m.endT)})`}**. Stage window used below: 0:00 → ${mmss(a.endT)}.`, '');
 
   L.push('## Headline', '');
   const ntd5 = a.nothingToDo.first5;
@@ -31,6 +31,8 @@ export function renderAnalysis(a) {
     ['longest novelty gap (stage)', ln ? gapLine(ln) : '—'],
     ['greyed-out goal on screen', `first 5 min ${pct(a.grey.first5.pct)} · stage ${pct(a.grey.stage.pct)}`],
     ['reveals / console lines (distinct) / modals', `${a.totals.reveals} / ${a.totals.consoleLines} (${a.totals.distinctConsole}) / ${a.totals.modals}`],
+    ['hands: nothing enabled / two or more distinct things (checks)', `${pct(a.hands.stage.nonePct)} / ${pct(a.hands.stage.twoPct)}`],
+    ['hands: clicks per minute · inside ≥ 30-s click gaps after 10:00', `${a.hands.stage.perMin.toFixed(1)} · ${a.hands.after10 ? pct(a.hands.after10.gap30Pct) : '—'}`],
   ]), '');
 
   L.push('## First meaningful choice candidates', '');
@@ -63,8 +65,8 @@ export function renderAnalysis(a) {
 
   L.push('## Cognitive load', '');
   L.push('Minute 0 is sampled at t = 0:02, the first snapshot after the first input.', '');
-  L.push(mdTable(['minute', 't', 'numbers on screen', 'interactive (buttons + sliders)', 'panels', 'sum'], a.load.map((r) => [r.label, r.t != null ? mmss(r.t) : '—', r.numbers ?? '—', r.interactive ?? '—', r.panels ?? '—', r.total ?? '—'])), '');
-  L.push(`Numbers on screen at ${LOAD_MINUTES.join('/')}/end: ${a.load.map((r) => r.numbers ?? '—').join(' / ')}; interactive: ${a.load.map((r) => r.interactive ?? '—').join(' / ')}; panels: ${a.load.map((r) => r.panels ?? '—').join(' / ')}.`, '');
+  L.push(mdTable(['minute', 't', 'numbers on screen', 'interactive (buttons + sliders)', 'panels', 'sum', 'words'], a.load.map((r) => [r.label, r.t != null ? mmss(r.t) : '—', r.numbers ?? '—', r.interactive ?? '—', r.panels ?? '—', r.total ?? '—', r.words ?? '—'])), '');
+  L.push(`Numbers on screen at ${LOAD_MINUTES.join('/')}/end: ${a.load.map((r) => r.numbers ?? '—').join(' / ')}; interactive: ${a.load.map((r) => r.interactive ?? '—').join(' / ')}; panels: ${a.load.map((r) => r.panels ?? '—').join(' / ')}; words: ${a.load.map((r) => r.words ?? '—').join(' / ')}.`, '');
   L.push('**Largest single-beat disclosure spikes** (consecutive snapshots):', '');
   L.push(mdTable(['t', 'Δnumbers', 'Δinteractive', 'Δpanels', 'what appeared'], a.spikes.map((s) => [mmss(s.t), s.dNumbers, s.dInteractive, s.dPanels, s.appeared.join('; ') || '(values only)'])), '');
 
@@ -76,6 +78,12 @@ export function renderAnalysis(a) {
     L.push('Game counters (start → stage end), useful for Autoplay runs:', '');
     L.push(mdTable(['counter', 'start', 'end'], Object.entries(a.counters).map(([k, v]) => [k, fmtN(v.start), fmtN(v.end)])), '');
   }
+
+  L.push('## Hands', '');
+  L.push('The Stage 2 critics\' measures (lib/analysis.mjs handsOf): checks are the 2-s snapshots, read before the player acts; a thing is an enabled non-ambient button or card (lot sizes and bulk buttons count once); clicks exclude the main button\'s mash.', '');
+  const hRow = (name, h) => [name, h ? `${mmss(h.from)}–${mmss(h.end)}` : '—', h ? h.checks : '—', h ? pct(h.nonePct) : '—', h ? pct(h.twoPct) : '—', h ? h.medianThings : '—', h ? h.clicks : '—', h ? h.perMin.toFixed(1) : '—', h ? pct(h.gap30Pct) : '—', h ? `${h.gaps30} (longest ${h.longestGap} s)` : '—'];
+  L.push(mdTable(['window', 'span', 'checks', 'nothing enabled', 'two or more things', 'median things', 'clicks', 'clicks/min', 'inside ≥ 30-s gaps', '≥ 30-s gaps'], [hRow('whole stage', a.hands.stage), hRow('first 10 min', a.hands.first10), hRow('after 10:00', a.hands.after10)]), '');
+  L.push(`Share of checks each thing is enabled: ${Object.entries(a.hands.stage.enabledShare).slice(0, 12).map(([k, v]) => `${k} ${v.toFixed(0)}%`).join(' · ')}.`, '');
 
   L.push('## Cadence', '');
   const cad = (x) => `${x.n} (${x.times.map(mmss).join(', ') || '—'}); median gap ${x.medianGap != null ? `${Math.round(x.medianGap)} s` : '—'}, max gap ${x.maxGap != null ? `${x.maxGap} s` : '—'}, last one ${x.sinceLast != null ? `${x.sinceLast} s before ${a.endLabel}` : '—'}`;

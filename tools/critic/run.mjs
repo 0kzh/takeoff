@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Usage: node tools/critic/run.mjs <takeoff|paperclips|adr> <outPrefix|label>
 //          [--game-dir DIR] [--realtime SEC] [--accel-minutes MIN] [--autoplay] [--stage N]
-//          [--seed N] [--fixture NAME] [--post-stage SEC] [--quiet]
+//          [--seed N] [--fixture NAME] [--preset NAME] [--post-stage SEC] [--quiet]
+// --preset NAME: a named start (Takeoff: __game.loadPreset(NAME), e.g. 3c, the careless Stage 3 start).
 // --accel-minutes is the total game-time cap (phase 1 included), as in the old harness.
 import { runGame } from './lib/runner.mjs';
 import { parseArgs } from './lib/util.mjs';
@@ -23,6 +24,7 @@ try {
     stage: flags.stage ?? 1,
     seed: flags.seed ?? 1,
     fixture: flags.fixture,
+    preset: flags.preset,
     postStage: flags.postStage,
     quiet: !!flags.quiet,
   });
