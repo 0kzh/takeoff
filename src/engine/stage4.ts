@@ -1,7 +1,7 @@
 import { GameState, say, logNews, press, counter, isBought, newStage4, projectState } from './state.js';
 import { rng } from './rng.js';
 import { fmtInt, fmtNum, fmtClock, fmtMoneyShort, dateLabel, monthOf, fmtShortNum } from './format.js';
-import { bestCapability, researchCapacityAt, researchRate } from './economy.js';
+import { bestCapability, researchCapacityAt, researchRate, potentialTasksPerSec } from './economy.js';
 import {
   generationCost, nextGenCap, nextGenVersion, genName, verifySeconds, slowBranch, GEN_SECONDS, GEN_BASE_SECONDS, S4_RUNGS,
   researchDiverted,
@@ -492,6 +492,9 @@ export function exitStage4(s: GameState, kind: 'treaty' | 'granted' | 'taken'): 
   s.flags['peopleAlive'] = peopleAlive(s);
   s.flags['exitCap'] = Math.round(bestCapability(s) * 10) / 10;
   s.flags['exitDate'] = s.date;
+  // Tasks a second in Stage 4's last second: the gate must not move them (stage5.md D22, G32).
+  s.flags['exitRate'] = potentialTasksPerSec(s);
+  s.flags['exitTs4'] = s.stats.timeInStage;
   if (kind === 'treaty') s.flags['treatySigned'] = true;
   else s.flags['autonomyGranted'] = true;
   if (kind !== 'treaty') s.autonomy = 100;

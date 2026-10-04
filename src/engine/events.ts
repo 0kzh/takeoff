@@ -232,8 +232,11 @@ export function rivalRelease(s: GameState): void {
 
 /** Seconds between two modals opening on their own; a modal the player's click caused is exempt. */
 export const MODAL_SPACING = 150;
-/** Modals that answer the player's own click (a confirm), so they open at once. */
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote', 'c_treaty', 'c_halt'];
+/**
+ * Modals that answer the player's own click (a confirm), so they open at once. `Final instructions`
+ * opens at once too: its one-to-two-minute wait is the stage's last (stage5.md §2.4).
+ */
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote', 'c_treaty', 'c_halt', 'c_final'];
 
 export interface OpenOptions {
   /** Open only if it can open right now; otherwise do nothing (a passing offer, like the gamble). */
@@ -338,6 +341,14 @@ export function resolveChoice(s: GameState, index: number): boolean {
   const cost = optionCost(s, opt);
   // The record is read before the effect changes what else could have been chosen.
   const record = typeof opt.record === 'function' ? opt.record(s) : opt.record;
+  // A choice a person made: a card with more than one option to press (stage5.md appendix). Silence's
+  // cards, and the race branch's, have one.
+  const enabled = def.options.filter((_, i) => choiceOptionEnabled(s, def, i)).length;
+  if (enabled >= 2) {
+    s.flags['lastHumanTitle'] = def.title;
+    s.flags['lastHumanOption'] = record;
+    s.flags['lastHumanDate'] = s.date;
+  }
   if (cost) pay(s, cost);
   s.activeChoice = null;
   noteAnswered(s, def.id);
@@ -388,6 +399,11 @@ export function defaultIndex(s: GameState, def: ChoiceDef): number {
 /** The first of `order` that is enabled now (a careful default when some answers are greyed). */
 export function firstEnabled(s: GameState, def: ChoiceDef, order: number[]): number {
   return order.find((i) => choiceOptionEnabled(s, def, i)) ?? order[order.length - 1]!;
+}
+
+/** The word on an option's button (a function when the run decides it). */
+export function optionLabel(s: GameState, opt: ChoiceOption): string {
+  return typeof opt.label === 'function' ? opt.label(s) : opt.label;
 }
 
 /** Stage 2 on: the option's effect and cost, printed under its label (`+10 T data · $675k`). */

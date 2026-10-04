@@ -13,6 +13,7 @@ import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.j
 import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall, dataNotInHand } from '../engine/world.js';
 import { stage3Projects, granted } from './projects3.js';
 import { stage4Projects } from './projects4.js';
+import { stage5Projects } from './projects5.js';
 import { minedPerSec } from '../engine/fleet.js';
 
 /**
@@ -83,6 +84,13 @@ export interface ProjectDef {
   instrument?: boolean;
   /** Stage 3: what a greyed card waits for when it is not money (`needs Interpretability lab II`). */
   needs?: (s: GameState) => string;
+  /** Stage 5: tonnes of the mission fund, at least this many seconds of the flow, fixed when the card first shows. */
+  revealMatter?: number;
+  /**
+   * Stage 5: a mission (stage5.md §2.2). Bought, it builds for `seconds`, one at a time (or `beside` the
+   * queue); `complete` runs when it is built.
+   */
+  mission?: { seconds: number; beside?: boolean; complete: (s: GameState) => void };
 }
 
 export type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> & {
@@ -94,16 +102,19 @@ export function project(def: ProjectInput): ProjectDef {
   const secs = def.revealFunds;
   const rsecs = def.revealResearch;
   const msecs = def.revealMaterials;
+  const fsecs = def.revealMatter;
   // A card with `revealFunds` / `revealResearch` costs at least that many seconds of the revenue
   // (research rate) at the moment it first shows, fixed then (critic round 2 §6.2: a card is a goal
   // for a minute or two, not a conveyor belt). Before it shows, the preview uses today's rates.
   // A Stage 1 card's floor never passes four times its list price: a card that returns a researcher or
   // a doubling of the lab must not out-price First Datacenter (a $340,000 recruiter was a trap).
   const stage1 = (def.stages ?? [1]).includes(1);
-  const cost = secs === undefined && rsecs === undefined && msecs === undefined ? base : (s: GameState): Cost => {
+  const fixed = secs === undefined && rsecs === undefined && msecs === undefined && fsecs === undefined;
+  const cost = fixed ? base : (s: GameState): Cost => {
     const c = base(s);
     const out: Cost = { ...c };
     if (msecs !== undefined) out.materials = Math.max(c.materials ?? 0, revealMaterialsPrice(s, def.id, msecs));
+    if (fsecs !== undefined) out.fund = Math.max(c.fund ?? 0, revealMatterPrice(s, def.id, fsecs));
     if (secs !== undefined) {
       const floor = revealPrice(s, def.id, secs);
       // The cap is Stage 1's: a card carried into Stage 2 keeps Stage 2's floor.
@@ -112,10 +123,11 @@ export function project(def: ProjectInput): ProjectDef {
     if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
     return out;
   };
-  const onShow = secs === undefined && rsecs === undefined && msecs === undefined ? def.onShow : (s: GameState) => {
+  const onShow = fixed ? def.onShow : (s: GameState) => {
     if (secs !== undefined) s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
     if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
     if (msecs !== undefined) s.flags[`mprice:${def.id}`] = revealMaterialsPrice(s, def.id, msecs);
+    if (fsecs !== undefined) s.flags[`fprice:${def.id}`] = revealMatterPrice(s, def.id, fsecs);
     def.onShow?.(s);
   };
   // Stage 3 (stage3.md §4.1 item 7): a prerequisite gates the purchase, not the appearance.
@@ -165,6 +177,13 @@ export function revealMaterialsPrice(s: GameState, id: string, seconds: number):
   const fixed = s.flags[`mprice:${id}`];
   if (typeof fixed === 'number') return fixed;
   return twoFigures(seconds * Math.max(1, minedPerSec(s)));
+}
+
+/** Stage 5 (stage5.md §2.2): `seconds` of the flow to orbit, two figures; fixed at the reveal. */
+export function revealMatterPrice(s: GameState, id: string, seconds: number): number {
+  const fixed = s.flags[`fprice:${id}`];
+  if (typeof fixed === 'number') return fixed;
+  return twoFigures(seconds * Math.max(1, s.s5.massFlow));
 }
 
 function twoFigures(raw: number): number {
@@ -880,6 +899,7 @@ export const PROJECTS: ProjectDef[] = [
   ...stage2Projects(),
   ...stage3Projects(project),
   ...stage4Projects(project),
+  ...stage5Projects(project),
 ];
 
 // ---------- Stage 2 (stage2.md §4.2): rows in table order; funds at scale 1 through s2() ----------

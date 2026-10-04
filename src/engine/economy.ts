@@ -247,9 +247,23 @@ export function taskShare(s: GameState): number {
 }
 
 export function potentialTasksPerSec(s: GameState): number {
-  // Stage 4: the universal basic income is paid in output (stage4.md §2.3).
-  const ubi = s.stage === 4 ? 1 - s.s4.ubiShare : 1;
-  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s) * ubi;
+  // From Stage 4: the universal basic income is paid in output (stage4.md §2.3), in both of Stage 5's
+  // skins to the end (stage5.md as-built deltas row 2: the gate moves nothing).
+  const ubi = s.stage >= 4 ? 1 - s.s4.ubiShare : 1;
+  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s) * ubi * stage5TaskMult(s);
+}
+
+/**
+ * Stage 5's own multipliers on the count (stage5.md §4.2, §5.2): a tenth held for people (the charter),
+ * a tenth of the ring on medicine for two minutes, Jupiter rebuilt as a computer.
+ */
+export function stage5TaskMult(s: GameState): number {
+  if (s.stage < 5) return 1;
+  let m = 1;
+  if (s.flags['charter'] === true) m *= 0.9;
+  if (s.effects.some((e) => e.id === 'medicine')) m *= 0.9;
+  if (s.flags['jupiter'] === true) m *= 3;
+  return m;
 }
 
 /** Stage 1: copies stop when the power runs out. */

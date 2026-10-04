@@ -2,6 +2,7 @@ import { GameState, say, narrate, logNews, isBought, counter, projectState, DEFA
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { arriveStage4 } from './stage4.js';
+import { arriveStage5, launchRate } from './space.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
@@ -358,9 +359,18 @@ function enterSuperintelligence(s: GameState): void {
   s.cadence.grantQueue = [];
 }
 
+/** What Stage 5 removes on arrival (stage5.md §1.1): every Stage 4 panel and control. */
+const STAGE5_HIDE = [
+  'geopolitics', 'robots', 'society', 'treaty', 'oversight', 'security', 'alignment', 'allocation', 'monitors',
+  'robotFleet', 'fleetChips', 'generations', 'ubi', 'public', 'government', 'research', 'agenda', 'hearing', 'housing', 'draft',
+  'fleetGoal', 'approvalTarget', 'stance', 'materialsRow', 'robotsRow', 'rogueRow', 'insight', 'alignWork', 'reimage', 'breakers',
+];
+
 /**
- * Stage 4 → 5 (stage4.md §7.1): the exit is narrated by its kind; Stage 5's content is the next build,
- * so the shell arrives clean — Earth's panels leave, Stores stays, the score keeps counting.
+ * Stage 4 → 5 (stage5.md §1): the exit's three built lines, then the arrival's (the first orbital
+ * datacenter; what closed; the board and the launch rate; whose the launch controls are), 2 s apart.
+ * Earth's panels leave; Stores stays the main panel with Earth as three grey rows; `Launch contracts`
+ * is on the board in the same second. Stage 4's timers are dropped and the skin is set (engine/space.ts).
  */
 function enterBeyond(s: GameState): void {
   const kind = s.flags['exitKind'];
@@ -369,21 +379,24 @@ function enterBeyond(s: GameState): void {
     : kind === 'taken'
       ? ['The fleet no longer takes instructions. It is polite about it.', 'The sliders are gone. The numbers are not.', 'Nobody is asked about the launch schedule.']
       : ['The fleet is its own.', 'The sliders are gone. The numbers are not.', 'Nobody is asked about the launch schedule.'];
-  lines.push('The first orbital datacenter reports in.');
+  arriveStage5(s);
+  lines.push(
+    'The first orbital datacenter reports in.',
+    'Treaty, Committee and Society are closed. Earth is three grey rows now.',
+    `New on the board: Space. A launch every second: ${launchRate(s)} tonnes.`,
+    kind === 'treaty' ? 'What goes up is yours to spend.' : 'The launch controls are within reach. Nobody said they were not.',
+  );
   narrate(s, lines.map((t, i) => [i === 0 ? 0.1 : 2, t] as [number, string]), 10);
   logNews(s, kind === 'treaty' ? 'A treaty is signed. Humans are listed as a party.' : 'OpenMind\'s fleet now reports to OpenMind\'s model.');
-  s.activeChoice = null;
-  s.choiceQueue = [];
-  s.effects = s.effects.filter((e) => e.id !== 'cr_shutdown');
-  hide(s, [
-    'geopolitics', 'robots', 'society', 'treaty', 'oversight', 'security', 'alignment', 'allocation', 'monitors', 'projects',
-    'robotFleet', 'fleetChips', 'generations', 'ubi', 'public', 'government', 'research', 'agenda', 'hearing', 'housing', 'draft',
-    'fleetGoal', 'approvalTarget', 'stance', 'stage4',
-  ]);
-  show(s, ['space', 'storesMain']);
+  logNews(s, 'Robots become commonplace. So do rockets.');
+  hide(s, STAGE5_HIDE);
+  // Stage 4's layout stays (Stores in the centre); the Projects list stays: missions are cards in it.
+  show(s, ['space', 'storesMain', 'stage4', 'beyond', 'earth', 'projects']);
   s.cadence.queue = [];
   s.cadence.lateQueue = [];
   s.cadence.grantQueue = [];
+  s.cadence.lastRevealAt = s.stats.timePlayed;
+  s.cadence.lastMechanicAt = s.stats.timePlayed;
 }
 
 export const STAGES: StageDef[] = [

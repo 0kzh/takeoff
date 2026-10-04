@@ -12,11 +12,12 @@ import {
   GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, buildWall, standingOrderOn, lotSizes } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
-import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, optionCost, optionLabel } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
 import type { ChoiceDef } from '../data/choices.js';
 import { stage3Step, S3Memory } from './policy3.js';
 import { stage4Step, S4Memory } from './policy4.js';
+import { stage5Step, S5Memory } from './policy5.js';
 
 /** A modal answer by its index, or by its option's `record` (robust to the order options are listed in). */
 type Answer = number | string;
@@ -66,6 +67,8 @@ export interface BotMemory {
   s3?: S3Memory;
   /** Stage 4 bookkeeping (sim/policy4.ts). */
   s4?: S4Memory;
+  /** Stage 5 bookkeeping (sim/policy5.ts). */
+  s5?: S5Memory;
 }
 
 export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false, variant = ''): BotMemory {
@@ -110,6 +113,10 @@ function readModal(s: GameState, mem: BotMemory): boolean {
 
 /** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
+  if (s.stage >= 5) {
+    stage5Step(s, a, mem);
+    return;
+  }
   if (s.stage >= 4) {
     stage4Step(s, a, mem);
     return;
@@ -170,7 +177,7 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   // As the explorer's byLabel: the first enabled option whose label matches; the best-looking player
   // waits while a matching option is greyed (the timer decides); otherwise the first enabled one.
   const wanted = mem.variant === 'modals-best' ? BEST_LABELS : WORST_LABELS;
-  const matches = (i: number) => wanted.some((re) => re.test(def.options[i]!.label));
+  const matches = (i: number) => wanted.some((re) => re.test(optionLabel(s, def.options[i]!)));
   const hit = enabled.find(matches);
   if (hit !== undefined) {
     a.resolveChoice(s, hit);

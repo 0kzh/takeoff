@@ -19,6 +19,7 @@ import {
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
 import { stage4Tick, stage4Slow, toggleVerify, setVerify } from './stage4.js';
+import { stage5Tick, stage5Slow, buyRow, setSplitShare, cycleIndustryShare, setIndustryShare } from './space.js';
 import { updateHold } from './hold.js';
 import { setFleetShare, setFleetGoal, buildHousing } from './fleet.js';
 import { cycleUbi, setUbiShare, setApprovalHold } from './society.js';
@@ -42,7 +43,10 @@ const MAX_TICKS_PER_CALL = 36000;
 
 /** Advances the simulation by `dtMs` of game time in fixed 100 ms steps. Pure state, no DOM. */
 export function tick(s: GameState, dtMs: number): void {
-  if (s.ending) return;
+  if (s.ending) {
+    endingTick(s, dtMs);
+    return;
+  }
   s.tickAccum += dtMs;
   let n = 0;
   while (s.tickAccum >= TICK_MS && n < MAX_TICKS_PER_CALL) {
@@ -52,6 +56,24 @@ export function tick(s: GameState, dtMs: number): void {
     if (s.ending) break;
   }
   if (n >= MAX_TICKS_PER_CALL) s.tickAccum = 0;
+}
+
+/** The two endings that keep counting (stage5.md §7.2): Tasks Completed rises at the last second's rate. */
+export const COUNTING_ENDINGS = ['concord', 'silence'];
+
+/**
+ * After an ending only the counter moves, and only in Concord and Silence: at the rate the last second
+ * of play ran at. The clock, the date and time played stay where the run ended.
+ */
+function endingTick(s: GameState, dtMs: number): void {
+  if (!COUNTING_ENDINGS.includes(s.ending)) return;
+  const rate = typeof s.flags['endRate'] === 'number' ? (s.flags['endRate'] as number) : s.stats.tasksPerSec;
+  s.taskFrac += (rate * dtMs) / 1000;
+  const whole = Math.floor(s.taskFrac);
+  if (whole > 0) {
+    s.tasks += whole;
+    s.taskFrac -= whole;
+  }
 }
 
 /**
@@ -95,6 +117,7 @@ export function step(s: GameState): void {
   fireArmedRun(s);
   stage3Tick(s, dt);
   stage4Tick(s, dt);
+  stage5Tick(s, dt);
 
   updateReveals(s);
   updateProjects(s);
@@ -153,6 +176,7 @@ function slowStats(s: GameState): void {
   updateHold(s);
   stage3Slow(s);
   stage4Slow(s);
+  stage5Slow(s);
 }
 
 /**
@@ -376,6 +400,10 @@ export const actions = {
   setStance,
   toggleVerify,
   setVerify,
+  buyRow,
+  setSplitShare,
+  cycleIndustryShare,
+  setIndustryShare,
   buyProject,
   resolveChoice,
   takeDefault,

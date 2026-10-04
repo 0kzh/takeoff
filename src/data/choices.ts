@@ -10,7 +10,8 @@ import { datacenterPrice } from './projects.js';
 type Ctx = Record<string, number | string>;
 
 export interface ChoiceOption {
-  label: string;
+  /** A function when the button's word depends on the run (Stage 5's Silence reads `acknowledge`). */
+  label: string | ((s: GameState) => string);
   /** Short id recorded in the choice history and shown on the end screen (a function when what was chosen depends on what else could be). */
   record: string | ((s: GameState) => string);
   /** A function when it names a price that scales with the stage (or was fixed when the modal opened). */
@@ -106,6 +107,7 @@ const publishersLicence = (s: GameState): number => s2(s, 150000);
 
 import { CHOICES3 } from './choices3.js';
 import { CHOICES4 } from './choices4.js';
+import { CHOICES5 } from './choices5.js';
 
 export const CHOICES: ChoiceDef[] = [
   {
@@ -861,4 +863,4 @@ function hearingDone(s: GameState): void {
 
 
 // Stage 3's modals live in data/choices3.ts (it imports only this file's types).
-CHOICES.push(...CHOICES3, ...CHOICES4);
+CHOICES.push(...CHOICES3, ...CHOICES4, ...CHOICES5);

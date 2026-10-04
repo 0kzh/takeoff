@@ -873,8 +873,6 @@ function renderLater(s: GameState): void {
   }
   n('lead', s.lead);
   n('baiwenCapability', s.baiwenCapability, 2);
-  n('launchCapacity', s.launchCapacity);
-  n('orbitalCompute', s.orbitalCompute);
   setText('treatyStatus', s.flags['treatySigned'] ? 'signed' : 'not negotiating');
   setText('statTasksPerSec', fmtInt(s.stats.tasksPerSec));
   setText('statRevPerSec', fmtMoney(s.stats.revPerSec));

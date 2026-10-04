@@ -97,6 +97,30 @@ export function fmtShortNum(n: number): string {
   return fmtInt(Math.round(n));
 }
 
+const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+
+/** Stage 5's counts: `fmtShortNum` to the trillions, then `2.7 × 10¹⁵`. */
+export function fmtBig(n: number): string {
+  const a = Math.abs(n);
+  if (!Number.isFinite(n)) return '0';
+  if (a < 1e15) return fmtShortNum(n);
+  let e = Math.floor(Math.log10(a));
+  let m = n / Math.pow(10, e);
+  if (Math.abs(m) >= 9.95) {
+    e += 1;
+    m /= 10;
+  }
+  return `${m.toFixed(1)} × 10${String(e).split('').map((d) => SUPERSCRIPT[Number(d)]).join('')}`;
+}
+
+/** A small percentage to two significant figures: `0.0034`, `0.010`, `0.25` (no sign, no `%`). */
+export function fmtSmallPct(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return '0';
+  if (p >= 10) return fmtNum(p, 0);
+  const decimals = Math.min(6, Math.max(1, -Math.floor(Math.log10(p)) + 1));
+  return p.toFixed(decimals);
+}
+
 /** Tonnes of materials: `40,000 t`, `2.0M t`. */
 export function fmtTonnes(n: number): string {
   return `${fmtShortNum(n)} t`;

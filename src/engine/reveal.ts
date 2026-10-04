@@ -3,6 +3,7 @@ import { PROJECTS, ProjectDef } from '../data/projects.js';
 import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, MECHANIC_FLAGS, inApproach, rowById } from '../data/stage2.js';
 import { STAGE3_TABLE, STAGE3_ORDER, MECHANIC_FLAGS_S3, inApproach3, dateFallback3, rowById3 } from '../data/stage3.js';
 import { STAGE4_TABLE, STAGE4_ORDER, MECHANIC_FLAGS_S4, inApproach4 } from '../data/stage4.js';
+import { STAGE5_TABLE, STAGE5_ORDER, MECHANIC_FLAGS_S5 } from '../data/stage5.js';
 import { bestCapability } from './economy.js';
 import { visibleProjects } from './projects.js';
 
@@ -56,7 +57,7 @@ export const OPENING_DRIP_S3 = 30;
  * then one every 30 s (critic round 2 §6.1: no more than 16 new things in any six minutes); Stage 2, 15 s.
  */
 function dripSeconds(s: GameState): number {
-  if (s.stage === 3 || s.stage === 4) return s.stats.timeInStage < 300 ? OPENING_DRIP_S3 : DRIP_SECONDS;
+  if (s.stage >= 3) return s.stats.timeInStage < 300 ? OPENING_DRIP_S3 : DRIP_SECONDS;
   if (s.stage !== 1) return DRIP_SECONDS;
   if (!s.revealed['training']) return EARLY_DRIP_SECONDS;
   return STAGE1_DRIP_SECONDS;
@@ -132,8 +133,9 @@ function eligible(s: GameState, def: ProjectDef): boolean {
     const c = def.cost(s);
     if ((c.research ?? 0) > 0 || (c.funds ?? 0) > 0) return false;
   }
-  // Before the Research panel, only rescues can appear (their prices are not in research).
-  return def.rescue === true || s.revealed['research'] === true;
+  // Before the Research panel, only rescues can appear (their prices are not in research). Stage 5 has
+  // no research panel: its cards are missions.
+  return def.rescue === true || s.revealed['research'] === true || s.stage >= 5;
 }
 
 function show(s: GameState, def: ProjectDef): void {
@@ -155,6 +157,8 @@ function order(id: string): number {
   // Stage 4's carried rows (labs, monitors) queue in its table's order, after its own rows.
   const s4 = STAGE4_ORDER.get(id);
   if (s4 !== undefined) return 100000 + s4;
+  const s5 = STAGE5_ORDER.get(id);
+  if (s5 !== undefined) return 200000 + s5;
   return tableOrder.get(id) ?? 0;
 }
 
@@ -385,6 +389,10 @@ export function updateStageContent(s: GameState): void {
   }
   if (s.stage === 4) {
     updateStage4Content(s);
+    return;
+  }
+  if (s.stage === 5) {
+    updateStage5Content(s);
     return;
   }
   if (s.stage !== 2) return;
@@ -640,6 +648,34 @@ function governor4(s: GameState, approach: boolean): void {
   }
 }
 
+// ---------- Stage 5: the table and the governor (stage5.md §4.1) ----------
+
+/**
+ * Every tick in Stage 5: rows other than projects appear when their trigger fires; missions come through
+ * the queue and the drip like any card. The governor fills a 170 s hole with the next row whose
+ * prerequisite holds; the mechanic governor is off (G2 is relaxed to 360 s here, §4.3). There are no late
+ * items: the last project is one row among three on the board.
+ */
+function updateStage5Content(s: GameState): void {
+  for (const row of STAGE5_TABLE) {
+    if (row.kind === 'project' || rowDone3(s, row) || !row.trigger || !row.trigger(s)) continue;
+    if (rowPrereq(s, row)) revealRow(s, row);
+  }
+  const c = s.cadence;
+  const now = s.stats.timePlayed;
+  if (s.activeChoice || now - c.lastRevealAt < GOVERNOR_SECONDS) return;
+  for (const row of STAGE5_TABLE) {
+    if (row.governed === false || rowDone3(s, row)) continue;
+    // The last project waits for its threshold; the far goals for theirs to come near.
+    if (row.id === 'p_reflection' || row.id === 'p_relay' || row.id === 'p_jupiter') continue;
+    if (!rowPrereq(s, row)) continue;
+    if (!revealRow(s, row, OVERFLOW)) continue;
+    c.governed.push(`${Math.round(now)}:${row.id}`);
+    c.lastRevealAt = now;
+    return;
+  }
+}
+
 /** Lookup sets for `cadence.seen`, keyed by the array itself (a load replaces the array). */
 const seenSets = new WeakMap<string[], Set<string>>();
 
@@ -663,7 +699,7 @@ export function noteReveals(s: GameState): void {
     return true;
   };
   for (const [id, on] of Object.entries(s.revealed)) {
-    if (on && mark(`f:${id}`) && (MECHANIC_FLAGS.includes(id) || MECHANIC_FLAGS_S3.includes(id) || MECHANIC_FLAGS_S4.includes(id))) s.cadence.lastMechanicAt = s.stats.timePlayed;
+    if (on && mark(`f:${id}`) && (MECHANIC_FLAGS.includes(id) || MECHANIC_FLAGS_S3.includes(id) || MECHANIC_FLAGS_S4.includes(id) || MECHANIC_FLAGS_S5.includes(id))) s.cadence.lastMechanicAt = s.stats.timePlayed;
   }
   for (const [id, st] of Object.entries(s.projects)) {
     if (!st.shown) continue;

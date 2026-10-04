@@ -14,7 +14,8 @@ export const HOLD_AFTER_SECONDS = 120;
 
 /** What is waiting on the player now ('' when nothing): an event with no timer, or a run's sign-off. */
 export function waitingOnPlayer(s: GameState): string {
-  if (s.stage < 3 || s.ending) return '';
+  // Stage 5 has nothing to hold: Final instructions waits for as long as it likes.
+  if (s.stage < 3 || s.stage >= 5 || s.ending) return '';
   const c = s.activeChoice;
   if (c) {
     const def = choiceById(c.id);

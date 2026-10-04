@@ -191,6 +191,32 @@ export function activeGpus(s: GameState): number {
 
 /** Compute in G4-equivalents: a G5 counts one and a half, a G6 two and a half. */
 export function effGpus(s: GameState): number {
+  // Stage 5: the orbital datacenters, ×2 with the ring, powered by the swarm (stage5.md §2.1).
+  return s.stage >= 5 ? earthGpus(s) + orbitalEffective(s) : earthGpus(s);
+}
+
+/** Tonnes in 0.01 % of the Sun's output: the swarm's first goal and its unit (stage5.md §2.1). */
+export const SWARM_TONNES = 1.5e8;
+/** Orbital compute × (1 + 20 × the swarm, in units of 0.01 %, at most 1). */
+export const SWARM_BOOST = 20;
+
+/** What the swarm multiplies orbital compute by: ×21 at 0.01 % of the Sun. */
+export function swarmFactor(s: GameState): number {
+  return 1 + SWARM_BOOST * Math.min(1, s.s5.swarm / SWARM_TONNES);
+}
+
+/**
+ * Stage 5's orbital compute in G4-equivalents: the datacenters, ×2 with the ring, powered by the swarm.
+ * Here, not in engine/space.ts, so this module imports nothing of Stage 5 (an import cycle would reach it
+ * before it is initialised).
+ */
+export function orbitalEffective(s: GameState): number {
+  if (s.stage < 5) return 0;
+  return s.s5.orbitalGpus * s.s5.orbitalMult * swarmFactor(s);
+}
+
+/** Compute on Earth: the halls and their lots; from Stage 4 the fleet's GPU-equivalents with their power. */
+export function earthGpus(s: GameState): number {
   if (s.stage < 2) return s.gpus;
   const owned = activeG4(s) + G5_COMPUTE * activeG5(s) + G6_COMPUTE * activeG6(s);
   // Stage 4: the fleet builds GPU-equivalents with their power (stage4.md §2.2).

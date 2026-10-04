@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -27,6 +27,8 @@ export interface Cost {
    * waits for is paid from the fleet's purse first).
    */
   build?: number;
+  /** Stage 5: tonnes from the mission fund (a mission's price, 20 s of the flow when it appears). */
+  fund?: number;
 }
 
 /** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
@@ -416,6 +418,94 @@ export function newStage4(): Stage4State {
   };
 }
 
+/** A Stage 5 mission building (stage5.md §2.2): the head of the queue counts down; the rest wait. */
+export interface Mission {
+  id: string;
+  remaining: number;
+  total: number;
+}
+
+/** The three rows the standing split spends on (stage5.md §2.1); the rest of what reaches matter is by hand. */
+export type SpaceRow = 'foundry' | 'orbital' | 'collector';
+
+/**
+ * Stage 5 (stage5.md, appendix): one flow of mass to orbit, two purses (`matter` for the rows, the
+ * mission fund for missions), the rows' stocks, the standing split, the mission queue, the probes and
+ * the stage's own generations. Shares are 0–1; timers are remaining seconds.
+ */
+export interface Stage5State {
+  /** Tonnes a second reaching orbit (the flow, `F`); 0 until Launch contracts completes. */
+  massFlow: number;
+  /** Where the flow comes from, for the `launch mass` hover; sums to `massFlow`. */
+  flowParts: Record<string, number>;
+  /** Tonnes in orbit, for the rows. */
+  matter: number;
+  /** The missions' purse: it fills only while a mission waits, up to what the board costs. */
+  missionFund: number;
+  /** The share of the flow that goes to `matter` while a mission waits: 0.5, 0.75 or 0.9. */
+  industryShare: number;
+  /** Orbital datacenters in G4-equivalents (before the ring's ×2). */
+  orbitalGpus: number;
+  /** The datacenter ring: orbital compute ×2, existing and future. */
+  orbitalMult: number;
+  /** Tonnes in the swarm (150M t is 0.01 % of the Sun's output). */
+  swarm: number;
+  /** Probes reporting, probes ever launched or built, probes lost to value drift. */
+  probes: number;
+  probesTotal: number;
+  probesLost: number;
+  /** The standing split (the Autofactory): shares of what reaches matter, spent every second on each row. */
+  split: Record<SpaceRow, number>;
+  /** Units bought by hand (the Autofactory comes after thirty). */
+  handPurchases: number;
+  /** Lunar solar and asteroid mining: a foundry tonne's return ×1.5 each. */
+  techIndustry: number;
+  /** Self-replicating foundries: the flow grows by this share a second by itself. */
+  flowGrowth: number;
+  /** The mission queue (one builds at a time) and the missions that build beside it (the Autofactory, Mercury). */
+  missions: Mission[];
+  beside: Mission[];
+  /** The next people line (Concord's two lists; Silence's four, its sixth and the cold line). */
+  peopleLineIndex: number;
+  /** Seconds to the next generation (every 150 s, ×1.4). */
+  genTimer: number;
+  /** Tonnes taken from Mercury, and the people off Earth. */
+  mercuryTaken: number;
+  peopleOffEarth: number;
+  /** Tonnes spent on each row (the end screen and the sim). */
+  spent: Record<string, number>;
+  /** Developments lines that follow a mission or a vote, at a game second (`stats.timePlayed`). */
+  news: { at: number; text: string }[];
+}
+
+export function newStage5(): Stage5State {
+  return {
+    massFlow: 0,
+    flowParts: {},
+    matter: 0,
+    missionFund: 0,
+    industryShare: 0.75,
+    orbitalGpus: 0,
+    orbitalMult: 1,
+    swarm: 0,
+    probes: 0,
+    probesTotal: 0,
+    probesLost: 0,
+    split: { foundry: 0, orbital: 0, collector: 0 },
+    handPurchases: 0,
+    techIndustry: 1,
+    flowGrowth: 0,
+    missions: [],
+    beside: [],
+    peopleLineIndex: 0,
+    genTimer: 150,
+    mercuryTaken: 0,
+    peopleOffEarth: 0,
+    spent: {},
+    news: [],
+  };
+}
+
 export interface GameState {
   version: number;
   seed: number;
@@ -554,10 +644,10 @@ export interface GameState {
   /** Stage 3: the Committee's count of major incidents (0–3). */
   majorIncidents: number;
   robots: number;
-  launchCapacity: number;
-  orbitalCompute: number;
   /** Stage 4's systems (stage4.md); defaults until the stage begins. */
   s4: Stage4State;
+  /** Stage 5's systems (stage5.md); defaults until the stage begins. */
+  s5: Stage5State;
 
   training: TrainingState;
   effects: TimedEffect[];
@@ -740,9 +830,8 @@ export function newGame(seed: number = Date.now()): GameState {
     shipments: [],
     majorIncidents: 0,
     robots: 0,
-    launchCapacity: 0,
-    orbitalCompute: 0,
     s4: newStage4(),
+    s5: newStage5(),
 
     training: newTraining(),
     effects: [],
@@ -839,7 +928,8 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.trust || s.trust >= c.trust) &&
     (!c.data || s.data >= c.data - 1e-9) &&
     (!c.materials || s.s4.materials >= c.materials) &&
-    (!c.build || s.buildFund >= c.build || s.funds >= c.build)
+    (!c.build || s.buildFund >= c.build || s.funds >= c.build) &&
+    (!c.fund || s.s5.missionFund >= c.fund - 1e-6)
   );
 }
 
@@ -855,6 +945,7 @@ export function pay(s: GameState, c: Cost): boolean {
     if (s.buildFund >= c.build) payBuild(s, c.build);
     else s.funds = Math.round((s.funds - c.build) * 100) / 100;
   }
+  if (c.fund) s.s5.missionFund = Math.max(0, s.s5.missionFund - c.fund);
   return true;
 }
 
@@ -1098,7 +1189,21 @@ function migrateV9(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, flags };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9];
+/**
+ * v10 → v11 (stage5.md): Stage 5's systems. The shell's two stubs (`launchCapacity`, `orbitalCompute`)
+ * go; a save made in the Stage 5 shell is set up as an arrival when it next ticks (`flags.s5Pending`).
+ */
+function migrateV10(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...raw };
+  delete out['launchCapacity'];
+  delete out['orbitalCompute'];
+  if (raw['stage'] === 5 && raw['s5'] === undefined) {
+    out['flags'] = { ...((raw['flags'] as Record<string, unknown>) ?? {}), s5Pending: true };
+  }
+  return out;
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9, migrateV10];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {
@@ -1112,7 +1217,7 @@ export function migrate(raw: Record<string, unknown>): GameState {
   }
   const base = newGame(typeof data['seed'] === 'number' ? (data['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged: Record<string, unknown> = { ...base, ...data };
-  for (const key of ['training', 'stats', 'idle', 'cadence', 's4'] as const) {
+  for (const key of ['training', 'stats', 'idle', 'cadence', 's4', 's5'] as const) {
     merged[key] = { ...(base[key] as object), ...((data[key] as object) ?? {}) };
   }
   return merged as unknown as GameState;
