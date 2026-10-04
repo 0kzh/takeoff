@@ -318,7 +318,8 @@ const grantButtons = new Map<string, HTMLButtonElement>();
 export function renderAlignment(s: GameState): void {
   const measured = s.alignmentApparent;
   setText('alignmentApparent', fmtNum(measured, 1));
-  setText('alignBands', measured >= 80 ? '— reassured' : measured >= 70 ? '— 80: reassured' : measured >= 55 ? (measured < 65 ? '— 55: advisories' : '') : '— advisories at every run');
+  // A band edge prints only within five points of it (the load pass: edges that are not near go).
+  setText('alignBands', measured >= 80 ? '— reassured' : measured >= 75 ? '— 80: reassured' : measured >= 55 ? (measured < 60 ? '— 55: advisories' : '') : '— advisories at every run');
   setText('alignTrue', fmtNum(s.alignmentTrue, 1));
   setText('interpretability', fmtInt(s.interpretability));
   const words = ['the weights are numbers', 'probes on the residual stream', 'probes flag single runs', 'alignment read from the weights', 'drift stops with monitors at 15%', 'neuralese is readable'];
