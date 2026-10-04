@@ -78,7 +78,8 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
     case 'c_halt':
       return has(mem, 'pause') ? [0] : [1];
     case 'c_order':
-      return has(mem, 'refuse') ? [2] : [0, 1, 2];
+      // Stage 4's order: concede, (favours, gone with money), hand over the keys, refuse.
+      return has(mem, 'refuse') ? [3] : [0, 2, 3];
     default:
       return [0, 1, 2, 3];
   }
@@ -124,6 +125,8 @@ function wanted(s: GameState, mem: BotMemory, id: string): boolean {
   if (id === 'p_monitors_scale' && (has(mem, 'no-monitors') || mem.policy === 'racer')) return false;
   if (id === 'p_nanofab' && has(mem, 'nanofab-never')) return false;
   if (id === 'p_hardened' && has(mem, 'hardened-never')) return false;
+  if (id === 'p_nano_oversight' && has(mem, 'nano-oversight-never')) return false;
+  if (id === 'p_early_warning' && has(mem, 'warning-never')) return false;
   const p = visibleProjects(s).find((x) => x.id === id);
   if (!p) return false;
   if (p.grant === true) return grantWanted(mem, id);
@@ -191,19 +194,12 @@ function botS4(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['reimage'] && rogueShare(s) >= 0.04 && reimageCooldown(s) <= 0) a.reimage(s);
 
   // The fleet: sliders by hand until the grant; then its goal.
-  if (s.revealed['fleet'] && !fleetAuto(s)) setFleet(s, a, fleetTarget(s, mem));
+  if (s.revealed['robotFleet'] && !fleetAuto(s)) setFleet(s, a, fleetTarget(s, mem));
   if (fleetAuto(s)) a.setFleetGoal(s, has(mem, 'goal-people') ? 'people' : has(mem, 'goal-treaty') || f.treaty >= 60 ? 'treaty' : 'growth');
 
   // Society: the dividend, or the held line once the model runs the transition; housing.
   if (s.revealed['ubi'] && s.flags['transitionAuto'] !== true) a.setUbiShare(s, ubiWanted(s, mem));
   if (s.flags['transitionAuto'] === true) a.setApprovalHold(s, has(mem, 'hold-25') ? 25 : 0);
-  // Housing while the approval target is below 0 (§9.1 says −20), or while the model pays a dividend to
-  // hold its line (each unit is output it no longer pays out); never out of what a wanted card needs.
-  const housingWanted = approvalTargetS4(s) < 0 || (s.flags['transitionAuto'] === true && f.ubiShare > 0);
-  const reserve = visibleProjects(s)
-    .filter((p) => wanted(s, mem, p.id) && !p.canAfford(s) && (p.cost(s).materials ?? 0) > 0 && (!p.prereq || p.prereq(s)))
-    .reduce((m, p) => Math.max(m, p.cost(s).materials ?? 0), 0);
-  if (s.revealed['housing'] && !has(mem, 'housing-never') && housingWanted && f.materials - reserve >= housingCost(s)) a.buildHousing(s, 1);
 
   // Research shares: Alignment work; Draft clauses while the treaty is under its ceiling.
   if (s.revealed['alignWork']) a.setAlignWork(s, alignWorkShare(mem));
@@ -218,6 +214,14 @@ function botS4(s: GameState, a: Actions, mem: BotMemory): void {
     if (!wanted(s, mem, p.id) || !p.canAfford(s)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
+  // Housing while the approval target is below 0 (§9.1 says −20), or while the model pays a dividend to
+  // hold its line (each unit is output it no longer pays out); after the cards, and never out of what a
+  // wanted card still needs.
+  const housingWanted = approvalTargetS4(s) < 0 || (s.flags['transitionAuto'] === true && f.ubiShare > 0);
+  const reserve = visibleProjects(s)
+    .filter((p) => wanted(s, mem, p.id) && (p.cost(s).materials ?? 0) > 0 && (!p.prereq || p.prereq(s)))
+    .reduce((m, p) => Math.max(m, p.cost(s).materials ?? 0), 0);
+  if (s.revealed['housing'] && !has(mem, 'housing-never') && housingWanted && f.materials - reserve >= housingCost(s)) a.buildHousing(s, 1);
   // A hearing whenever the agenda is empty and seats are below 8.
   if (s.revealed['hearing'] && !has(mem, 'hearings-never') && f.agenda.length === 0 && seats(s) < 8) a.holdHearing(s);
   if (s.flags['negotiateAuto'] === true) a.setStance(s, has(mem, 'stance-concede') ? 'concede' : has(mem, 'stance-hold') ? 'hold' : 'balanced');
@@ -242,7 +246,7 @@ function firstTimerS4(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.activeChoice && readModal4(s, mem)) {
     const def = choiceById(s.activeChoice.id);
     if (def) {
-      if (has(mem, 'refuse') && def.id === 'c_order') a.resolveChoice(s, 2);
+      if (has(mem, 'refuse') && def.id === 'c_order') a.resolveChoice(s, 3);
       else {
         const first = def.options.map((_, i) => i).find((i) => choiceOptionEnabled(s, def, i));
         if (first !== undefined) a.resolveChoice(s, first);

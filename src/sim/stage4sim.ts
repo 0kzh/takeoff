@@ -107,7 +107,7 @@ export interface Stage4Summary {
 /** Mechanic modals (the content table's `mechanic: true` choice rows). */
 const MECHANIC_MODALS = [...STAGE4_TABLE.filter((r) => r.kind === 'choice' && r.mechanic).map((r) => r.id), 'c_verify'];
 /** Verbs that are cards: the three exits and the halt, Verify Baiwen-4's wait, Revoke. */
-const MECHANIC_PROJECTS = ['p_concord', 'p_halt', 'p_autonomy', 'p_verify', 'p_revoke', 'p_talks'];
+const MECHANIC_PROJECTS = ['p_concord', 'p_halt', 'p_autonomy', 'p_verify', 'p_revoke', 'p_talks', 'p_last_signoff'];
 
 /** What a grant takes away, for the REMOVED → GAINED log (C27). */
 const REMOVES: Record<string, string> = {
@@ -233,8 +233,9 @@ export class Stage4Tracker {
     }
     this.prevChoice = s.activeChoice;
 
-    // The verification wait (§4.3 counts it among the mechanics).
+    // The named waits (§4.3 counts the verification wait among the mechanics): Baiwen-4's read, Concord-1's design.
     if (s.s4.baiwen === 'verifying' && !this.mechanics.some(([, n]) => n === 'verifying')) this.mechanics.push([t, 'verifying']);
+    if (typeof s.flags['concordLeft'] === 'number' && (s.flags['concordLeft'] as number) > 0 && !this.mechanics.some(([, n]) => n === 'designing')) this.mechanics.push([t, 'designing']);
     // Generations, as they land.
     while (this.gens0 < s.s4.generations) {
       this.gens0++;

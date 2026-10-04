@@ -15,7 +15,7 @@ import { approach4 } from './projects4.js';
 
 /** New panels, verbs, toggles, sliders, Stores rows and reading lines (arc G2). */
 export const MECHANIC_FLAGS_S4 = [
-  'robots', 'robotsRow', 'fleet', 'materialsRow', 'generations', 'society', 'housing', 'ubi', 'agenda', 'hearing',
+  'robots', 'robotsRow', 'robotFleet', 'materialsRow', 'generations', 'society', 'housing', 'ubi', 'agenda', 'hearing',
   'treaty', 'draft', 'fleetGoal', 'approvalTarget', 'stance', 'treatyAppetite', 'fleetChips', 'breakers', 'ashford',
   'nano', 'shutdown', 'ashfordDeaths',
 ];
@@ -105,7 +105,8 @@ export const STAGE4_TABLE: ContentRow[] = [
   flagRow('#treatyAppetite', 'treatyAppetite', {
     late: true,
     mechanic: true,
-    trigger: (s) => s.s4.talks === 'open' && s.s4.treaty >= 70,
+    // Treaty 75 %, or from 21:30 (a late row's date fallback, §4.1 item 2).
+    trigger: (s) => s.s4.talks === 'open' && (s.s4.treaty >= 75 || ts(s) >= 1290),
     prereq: (s) => s.s4.talks === 'open',
   }),
   project('p_spec4'),
@@ -127,6 +128,7 @@ export const STAGE4_TABLE: ContentRow[] = [
       s.flags['fleetChipsSaid'] = s.stats.timePlayed;
     },
   }),
+  project('p_chip_lines'),
   project('p_last_signoff'),
   project('p_interp4'),
   project('p_interp5'),

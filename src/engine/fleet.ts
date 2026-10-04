@@ -13,10 +13,21 @@ export const REPLICATE_RATE = 0.0065;
 export const BUILD_RATE = 0.5;
 export const ROBOT_TONNES = 40;
 export const GPU_TONNES = 0.02;
-/** Half the fleet on chips installs them in 4:00, all of it in 2:00. */
-export const CHIPS_SECONDS = 120;
+/**
+ * Half the fleet on chips installs them in 5:00, all of it in 2:30 (stage4.md §2.8 has 4:00 / 2:00; §9.5's
+ * chips knob: the careful bot signed before 30 minutes once Baiwen-4 came back aligned).
+ */
+export const CHIPS_SECONDS = 150;
 export const CAR_PLANT_ROBOTS = 10000;
 export const PERMITS = { start: 400000, none: 1200000, dividend: 4800000 };
+/** Treaty chips installed a second (a share of the whole): the fleet's chips share over 150 s, ×1.25 with the chip lines. */
+export function chipsRate(s: GameState): number {
+  return (s.s4.chips / CHIPS_SECONDS) * (s.flags['chipLines'] === true ? CHIP_LINES : 1);
+}
+
+/** `Treaty chip lines`: every fab prints the treaty's chip; installation ×1.25. */
+export const CHIP_LINES = 1.25;
+
 /** The People and Treaty goals take a fifth of the fleet (§2.5). */
 export const GOAL_SHARE = 0.2;
 
@@ -124,7 +135,7 @@ export function updateFleet(s: GameState, dt: number): void {
   const built = Math.max(0, Math.min(buildWant(s) * dt, f.materials / GPU_TONNES));
   f.materials -= built * GPU_TONNES;
   f.builtCompute += built;
-  if (f.chips > 0 && f.chipsInstalled < 1) f.chipsInstalled = Math.min(1, f.chipsInstalled + (f.chips / CHIPS_SECONDS) * dt);
+  if (f.chips > 0 && f.chipsInstalled < 1) f.chipsInstalled = Math.min(1, f.chipsInstalled + chipsRate(s) * dt);
   // A nanofab line outside its enclosure eats materials no one accounts for (stage4.md §5.3).
   if (f.nanoDrain > 0) f.materials = Math.max(0, f.materials - NANO_DRAIN * dt);
   f.materials = Math.max(0, f.materials);
@@ -168,7 +179,7 @@ export function idleShare(s: GameState): number {
  * is shown as `Idle`. Gone once the fleet assigns itself.
  */
 export function setFleetShare(s: GameState, job: FleetJob, pct: number): boolean {
-  if (s.stage !== 4 || !s.revealed['fleet'] || fleetAuto(s) || !Number.isFinite(pct)) return false;
+  if (s.stage !== 4 || !s.revealed['robotFleet'] || fleetAuto(s) || !Number.isFinite(pct)) return false;
   if (job === 'chips' && !s.revealed['fleetChips']) return false;
   const f = s.s4;
   const others = (['mine', 'replicate', 'build', 'chips'] as const).filter((j) => j !== job).reduce((a, j) => a + f[j], 0);
@@ -199,7 +210,8 @@ export function jobLine(s: GameState, job: FleetJob): string {
     return `+${fmtShortNum(r)} robots/s${Number.isFinite(dbl) && dbl < 3600 ? `, doubling in ${fmtClock(dbl)}` : ''}`;
   }
   if (job === 'build') return `+${fmtShortNum(builtPerSec(s))} GPUs/s`;
-  const left = s.s4.chips > 0 ? ((1 - s.s4.chipsInstalled) * CHIPS_SECONDS) / s.s4.chips : Infinity;
+  const rate = chipsRate(s);
+  const left = rate > 0 ? (1 - s.s4.chipsInstalled) / rate : Infinity;
   return Number.isFinite(left) ? `done in ${fmtClock(left)}` : 'nothing installing';
 }
 

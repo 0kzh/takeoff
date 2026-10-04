@@ -17,7 +17,7 @@ import { generationCost } from './training.js';
  * One point of progress every this many seconds (stage4.md §9.5's first knob; the as-built deltas' re-run:
  * one point in 20 s, so a lab that works the treaty signs near 30 minutes and one that does not near 36).
  */
-export const TREATY_SECONDS = 24;
+export const TREATY_SECONDS = 27;
 /** `Draft clauses`: treaty +0.2 points for each 2 % of a generation diverted (at 20 %, about half again the accrual). */
 export const DRAFT_POINTS = 0.2;
 export const DRAFT_SHARES = [0, 0.1, 0.2, 0.3];
@@ -38,6 +38,14 @@ export const AGENDA_TITLES: Record<string, string> = {
   hearing: 'a hearing',
 };
 
+/** Seconds `Design Concord-1` takes once bought: the enforcer is written, then the chips can go in. */
+export const CONCORD_DESIGN_SECONDS = 90;
+
+/** Concord-1 is designed (its card bought and its 1:30 run out). */
+export function concordDesigned(s: GameState): boolean {
+  return s.flags['concord1'] === true;
+}
+
 export function talksOpen(s: GameState): boolean {
   return s.s4.talks === 'open';
 }
@@ -54,7 +62,10 @@ export function treatyCeiling(s: GameState): { cap: number; wait: string } {
     return { cap: isBought(s, 'p_inspectors') ? 50 : 40, wait: 'waiting for verification' };
   }
   if (s.flags['termsDone'] !== true) return { cap: 60, wait: 'waiting for terms' };
-  if (!isBought(s, 'p_concord1')) return { cap: 80, wait: 'waiting for a model that can write the enforcer' };
+  if (!concordDesigned(s)) {
+    const left = counter(s, 'concordLeft');
+    return { cap: 80, wait: left > 0 ? `designing Concord-1 — ${fmtClock(Math.ceil(left))}` : 'waiting for a model that can write the enforcer' };
+  }
   return { cap: 100, wait: 'treaty chips' };
 }
 
@@ -160,6 +171,8 @@ function finishAgenda(s: GameState, id: string): void {
     s.s4.treaty = Math.max(s.s4.treaty, s.s4.treatyOpening);
     s.revealed['treaty'] = true;
     s.revealed['draft'] = true;
+    // The Treaty panel takes Geopolitics' place, the lead line with it (§2.8).
+    s.revealed['geopolitics'] = false;
     say(s, `Treaty talks open. Progress: ${fmtInt(Math.round(s.s4.treaty))}%. It will not pass 40% unverified.`);
     logNews(s, 'OpenMind\'s Committee and Beijing agree to talk. The agenda is one line.');
   } else if (id === 'terms') {
@@ -202,6 +215,16 @@ export function updateTreaty(s: GameState): void {
       say(s, 'Baiwen-5 is verified under joint monitors. The treaty moves again.');
     }
   }
+  // Concord-1's design, a named wait (1:30) once a model can write it.
+  const designing = counter(s, 'concordLeft');
+  if (designing > 0) {
+    s.flags['concordLeft'] = Math.max(0, designing - 1);
+    if (designing - 1 <= 0) {
+      s.flags['concord1'] = true;
+      say(s, 'Concord-1 is designed: one model, on sealed chips, that only enforces.');
+      logNews(s, 'A treaty is proposed. Humans are listed as a party.');
+    }
+  }
   if (f.baiwen === 'verifying') {
     f.baiwenLeft = Math.max(0, f.baiwenLeft - 1);
     if (f.baiwenLeft <= 0) {
@@ -214,7 +237,7 @@ export function updateTreaty(s: GameState): void {
     const rate = treatyRate(s);
     if (rate > 0) addProgress(s, rate);
     // The last fifth is the chips (§2.8): installed, the treaty follows them to 100.
-    if (isBought(s, 'p_concord1') && f.treaty >= 80 - 1e-9) f.treaty = Math.max(f.treaty, 80 + 20 * f.chipsInstalled);
+    if (concordDesigned(s) && f.treaty >= 80 - 1e-9) f.treaty = Math.max(f.treaty, 80 + 20 * f.chipsInstalled);
   }
   treatyWalls(s);
 }

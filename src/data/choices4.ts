@@ -211,8 +211,14 @@ export const CHOICES4: ChoiceDef[] = [
           s.s4.treaty = 0;
           s.s4.baiwen = 'unknown';
           s.revealed['treaty'] = true;
-          const st = s.projects['p_talks'];
-          if (st) st.shown = true;
+          // Both cards come back: the talks to reopen, and a fresh read of whatever Beijing brings.
+          for (const id of ['p_talks', 'p_verify']) {
+            const st = s.projects[id];
+            if (st) {
+              st.shown = id === 'p_talks';
+              st.bought = 0;
+            }
+          }
         },
       },
     ],

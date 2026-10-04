@@ -1,4 +1,5 @@
 import { GameState, newGame, ModelRecord, RivalRecord, ChoiceRecord } from '../engine/state.js';
+import { rng, seedFrom } from '../engine/rng.js';
 import { enterStage } from '../engine/stages.js';
 import { step, actions } from '../engine/tick.js';
 import { voteReady } from '../engine/oversight.js';
@@ -613,21 +614,56 @@ function stage4From(start: (seed: number) => GameState, seed: number, policy: 'b
   return s;
 }
 
+// ---------- Stage 5 starts: real Stage 4 exits (stage4.md §7.2, §9.6) ----------
+
+/**
+ * Plays Stage 4 from a Stage 4 preset with the simulator's policy until an exit fires: the state on
+ * Stage 5's first tick is a real hand-over. `5c` is `4s` played by the reasonable bot to the treaty
+ * (aligned); `5s` is `4cr` played by the first-timer to the fleet granted (misaligned).
+ */
+function stage5From(start: () => GameState, policy: 'bot' | 'naive'): GameState {
+  const s = start();
+  const mem = newBotMemory(policy);
+  for (let i = 0; i < 70 * 600 && s.stage === 4 && !s.ending; i++) {
+    policyStep(s, actions, mem);
+    step(s);
+  }
+  s.log = s.log.slice(-6);
+  return s;
+}
+
+/**
+ * A Stage 4 start is the same Stage 3 exit for every seed; `seed` seeds what Stage 4 rolls (Baiwen-4's
+ * alignment, drift, incidents), so `--seed 1…5` are five different Stage 4s from one arrival.
+ */
+function seeded(s: GameState, seed: number): GameState {
+  s.rngSeed = seedFrom(1000003 * seed + 4);
+  if (s.stage === 4) s.s4.baiwenAligned = rng(s) < 0.3;
+  return s;
+}
+
+const stage4Slow = (seed = 1) => seeded(stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow'), seed);
+const stage4Race = (seed = 1) => seeded(stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'race'), seed);
+const stage4CarelessSlow = (seed = 1) => seeded(stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'slow'), seed);
+const stage4CarelessRace = (seed = 1) => seeded(stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'race'), seed);
+
 export const PRESETS: Preset[] = [
   { stage: 1, label: 'Stage 1 start', ready: true, build: (seed) => newGame(seed) },
   { stage: 2, label: 'Stage 2 start', ready: true, build: stage2 },
   { stage: 3, label: 'Stage 3 start', ready: true, build: stage3 },
-  { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
-  { stage: 5, label: 'Stage 5 start', ready: false, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
+  { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: stage4Slow },
+  { stage: 5, label: 'Stage 5 start (aligned)', ready: true, build: () => stage5From(() => stage4Slow(1), 'bot') },
 ];
 
 /** Presets that are variants of a stage's start (`--preset 3c`, the dev overlay's second row). */
 export const EXTRA_PRESETS: Record<string, Preset> = {
   '3c': { stage: 3, label: 'Stage 3 start (careless)', ready: true, build: stage3Careless },
-  '4s': { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
-  '4r': { stage: 4, label: 'Stage 4 start (race)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'race') },
-  '4cs': { stage: 4, label: 'Stage 4 start (careless, slow)', ready: true, build: () => stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'slow') },
-  '4cr': { stage: 4, label: 'Stage 4 start (careless, race)', ready: true, build: () => stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'race') },
+  '4s': { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: stage4Slow },
+  '4r': { stage: 4, label: 'Stage 4 start (race)', ready: true, build: stage4Race },
+  '4cs': { stage: 4, label: 'Stage 4 start (careless, slow)', ready: true, build: stage4CarelessSlow },
+  '4cr': { stage: 4, label: 'Stage 4 start (careless, race)', ready: true, build: stage4CarelessRace },
+  '5c': { stage: 5, label: 'Stage 5 start (aligned: the treaty)', ready: true, build: () => stage5From(() => stage4Slow(1), 'bot') },
+  '5s': { stage: 5, label: 'Stage 5 start (misaligned: the fleet granted)', ready: true, build: () => stage5From(() => stage4CarelessRace(1), 'naive') },
 };
 
 export function presetFor(stage: number): Preset {

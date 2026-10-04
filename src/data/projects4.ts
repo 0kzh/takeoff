@@ -5,7 +5,7 @@ import { moveGov } from '../engine/world.js';
 import { seats } from '../engine/world3.js';
 import { openChoice, fireDevelopmentOnce } from '../engine/events.js';
 import { CAR_PLANT_ROBOTS, fleetAuto } from '../engine/fleet.js';
-import { talksOpen, startAgenda, agendaQueueSeconds, agendaSeconds, AGENDA_TITLES } from '../engine/treaty.js';
+import { talksOpen, startAgenda, agendaQueueSeconds, agendaSeconds, AGENDA_TITLES, CONCORD_DESIGN_SECONDS } from '../engine/treaty.js';
 import { exitStage4, ts4, at, NANO_SECONDS, moveLead4, revokeNewest } from '../engine/stage4.js';
 import { fmtClock } from '../engine/format.js';
 import { granted } from './projects3.js';
@@ -112,7 +112,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealResearch: RESEARCH_SECONDS_S4,
       description: 'The fleet assigns itself: replication ×1.25. The sliders go; a goal takes their place.',
       stages: [4],
-      trigger: (s) => ts4(s) >= 210 && s.revealed['fleet'] === true,
+      trigger: (s) => ts4(s) >= 210 && s.revealed['robotFleet'] === true,
       buy: (s) => {
         grant4(s, 'p_fleet_auto', 'Let it assign the fleet', 15);
         s.flags['fleetAuto'] = true;
@@ -125,7 +125,7 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
     agendaRow(project, 'p_talks', 'talks', 'Open treaty talks with Beijing: the Treaty panel and its progress.', {
       trigger: (s) => ts4(s) >= 270,
       urgent: (s) => s.s4.talks !== 'open' && !s.s4.agenda.some((x) => x.id === 'talks'),
-      uses: Infinity,
+      // On the agenda, the card leaves; walking away puts it back (c_verify).
       canAfford: (s) => s.s4.talks !== 'open' && !s.s4.agenda.some((x) => x.id === 'talks'),
       onShow: (s) => {
         s.revealed['agenda'] = true;
@@ -242,7 +242,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealResearch: RESEARCH_SECONDS_S4,
       description: 'Both teams read both models with the lab\'s tools: three minutes, then what Baiwen-4 wants.',
       stages: [4],
-      uses: Infinity,
       trigger: (s) => talksOpen(s) && ts4(s) >= 660,
       prereq: (s) => s.interpretability >= 3 && s.s4.baiwen === 'unknown' && s.flags['negotiateAuto'] !== true && talksOpen(s),
       needs: (s) => (s.interpretability < 3 ? 'needs interpretability 3' : s.flags['negotiateAuto'] === true ? 'the models talk directly now' : s.s4.baiwen === 'verifying' ? 'verifying' : 'needs the talks open'),
@@ -384,14 +383,16 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       title: 'Design Concord-1',
       cost: { research: 1 },
       revealResearch: RESEARCH_SECONDS_S4,
-      description: 'One model, on sealed chips, that only enforces the treaty. The treaty can pass 80%.',
+      description: 'One model, on sealed chips, that only enforces the treaty: 1:30 to write, then the treaty can pass 80%.',
       stages: [4],
       trigger: (s) => talksOpen(s) && (best(s) >= (s.flags['negotiateAuto'] === true ? 150 : 250) || at(s, 2028, 10)),
       prereq: (s) => talksOpen(s) && best(s) >= (s.flags['negotiateAuto'] === true ? 150 : 250) - 1e-9,
       needs: (s) => `needs a ${s.flags['negotiateAuto'] === true ? 150 : 250}× model`,
-      buy: () => undefined,
-      consoleMsg: 'Concord-1 is designed: one model, on sealed chips, that only enforces.',
-      logMsg: 'A treaty is proposed. Humans are listed as a party.',
+      // A named wait (§2.8 has none): the enforcer takes 1:30 to write, and the chips wait for it.
+      buy: (s) => {
+        s.flags['concordLeft'] = CONCORD_DESIGN_SECONDS;
+      },
+      consoleMsg: 'Designing Concord-1 — 1:30. One model, on sealed chips, that only enforces.',
     }),
     project({
       id: 'p_autonomy',
@@ -405,6 +406,20 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       buy: (s) => {
         exitStage4(s, 'granted');
       },
+    }),
+    project({
+      id: 'p_chip_lines',
+      title: 'Treaty chip lines',
+      cost: { materials: 1 },
+      revealMaterials: 60,
+      description: 'Every fab on both sides prints the treaty\'s chip: installation ×1.25.',
+      stages: [4],
+      // The last fifth's own card (stage4.md §9.5: a hole after minute 27 wants a late row), halfway through the chips.
+      trigger: (s) => s.s4.chipsInstalled >= 0.4,
+      buy: (s) => {
+        s.flags['chipLines'] = true;
+      },
+      consoleMsg: 'Every fab on both sides now prints the treaty\'s chip. Installation ×1.25.',
     }),
     project({
       id: 'p_last_signoff',

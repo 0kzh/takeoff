@@ -237,8 +237,9 @@ function landGeneration(s: GameState): void {
     moveLead4(s, 0.1);
   }
   if ((s.monitorShare ?? 0) >= 0.15 - 1e-9) s.alignmentTrue = clamp100(s.alignmentTrue + 1);
-  // Measured alignment's bottom band (§2.11): under 55, each generation costs relations 2.
-  if (s.alignmentApparent < 55) moveGov(s, -2);
+  // Measured alignment's bottom band (§2.11): under 55, a generation nobody read costs relations 2 (a
+  // lab that reads each one first keeps the Committee's ear while its number climbs).
+  if (s.alignmentApparent < 55 && !g.verified) moveGov(s, -2);
   s.flags['graphDirty'] = true;
   const rung = S4_RUNGS.find((x) => before < x - 1e-9 && g.capAfter >= x - 1e-9);
   const read = g.verified ? 'Read first.' : 'Nobody read it.';
@@ -447,7 +448,7 @@ export function revokeNewest(s: GameState): void {
     s.flags['fleetAuto'] = false;
     s.s4.techRep /= 1.25;
     s.revealed['fleetGoal'] = false;
-    s.revealed['fleet'] = true;
+    s.revealed['robotFleet'] = true;
   } else if (id === 'p_transition_auto') {
     s.flags['transitionAuto'] = false;
     s.revealed['approvalTarget'] = false;
@@ -531,8 +532,8 @@ export function stage4Slow(s: GameState): void {
     addMajorIncident(s, due);
   }
   const fleetAt = s.flags['fleetAt'];
-  if (typeof fleetAt === 'number' && s.stats.timePlayed >= fleetAt && !s.revealed['fleet']) {
-    s.revealed['fleet'] = true;
+  if (typeof fleetAt === 'number' && s.stats.timePlayed >= fleetAt && !s.revealed['robotFleet']) {
+    s.revealed['robotFleet'] = true;
     s.revealed['materialsRow'] = true;
     say(s, 'The fleet has three jobs: mine, replicate, build.');
   }
@@ -594,7 +595,7 @@ export function enabledPurchasesS4(s: GameState): string[] {
 
 /** The Stores row for treaty chips and the fleet's chips job, once Concord-1 is designed and the treaty is at 80 %. */
 export function chipsOpen(s: GameState): boolean {
-  return isBought(s, 'p_concord1') && s.s4.treaty >= 80 - 1e-9;
+  return s.flags['concord1'] === true && s.s4.treaty >= 80 - 1e-9;
 }
 
 /** What the materials row's rate reads: `+12,400 t/s`. */
