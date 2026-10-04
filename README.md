@@ -5,10 +5,12 @@ An incremental browser game about an AI lab racing to superintelligence, in the 
 modals). You run OpenMind from July 2025: complete tasks, bill them, rent GPUs, hire researchers,
 train and release Sage models, and watch the world react in the margin.
 
-Phase 1 ships the full architecture and **Stage 1 — The Startup** (about 27–31 minutes). Its last
-third is the Abilene site ladder — reserve the site, wait out the interconnect queue, build the
-substation, break ground — and breaking ground opens a working seed of Stage 2's Infrastructure
-panel. The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the
+Built so far: the full architecture, **Stage 1 — The Startup** (about 27–31 minutes) and
+**Stage 2 — Scale** (about 37–41 minutes). Stage 1's last third is the Abilene site ladder;
+breaking ground opens Stage 2, where OpenMind owns its datacenters: GPU lots, power plants and an
+interconnect queue, an AUTO-priced market, data, two training pipelines, rivals, government,
+public approval, security and an alignment number nobody can see. `Let Sage-3 write the code`
+ends it and opens the Stage 3 shell (narrated arrival; Stage 3's content is not built yet). The design lives in `docs/design.md` and the stage plan in `docs/stages.md` (where the
 two differ, `docs/stages.md` and the code win).
 
 ## Running it
@@ -26,7 +28,8 @@ npm run watch        # in a second terminal: recompile on save
 | `npm run serve` | zero-dependency static server (`scripts/serve.mjs`) on port 8731, `Cache-Control: no-store` |
 | `npm run dev` | build, then serve |
 | `npm run sim -- --minutes 45 --seed 1` | build, then run the headless simulator |
-| `node tools/verify/smoke.mjs` | browser smoke test (after `npm run build`; needs `npm install` in `tools/`) |
+| `node tools/verify/smoke.mjs` | Stage 1 browser smoke test (after `npm run build`; needs `npm install` in `tools/`) |
+| `node tools/verify/smoke-stage2.mjs` | Stage 2 browser smoke test, from the Stage 2 preset through the Stage 3 arrival |
 
 The browser loads `dist/main.js` as a native ES module, which is why every TypeScript import uses
 an explicit `.js` extension. `dist/` is gitignored.
@@ -127,13 +130,19 @@ dropped). Open it with `openChoice(s, id, context)` or from a development. Modal
 150 s apart (`MODAL_SPACING`); later ones wait in `choiceQueue`. A modal the player's own click
 causes (`PLAYER_MODALS`: the open-issues confirm, Sage-2) opens at once. Stage 1's modals are a
 calendar of dated developments about 3¼ minutes apart, plus the training gamble when it fits. The
-game does not pause while a modal is open.
+game does not pause while a modal is open, and neither does the page: the event panel catches no
+clicks outside itself, takes keyboard focus when it opens, and Escape takes a timed modal's
+default (an untimed one ignores it). From Stage 2 each option prints its effect and cost under
+its label (`line` in `data/choices.ts`); a greyed option says what it needs (`needs`, or its
+price).
 
 ## Dev overlay
 
 Open with the backtick key or `?dev=1`. The fixed bottom-right panel has:
 
-* **Stage 1–5**: load a preset. Stages 1 and 2 are hand-tuned; 3–5 load the Stage 2 preset and say `preset pending`.
+* **Stage 1–5**: load a preset. Stage 2 is the simulator's median Stage 1 state at Break ground,
+  run through the arrival; Stage 3 is the median Stage 2 exit (bot, seeds 1–5; seed 4's records)
+  run through the Stage 3 arrival; 4–5 load the Stage 3 preset and say `preset pending`.
 * **Speed ×1/×5/×20**, plus **Autoplay** (the simulator's bot plays in the browser).
 * `?seed=N` in the URL starts a reproducible new game when there is no save.
 * **+$, +Research, +Insight, +Compute, +Power, +Trust, Finish training, Fire event ▾**.
@@ -161,8 +170,8 @@ for project buttons, `choice-<choiceId>-<n>` for modal options, `dev-*` for the 
 
 ## Saving
 
-`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 3; version-1
-and version-2 saves are migrated on load). The game saves every 15 s,
+`localStorage["takeoff.save.v1"]` holds the whole `GameState` as JSON (`SAVE_VERSION` 4; versions
+1–3 are migrated on load). The game saves every 15 s,
 about 250 ms after any player action, and when the tab is hidden or closed. A `saved.` toast shows
 at most once every 30 s. Timers (training, red-team cooldown, choice countdowns) are stored as
 remaining seconds, so a reload cannot skip them. There is no offline progress. `migrate()` upgrades
@@ -177,7 +186,16 @@ npm run sim -- --minutes 45 --seed 2 --policy naive     # the critic's scripted 
 npm run sim -- --minutes 45 --seed 2 --policy greedy    # the same, renting whenever it can and never saving
 npm run sim -- --minutes 45 --seed 1 --json             # one machine-readable summary line
 npm run sim -- --minutes 60 --stop-at-stage 2
+npm run sim -- --minutes 60 --preset 2 --stop-at-stage 3   # Stage 2 from its preset
+npm run sim -- --minutes 60 --preset 2 --variant modals-worst --json
 ```
+
+`--preset N` starts from the dev overlay's Stage N preset (2: the Stage 1 median at Break ground;
+3: the Stage 2 median exit). `--variant` plays the bot with one Stage 2 decision fixed:
+`modals-best` / `modals-worst` (the most careful- or reckless-looking answer to every modal),
+`redteam-never`, `slider-N` (copies on research fixed at N %), `safety-0` / `safety-2` (Safety
+runs), `gulf-sign` / `gulf-domestic`, `auto-off` (AUTO pricing off on arrival, price never
+touched).
 
 Three policies play through `actions` only:
 
@@ -204,6 +222,17 @@ every gap over 120 s,
 worst 5-minute window, Stage 1 idle rescues (and any at 0 tasks), and soft-lock stretches (60 s+
 without production in Stage 1). `--json` prints the summary only, as one line.
 
+In Stage 2 the bot follows `stage2.md` §9.1 (modals; free and cheap cards; the binding wall —
+power, then room; training once the cluster gives 72 % of the compute wanted; cards in table
+order with the next run's money kept; GPU lots until the Standing order; Trust; the slider at
+20 %), naive and greedy §9.2 (every affordable card, every enabled Infrastructure button top to
+bottom, greedy five times over). The Stage 2 summary block adds the A1–A19 acceptance numbers
+(duration, reveal and mechanic gaps, training intervals, governor pulls, modals, visible cards and
+queue waits, first power / datacenter / AI assistants, GPU presses before the Standing order,
+5-minute marks), the reveal → purchase latency per card (median and the share bought within 10 s),
+the modal answers, and the exit state (capability, alignment true / apparent, government,
+approval, lead, funds, security level).
+
 Stage 1 targets (seeds 1–5): transition 25:00–35:00 (bot) / 26:00–40:00 (naive) / ≤ 40:00
 (greedy), longest reveal gap ≤ 180 s, ≤ 60 Buy Power presses and ≤ 10 in any 5 minutes,
 capability 1.5–1.8× at the transition, no run below 0.3 yield, 7–9 modals and never two
@@ -223,3 +252,16 @@ it), the reveal order and staggering, numeric-token counts at minutes 0/1/3/5/10
 reload during a training run, the transition narration and arrival, no horizontal overflow at
 390 px, and no page or console errors through the Stage 2 arrival. Screenshots go to
 `agent-tools/shots/stage1/` (gitignored); it exits non-zero on any failure.
+
+```sh
+node tools/verify/smoke-stage2.mjs [--policy naive] [--seed 1]
+```
+
+Loads the Stage 2 preset and plays it under autoplay to the Stage 3 arrival. It checks the arrival
+(five narration lines held whole for 10 s, revenue above the pre-arrival figure 30 s in, no
+backlog), no Stage 1 diagnosis line, the Stores rows and a hover breakdown, the capability graph
+drawn, every Stage 2 panel appearing, the event panel (an effect line on every option, keyboard
+focus inside it, the page behind still clickable, Escape taking a timed default), save → reload
+mid-run, mid-interconnect-queue and mid-cooldown, numbers / controls / words on screen at each
+5-minute mark against `stage2.md` §6.3, the Stage 3 narration and dev overlay, the Stage 3 preset,
+and 390 px without horizontal overflow. Screenshots go to `agent-tools/shots/stage2/`.

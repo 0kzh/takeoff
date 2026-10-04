@@ -280,7 +280,14 @@ export function buildDatacenter(s: GameState): boolean {
 export const GAS_BASE = 60000;
 
 export function gasCost(s: GameState): number {
-  return s2(GAS_BASE * Math.pow(1.7, s.gasPlants));
+  return threeFigures(s2(GAS_BASE * Math.pow(1.7, s.gasPlants)));
+}
+
+/** A price to three significant figures: `$560,000`, not `$560,082`. */
+function threeFigures(x: number): number {
+  if (x <= 0) return 0;
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(x)) - 2));
+  return Math.round(x / unit) * unit;
 }
 
 function queued(s: GameState, kind: PowerOrder['kind']): PowerOrder[] {

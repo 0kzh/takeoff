@@ -94,53 +94,50 @@ when you buy **Break ground**. The console keeps its last four lines and prints,
 
 ## Stage 2 — Scale
 
-The second stage is where most of the game's systems arrive, and it is the easiest to mess up. OpenMind owns datacenters now. You manage **Power** as a capacity (MW) against the draw of your **Compute**, and **Data** against the appetite of your **training runs**. **Copies** are split between completing tasks and doing research with the **Allocation** slider — the beginning of the end for your human researchers, whose share of research is printed every second. The **Capability graph** appears when three versions have been released and shows **Anthrosoft** and **Baiwen** too. **Security**, **Government Relations**, and **Public Approval** meters appear and begin to matter. The **Stats** panel pops in late in the stage.
+*As built (`docs/specs/stage2.md` is the spec; the code wins where they differ). Times are the reasonable bot's, seeds 1–5 from the Stage 2 preset: the stage runs **38:45–40:52**; the first-timer (`--policy naive`) takes 37:40–41:00.*
+
+OpenMind owns its datacenters. Compute is bought in lots and needs **room** (datacenters) and **power** (plants, some of them behind an **interconnect queue**). The market is priced on **AUTO**: it falls to clear what the copies make, so revenue grows with the square root of supply until a better model or a wider market lifts it. From the second run, training wants **data** as well as research and money, and the public web runs out. Copies are split between tasks and research with a **slider**, and the human share of research falls toward nothing. The world arrives as meters: **Government**, **Public** (approval, jobs), **Security**, and an **alignment** number that is measured, not known.
 
 ### What changes on screen
 
-*Removed:* Buy Power (kWh), Rent GPU.
-*Added:* **Infrastructure** (Datacenters, Power plants, chips), **Data**, **Allocation** slider (after *AI research assistants*), **Capability** graph (3 releases), **Government**, **Public**, **Security** (after the first theft warning), **Stats** (after *Dashboard*).
+*Removed on arrival:* Buy Power (kWh), Rent GPU, Compute, the Abilene site ladder, Custom model contracts (the signed ones keep paying a fixed rate).
+*Added on arrival:* **Stores** (A Dark Room's box: funds, research, insight, Trust, GPUs, power, copies, data; hover any row for its sources and sinks per second), the rebuilt **Infrastructure** panel, **AUTO** pricing.
+*Added later, in this order (typical):* gas turbines 2:00 · capability graph 2:00 · datacenters 3:00 · solar 3:15 · the research slider 3:45 · keep-internal releases ~7:00 · Government 10:00 · Public 13:30 · Security 15:00 · nuclear and the interconnect queue ~19–21 · second pipeline ~20 · job-transition fund ~24 · Security level 3 ~26 · alignment compute ~27 · Stats ~28 · shared evaluations ~32 · the G6 pre-order ~36.
 
-### Resources introduced
+### The economy (as built)
 
-Power as MW capacity · Compute as owned GPUs with a Nimbus chip generation · Data (tokens) · Capability (graph) · Alignment (apparent) · Security Level · Government Relations · Public Approval · Jobs Displaced · Lead over Baiwen.
-
-### The economy
-
-* Datacenter: `$250k × 1.5^n`, +10,000 GPU capacity, draws 10 MW at full. GPUs are bought in batches of 1,000 at a chip price that falls each generation. Compute sits idle if MW < draw: `Power-limited: 61 % of GPUs active`.
-* Power plants: Gas (+100 MW, fast, −approval), Solar+storage (+50 MW, cheap, slow), Nuclear PPA (+500 MW, 2026-late), Gulf site (+1 GW, cheap, Iran exposure).
-* Grid interconnect queue: a cooldown timer of 3 real minutes between plant completions unless you buy *Behind-the-meter* ($).
-* Data: web crawl 15T (finite), licensing ($0.5M per T), synthetic data from research copies. Each training run consumes `D(n) = 2T × 1.3^n`.
-* Training now costs research, funds, data, and a chosen share of compute.
-* Distillation project: a "mini" release — 4 copies per GPU at 60 % capability — that mirrors UP's MegaClipper moment and makes revenue jump.
+* **GPUs** in lots of 1,000 / 5,000 / 25,000 at $95 per G4 ($209 per G5 after the *Nimbus G5 order*), cut to the room and power left; the *Standing order* (shown after five lots) buys them automatically and keeps the next run's money. Each GPU draws 1 kW.
+* **Datacenters**: 10k, 15k, 25k, 50k … slots for $0 (Abilene), $285k, $1.5M, $3.8M … ; the button names its slots.
+* **Power**: gas +20 MW at once ($114k, ×1.7 each); solar +50 MW after 3:00 in the interconnect queue (0:30 behind the meter; two at a time); nuclear +500 MW in 2:00; Al-Marsa +1,000 MW in 2:00, priced at a minute of revenue when the offer opens.
+* **Market**: customers take `market × (0.25 / price)²` tasks a second; AUTO walks the price to clear output plus a thirtieth of the backlog. `Market flooded` names the fall; a manual price above the market prints the share billed and the clearing price, and finance puts AUTO back after five minutes.
+* **Research**: researchers (capped by capability) plus `10 × √(copies on research) × capability^1.5` from the copies; the slider runs 5–50 %. The lab's capacity grows with the Research cluster, Experiment scheduler and Checkpoint farm (×4 each); insight trickles in below capacity.
+* **Training**: research, funds and (from the second run) data, `1.5 T × (capability / 1.6)³`; the whole fleet trains; 45–120 s; a second pipeline after *Parallel pipelines*. Eleven or twelve runs, a start every ~3:25, capability 1.64× → 4.0–4.2×.
+* **Data**: the web crawl (15 T, once), the publishers (licence +10 T, fight +5 T and a lawsuit, or write your own), synthetic data from research copies, the code hosts (+20 T), the archives (+40 T), the flywheel (0.6 T per billion tasks). The data wall arrives around minute 13–20.
+* **Cards**: most cost at least a minute or a minute and a half of the revenue at the moment they appear (fixed then), so they stand as goals: the bot buys a card a median 6–8 minutes after it shows, the first-timer 3½–4½; up to seven cards on screen.
 
 ### Developments (world)
 
-`Jan 2026 — Sage models write a fifth of the code at Fortune 500 companies.` · `Apr 2026 — Beijing designates Baiwen the national champion. The Lanzhou CDZ begins construction.` · `Jul 2026 — Anthrosoft releases a competing agent. Your demand falls.` · `Sep 2026 — Junior developer postings down 40 %.` · `Nov 2026 — 10,000 march in Austin. One datacenter's fence is cut.` · `Dec 2026 — Baiwen is believed to be six months behind.`
+Stage 2's calendar (`data/developments.ts`) runs from `Feb 2026 — Sage models write a fifth of the code at Fortune 500 companies.` to `Baiwen is believed to be … months behind.`, with the Senate hearing, Lanzhou, the open-weights model, junior postings, the heat wave (curtailment), the Gulf offer, the Pentagon, the capex line, the protest and the billion-task milestone between.
 
 ### Crises
 
-Jailbreak scandal (release with issues) · first **weights-theft attempt** (warning, then the real thing in Stage 3 unless SL ≥ 3) · the first **riot** if approval < −40.
+Incidents from issues shipped un-red-teamed (approval and measured alignment down) · the publishers' lawsuit (data deleted) · curtailment in the heat (spared by solar or behind-the-meter) · the Abilene protest · the subpoena · the advisory · riots at very low approval.
 
-### Choices
+### Choices (8–9 per stage, ≥ 150 s apart)
 
-*Release Sage-2 publicly or keep it internal.* · *Build in the Gulf.* · *Accept the defense contract.*
-
-### Projects (Stage 2)
-
-Datacenter · Nimbus G5 order · Gas turbines · Solar + storage · Grid interconnect / Behind-the-meter · Nuclear PPA · Gulf site: Al-Marsa · Web crawl · License publishers · Synthetic data · Data flywheel · Parallel Pipelines · Distillation · Automated evals · AI research assistants · Security SL2 · Security SL3 · Hire a policy team · Brief the administration · Defense contract · Free tier for students · Job-transition fund · Dashboard · Series B.
+*Release Sage-2* (public or internal) · *A Senate Hearing* · *The Publishers* · *A Month of Evals* · *Al-Marsa* · *The Pentagon Calls* · *4 a.m.* (the theft warning) · *A Joint Statement* · the training gamble (once). Each option prints its effect and cost on the button. Measured over seeds 1–3: the careful answers end the stage with approval 15–20 points higher, the lead a month shorter and true alignment 5–8 higher than the reckless ones; never red-teaming costs 12 points of measured alignment and 4–5 incidents; no Safety runs cost 8 points of true alignment; copies at 50 % on research add 3–9 minutes; Al-Marsa costs 11 points of government relations.
 
 ### Stage 2 ends
 
-when a released model's capability reaches **4×** (superhuman coder). The console goes black for two seconds, then: `Sage-3 writes better code than anyone at OpenMind.` The **Marketing** button and **Hire Researcher** disappear (hype is now automatic; nobody is hiring). The date snaps to **Jan 2027**.
+with `Let Sage-3 write the code` — pinned from 2.8× (14–19 minutes before the end), bought once a released model reaches 4×. The console narrates the Stage 3 arrival (`Sage-3 writes better code than anyone at OpenMind.`); marketing, hiring, the price buttons, gas and solar leave; Alignment arrives.
 
 ### Strategy
 
-* Power first, then GPUs. A datacenter with no plant is a monument.
-* Put 20–30 % of copies on research as soon as *AI research assistants* lands; the human share will fall below 50 % within five minutes and you should let it.
-* Buy Security SL2 and SL3 before Dec 2026. If you don't, Stage 3 opens with Baiwen at your capability.
-* Turn down the Gulf site unless you are willing to lose it.
-* Red-team every release. Incidents now cost Government Relations, which you will need.
+* Power before GPUs, room before power runs out: the reason line under the GPU button says which wall is next.
+* Leave AUTO on. The price falls; watch revenue.
+* Put 10–20 % of copies on research once the assistants land; more starves revenue.
+* License the archives early if you can; the data wall decides the middle of the stage.
+* Red-team every release. Incidents cost approval and the alignment the world can see.
 
 ---
 

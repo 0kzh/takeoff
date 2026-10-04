@@ -26,7 +26,7 @@ export const MECHANIC_GOVERNOR_SECONDS = 240;
 
 /** Projects on screen at once (rescues, urgent fixes and the stage goal not counted). */
 export function maxVisible(s: GameState): number {
-  return s.stage === 1 ? 4 : 8;
+  return s.stage === 1 ? 4 : 7;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {

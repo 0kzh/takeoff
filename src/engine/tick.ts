@@ -199,7 +199,13 @@ function researchWall(s: GameState): void {
       say(s, `Research at capacity. ${want.what} needs ${fmtInt(want.amount)}. ${fix}`);
     }
   } else if (s.insightUnlocked) {
-    say(s, 'Research at capacity — insight accrues.');
+    if (s.stage < 2) {
+      say(s, 'Research at capacity — insight accrues.');
+    } else if (s.stats.timePlayed - ((s.flags['capLineAt'] as number) ?? -999) >= 120) {
+      // Stage 2: the cap moves with every room; the line carries its number, at most every 2 minutes.
+      s.flags['capLineAt'] = s.stats.timePlayed;
+      say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
+    }
   }
 }
 

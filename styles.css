@@ -205,7 +205,9 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .projectButton {
   display: block;
   width: 275px;
-  height: 60px;
+  /* UP's 60 px card, grown when a title and its price wrap (no clipped description). */
+  min-height: 60px;
+  height: auto;
   background: #c8c8c8;
   border: 1px solid #000;
   outline: none;
