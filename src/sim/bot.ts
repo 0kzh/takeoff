@@ -14,8 +14,9 @@ import {
 import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
 import { trainCost, canStartTraining, gpusShort, trainSlotFree } from '../engine/training.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.js';
-import { PRESETS } from '../data/presets.js';
+import { presetByKey } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
+import { Stage3Tracker, Stage3Summary, printStage3 } from './stage3sim.js';
 
 /** The only Node global the sim needs; avoids a dependency on @types/node. */
 declare const process: { argv: string[]; exitCode?: number };
@@ -27,21 +28,21 @@ interface Args {
   json: boolean;
   policy: PolicyName;
   stopAtStage: number;
-  preset: number;
+  preset: string;
   variant: string;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { minutes: 60, seed: 1, quiet: false, json: false, policy: 'bot', stopAtStage: 0, preset: 1, variant: '' };
+  const args: Args = { minutes: 60, seed: 1, quiet: false, json: false, policy: 'bot', stopAtStage: 0, preset: '1', variant: '' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = argv[i + 1];
     if (k === '--minutes' && v) args.minutes = Number(v);
     if (k === '--seed' && v) args.seed = Number(v);
     if (k === '--stop-at-stage' && v) args.stopAtStage = Number(v);
-    if (k === '--preset' && v) args.preset = Number(v);
+    if (k === '--preset' && v) args.preset = v;
     if (k === '--variant' && v) args.variant = v;
-    if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy' || v === 'trainfirst')) args.policy = v;
+    if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy' || v === 'trainfirst' || v === 'racer' || v === 'cautious')) args.policy = v;
     if (k === '--quiet') args.quiet = true;
     if (k === '--json') args.json = true;
   }
@@ -112,6 +113,8 @@ export interface Summary {
   choices1: string[];
   /** Stage 2 block (null when the run never reached Stage 2). */
   s2: Stage2Summary | null;
+  /** Stage 3 block (null when the run never reached Stage 3). */
+  s3: Stage3Summary | null;
 }
 
 export interface ExitState1 {
@@ -343,8 +346,8 @@ function markOf(s: GameState, t: number): Mark {
 }
 
 export function simulate(args: Args): SimResult {
-  const preset = PRESETS[Math.max(1, args.preset) - 1];
-  const s = args.preset > 1 && preset ? preset.build(args.seed) : newGame(args.seed);
+  const preset = presetByKey(args.preset);
+  const s = args.preset !== '1' && preset ? preset.build(args.seed) : newGame(args.seed);
   const mem = newBotMemory(args.policy, false, args.variant);
   const lines: string[] = [];
   const milestones: Record<string, number> = {};
@@ -429,6 +432,7 @@ export function simulate(args: Args): SimResult {
   let lastCapAt = s.stats.timePlayed;
   let longestRelease = 0;
   let longestReleaseAt = 0;
+  const t3 = new Stage3Tracker();
   const tracked = new Proxy(actions, {
     get(target, prop: string) {
       const fn = (target as unknown as Record<string, (...args: unknown[]) => unknown>)[prop];
@@ -514,6 +518,7 @@ export function simulate(args: Args): SimResult {
     }
     policyStep(s, tracked, mem);
     step(s);
+    t3.tick(s, actionTimes);
     const t = s.stats.timePlayed;
     // Stage 1: a free slot with Train blocked by the GPU requirement (owner feedback U1's measure).
     if (s.stage === 1) {
@@ -960,6 +965,7 @@ export function simulate(args: Args): SimResult {
     exitState1: s1Snap,
     choices1: s1Choices,
     s2,
+    s3: t3.summary(s, actionTimes),
   };
   return { state: s, milestones, idleGaps, lines, summary };
 }
@@ -1045,7 +1051,7 @@ function main(): void {
   }
   const m = result.milestones;
   const fmt = (k: string) => (m[k] !== undefined ? fmtClock(m[k]!) : '—');
-  if (args.preset <= 1) {
+  if (args.preset === '1') {
     console.log(`\n== Stage 1 milestones (policy ${args.policy}, seed ${args.seed}) ==`);
     console.log(`first GPU                ${fmt('firstGpu')}   (target ≤ 0:20)`);
     console.log(`Research panel           ${fmt('reveal:research')}`);
@@ -1074,6 +1080,7 @@ function main(): void {
     if (sum.choices1.length) console.log(`modal answers            ${sum.choices1.join(', ')}`);
   }
   if (sum.s2) printStage2(sum.s2);
+  if (sum.s3) printStage3(sum.s3, args.policy);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
 }
 

@@ -14,13 +14,14 @@ import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
+import { stage3Step, S3Memory } from './policy3.js';
 
 /**
  * `trainfirst` mirrors the critic harness's first-timer (tools/critic/games/takeoff*.mjs): it trains
  * whenever Train is enabled, holds the GPU/marketing drip while a big funds goal is on screen, buys
  * every other affordable thing, and in Stage 2 buys infrastructure by the lot row's reason.
  */
-export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst';
+export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
 
 
 export interface BotMemory {
@@ -46,6 +47,8 @@ export interface BotMemory {
   variant: string;
   /** Leave the stage-ending purchase (Break ground) to the player (the browser smoke test clicks it). */
   holdTransition: boolean;
+  /** Stage 3 bookkeeping (sim/policy3.ts). */
+  s3?: S3Memory;
 }
 
 export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false, variant = ''): BotMemory {
@@ -88,11 +91,28 @@ function readModal(s: GameState, mem: BotMemory): boolean {
 
 /** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
+  if (s.stage >= 3) {
+    stage3Step(s, a, mem);
+    return;
+  }
+  // `racer` and `cautious` are Stage 3 temperaments: before it they play the reasonable bot.
+  const real = mem.policy === 'racer' || mem.policy === 'cautious' ? 'bot' : mem.policy;
   if (s.stage >= 2) {
     // The first-timers follow the critic harness's Stage 2 rules (infrastructure by the lot row's
     // reason; every other enabled purchase); greedy presses the lots five times a pass.
-    if (mem.policy === 'bot') botStepS2(s, a, mem);
-    else trainfirstStepS2(s, a, mem);
+    if (real === 'bot') {
+      const was = mem.policy;
+      mem.policy = 'bot';
+      botStepS2(s, a, mem);
+      mem.policy = was;
+    } else trainfirstStepS2(s, a, mem);
+    return;
+  }
+  if (real !== mem.policy) {
+    const was = mem.policy;
+    mem.policy = real;
+    stage1Step(s, a, mem);
+    mem.policy = was;
     return;
   }
   stage1Step(s, a, mem);
