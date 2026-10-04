@@ -2,7 +2,7 @@ import type { GameState } from '../engine/state.js';
 import { dateLabel, fmtNum } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { baiwenAt, leadWords, leadBandNote } from '../engine/world.js';
-import { byId, setText, showId } from './dom.js';
+import { byId, setText, setTitle, showId } from './dom.js';
 
 /**
  * The capability graph (stage2.md §3): capability relative to a human researcher on a log axis,
@@ -107,8 +107,9 @@ export function renderGraph(s: GameState): void {
     ? 'The Committee votes'
     : goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label === 'country of geniuses' ? 'a country of geniuses' : rung.label === 'superhuman AI researcher' ? 'superhuman AI researcher' : rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`;
   setText('nextTier', next);
-  const band = leadBandNote(s);
-  setText('leadLine', `Baiwen: ${leadWords(s)}${band ? ` — ${band}` : ''}`);
+  setText('leadLine', `Baiwen: ${leadWords(s)}`);
+  // What the lead's band does (exports, relations) is in the line's hover.
+  setTitle('leadLine', leadBandNote(s));
   // The Stats panel takes the lead over once it exists; the line under the graph goes.
   showId('leadLine', s.revealed['stats'] !== true);
 

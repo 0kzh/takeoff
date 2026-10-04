@@ -9,7 +9,7 @@ import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
   lotSizes, lotFits, lotCostOf, datacenterReason, plantReason,
 } from './infrastructure.js';
-import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun, delayNote } from './training.js';
+import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
 import { stageDef, mechanic, mechanicClear } from './stages.js';
@@ -409,10 +409,7 @@ export function optionLabel(s: GameState, opt: ChoiceOption): string {
 /** Stage 2 on: the option's effect and cost, printed under its label (`+10 T data · $675k`). */
 export function optionLine(s: GameState, opt: ChoiceOption): string {
   const ctx = s.activeChoice?.context ?? {};
-  const line = (typeof opt.line === 'function' ? opt.line(s, ctx) : opt.line) ?? '';
-  // A priced answer prints what it costs the waiting run (arc G34 rule 3).
-  const cost = optionCost(s, opt);
-  return cost && canPay(s, cost) ? `${line}${delayNote(s, cost)}` : line;
+  return (typeof opt.line === 'function' ? opt.line(s, ctx) : opt.line) ?? '';
 }
 
 /** A greyed option says what it needs: its own words, or the price it cannot pay. */

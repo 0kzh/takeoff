@@ -29,8 +29,10 @@ div[data-reveal].shown, .panel.shown { display: block; }
 .hiddenIds { display: none; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
-#buyPowerRow, #copiesRow, #priceHint, #hypeLevelLine, #trainGpuLine, #trainGpuMeter, #capabilityPart { display: none; }
-#buyPowerRow.shown, #copiesRow.shown, #priceHint.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #trainGpuMeter.shown, #capabilityPart.shown { display: inline; }
+#buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #trainGpuMeter, #capabilityPart, #gasMW, #solarMW, #nuclearMW { display: none; }
+#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown, #gasMW.shown, #solarMW.shown, #nuclearMW.shown { display: inline; }
+/* A bar keeps its box when it is shown (as an inline it collapsed to an empty frame). */
+#trainGpuMeter.shown { display: inline-block; }
 /* The first render after a load restores the screen; only later reveals fade in. */
 body.boot * { animation: none !important; }
 #marketState { white-space: nowrap; }
@@ -182,7 +184,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   font-weight: bold;
 }
 
-/* ADR cooldown: a #DDDDDD bar drains behind the label. */
+/* ADR cooldown: the training bar drains behind the label. */
 .cooldown {
   position: relative;
   overflow: hidden;
@@ -194,9 +196,18 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   top: 0;
   bottom: 0;
   width: 0;
-  background: #ddd;
+  background: #888;
 }
 .cooldownLabel { position: relative; }
+/* While it cools the button is the training bar: black border, white track, gray fill. */
+.cooldown.cooling, .cooldown.cooling:hover, .cooldown.cooling:active {
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 0;
+  box-shadow: none;
+  text-shadow: none;
+  opacity: 1;
+}
 
 /* ---------- projects (UP .projectButton) ---------- */
 
@@ -227,34 +238,33 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
 .projectButton.rescue { border-style: dashed; }
 .projectButton.pinned { border-width: 2px; }
-/* Needed now: a wall's answer or a card the stage cannot go on without (arc G31). */
-.projectButton.urgent { border-left: 5px solid #000; }
-.projectButton.urgent .projectTitle::after { content: ' — needed'; font-weight: normal; font-style: italic; }
-/* A card the lab cannot hold says so (`needs a lab that holds 2,000 — Expand Lab`); First Datacenter's status lines. */
+/* Needed now: a wall's answer or a card the stage cannot go on without (arc G31). Stages 1–2 draw their
+   cards as they were first built (plain, dashed for a rescue, heavier for a pinned goal); the mark is
+   Stage 3's and later. */
+body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent { border-left: 5px solid #000; }
+body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectTitle::after { content: ' — needed'; font-weight: normal; font-style: italic; }
+/* A Stage 5 mission says what its fund lacks, under its sentence. */
 .projectReason { display: block; }
 .projectReason:empty { display: none; }
-.projectStatus { display: block; }
-.meter.off { display: none; }
 
 /* ---------- training ---------- */
 
 #train-idle, #train-running, #train-eval, #train-redteam { display: none; margin-top: 6px; }
 #train-idle.shown, #train-running.shown, #train-eval.shown, #train-redteam.shown { display: block; }
 
-.progress {
-  width: 300px;
+.progress, .benchBar, .meter {
   height: 12px;
   border: 1px solid #000;
-  margin: 3px 0;
   background: #fff;
 }
-.progressFill { height: 100%; width: 0; background: #888; }
+.progress { width: 300px; margin: 3px 0; }
+.progressFill, .benchFill, .meterFill { display: block; height: 100%; width: 0; background: #888; }
 
 #benchmarks { margin: 4px 0 6px; font-size: 13px; }
 .bench { display: flex; align-items: center; height: 16px; }
 .benchLabel { width: 72px; }
-.benchBar { width: 190px; height: 9px; border: 1px solid #000; margin-right: 6px; background: #fff; }
-.benchFill { display: block; height: 100%; width: 0; background: #555; transition: width 0.3s; }
+.benchBar { width: 190px; margin-right: 6px; }
+.benchFill { transition: width 0.3s; }
 .benchValue { width: 30px; text-align: right; }
 
 /* The bars and the reviewers' lines carry the evaluation; the total below has the numbers. */
@@ -302,7 +312,6 @@ div.storeRow[data-reveal].shown { display: flex; }
    ran 12 px past the box from the millionth GPU): the meter keeps its line, the figures move under it. */
 .storeRow { flex-wrap: wrap; }
 .storeRow .storeVal { white-space: normal; margin-left: auto; min-width: 0; }
-.storeRow .storeVal .meter { white-space: nowrap; }
 /* A row's words (`runs 5,000 GPUs`, `the halls are full · Build Datacenter`) sit under its figure. */
 #gpuFull, #powerFull { display: block; white-space: normal; line-height: 1.2; }
 #storeTip {
@@ -547,10 +556,6 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   #toast { display: none; }
 }
 
-/* Focus: each button carries its trade from Stage 2 (critic C5). */
-.focusTrade { display: block; font-size: 10px; line-height: 1.1; color: #555; }
-.focusTrade:empty { display: none; }
-
 /* ---------- Stage 3 (stage3.md §6) ---------- */
 
 /* A control a grant took away (Train, Red-team, Approve, the hall and reactor buttons). */
@@ -561,8 +566,8 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 #grantList { margin-top: 6px; }
 /* A grant: the hand-over, drawn apart from the cards (UP's probe-trust button sits by itself). */
 .projectButton.grant { width: 310px; min-height: 44px; border-style: double; border-width: 3px; }
-#btn-sl3.urgent, #btn-datacenter.urgent, #btn-nuclear.urgent { border: 2px solid #000; font-weight: bold; }
-#btn-sl3.urgent::after, #btn-datacenter.urgent::after, #btn-nuclear.urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
+body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent { border: 2px solid #000; font-weight: bold; }
+body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
 #endingBox p { margin-top: 18px; }
 #endingCounter { font-size: 28px; font-weight: bold; margin: 6px 0 2px; }
 #endingCounter.classified { color: #999; }
@@ -574,11 +579,11 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 #endingChoices div { margin-bottom: 2px; }
 #btn-newGame { font-size: 14px; }
 
-/* The capacity meter (owner feedback 1, B3): halfwidth glyphs keep one width in the page's font; the
-   boot check falls back to block glyphs in the console's monospace stack. */
-.meter { white-space: nowrap; letter-spacing: 0; }
-body.meterMono .meter { font-family: Menlo, Consolas, "Courier New", monospace; }
-.meter.warn { color: #b00000; }
+/* Compact versions of the original training bar fit beside capacity figures. */
+.meter { display: inline-block; width: 90px; vertical-align: middle; overflow: hidden; text-align: left; }
+/* A meter sits inside a sentence: an inline fill keeps that sentence on one line when it is read or copied. */
+.meterFill { display: inline-block; vertical-align: top; }
+.meter.warn .meterFill { background: #b00000; }
 
 /* ---------- Stage 4 (stage4.md §6) ---------- */
 
@@ -638,8 +643,6 @@ body[data-stage="5"] #panel-stores { font-size: 15px; }
 #splitBlock .fleetRow input[type="range"] { width: 70px; }
 #byHand { display: block; }
 #splitStatus { margin: 4px 0; font-style: italic; }
-/* Stores' figures are right-aligned; a meter's fill runs from the left. */
-#fundMeter, #swarmMeter { text-align: left; }
 #panel-earth { color: #888; margin-top: 14px; }
 #panel-earth.stores::before { color: #888; }
 #panel-earth.quiet .storeRow { cursor: default; }

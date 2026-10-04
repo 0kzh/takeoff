@@ -66,7 +66,7 @@ returns), research still accrues, and Tasks rise at a flat rate.
 | 6 | **The wallet rule (G34)** is built in Stages 2–4 as a fund and a share on a cycling button (`buildFund`, `cycleBuildShare`, `Draft clauses`). Stage 4's cards are bought the moment they appear (median 0–8 s), because their purse never stops filling | Two purses. **`matter`** pays for the rows. The **`mission fund`** pays for missions: it fills only while a mission is waiting, up to what the board costs, from the flow's other share; with nothing waiting the whole flow is `matter`. **`Industry share: 50 / 75 / 90 %`** (it starts at 75) arrives with the first priced mission at 1:00 and prints both clocks: `Industry share: 75% · a unit every 2.7 s · Mass driver in 0:48`, or `· no mission is waiting: all of the flow`. `max` spends `matter` only. Nothing is held, and no mission can be bought in the second it appears. On paper the share moves the stage by under two minutes (25:01 at 50 %, 26:54 at 90 %): it paces the missions and is not one of the stage's decision axes; G34's `ends 4:00 apart` test is waived for it in `arc.md`, because what it does not take goes to one-off cards |
 | 7 | **Prices fixed at reveal** (`revealFunds`, `revealResearch`, Stage 4's materials prices) | `revealMatter: 20`: a mission costs **20 s of the flow** at the moment it appears, not 90. At 90 s a quarter of the flow needs six minutes a mission, the queue falls five minutes behind and the stage runs 28–30 minutes on paper. At 20 s the fund covers a mission 30–83 s after it shows. `Launch contracts` is free; the two far goals are priced by their requirement alone; the last project is priced like any mission (D6). The Autofactory builds beside the queue |
 | 8 | **The fleet's sliders** (`setFleetShare`: 0–100 % in steps of 5; a slider cannot take more than the others leave; the rest is printed as `Idle`; each prints its rate) | The standing split is that component: three sliders, `Foundries`, `Datacenters`, `Collectors`, each a share of what reaches `matter`, each with its row's return and ETA. The remainder prints **`By hand: 40%`** and stays in `matter` for the buttons. There is no separate `Standing split: 60%` slider. It opens at 35 / 25 (by hand 40 %) and, when Collectors arrive, goes to 20 / 20 / 20 with a console line. Both presets gave the fleet's sliders away in Stage 4, so the Autofactory is where that player gets sliders back |
-| 9 | **Stores and the layout.** Stores is the main panel in Stage 4 only (see the shell, above). Meters are `meter()` in `ui/meter.ts`, each followed by `amount of capacity` | Keep Stage 4's layout from Stage 4 on, with `panel-space` at the top of the left column. Rows as §2.5. Two meters, each with its denominator: `mission fund ｢￭￭￭￭･･････｣ 3,000 of 7,400 t` (on screen only while a mission waits) and `swarm ｢￭￭￭･･･････｣ 51M of 150M t · 0.0034%` (the tonnes move every second; the percentage is the goal's name; the denominator steps to 1,500M t and 4,500M t). `funds`, `research`, `insight`, `materials`, `monitors`, `rogue copies` and `treaty chips` leave |
+| 9 | **Stores and the layout.** Stores is the main panel in Stage 4 only (see the shell, above). Meters are `renderMeter()` in `ui/meter.ts` (the training bar's border, track and fill; no glyphs), each followed by `amount of capacity` | Keep Stage 4's layout from Stage 4 on, with `panel-space` at the top of the left column. Rows as §2.5. Two meters, each with its denominator: `mission fund [meter] 3,000 of 7,400 t` (on screen only while a mission waits) and `swarm [meter] 51M of 150M t · 0.0034%` (the tonnes move every second; the percentage is the goal's name; the denominator steps to 1,500M t and 4,500M t). `funds`, `research`, `insight`, `materials`, `monitors`, `rogue copies` and `treaty chips` leave |
 | 10 | **Stats** in the shell prints the lead over Baiwen and measured alignment | §2.5: `Model`, `Copies thinking`, `Lost to value drift`. The other two leave with their panels |
 | 11 | **The scheduler.** One content table a stage (`STAGE4_TABLE`), `maxVisible` 6 with two overflow, the 170 s governor, a 240 s mechanic governor, a 30 s opening drip whose test is Stage 3 or 4 | A `STAGE5_TABLE` from §4.2, with the opening drip. 170 s where this file said 150 s. The mechanic governor is off in Stage 5 (§4.3 relaxes G2 to 360 s). The shell hides `projects`; missions are cards there, so it comes back |
 | 12 | **Cards** are docked, timed and non-blocking; an option prints its effect (`optionLine`) or the stated requirement that greys it (`optionNeeds`); the timer's default is listed first | The three choices reuse this. `c_charter` lists `first come` first, because it is the default. In Silence the option that asks people is greyed with `needs someone to ask`, wherever it sits, and the one button reads `acknowledge` |
@@ -296,7 +296,7 @@ G4 asks for after a verb has been pressed thirty times, as a budget and not a sw
 | orbital compute ×2 (existing and future) | Datacenter ring |
 | `F` ×3 | Disassemble Mercury |
 
-The swarm is a meter with its denominator and what it is doing: `Swarm ｢￭￭￭･･･････｣ 51M of 150M t · 0.0034% ·
+The swarm is a meter with its denominator and what it is doing: `Swarm [meter] 51M of 150M t · 0.0034% ·
 powering the ring ×7.8`. The tonnes move every second; the percentage is the goal's name; the denominator steps
 to 1,500M t (0.1 %) and 4,500M t (0.3 %). The stage's last project appears at 0.01 %. Targets (reasonable bot
 from `5c`, paper): `F` 1.5k t/s at 5:00, 9k at 10:00, 33k at 15:00, 940k at 20:00; orbital compute 1.9 × 10⁹,
@@ -352,8 +352,8 @@ either: measured alignment leaves Stats, and a generation's line has no `Read fi
 
 Stores is the main panel, in the centre column, as in Stage 4. Rows, in order: `launch mass` (t/s; hover:
 `launch +300` · `mass driver +300` · `mined +4,100` · `self-replicating +0.3%/s` · **total**) · `matter` (t in
-orbit) · `mission fund ｢￭￭￭￭･･････｣ 3,000 of 7,400 t` (only while a mission is waiting) · `orbital GPUs` ·
-`swarm ｢￭￭￭･･･････｣ 51M of 150M t` · `mercury` · `people off Earth` · `probes` (late) · under `earth`, grey:
+orbit) · `mission fund [meter] 3,000 of 7,400 t` (only while a mission is waiting) · `orbital GPUs` ·
+`swarm [meter] 51M of 150M t` · `mercury` · `people off Earth` · `probes` (late) · under `earth`, grey:
 `robots`, `GPUs`, `power`. Stats: `Model`, `Copies thinking`, `Lost to value drift`, and nothing else.
 
 ---
@@ -366,9 +366,9 @@ Tasks Completed: 168,201,177,340,912,655,104
 Space                    | Stores                                  | Developments
 [4 rows, 3 sliders]      | launch mass   2,440,000 t/s             | May 2030 — ...
 By hand: 20%             | matter        1.2e7 t                   |
-Industry share: 75%      | mission fund  ｢･･････････｣ 0 of 4.9e7 t | Stats
+Industry share: 75%      | mission fund  [meter]      0 of 4.9e7 t | Stats
 Mission: —               | orbital GPUs  4.7e12                    | Model: Steward-4.6 · 8,490×
-Swarm ｢￭･････････｣       | swarm         151M of 1,500M t · 0.0101% | Copies thinking: 2.7e15
+Swarm [meter]            | swarm         151M of 1,500M t · 0.0101% | Copies thinking: 2.7e15
                          | probes        3                         | Lost to value drift: 0
 Projects: Alpha Centauri relay (needs swarm 0.1%) · Jupiter brain (needs swarm 0.3%) · The long reflection (2:00)
 ```
@@ -726,5 +726,5 @@ puts the game at about 170.
 * `endings.ts`: the mission and the card that set `longReflection` and `finalInstructions`; four rows in
   `endStats()`; the two counting sentences and the epilogue sentences by flag.
 * `ui`: `render4.ts`'s `layout` and Stores at `stage >= 4`; `panel-space`; the fleet's slider component for the
-  split; `meter()` for the mission fund and the swarm; Stores' `earth` legend; Stats trimmed; graph removal.
+  split; `renderMeter()` for the mission fund and the swarm; Stores' `earth` legend; Stats trimmed; graph removal.
 * `sim`: a Stage 5 block (D1–D24) from `5c`, `5s`, `5g`, `5r` and from a new game, the variants, the skin switch.

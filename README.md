@@ -9,7 +9,7 @@ All five stages are built, with their four endings: **Stage 1 — The Startup** 
 minutes), **Stage 2 — Scale** (about 36–44 minutes), **Stage 3 — Takeoff** (about 42–50 minutes),
 **Stage 4 — Superintelligence** (about 30–40 minutes) and **Stage 5 — Beyond** (about 23–27 minutes);
 the simulator's reasonable bot plays a new game to its ending in about 160 minutes. Stage 1
-opens one mechanic at a time (one button, then funds, a GPU to save for, the power meter, Buy Power,
+opens one mechanic at a time (one button, then funds, a GPU to save for, the power bar, Buy Power,
 the price, Marketing, Research), and every training run needs a number of GPUs: when the next one
 needs more than the cloud will rent, `First Datacenter` (1,000 GPUs of OpenMind's own at Abilene)
 opens Stage 2, where OpenMind owns its datacenters: GPU lots in three sizes, datacenters that take
@@ -97,7 +97,7 @@ src/
     render3.ts    Stage 3's panels: allocation, the loop, shipments, Alignment and its grant list, Oversight, the end screen
     render4.ts    Stage 4's layout and panels: Stores in the centre, the fleet, Society, the treaty, the agenda, the generation line
     render5.ts    Stage 5's screen: Space (the rows, the split, the Industry share, the mission line, the swarm), Stores and Earth, Stats
-    meter.ts      meter(fraction): the ten-cell capacity bar `｢￭￭￭￭￭￭￭･･･｣` (DOM-free; boot width check)
+    meter.ts      renderMeter(element, fraction): compact bordered bars with the original training fill
     console.ts, log.ts, modal.ts, graph.ts, stores.ts, dev.ts, save.ts, dom.ts
   sim/
     policy.ts     the "reasonable player" bot and the other policies (pure; also drives the dev overlay's Autoplay)
@@ -170,18 +170,19 @@ Research, Training Pipeline), then every 30 s, at most four on screen (after 140
 one more may come out); an empty panel gets its next card 10 s after its last one was bought, and is
 not drawn without a card; a card already paid for when it would come out waits up to 60 s for a
 purchase to take the balance below it; Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
-160 s with nothing new, one or two more may join, eight at most), and a card more than three minutes
-of income from its purse is not drawn (grey is for goals; the stage goal excepted). These skip the wait: `rescue`
+160 s with nothing new, one or two more may join, eight at most); every card on the shelf is drawn,
+with its sentence, for as long as it is there. These skip the wait: `rescue`
 (also uncapped, drawn dashed), `pinned` (the stage goal), `urgent(s)` (a wall's named fix while it
 holds), `ignoresCap` (Stage 2's G6 pre-order), `chain` (the next step of a series, at once when
 there is room); Stage 1 `sideline` offers drip in but never fill the cap. A card never appears
 within 4 s of a modal opening, nor a modal within 4 s of anything new (`BEAT_GAP_SECONDS`). Stage 1
 projects mostly cost research or insight, as Paperclips' cost operations; money is for compute,
 marketing, training and First Datacenter. A Stage 1 run costs dollars only (`$290 × c^13`, two
-figures: $290 / $1,300 / $5,300 / $23,000 / $100,000) and needs its GPUs; research buys cards. While
-the next run (at the wall, First Datacenter) waits for money, Marketing, Rent GPU and dollar cards
-print the delay they cause when it is 10 s or more (`· Sage-1.4 0:55 later`), and Train, pressed
-short of money, arms. A card the lab cannot hold says so (`needs a lab that holds 2,000 — Expand Lab`).
+figures: $290 / $1,300 / $5,300 / $23,000 / $100,000) and needs its GPUs; research buys cards. Train,
+pressed short of money, arms (`starts when paid for — about 0:44`). A card is its title, its price
+and its sentence and nothing else: what a greyed one waits on is in its hover (`needs a lab that
+holds 2,000 — Expand Lab`; on First Datacenter, the GPUs the next model needs against what the
+cloud rents).
 
 Stage 3 projects live in `src/data/projects3.ts` and its content table (`src/data/stage3.ts`) orders
 them with the panels, buttons and modals the stage reveals. Extra options there: `grant` (an autonomy
@@ -213,15 +214,25 @@ clicks outside itself, takes keyboard focus when it opens, and Escape takes the 
 event carries a timer with a harmless default, so an unanswered one never holds the stage up.
 Each option prints its effect and cost under its label (`line` in `data/choices.ts`; stakes are
 sized when the modal opens, in `onOpen`'s context); a greyed option says what it needs (`needs`,
-or its price). A priced option, like a card, prints the delay it causes a run waiting for money
-(`· Sage-2.5 0:41 later`, from 10 s: `delayNote` in `engine/training.ts`).
+or its price).
 
 **The wallet rule** (arc G34) holds everywhere: the game never holds the player's money. A row is
-grey only when its purse cannot pay (it prints the shortfall and a clock) or a stated requirement
-is unmet; a purchase a waiting run draws on stays lit and prints its delay; a price never blocks
-Train (pressed short, it is armed and starts when paid for; pressed again it stands down). A
-repeatable sink at a flat price gets its own purse: in Stages 2–3 the build share of income fills
-`buildFund`, which pays for lots, plants and halls (`creditIncome` / `payBuild` in `engine/state.ts`).
+grey only when its purse cannot pay or a stated requirement is unmet (`no room`, `no power`); a
+purchase a waiting run draws on stays lit; a price never blocks Train (pressed short, it is armed
+and starts when paid for; pressed again it stands down). A repeatable sink at a flat price gets its
+own purse: in Stages 2–3 the build share of income fills `buildFund`, which pays for lots, plants
+and halls (`creditIncome` / `payBuild` in `engine/state.ts`).
+
+**The core screen reads as it did at commit `a2117b5`** (owner feedback 2, 2026-10-04; `docs/specs/arc.md`
+has the rule). On the panels that existed then (Stores, Power, Business, Compute, Infrastructure,
+Research, Projects, Training, the graph, Security, Government, Public, Stats) a row is a label and a
+value, or a button, its price and at most a short italic reason; nothing prints a delay, a clock, a
+return or a band edge after a row (those are in hovers). What differs from that commit is what the
+owner asked for since (the one-at-a-time opening, the bars on Stage 1's power, quota and research
+lines and on a Train row short of GPUs, First Datacenter, `Needs N GPUs` in place of
+`undertrained`) and the rows the current mechanics need (`build fund` in Stores, `Build share: 50%`,
+the lot rows, `starts when paid for`). The simulator reads none of this text: its results are
+byte-identical before and after.
 
 ## Dev overlay
 
@@ -526,11 +537,11 @@ autoplay, the reveal order, beats 4–8 in order ≥ 30 s apart, no beat in the 
 adding more than 2 controls or 4 numbers (later: 3 and 8), a greyed goal on screen from the first
 purchase (G3 as amended), no `undertrained` or `Train now` anywhere, the Train row naming its GPU
 shortfall and fix, numbers / controls / words at minutes 0/1/3/5/10/20/end and the minute-10 budget
-(≤ 48 numbers, ≤ 16 controls, ≤ 250 words: round 2's 38 / 15 / 230 plus round 3's Focus trades,
-capacities and printed delays), round 3's rows (the Train row costs money only and arms when short;
-a printed delay; First Datacenter's two status lines before and at the wall; the power and quota rows
-with their capacity; Focus's three trades and `Next run:`; each event's default listed first; no
-`… first` hold), a save → reload during a training run, the transition
+(≤ 48 numbers, ≤ 16 controls, ≤ 250 words; the build shows 38 / 16 / 204), the Train row (it costs
+money only and arms when short: `starts when paid for — about 0:44`), owner feedback 2's rows (no
+printed delay anywhere; First Datacenter a plain card before and at the wall; `Power [bar] 968 kWh`
+and `GPUs rented [bar] 61 / 80`; three plain Focus buttons with one note line and `Focus:` during a
+run), each event's default listed first, no `… first` hold, a save → reload during a training run, the transition
 narration and arrival, no horizontal overflow at 390 px, and no page or console errors through the
 Stage 2 arrival. Screenshots go to
 `agent-tools/shots/stage1/` (gitignored); it exits non-zero on any failure.
@@ -544,12 +555,15 @@ Loads the Stage 2 preset and plays it under autoplay to the Stage 3 arrival. It 
 backlog), no Stage 1 diagnosis line, the Stores rows and a hover breakdown, the capability graph
 drawn, every Stage 2 panel appearing, the event panel (an effect line on every option, keyboard
 focus inside it, the page behind still clickable, Escape taking a timed default), save → reload
-mid-run, mid-interconnect-queue and mid-cooldown, the Stores meters, no `undertrained` or `Train
-now`, the Train row short of GPUs (`Needs 3,700 GPUs. 1,000 free.` and, with GPUs unpowered,
-`Needs 6,700 powered GPUs. 4,000 are dark: add power.`), the wallet rule (no `… first` hold string
-on screen, the Build share and build fund rows, Train armed while short with `… starts when paid
-for`, a card printing the delay it causes, the GPU row's amount and capacity `1,000 of 10,000`, fewer
-than half the controls grey at every mark after 5:00), numbers / controls / words on screen at each
+mid-run, mid-interconnect-queue and mid-cooldown, Stores one line a row with no bars (`research
+# / #`, `GPUs # / #`, `power # MW`), no `undertrained` or `Train now`, the Train row short of GPUs
+(`Needs 3,700 GPUs. 1,000 free.` and, with GPUs unpowered, `Needs 6,700 powered GPUs. 4,000 are
+dark: add power.`), the wallet rule (no `… first` hold string on screen, the Build share and build
+fund rows, Train armed while short with `starts when paid for`, fewer than half the controls grey
+at every mark after 5:00), owner feedback 2's rows (no delay printed beside a purchase;
+`Build share: 50%`, `Buy GPUs (1,000) $123,600` with at most `no room` or `no power`,
+`Standing order: ON`; three plain Focus buttons; no band hints or rates after a row; every card
+with its sentence), numbers / controls / words on screen at each
 5-minute mark (numbers ≤ 80, set against Paperclips' Stage 2: 39 and 54 at 5:00 and 10:00 with a
 nearly empty early stage, 66–83 at the marks from 15:00; controls ≤ 30), the Stage 3 narration and
 dev overlay, the Stage 3 preset, and 390 px without horizontal overflow. Screenshots go to
@@ -564,8 +578,9 @@ the arrival (the narration, the promised research number passed within 30 s, `Ap
 `Release`, no Stage 2 control left); every Stage 3 panel, the grants and their WARNING line, drift,
 the readings, the session and the motion; Stage 4's narration and its clean screen; save → reload
 mid-run, mid-shipment, mid-event and mid-session with the timers kept; numbers / controls / words at
-each 5-minute mark (counted as in `stage2.md` §6.3: numbers ≤ 85, controls ≤ 30, words ≤ 350, what the
-build reaches; the spec's 65 numbers is not met); no `… first` hold string, the build share and fund
+each 5-minute mark (counted as in `stage2.md` §6.3: numbers ≤ 90, controls ≤ 30, words ≤ 380, what the
+build reaches now that a project card keeps its sentence in every stage (owner feedback 2: 72–88 and
+235–370; the spec's 65 numbers is not met); no `… first` hold string, the build share and fund
 on screen and Alignment work as a share; the careless start played by the first-timer into Stage 4;
 the Pause (signed by the test when the bot is offered it) and the Project (the first-timer with
 `refuse`), each with the end screen, which must cover the page (nothing of the game drawn behind it,

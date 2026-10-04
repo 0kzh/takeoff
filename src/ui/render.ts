@@ -1,24 +1,24 @@
 import type { GameState, Focus, TrainingRun } from '../engine/state.js';
-import { counter, isBought } from '../engine/state.js';
+import { isBought } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock,
   powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec, marketState, priceAbsurd,
   humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM, powerSecondsLeft, priceCeiling,
-  aiResearchRate, revenueCostOfAlloc, researchRate, insightRate,
+  aiResearchRate, revenueCostOfAlloc,
 } from '../engine/economy.js';
 import {
   lotReasonOf, lotCostOf, lotReturn, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, freeSlots, solarSeconds,
-  freePowerGpus, powerScale, poweredGpus, KW_PER_GPU, GAS_MW, SOLAR_MW, NUCLEAR_MW,
-  buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits, fundsIncome, roomFixS3, powerFixS3,
+  freePowerGpus, powerScale, KW_PER_GPU, GAS_MW, SOLAR_MW, NUCLEAR_MW,
+  buildEta, buildWall, standingStall, lotSizes, roomFixS3, powerFixS3,
 } from '../engine/infrastructure.js';
 import { marketBreakdown, qualityMultS2 } from '../engine/market.js';
 import {
   trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, nextRunName, gpusNeeded, gpusAvailable,
   trainGpuLine, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
-  trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS, canPressTrain, runPaidInSeconds, delayNote,
-  gpusShort, needsDatacenter, labReason,
+  trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS, canPressTrain,
+  needsDatacenter, labReason,
 } from '../engine/training.js';
 import { datacenterStatus } from '../data/projects.js';
 import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
@@ -27,7 +27,7 @@ import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
 import { endScreen } from '../engine/endings.js';
 import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setShown, showId, setDisabled, setWidth, setTitle, make } from './dom.js';
-import { meter, MeterMode, useBlockMeter } from './meter.js';
+import { renderMeter, renderCooldown } from './meter.js';
 import { renderConsole } from './console.js';
 import { renderLog } from './log.js';
 import { renderModal } from './modal.js';
@@ -35,7 +35,7 @@ import { renderGraph } from './graph.js';
 import { mountStores, renderStores } from './stores.js';
 import {
   mount3, renderResearch3, renderTraining3, renderInfrastructure3, renderAlignment, renderSecurity3, renderGeopolitics,
-  renderOversight, renderPublic3, renderStats3, noteState3, setOff, folded,
+  renderOversight, renderPublic3, renderStats3, noteState3, setOff,
 } from './render3.js';
 import { mount4, renderStage4 } from './render4.js';
 import { mount5, renderStage5 } from './render5.js';
@@ -51,7 +51,6 @@ let perform: Perform;
 /** Wires every static button to its action. Called once at boot. */
 export function mount(p: Perform): void {
   perform = p;
-  checkMeterGlyphs();
   revealEls = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
   hideEls = Array.from(document.querySelectorAll<HTMLElement>('[data-hide]'));
   const bind = (id: string, fn: () => void) => byId(id).addEventListener('click', fn);
@@ -136,35 +135,15 @@ function fmtTaskPrice(p: number): string {
   return (p < 0.1 ? `$ ${p.toFixed(3)}` : fmtMoney(p)).replace(' ', '\u00a0');
 }
 
-/** A meter span: the glyphs (no digits), the exact values in its label and hover (owner feedback 1, B3). */
-function setMeter(id: string, fraction: number, mode: MeterMode, label: string, warn = false): void {
-  setText(id, meter(fraction, mode));
+/** A bordered meter: the exact values remain in its label and hover. */
+function setMeter(id: string, fraction: number, label: string, warn = false): void {
   const el = byId(id);
+  renderMeter(el, fraction);
   if (el.getAttribute('aria-label') !== label) {
     el.setAttribute('aria-label', label);
     el.title = label;
   }
   if (el.classList.contains('warn') !== warn) el.classList.toggle('warn', warn);
-}
-
-/**
- * Boot: measure the two halfwidth glyphs in the page's font; if either is missing or their widths
- * differ by more than a pixel, every meter falls back to `[■■■□□]` in a monospace span.
- */
-function checkMeterGlyphs(): void {
-  const probe = document.createElement('span');
-  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0';
-  document.body.appendChild(probe);
-  const width = (text: string) => {
-    probe.textContent = text;
-    return probe.getBoundingClientRect().width;
-  };
-  const full = width('￭'.repeat(10));
-  const empty = width('･'.repeat(10));
-  probe.remove();
-  const fallback = !(full > 0 && empty > 0) || Math.abs(full - empty) > 1;
-  useBlockMeter(fallback);
-  document.body.classList.toggle('meterMono', fallback);
 }
 
 function setToggle(id: string, on: boolean, text: string): void {
@@ -176,18 +155,14 @@ function setToggle(id: string, on: boolean, text: string): void {
 function renderPower(s: GameState): void {
   if (s.stage >= 2) return;
   setText('power', fmtInt(s.power));
-  // A store that drains: the scale is the block Buy Power sells right now (critic round 3 §10.2: it
-  // was the block the fleet warrants, which the button did not sell yet). Red only when it is close
-  // to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up. After the
-  // opening the row prints the amount against that scale (`968 of 1,000 kWh`, stage2-round2-fixes.md
-  // item 6); above a block the meter is full and the amount stands alone.
+  // A store that drains: the bar's scale is the block Buy Power sells right now; the row prints the
+  // amount alone, as it did before the bar (the scale is in the bar's hover). Red only when it is
+  // close to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up.
   const block = powerBlock(s);
-  setText('powerScale', fmtInt(block));
-  setOff('powerOf', s.power > block);
   const left = powerSecondsLeft(s);
   const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
-  setMeter('powerMeter', Math.min(1, s.power / block), 'drain', `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
-  setText('powerNote', copiesIdle(s) ? 'Power is out. The copies have stopped. Buy Power starts them.' : '');
+  setMeter('powerMeter', Math.min(1, s.power / block), `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
+  setText('powerNote', copiesIdle(s) ? 'no power — copies idle' : '');
   setText('powerBlock', fmtInt(powerBlock(s)));
   setText('powerCost', fmtMoney(powerBlockCost(s)));
   // The manual verb never needs power and is never disabled.
@@ -225,20 +200,17 @@ function renderBusiness(s: GameState): void {
     const billed = billingPerSec(s);
     const made = productionPerSec(s);
     const state = marketState(s);
-    // Unsold tasks: hidden while there are none (owner feedback 1, beat 6), and while every task sells
+    // Unbilled tasks: hidden while there are none (owner feedback 1, beat 6), and while every task sells
     // (what is left is under three seconds of work, and the line beside it says so).
     const showUnbilled = s.unbilled >= 1 && state !== 'selling out';
     if (unbilledLine.classList.contains('off') === showUnbilled) unbilledLine.classList.toggle('off', !showUnbilled);
     setText('soldPerSec', fmtRate(billed));
     setText('tasksPerSec', fmtRate(made));
-    setText('marketState', state);
-    // One sentence for a newcomer, by the market's state (owner feedback 1, "Lines rewritten").
-    setText('billingLine',
-      state === 'backlog growing' ? `Customers buy ${fmtRate(billed)} of the ${fmtRate(made)} tasks Sage makes a second. Unsold tasks pile up.`
-        : state === 'backlog shrinking' ? `Customers buy ${fmtRate(billed)} a second; Sage makes ${fmtRate(made)}. The pile shrinks.`
-          : state === 'selling out' ? 'Every task sells. Customers would pay more.'
-            : state === 'nobody buys' ? `Nobody buys at ${fmtMoneyShort(s.price)}.`
-              : '');
+    // "Billing all 106/s produced" when nothing is left over: one number instead of two equal ones.
+    const all = billed >= 0.99 * made && made > 0;
+    setText('billingOf', all ? 'Billing all ' : 'Billing ');
+    showId('billingOfPart', !all);
+    setText('marketState', state === 'nobody buys' ? `nobody buys at ${fmtMoneyShort(s.price)}` : state);
     setText('demand', fmtInt(demandPercent(s)));
     setDisabled('btn-lowerPrice', s.price <= MIN_PRICE + 1e-9);
     const ceiling = s.price >= priceCeiling(s);
@@ -248,8 +220,6 @@ function renderBusiness(s: GameState): void {
       'btn-raisePrice',
       ceiling || priceAbsurd(s) ? 'nobody pays this' : `Raise the price by ${step}. Fewer tasks bill; each earns more.`,
     );
-    setText('priceHint', ceiling ? 'raise: nobody pays this' : 'lower: more tasks sell, each earns less');
-    showId('priceHint', counter(s, 'priceMoves') === 0 || ceiling);
     setTitle('btn-lowerPrice', `Lower the price by ${s.price <= PRICE_STEP_FROM + 1e-9 ? 'one cent' : '5%'}. More tasks bill; each earns less.`);
   }
   showId('hypeLine', s.hypeBoost > 1.05);
@@ -257,8 +227,6 @@ function renderBusiness(s: GameState): void {
   setText('apiCustomers', fmtInt(s.apiCustomers));
   setText('hypeLevel', fmtInt(s.hypeLevel));
   setText('marketingCost', fmtMoney(marketingCost(s)));
-  // Lit while a run (or, at the wall, First Datacenter) waits for money: what it costs that wait (arc G34).
-  setText('marketingDelay', s.stage < 2 && s.funds >= marketingCost(s) ? delayNote(s, { funds: marketingCost(s) }) : '');
   setDisabled('btn-marketing', s.funds < marketingCost(s));
   setTitle('btn-marketing', `Marketing level ${fmtInt(s.hypeLevel)}. More demand at every price: ×1.1 per level.`);
   // The level appears with the first purchase (owner feedback 1, beat 7).
@@ -270,16 +238,14 @@ function renderCompute(s: GameState): void {
   setText('gpuCost', fmtMoney(gpuCost(s)));
   const quota = atRentQuota(s);
   setDisabled('btn-gpu', s.funds < gpuCost(s) || quota);
-  setText('gpuNote', quota ? 'the cloud rents no more' : '');
-  // What a GPU costs the waiting run (arc G34); none while the run is short of the GPUs it needs.
-  const needed = gpusShort(s) && !needsDatacenter(s);
-  setText('gpuDelay', !quota && !needed && s.funds >= gpuCost(s) ? delayNote(s, { funds: gpuCost(s) }) : '');
+  setText('gpuNote', quota ? 'quota reached — the provider has no more to rent' : '');
   setText('gpus', fmtInt(s.gpus));
   setText('gpuQuota', fmtInt(rentQuota(s)));
-  // The quota as a meter from 60 rented (owner feedback 1), with the amount and the capacity beside it.
-  if (s.revealed['quota']) setMeter('quotaMeter', s.gpus / rentQuota(s), 'use', `${fmtInt(s.gpus)} of the ${fmtInt(rentQuota(s))} the cloud rents`);
+  // The quota as a bar from 60 rented (owner feedback 1), with `rented / quota` beside it as before.
+  if (s.revealed['quota']) setMeter('quotaMeter', s.gpus / rentQuota(s), `${fmtInt(s.gpus)} of the ${fmtInt(rentQuota(s))} the cloud rents`);
   setText('copies', fmtInt(copies(s)));
-  const note = copiesIdle(s) ? '(idle: no power)' : s.training.run?.phase === 'training' ? '(half the GPUs are training)' : '';
+  const run = trainingRun(s);
+  const note = copiesIdle(s) ? '(idle: no power)' : run ? `(${fmtInt(run.gpus ?? 0)} GPUs are training)` : '';
   setText('copiesNote', note);
   // Copies equal GPUs until training diverts some or efficiency adds more: show the line when it says something.
   showId('copiesRow', copies(s) !== s.gpus);
@@ -292,18 +258,17 @@ function renderInfrastructure(s: GameState): void {
   setText('gpuCapacity', fmtInt(gpuCapacity(s)));
   setText('powerMW', fmtNum(powerDrawMW(s), 1));
   setText('powerCapMW', fmtInt(s.powerCapacityMW));
-  // Meters replace the `/ cap` halves (owner feedback 1, B3): the cap is in the hover, and in words when full.
+  // Stores rows are one line each: `GPUs 11,000 / 25,000`, and power's capacity alone (the draw is the
+  // GPU count again), with a word in front when all of it is in use or some GPUs have none.
   const cap = gpuCapacity(s);
-  setMeter('gpuMeter', s.gpus / Math.max(1, cap), 'use', `${fmtInt(s.gpus)} GPUs in ${fmtInt(cap)} slots`);
-  // The words under the figure (their own line, so a long one never pushes the box wider).
-  setText('gpuFull', s.gpus >= cap ? (s.stage >= 3 ? `the halls are full · ${roomFixS3(s)}` : 'the halls are full · Build Datacenter') : '');
-  const draw = powerDrawMW(s);
-  setMeter('powerMeterS', draw / Math.max(1e-9, s.powerCapacityMW), 'use', `${fmtNum(draw, 1)} of ${fmtInt(s.powerCapacityMW)} MW in use`);
   const dark = Math.max(0, s.gpus - activeGpus(s));
   const powerFull = freePowerGpus(s) < 100;
-  setText('powerFull', dark > 0
+  setText('powerAll', s.stage >= 3 ? '' : dark > 0 ? `${fmtInt(dark)} GPUs dark: ` : powerFull ? 'all in use: ' : '');
+  // Stage 3 names what answers a wall under the figure (the build-out moves the fix around).
+  setText('gpuFull', s.stage >= 3 && s.gpus >= cap ? `the halls are full · ${roomFixS3(s)}` : '');
+  setText('powerFull', s.stage < 3 ? '' : dark > 0
     ? `${fmtInt(dark)} GPUs dark${powerScale(s) < 1 ? ': a crisis holds power back' : ': add power'}`
-    : powerFull ? `full · ${s.stage >= 3 ? powerFixS3(s) : cheapestPlantFix(s)}` : s.stage >= 3 ? '' : `runs ${fmtInt(poweredGpus(s))} GPUs`);
+    : powerFull ? `full · ${powerFixS3(s)}` : '');
   setText('infraCopies', fmtInt(copies(s)));
   setText('datacenters', fmtInt(s.datacenters));
   setText('chipPrice', fmtMoney(gpuUnitPrice(s)));
@@ -317,10 +282,10 @@ function renderInfrastructure(s: GameState): void {
   }
   setText('chipsOnOrder', chipsOnOrder(s) > 0 ? fmtInt(chipsOnOrder(s)) : 'none yet');
 
-  // GPU lots, side by side, whole lots from the build fund (arc G34): lit with what each adds, grey
-  // only for the fund's shortfall (`$12,400 short — 0:09`), power or room. A grey row more than three
-  // minutes from the fund's income is not drawn, and at most one grey lot row is (stage2-round2 item 7).
-  let freeSaid = false;
+  // GPU lots, whole lots from the build fund: `Buy GPUs (1,000) $120,000`, and beside a greyed button
+  // the wall that greys it (`no room`, `no power`); short of money the button is grey and says nothing
+  // (the fund is in Stores). A grey row more than three minutes from the fund's income is not drawn,
+  // and at most one grey lot row is.
   let greyShown = false;
   const window = lotSizes(s);
   for (const [row, suffix] of [[0, ''], [1, '5'], [2, '25']] as const) {
@@ -330,29 +295,18 @@ function renderInfrastructure(s: GameState): void {
     setText(row === 0 ? 'gpuLotSize' : `gpuLot${suffix}Size`, fmtInt(n));
     setText(row === 0 ? 'gpuBatchCost' : `gpuBatch${suffix}Cost`, fmtMoneyShort(cost));
     const wallWhy = lotReasonOf(s, n);
-    const short = wallWhy ? '' : buildShortLine(s, cost);
-    const reason = wallWhy === 'no power'
-      ? `No power for them${freeSaid ? '.' : `: ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} MW free.`} ${cheapestPlantFix(s)}.`
-      : wallWhy === 'no room'
-        ? `No room for them: ${freeSlots(s) > 0 ? `${fmtInt(freeSlots(s))} slots left` : 'the halls are full'}. Build Datacenter.`
-        : short;
-    setText(`gpuReason${suffix}`, reason);
-    const lit = !wallWhy && !short;
+    setText(`gpuReason${suffix}`, wallWhy);
+    const lit = !wallWhy && s.buildFund >= cost;
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
-    const uses = `uses ${fmtInt(mw)} MW${freeSaid ? '' : ` of ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free`}`;
-    if (lit) freeSaid = true;
-    setText(`gpuReturn${suffix}`, lit ? `${uses} · +${fmtMoneyShort(Math.round(lotReturn(s, n)))}/s` : '');
     setDisabled(id, !lit);
+    // What the lot uses and adds is in its hover.
+    setTitle(id, `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each, from the build fund. The lot uses ${fmtInt(mw)} MW (${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free) and adds about ${fmtMoneyShort(Math.round(lotReturn(s, n)))} a second at today's market.`);
     // Grey is for goals: a wall the row names, or a shortfall the share fills within three minutes.
     const near = !!wallWhy || buildEta(s, cost) <= 180;
     const drawn = lit || (near && !greyShown);
     if (!lit && drawn) greyShown = true;
     setOff(row === 0 ? 'lotRow' : `lot${suffix}Row`, !drawn);
   }
-  setTitle(
-    'btn-gpuBatch',
-    `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each, from the build fund. The return is the task revenue the lot adds at today's market; the cluster also trains on it.`,
-  );
   renderStanding(s);
 
   const wall = buildWall(s);
@@ -361,12 +315,11 @@ function renderInfrastructure(s: GameState): void {
   setText('dcSlots', fmtInt(dc.add));
   setText('datacenterCost', fmtMoneyShort(dc.cost));
   const building = datacenterBuilding(s);
-  const dcShort = building ? '' : buildShortLine(s, dc.cost);
-  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : dcShort);
-  // `1:30 to build · 7,000 slots free`: building ahead prints the idle room it adds to (round 2 §1).
-  setText('dcNote', building || dcShort ? '' : `${fmtClock(dcBuildSeconds(s))} to build · ${fmtInt(freeSlots(s))} slots free${wall === 'room' ? ' · room is the wall' : ''}`);
-  setDisabled('btn-datacenter', !!building || !!dcShort);
-  setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}). Paid from the build fund.`);
+  const dcShort = !building && s.buildFund < dc.cost;
+  // A hall going up is a named wait; short of money the button is grey and says nothing.
+  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : '');
+  setDisabled('btn-datacenter', !!building || dcShort);
+  setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}); ${fmtInt(freeSlots(s))} slots are free now. Paid from the build fund.`);
   // The build fund's rows share one grey place (round 2 item 7, `grey is for goals`): a lit row is always
   // drawn, the wall's named fix always, and one grey row within three minutes of the share's income.
   const dcLit = !building && !dcShort;
@@ -375,84 +328,50 @@ function renderInfrastructure(s: GameState): void {
   setOff('dcRow', !dcDrawn);
   byId('btn-datacenter').classList.toggle('urgent', wall === 'room' && standingStall(s) === 'room');
 
-  const idleMw = Math.max(0, s.powerCapacityMW - powerDrawMW(s));
-  // The idle power is printed once, on the first plant row that is lit (round 2 §1: building ahead
-  // prints its idle capacity); the rows below it carry their own capacity only.
-  let idleSaid = false;
-  // One grey plant row at most, as with the lots (round 2 item 7): the one a power wall names first.
-  const plant = (id: string, rowId: string, costId: string, noteId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
+  // One grey plant row at most, as with the lots: the one a power wall names first.
+  const plant = (id: string, rowId: string, costId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
-    const short = why ? '' : buildShortLine(s, cost);
-    setText(reasonId, why || short);
-    const when = kind === 'gas' ? 'now' : kind === 'solar' ? `in ${spokenWait(solarSeconds(s))}` : 'in two minutes';
-    const extra = kind === 'nuclear' && s.govRelations >= 60 ? ' · cheaper: good relations' : '';
-    const mw = kind === 'gas' ? GAS_MW : kind === 'solar' ? SOLAR_MW : NUCLEAR_MW;
-    const idle = !why && !short && !idleSaid && s.revealed[kind === 'gas' ? 'gasButton' : kind === 'solar' ? 'solarButton' : 'nuclearButton'] === true;
-    if (idle) idleSaid = true;
-    setText(noteId, why || short ? '' : `runs ${fmtInt((mw * 1000) / KW_PER_GPU)} GPUs · ${when}${idle ? ` · ${fmtNum(idleMw, idleMw < 10 ? 1 : 0)} MW idle` : ''}${wall === 'power' ? ' · power is the wall' : ''}${extra}`);
-    setDisabled(id, !!why || !!short);
+    setText(reasonId, why || (kind === 'solar' ? 'joins the queue' : kind === 'nuclear' && s.govRelations >= 60 ? 'cheaper: good relations' : ''));
+    const lit = !why && s.buildFund >= cost;
+    setDisabled(id, !lit);
     // The plant a power wall names stays drawn; any other grey plant only within three minutes.
     const named = wall === 'power' && kind === (s.revealed['gasButton'] ? 'gas' : 'solar');
-    const lit = !why && !short;
     const drawn = lit || named || (!greyShown && buildEta(s, cost) <= 180);
     if (!lit && !named && drawn) greyShown = true;
     setOff(rowId, !drawn);
     byId(id).classList.toggle('urgent', named && standingStall(s) === 'power');
   };
-  plant('btn-turbines', 'gasRow', 'turbineCost', 'gasNote', 'gasReason', 'gas', gasCost(s));
-  plant('btn-solar', 'solarRow', 'solarCost', 'solarNote', 'solarReason', 'solar', solarCost(s));
-  plant('btn-nuclear', 'nuclearRow', 'nuclearCost', 'nuclearNote', 'nuclearReason', 'nuclear', nuclearCost(s));
+  plant('btn-turbines', 'gasRow', 'turbineCost', 'gasReason', 'gas', gasCost(s));
+  plant('btn-solar', 'solarRow', 'solarCost', 'solarReason', 'solar', solarCost(s));
+  plant('btn-nuclear', 'nuclearRow', 'nuclearCost', 'nuclearReason', 'nuclear', nuclearCost(s));
+  // A plant's size is on its button until the first one is built (then in its tooltip and the Stores).
+  setText('nuclearLabel', 'Nuclear PPA');
+  setText('nuclearMW', ` (+${fmtInt(NUCLEAR_MW)} MW)`);
+  showId('gasMW', s.gasPlants === 0);
+  showId('solarMW', s.solarFarms + s.powerQueue.filter((o) => o.kind === 'solar').length === 0);
+  showId('nuclearMW', s.reactors + s.powerQueue.filter((o) => o.kind === 'nuclear').length === 0);
+  setTitle('btn-turbines', `Gas turbines: +${GAS_MW} MW at once, enough for ${fmtInt((GAS_MW * 1000) / KW_PER_GPU)} GPUs. The county notices each one.`);
+  setTitle('btn-solar', `Solar + storage: +${SOLAR_MW} MW, enough for ${fmtInt((SOLAR_MW * 1000) / KW_PER_GPU)} GPUs, after ${fmtClock(solarSeconds(s))} in the interconnect queue. Rides through curtailment.`);
+  setTitle('btn-nuclear', `A shuttered reactor, restarted for OpenMind: +${fmtInt(NUCLEAR_MW)} MW after a two-minute restart, enough for ${fmtInt((NUCLEAR_MW * 1000) / KW_PER_GPU)} GPUs.`);
 
   const q = queueLine(s);
   setText('interconnectLine', q);
   showId('interconnectLine', q.length > 0);
 }
 
-/**
- * `Build share: 50% · next 5,000 lot in 0:31 · Sage-2.5 in 0:52` (arc G34): the share moves two
- * printed clocks, the build fund's next lot and the run's price.
- */
+/** `Build share: 50%`: the share of income that fills the build fund (its row is in Stores). */
 function renderBuildShare(s: GameState): void {
   if (!s.revealed['buildShare']) return;
   setText('btn-buildShare', `${Math.round(s.buildShare * 100)}%`);
   setText('buildFund', fmtMoneyShort(Math.floor(s.buildFund)));
-  const parts: string[] = [];
-  const sizes = lotSizes(s).filter((n) => lotFits(s, n) && lotCostOf(s, n) > s.buildFund);
-  // Stage 3 draws one grey lot row with its own clock: the share does not say it twice.
-  if (sizes.length && s.stage === 2) {
-    const n = sizes[0]!;
-    const eta = buildEta(s, lotCostOf(s, n));
-    if (Number.isFinite(eta) && eta < 3600) parts.push(`next ${fmtInt(n)} lot in ${fmtClock(Math.max(1, eta))}`);
-  }
-  // Stage 3's runs are paid in research, not from either purse: the share's one clock is the lot's.
-  if (s.stage === 2 && s.revealed['training'] && trainSlotFree(s) && s.training.cooldown <= 0) {
-    const eta = runPaidInSeconds(s);
-    if (eta >= 1 && Number.isFinite(eta) && eta < 3600) parts.push(`${nextRunName(s)} in ${fmtClock(eta)}`);
-  }
-  setText('buildShareNote', parts.length ? `· ${parts.join(' · ')}` : '');
 }
 
-/** The Standing order's row: `Standing order: on · next lot in 0:31`, or the wall it waits on. */
+/** `Standing order: ON`, the toggle as it was before the build fund. */
 function renderStanding(s: GameState): void {
   if (!s.revealed['standingOrder']) return;
-  const line = standingLine(s);
   const on = standingOrderOn(s);
-  setText('btn-standing', on ? 'Standing order: on' : 'Standing order: off');
-  setText('standingNote', line.replace(/^Standing order: (on|off) ?·? ?/, '').replace(/^Standing order: /, ''));
-}
-
-/** A plant's queue in words where it is a round figure (`three minutes`), so the row carries one number fewer. */
-function spokenWait(seconds: number): string {
-  const words: Record<number, string> = { 15: '15 seconds', 30: 'half a minute', 60: 'a minute', 90: 'a minute and a half', 120: 'two minutes', 180: 'three minutes' };
-  return words[Math.round(seconds)] ?? fmtClock(seconds);
-}
-
-/** The power fix a full meter names: the plant that comes soonest, `Gas turbines add 20 MW`. */
-function cheapestPlantFix(s: GameState): string {
-  if (s.revealed['gasButton']) return `Gas turbines add ${GAS_MW} MW`;
-  if (s.revealed['solarButton']) return `Solar adds ${SOLAR_MW} MW`;
-  return 'Power plants add it';
+  setToggle('btn-standing', on, on ? 'ON' : 'OFF');
 }
 
 /** Trust on screen is never negative: what the lab owes is said in words (critic round 2 §4.3). */
@@ -465,7 +384,9 @@ function renderResearch(s: GameState): void {
   setText('trust', fmtTrust(s.trust));
   setText('nextTrust', fmtInt(s.nextTrust));
   setDisabled('btn-hireResearcher', s.trust < 1);
-  // From Stage 2 Trust buys only what names it: the Hire/Expand note goes with them.
+  // From Stage 2 Trust buys only what names it: the Hire and Expand row goes with its buttons.
+  const hire = s.revealed['hireResearcher'] === true && s.revealed['hireFaded'] !== true;
+  setOff('hireRow', s.stage >= 2 && !hire && s.revealed['expandLab'] !== true);
   setOff('trustCostNote', s.stage >= 2);
   setDisabled('btn-expandLab', s.trust < 1);
   setTitle('btn-expandLab', `1 Trust: room for ${fmtInt(1000 * s.labMult)} more research.`);
@@ -474,9 +395,9 @@ function renderResearch(s: GameState): void {
   const cap = researchCap(s);
   setText('research', fmtInt(Math.floor(s.research)));
   setText('researchCap', fmtInt(Number.isFinite(cap) ? cap : 0));
-  if (Number.isFinite(cap) && cap > 0) {
-    const label = `${fmtInt(Math.floor(s.research))} of ${fmtInt(cap)} the lab holds`;
-    setMeter(s.revealed['stores'] ? 'researchMeterS' : 'researchMeter', s.research / cap, 'use', label);
+  // Stage 1's research line carries the bar; in Stores the row is `research 320,592 / 416,000`.
+  if (Number.isFinite(cap) && cap > 0 && !s.revealed['stores']) {
+    setMeter('researchMeter', s.research / cap, `${fmtInt(Math.floor(s.research))} of ${fmtInt(cap)} the lab holds`);
   }
   // Lab Space is folded into the cap it produces; Insight reads "none yet" until there is some.
   setText('insight', s.insight >= 1 ? fmtInt(Math.floor(s.insight)) : 'none yet');
@@ -486,8 +407,9 @@ function renderResearch(s: GameState): void {
     const slider = byId<HTMLInputElement>('allocSlider');
     if (document.activeElement !== slider && slider.value !== String(pct)) slider.value = String(pct);
     setText('allocPct', `${pct}%`);
-    // Its two rates beside it (round 2 item 5): `· research +3,495/s · revenue −24%`.
-    if (s.stage === 2) setText('allocRate', ` · research +${fmtInt(Math.round(aiResearchRate(s)))}/s · revenue −${fmtInt(Math.round(revenueCostOfAlloc(s) * 100))}%`);
+    // The slider and its share, as before; what the share does is in the slider's hover.
+    if (s.stage === 2) setText('allocRate', '');
+    setTitle('allocSlider', s.stage === 2 ? `Research +${fmtInt(Math.round(aiResearchRate(s)))} a second; revenue −${fmtInt(Math.round(revenueCostOfAlloc(s) * 100))}%.` : '');
     const share = humanShare(s) * 100;
     setText('humanShare', `${share >= 10 ? fmtInt(share) : fmtNum(share, share >= 1 ? 1 : 2)}%`);
   }
@@ -496,21 +418,6 @@ function renderResearch(s: GameState): void {
 }
 
 const projectButtons = new Map<string, HTMLButtonElement>();
-
-/** Seconds until a card is paid for from what comes in (funds after the build share, research, insight). */
-function cardEta(s: GameState, c: { funds?: number; research?: number; insight?: number; trust?: number; data?: number }): number {
-  const eta = (need: number | undefined, have: number, rate: number) => {
-    const short = (need ?? 0) - have;
-    if (short <= 0) return 0;
-    return rate > 0 ? short / rate : Infinity;
-  };
-  if ((c.trust ?? 0) > s.trust) return Infinity;
-  return Math.max(
-    eta(c.funds, s.funds, fundsIncome(s)),
-    eta(c.research, s.research, researchRate(s)),
-    eta(c.insight, s.insight, insightRate(s)),
-  );
-}
 
 /** Buttons are kept and updated in place so a hover or a half-finished click survives a re-render. */
 function renderProjects(s: GameState): void {
@@ -532,15 +439,6 @@ function renderProjects(s: GameState): void {
       b = make('button', { class: cls, id: `proj-${def.id}`, 'data-project': def.id });
       const title = make('b', { class: 'projectTitle' });
       b.append(title, make('br'), make('span', { class: 'projectDesc' }, def.description), make('span', { class: 'projectReason reason' }));
-      // First Datacenter's two status lines (§2): the cloud's GPUs against the next model, and the price.
-      if (def.id === 'p_datacenter') {
-        for (const part of ['Need', 'Money']) {
-          const line = make('span', { class: 'projectStatus', id: `dc${part}Line` });
-          if (part === 'Need') line.append(make('span', {}, 'Cloud GPUs the next model needs '));
-          line.append(make('span', { class: 'meter', id: `dc${part}Meter`, role: 'img' }), make('span', { id: `dc${part}Text` }));
-          b.append(line);
-        }
-      }
       const id = def.id;
       b.addEventListener('click', () => perform('buyProject', id));
       projectButtons.set(def.id, b);
@@ -548,27 +446,17 @@ function renderProjects(s: GameState): void {
     if (list.children[i] !== b) list.insertBefore(b, list.children[i] ?? null);
     const title = b.firstElementChild as HTMLElement;
     const needs = s.stage >= 3 && def.prereq && def.needs && !def.prereq(s) ? ` (${def.needs(s)})` : '';
-    // A purchase that delays the waiting run prints the delay (arc G34 rule 3): `· Sage-2.5 0:41 later`.
-    const delay = def.canAfford(s) ? delayNote(s, def.cost(s)) : '';
-    const label = `${def.title} ${priceTag(s, def)}${needs}${delay}`;
+    // A card is its title, its price and its sentence, in every stage and for as long as it is on screen.
+    const label = `${def.title} ${priceTag(s, def)}${needs}`;
     if (title.textContent !== label) title.textContent = label;
-    // Grey is for goals (stage2-round2-fixes.md item 7): in Stage 2 a card more than three minutes
-    // from its purses' income is not drawn; the stage goal and a wall's fix are excepted.
-    const far = s.stage === 2 && !def.pinned && !def.rescue && def.urgent?.(s) !== true && cardEta(s, def.cost(s)) > 180;
-    if (b.classList.contains('off') !== far) b.classList.toggle('off', far);
-    // From Stage 2 a card's description is read in its first 45 s on screen, then lives in its hover
-    // while the card is greyed; a card that can be bought shows it until it is (critic S3 round 1 §9
-    // item 8: the median card is bought after 152–176 s, and at 390 px there is no hover).
-    const fold = s.stage >= 2 && !def.canAfford(s) && folded(s, `card:${def.id}`);
-    if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
-    const tip = fold ? def.description : '';
+    // What a greyed card is waiting on lives in its hover: the lab it needs, or (First Datacenter) the
+    // GPUs the next model needs against what the cloud rents.
+    const tip = def.id === 'p_datacenter' && s.stage === 1 ? datacenterTip(s) : labReason(s, def.cost(s).research ?? 0);
     if (b.title !== tip) b.title = tip;
-    // A card the lab cannot hold says so, with the fix on screen (§3): `needs a lab that holds 2,000 — Expand Lab`.
-    const reason = b.querySelector<HTMLElement>('.projectReason');
     // Stage 5: a mission is grey only while its fund is short, and says by how much and when (§2.2).
-    const why = def.mission ? missionNeeds(s, def) : labReason(s, def.cost(s).research ?? 0);
+    const reason = b.querySelector<HTMLElement>('.projectReason');
+    const why = def.mission ? missionNeeds(s, def) : '';
     if (reason && reason.textContent !== why) reason.textContent = why;
-    if (def.id === 'p_datacenter' && s.stage === 1) renderDatacenterCard(s);
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
     // The card that answers a standing wall, or that the stage cannot go on without (arc G31).
@@ -577,29 +465,10 @@ function renderProjects(s: GameState): void {
   });
 }
 
-/**
- * First Datacenter's status (stage1-round3-fixes.md §2). Until the wall: `Cloud GPUs the next model
- * needs ｢￭￭￭￭￭￭････｣ 45 of 80` (and `The one after will not fit.` when the run after next is too
- * big for any cloud) and `Price: 71 minutes of income.`; once it is needed, the money meter:
- * `｢￭￭￭･･･････｣ $87,000 short — about 2:25`.
- */
-function renderDatacenterCard(s: GameState): void {
+/** First Datacenter's hover: the GPUs the next model needs against what the cloud rents. */
+function datacenterTip(s: GameState): string {
   const st = datacenterStatus(s);
-  const rent = Math.max(1, st.rent);
-  setMeter('dcNeedMeter', st.need / rent, 'use', `${fmtInt(st.need)} GPUs for the next model; the cloud rents ${fmtInt(st.rent)}`);
-  setText('dcNeedText', ` ${fmtInt(st.need)} of ${fmtInt(st.rent)}${st.afterTooBig && !st.needed ? '. The one after will not fit.' : ''}`);
-  const meterEl = byId('dcMoneyMeter');
-  if (st.needed) {
-    if (meterEl.classList.contains('off')) meterEl.classList.remove('off');
-    setMeter('dcMoneyMeter', st.price > 0 ? s.funds / st.price : 1, 'use', `${fmtMoneyShort(Math.floor(s.funds))} of ${fmtMoneyShort(st.price)}`);
-    const eta = Number.isFinite(st.eta) && st.eta < 36000 ? ` — about ${fmtClock(Math.max(1, st.eta))}` : '';
-    setText('dcMoneyText', st.short > 0 ? ` ${fmtMoneyShort(Math.ceil(st.short))} short${eta}` : ' in hand');
-  } else {
-    if (!meterEl.classList.contains('off')) meterEl.classList.add('off');
-    const secs = st.incomeSeconds;
-    const words = !Number.isFinite(secs) ? 'more than any income yet' : secs >= 600 ? `${fmtInt(Math.round(secs / 60))} minutes of income` : `${fmtClock(secs)} of income`;
-    setText('dcMoneyText', `Price: ${words}.`);
-  }
+  return `The next model needs ${fmtInt(st.need)} GPUs; the cloud rents ${fmtInt(st.rent)}.${st.afterTooBig && !st.needed ? ' The one after will not fit.' : ''}`;
 }
 
 function renderTraining(s: GameState): void {
@@ -612,33 +481,30 @@ function renderTraining(s: GameState): void {
   setText('rivalCap', fmtNum(s.rivalCapability, 2));
   // The rival's number waits for the Stage 2 graph; until then, words (its value is in the tooltip).
   const lead = s.capability / s.rivalCapability;
-  // Stage 2: when Anthrosoft leads, the cost is on the line (round 2 item 5): `Anthrosoft leads: market −12%`.
+  // Stage 2: when Anthrosoft leads, what it costs the market is in the line's hover.
   const marketCut = s.stage === 2 ? Math.round((1 - qualityMultS2(s)) * 100) : 0;
-  setText('rivalStanding', lead > 1.02 ? 'Ahead of Anthrosoft' : lead < 0.98 ? (marketCut >= 1 ? `Anthrosoft leads: market −${marketCut}%` : 'Anthrosoft is ahead') : 'Level with Anthrosoft');
-  setTitle('rivalLine', `Anthrosoft's latest Cadence model: ${fmtNum(s.rivalCapability, 2)}×.`);
+  setText('rivalStanding', lead > 1.02 ? 'Ahead of Anthrosoft' : lead < 0.98 ? 'Anthrosoft is ahead' : 'Level with Anthrosoft');
+  setTitle('rivalLine', `Anthrosoft's latest Cadence model: ${fmtNum(s.rivalCapability, 2)}×.${lead < 0.98 && marketCut >= 1 ? ` While it leads, the market is ${marketCut}% smaller.` : ''}`);
   for (const focus of ['capability', 'efficiency', 'safety'] as Focus[]) {
     const b = byId(`btn-focus-${focus}`);
     if (b.classList.contains('selected') !== (t.focus === focus)) b.classList.toggle('selected', t.focus === focus);
   }
+  // Each button's own figures (`focusBase` in engine/training.ts): they are nowhere else on screen.
   if (s.stage >= 2) {
-    setTitle('btn-focus-capability', 'Capability: the next model is 10–14% more capable. Customers notice.');
+    setTitle('btn-focus-capability', 'Capability: the next model is 7–10% more capable. Customers notice.');
     setTitle('btn-focus-efficiency', 'Efficiency: +7% capability, and copies per GPU ×1.15.');
     setTitle('btn-focus-safety', 'Safety: +7% capability, measured alignment +8, and fewer issues on every later run.');
   } else {
+    setTitle('btn-focus-capability', 'Capability: the next model is 10–14% more capable. Customers notice.');
+    setTitle('btn-focus-efficiency', 'Efficiency: +5% capability, and 25% more copies on every GPU.');
     setTitle('btn-focus-safety', 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.');
   }
-  // All three trades under the buttons, not in tooltips (critic C5; stage1-round3-fixes.md §4 for Stage 1).
-  const s1 = s.stage === 1;
-  const s2 = s.stage === 2;
-  setText('focusTrade-capability', s2 ? '+12% capability' : s1 ? '+10–14% capability' : '');
-  setText('focusTrade-efficiency', s2 ? 'copies ×1.15' : s1 ? '+5%, copies per GPU ×1.25' : '');
-  setText('focusTrade-safety', s2 ? 'alignment +8' : s1 ? '+5%, fewer issues for good' : '');
-  setText('focusNote', s1 ? '' : focusNote(s, t.focus));
+  // Three plain buttons and the selected Focus's trade in one line under them; each button's own
+  // figures are in its tooltip.
+  setText('focusNote', focusNote(s, t.focus));
 
   const slotRun = evalRun(s);
   const running = trainingRun(s);
-  // During a run a click changes the next run only, and the row says so (§4).
-  setText('focusHead', s1 && (running || slotRun) ? 'Next run:' : 'Focus:');
   // Idle: no run at all, or (two pipelines) one waiting in evaluation and none training.
   const idle = !running && (!t.run || trainSlotFree(s));
   showId('train-idle', idle);
@@ -658,10 +524,9 @@ function renderTraining(s: GameState): void {
  */
 function focusNote(s: GameState, focus: Focus): string {
   const s2 = s.stage >= 2;
-  // Stage 2: the default is not the fast road to 4×, and the note says so (critic C5).
-  if (focus === 'capability') return s2 ? 'The biggest step per run; Efficiency\'s copies pay for the next runs sooner.' : 'The most capable next model (about +17%).';
-  if (focus === 'efficiency') return s2 ? 'More copies: more money for runs, more jobs displaced.' : 'Copies per GPU ×1.25; a smaller capability gain.';
-  return s2 ? 'Fewer issues on every later run, and measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
+  if (focus === 'capability') return s2 ? 'The most capable next model.' : 'The most capable next model (about +12%).';
+  if (focus === 'efficiency') return s2 ? 'More copies on every GPU; a smaller capability gain.' : 'Copies per GPU ×1.25; a smaller capability gain.';
+  return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
 }
 
 function renderIdle(s: GameState): void {
@@ -682,7 +547,7 @@ function renderIdle(s: GameState): void {
   setText('trainGpus', trainGpuLine(s));
   showId('trainGpuLine', need > 0);
   showId('trainGpuMeter', short);
-  if (short) setMeter('trainGpuMeter', have / need, 'use', `${fmtInt(have)} of the ${fmtInt(need)} GPUs ${nextRunName(s)} needs`);
+  if (short) setMeter('trainGpuMeter', have / need, `${fmtInt(have)} of the ${fmtInt(need)} GPUs ${nextRunName(s)} needs`);
   // At the wall the GPU line names the only fix (First Datacenter); the run's money is beside the point.
   setText('trainReason', canStartTraining(s) || needsDatacenter(s) ? '' : trainWait(s));
 }
@@ -696,12 +561,13 @@ function renderRunning(s: GameState, run: TrainingRun): void {
   const waiting = run.elapsed >= run.duration && s.training.run !== run;
   const left = Math.max(0, Math.ceil(run.duration - run.elapsed));
   setText('runRemaining', waiting ? 'trained; waits for the release slot —' : `${left} s`);
-  // `Training on 35 GPUs — 0:48 left. They serve no customers until it is done.` (owner feedback 1, B1)
+  // Stages 1–2: `34 s remaining` under the bar, as before; the GPUs the run holds are in the bar's hover
+  // (and, in Stage 1, beside Copies running). Stage 3 keeps its own line.
   const gpus = run.gpus ?? 0;
-  const all = gpus > 0 && gpusAvailable(s) <= 0;
   setText('runLine', waiting
     ? `${run.name} is trained; it waits for the release slot.`
-    : `Training on ${fmtInt(gpus)} GPUs — ${fmtClock(left)} left.${s.stage >= 3 ? '' : ` ${all ? `All ${fmtInt(gpus)} GPUs are training.` : 'They serve no customers until it is done.'}`}`);
+    : s.stage >= 3 ? `Training on ${fmtInt(gpus)} GPUs — ${fmtClock(left)} left.` : `${left} s remaining`);
+  setTitle('runLine', s.stage >= 3 || waiting ? '' : `Training on ${fmtInt(gpus)} GPUs. They serve no customers until it is done.`);
 }
 
 function renderEval(s: GameState, run: TrainingRun): void {
@@ -737,18 +603,19 @@ function renderEval(s: GameState, run: TrainingRun): void {
     });
   }
   setText('evalScore', evalP >= 1 ? fmtInt(totalScore(run)) : '…');
-  // What the run changes when it ships (critic C5: `copies per GPU 1.88 → 2.35`).
-  setText('evalChange', evalP >= 1 && s.stage === 2 && run.focus !== 'capability' ? `· ${focusChange(s, run)}` : '');
   setText('evalCap', evalP >= 1 ? fmtNum(run.capAfter, 2) : '…');
-  setTitle('evalTotal', evalP >= 1 ? `Reviewers' score: ${totalScore(run)}/40.` : '');
+  // What the run changes when it ships (`copies per GPU 1.88 → 2.35`) is in the total's hover.
+  setTitle('evalTotal', evalP >= 1 ? `Reviewers' score: ${totalScore(run)}/40.${s.stage === 2 && run.focus !== 'capability' ? ` ${focusChange(s, run)}` : ''}` : '');
   if (condensed) {
     const done = evalP >= 1;
     const issues = run.phase === 'redteam' ? run.issues : run.issuesFound;
     setText(
       'evalLine',
       done
-        // In red team, `Open issues: 1` is the line below; the count is said once.
-        ? `${run.name} … ${s.stage >= 3 ? '' : `${totalScore(run)}/40 · `}${fmtNum(run.capAfter, 2)}×${run.phase === 'redteam' ? '' : ` · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`}`
+        // Stage 3 says the count once (`Open issues: 1` is the line below) and drops the score.
+        ? s.stage >= 3
+          ? `${run.name} … ${fmtNum(run.capAfter, 2)}×${run.phase === 'redteam' ? '' : ` · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`}`
+          : `${run.name} … ${totalScore(run)}/40 · ${fmtNum(run.capAfter, 2)}× · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`
         : `Evaluating ${run.name} …`,
     );
     setTitle(
@@ -767,12 +634,11 @@ function renderEval(s: GameState, run: TrainingRun): void {
     setText('issuesOpen', fmtInt(run.issues));
     setDisabled('btn-redteam', !canRedTeam(s));
     const cooling = t.redTeamRemaining > 0 ? t.redTeamRemaining / t.redTeamDuration : 0;
-    setWidth(byId('redteamBar'), cooling);
+    renderCooldown(byId('btn-redteam'), byId('redteamBar'), cooling);
     setTitle('btn-redteam', `Close one open issue every ${t.redTeamDuration} s.`);
     setDisabled('btn-release', !canReleasePublic(s));
     setDisabled('btn-releaseInternal', !canRelease(s));
-    // The count is on the line above (`Open issues: 1`); the button says only that some are open.
-    setText('btn-release', run.issues > 0 ? 'Release (issues open)' : 'Release');
+    setText('btn-release', run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
     const sh = superhumanTooltips(s);
     setTitle(
       'btn-release',
@@ -797,22 +663,24 @@ function renderWorld(s: GameState): void {
   if (s.revealed['security']) {
     setText('securityNote', SECURITY_NOTES[s.securityLevel] ?? `SL${s.securityLevel}`);
     const c = sl3Cost(s);
-    const delay = s.securityLevel < 3 && s.funds >= c.funds && s.trust >= c.trust ? delayNote(s, { funds: c.funds }) : '';
-    setText('sl3Cost', `${c.trust ? `${fmtMoneyShort(c.funds)}, ${c.trust} Trust` : fmtMoneyShort(c.funds)}${delay}`);
+    setText('sl3Cost', c.trust ? `${fmtMoneyShort(c.funds)}, ${c.trust} Trust` : fmtMoneyShort(c.funds));
     setDisabled('btn-sl3', s.securityLevel >= 3 || s.funds < c.funds || s.trust < c.trust);
     // Bought, the row goes (critic S2 round 2 §8.8.7: it stayed, greyed, into Stage 3).
     setOff('sl3Row', s.securityLevel >= 3);
   }
   setText('govRelations', fmtInt(Math.round(s.govRelations)));
   setText('govMood', govMood(s));
-  // A consequence per band, with its threshold on screen (critic C7).
-  setText('govNote', s.stage === 2 ? govBandNote(s) : '');
-  setText('approvalNote', s.stage === 2 ? approvalBandNote(s) : '');
-  setText('alignNote', s.stage === 2 ? alignBandNote(s) : '');
+  // What each band of relations, approval and measured alignment does is in its line's hover.
+  setText('govNote', '');
+  setText('approvalNote', '');
+  setText('alignNote', '');
+  setTitle('govLine', govBandNote(s));
+  setTitle('alignLine', alignBandNote(s));
   setToggle('btn-shareEvals', s.shareEvals, s.shareEvals ? 'ON' : 'OFF');
   const a = Math.round(s.approval);
   setText('approval', `${a < 0 ? '−' : a > 0 ? '+' : ''}${fmtInt(Math.abs(a))}`);
-  setTitle('approvalLine', approvalTerms(s).map(([k, v]) => `${k} ${v > 0 ? '+' : '−'}${fmtNum(Math.abs(v), 1)}`).join('\n') || 'Nothing moves it yet.');
+  const band = approvalBandNote(s);
+  setTitle('approvalLine', `${approvalTerms(s).map(([k, v]) => `${k} ${v > 0 ? '+' : '−'}${fmtNum(Math.abs(v), 1)}`).join('\n') || 'Nothing moves it yet.'}${band ? `\n${band}` : ''}`);
   setText('jobsDisplaced', fmtJobs(s.jobsDisplaced));
   setToggle('btn-jobFund', s.jobFund, s.jobFund ? 'ON' : 'OFF');
   if (s.revealed['stats']) {
@@ -830,6 +698,7 @@ function renderWorld3(s: GameState): void {
   setText('govRelations', fmtInt(Math.round(s.govRelations)));
   setText('govMood', govMood(s));
   setText('govNote', '');
+  setTitle('govLine', '');
   setToggle('btn-shareEvals', s.shareEvals, s.shareEvals ? 'ON' : 'OFF');
   setDisabled('btn-shareEvals', s.flags['evalsLocked'] === true);
   renderOversight(s);

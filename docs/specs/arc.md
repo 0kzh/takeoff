@@ -39,25 +39,29 @@ The owner played the build of 2026-10-04. Where a note of theirs and a critic-dr
    disabled and says why. The yield mechanic and `Train now` are withdrawn. Those GPUs are busy while it trains.
 3. **Stage 1 ends with one purchase, `First Datacenter`.** The Abilene ladder, its rungs, panel and countdown are
    gone. Stage 1 targets 20–26 minutes at 240 s a month, with about five runs.
-4. **Capacities are meters** (`｢￭￭￭･･｣`, one style everywhere), and a row with a meter shows one number. GPUs
-   cannot be bought into no power or no room; the rows say that GPUs need power.
+4. **Capacities are meters** (the original training bar: black border, white track, `#888` fill — one style
+   for every bar, `renderMeter()` in `ui/meter.ts`). GPUs cannot be bought into no power or no room; a greyed
+   lot says which (`no power`, `no room`). (Owner feedback 2, below: the bars are on Stage 1's power, quota and
+   research lines and on a Train row short of GPUs; Stores rows are text, `GPUs 11,000 / 25,000`.)
 5. The Pause needs a lead of 1 month, not 2 (the built Stage 2 ends at 1.4; `stage3.md`, as-built deltas).
 
 ## Amendments after the Stage 1 round-3 critic (`stage1-round3-fixes.md`)
 
 1. **What a run costs changes once a stage, and is said each time.** Stage 1: dollars and GPUs (research buys
    cards only). Stage 2: dollars, research and data, and GPUs. Stage 3: research, and GPUs. Stage 4: nothing.
-2. (Withdrawn by G34, below: nothing is held back for a run. The purchases that delay it print the delay.)
-3. First Datacenter appears at the third release, prints its price in minutes of income and a meter of the
-   cloud's GPUs; cards wait until they cannot be paid for at once; events queue behind the player's progress
-   and list their default first.
+2. (Withdrawn by G34, below: nothing is held back for a run.)
+3. First Datacenter appears at the third release (a plain card since owner feedback 2: the GPUs the next model
+   needs against the cloud's are in its hover); cards wait until they cannot be paid for at once; events queue
+   behind the player's progress and list their default first.
 
 ## Amendments after the Stage 2 round-2 critic (`stage2-round2-fixes.md`)
 
 1. **G34, the wallet rule,** for every stage: no holds; a purse and a share for a sink income could feed
-   forever; a printed delay on everything else; a price never disables Train. Stage 2 gets a build fund and a
-   build share from its first second; Stage 3 keeps both, and `Alignment work` becomes a share of research.
-2. G27 counts a standing share as a sink. G14: a capacity row prints its meter, the amount and the capacity.
+   forever; a price never disables Train. Stage 2 gets a build fund and a build share from its first second;
+   Stage 3 keeps both, and `Alignment work` becomes a share of research. (The printed delay on everything else
+   is withdrawn from the core panels by owner feedback 2.)
+2. G27 counts a standing share as a sink. G14: a capacity row prints the amount and the capacity (`17,105 /
+   25,000`).
 3. Train can be armed in Stages 1 and 2 (one press a run); the permanent version is Stage 3's grant.
 
 ## Amendments after the Stage 5 as-built patch (`stage5.md`, as-built deltas)
@@ -70,6 +74,60 @@ The owner played the build of 2026-10-04. Where a note of theirs and a critic-dr
    else: alignment is fixed at Stage 4's exit.
 3. The whole game for the reasonable bot is about 157 minutes: 132 through the built Stages 1–4, and Stage 5 at
    25:29 on paper (22:36 in Silence).
+
+
+## Amendments after owner feedback 2 (2026-10-04: the core screen reads as it did at `a2117b5`)
+
+The owner, after a day of critic-driven passes: "the UI has gotten too confusing. please keep the core UI like
+a2117b5" (`a2117b5` is the last commit of 2026-10-03, when Stages 1–2 were the game). Earlier the same day:
+"keep the original training bars style (on oct 3rd) for all progress bars" and "show old research capacity like
+before". Where a guardrail below asks for text on these panels, this note wins.
+
+**The rule**, for every panel that existed at `a2117b5` (Stores, Power, Business, Compute, Infrastructure,
+Research, Projects, Training, the graph, Security, Government, Public, Stats), in every stage that shows it:
+
+1. A row `a2117b5` showed reads as it did then: the same words, order and element.
+2. A row it did not show stays only if the owner asked for it or the mechanics cannot be played without it, and
+   then as a label and a value, or a button, its price and at most a short italic reason.
+3. Nothing is strung after a row: no delay, clock, return, rate or band edge. Those live in hovers (`title`).
+
+| Panel | Reads |
+|---|---|
+| Power (Stage 1) | `Power [bar] 12,916 kWh` · `Buy Power  Cost: $ 183.80` · `Grid Contract: ON buys as needed` · out of power: `no power — copies idle` |
+| Business | `Unbilled Tasks: 237` · `lower raise Price per Task: $ 0.14` on one line · `Billing 8.6/s of 24.0/s produced: backlog growing` / `Billing all 270/s produced: selling out` · `Marketing  Level: 7` / `Cost: $ 1,600.00` |
+| Compute | `Rent GPU  Cost: $ 948.44` · `GPUs rented: 34`, then from the quota's reveal `GPUs rented [bar] 89 / 100` · `Copies running: 80 (15 GPUs are training)` |
+| Research | `Next Trust at 87,700 tasks` (Stages 1–2) · `Research [bar] 1,040 / 12,000` (Stage 1) · `Copies on research: [slider] 20%` |
+| Projects | A card is its title and price and its sentence, in every stage and for as long as it is on screen. First Datacenter is such a card. No `— needed` mark in Stages 1–2 |
+| Training | `Focus:` and three plain buttons, the selected one's trade in one line under them (`The most capable next model (about +12%).`) · `Train Sage-1.5  Cost: $120,000` · `Needs 55 GPUs for 1:09` (owner feedback 1; a bar before it when short) · the wait in italics: `money — about 0:07`, `short $2.3M — about 0:16`, armed `starts when paid for — about 1:08` · training: the bar and `34 s remaining` · `Release (3 open)` |
+| Stores | One line a row, no bars: `funds` · `build fund` · `research 320,592 / 416,000` · `GPUs 11,000 / 25,000` · `power 25 MW` (`all in use: 25 MW`, `3,000 GPUs dark: 25 MW`) · `copies` · `data` |
+| Infrastructure | `Build share: 50%` · `Buy GPUs (1,000) $123,600` and, greyed by a wall, `no room` or `no power` (short of money it is grey and says nothing: the fund is in Stores) · `Build Datacenter (+15,000 slots) $360,000`, while it goes up `building — 0:41` · `Gas turbines (+20 MW) $245,000` (the size leaves the button once one is built) · `Standing order: ON` |
+| Graph | `Next: superhuman coder at 4.00×` · `Baiwen: about 3 months behind` |
+| Security, Government, Public, Stats | `Air-gap the weights  $48.0M, 3 Trust` · `Relations: 63 (close)` · `Approval: −4` · `Jobs displaced: 0.1M` · `Revenue run-rate: $ 380.6M / yr` (Stage 2) · `Alignment (as measured): 77` |
+
+**What left these panels** (hover where noted): the delay beside a purchase (`· Sage-2.2 0:39 later`: cards,
+Marketing, Rent GPU, Security level 3, priced event options); the build share's clocks; a build row's `$113,125
+short — 0:14`, `uses 1 MW of 4 free · +$1,234/s` (hover) and `runs 20,000 GPUs · now · 5.0 MW idle` (hover); the
+Standing order's `next lot in 0:31`; the Stores bars and their second lines (`runs 25,000 GPUs`, `full · Gas
+turbines add 20 MW`); the captions inside the Focus buttons and `Next run:`; the slider's `research +2,056/s ·
+revenue −9%` (hover); the band edges after relations, approval, measured alignment and the lead (hover);
+`Anthrosoft leads: market −12%` (hover); the evaluation's `copies per GPU 1.88 → 2.35` (hover); First
+Datacenter's two status lines (hover); `needs a lab that holds 2,000 — Expand Lab` (hover); `each copy burns a
+kWh a task`; `by the copies' tasks`; the sentences in place of the billing line; the 45-second fold of a card's
+sentence; the rule that hid a card more than three minutes away; the names of cards after the Train row's wait.
+
+**What stays different from `a2117b5`**, and why: the one-at-a-time opening, the bars on Stage 1's power, quota
+and research lines and on a Train row short of GPUs, First Datacenter in place of the ladder, and `Needs N
+GPUs` in place of `undertrained` (the owner's own notes); `build fund`, `Build share`, the lot rows that climb
+with the fleet, an armed Train, Marketing and Hire leaving in Stage 2 (mechanics added since, unchanged here).
+
+**Guardrails amended.** G14: a capacity row is `amount / capacity`; the bars are where the owner asked for
+them. G17: a standing switch on a core panel prints the selected setting's trade in one line; the rest is in
+the buttons' hovers (modal options are unchanged). G27: on the core panels a sink's return is in its hover.
+G30: a core panel's band edges are in the line's hover. G31: no `— needed` mark in Stages 1–2. G34 (1) and (3):
+on the core panels a row short of its purse is grey and says nothing, and no purchase prints a delay; the
+simulator still measures the delay (`runDelaySeconds`), and its bots still decline on it. Stage 3's on-screen
+budget is 90 numbers and 380 words (the cards keep their sentences). Panels that exist only in Stages 3–5 keep
+their own notes and clocks until the owner says otherwise.
 
 ## 1. Requirements checklist
 
@@ -259,7 +317,7 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G2 | A new panel or mechanic (a new verb, toggle, slider, Stores row or instrument line) | about every 4 min; never more than 270 s (360 s in Stage 5, which must not promise more than it has) | Sim: gaps between `REVEAL` events of kind panel/button/toggle/slider/row |
 | G3 | A greyed-out goal is on screen | ≥ 99 % of ticks, counted from the first purchase; ≥ 2 distinct greyed goals throughout the last 10 min of a stage. In Stage 1's first three minutes the next unit of the newest mechanic (a GPU, a power block) counts, lit or grey (owner feedback 1) | Sim: visible unaffordable projects and buttons; `#nextTrust` / `#nextTier` count as one |
 | G4 | No chore | No verb pressed more than twice in any 60 s once its automation exists; automation offered within 8 presses or 4 min | Sim: per-verb press log |
-| G5 | No disclosure spike | ≤ 8 new on-screen numbers and ≤ 3 new interactive elements in any beat. Stage 1's first five minutes: one mechanic a beat, ≤ 4 new numbers and ≤ 2 new controls, beats ≥ 30 s apart after the first GPU (owner feedback 1) | Engine: the reveal scheduler (15 s between projects); Playwright snapshot diff |
+| G5 | No disclosure spike | ≤ 8 new on-screen numbers and ≤ 3 new interactive elements in any beat. Stage 1's first five minutes: one mechanic a beat, ≤ 4 new numbers and ≤ 2 new controls, beats ≥ 30 s apart after the first GPU (owner feedback 1). Research prints its capacity as the original pair, `Research [meter] 837 / 1,000`, which counts as one number (owner, 2026-10-04) | Engine: the reveal scheduler (15 s between projects); Playwright snapshot diff |
 | G6 | Every wait is named | A console line with the name and the time left within 2 s of the wait starting | Unit test per timer |
 | G7 | Every transition is narrated | ≥ 3 console lines over ~6 s saying what was lost, what replaced it and what the new number means; previous 4 lines kept; ≥ 1 affordable action | Sim + Playwright at each preset |
 | G8 | Every resource that can hit zero has a rescue | Rescue reachable within 60 s without the missing resource | `stageN.md` soft-lock table; sim "worst choice" seeds |
@@ -268,9 +326,9 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G11 | The exit goal is visible early | ≥ 8 min before it is reachable | Sim: exit project `shown` time vs exit time |
 | G12 | Idle rescues | ≤ 1 per stage for the reasonable bot | Sim counter |
 | G13 | No wall is carried across a transition | Next training run affordable in cap terms; Trust ≥ 0; ≥ 1 affordable action | `enter()` pre-flight |
-| G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage. A new game: ≤ 1 / 4 / 6 / 11 / 17 / 22 numbers at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00. A capacity row prints its meter, the amount and the capacity (`17,105 of 25,000`); both figures count (`stage2-round2-fixes.md` item 6) | Playwright count at 5-min marks |
+| G14 | On-screen load | ≤ 65 numbers and ≤ 30 interactive elements outside the log and console, and within 25 % of the critic's count for the matching UP stage. A new game: ≤ 1 / 4 / 6 / 11 / 17 / 22 numbers at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00. A capacity row prints the amount and the capacity (`17,105 / 25,000`); both figures count (`stage2-round2-fixes.md` item 6; owner feedback 2 for the form) | Playwright count at 5-min marks |
 | G16 | Decisions decide | Every framed choice axis of a stage (each modal, each standing switch or slider, each grant taken or refused) moves the stage's length by ≥ 3 min, or moves an exit variable a later stage reads by a stated margin: true alignment ≥ 8, lead ≥ 1 month, relations ≥ 10, approval ≥ 10, or a branch or ending flag | Sim variants on seeds 1–3, each the reasonable bot with one thing changed (`--variant modals-first`, `modals-last`, `modals-never`, one per switch extreme). The stage spec lists its axes and the spread expected. An axis that fails is cut or stops being framed as a choice |
-| G17 | Stakes on the button | A standing switch (Focus, Verify, a goal selector) prints its trade under its buttons the same way. Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
+| G17 | Stakes on the button | A standing switch (Focus, Verify, a goal selector) prints its trade under its buttons the same way (on a core panel: the selected setting's trade in one line, the rest in the buttons' hovers; owner feedback 2). Each modal option is two lines: its label, then every visible effect and cost in numbers. Nothing a decision needs is only in a tooltip. A greyed option says what it needs. A funds or research stake is sized when the modal opens: at least 90 s of income, or a quarter of the dearest goal on screen. A hidden variable's stake is a sentence, never its number | Playwright reads the option text; unit test on the sizing |
 | G18 | Goals, not a conveyor belt | Median time from a project's first appearance to its purchase ≥ 90 s for the reasonable bot; ≤ 20 % bought within 10 s; nothing refunds its own price. Engine backstop: at reveal a price is raised to 90 s of its currency's current rate when the list price is lower; a prerequisite gates the purchase, not the appearance | Sim: reveal → purchase table; `FLOOR` lines on ≤ 30 % of rows |
 | G19 | Text budget | ≤ 260 words on screen outside the console and log (≤ 200 in Stage 1); ≤ 2.5 console lines and ≤ 1.5 Developments lines a minute over any five minutes; one flavour line per training run; a console line carries a number, a name or an instruction; ≤ 14 first-time reveals in any six minutes; projects drip 30 s apart for the first five minutes of a stage | Playwright word count at 5-min marks; sim line counter |
 | G20 | Modals never block input | A modal is a card docked in the page. Everything behind it stays clickable, focus moves into it, Escape or its timer takes the stated default, and one without a timer can be left open | Playwright clicks a button behind an open modal |
@@ -280,14 +338,14 @@ opening for the first time. Carried-over projects do not count. A "beat" is a 5-
 | G24 | Something to buy | After the first 3 minutes of a stage, at most 50 % of 2-second checks find no enabled purchase (Stage 2 as built: 85–88 %; Paperclips: 1 %) | Harness: the first-timer policy samples every enabled, affordable control each 2 s (`explore-sN.mjs baseline`, seeds 1–3). Sim: the same count from `noveltyKeys`, in the stage block |
 | G25 | A choice of purchases | Two or more distinct affordable things in at least 25 % of checks (Stage 2: 4–5 %; Paperclips: 97 %) | Same samples; "distinct" = different controls with different printed returns |
 | G26 | Hands stay busy | After the first 10 minutes, at most 35 % of the time lies inside stretches of 30 s or more without a click (Stage 2: 63–69 %; Paperclips: 28 %). The number the stage's goal is stated in moves at least every 5:30 | Harness click log; sim press log for the reasonable bot; sim: intervals between changes of the goal number |
-| G27 | Sinks print their return | Every repeatable purchase, slider and standing switch prints, beside the control and not in a hover, what one more unit or one more notch returns, and what it costs in the thing being waited for. Each stage has at least two player-steered sinks live at all times (a repeatable button or a standing share), so their returns compete; a repeatable at a flat price is a share with its own purse (G34) | Playwright: text beside every repeatable control; sim: list of enabled repeatables at each 5-min mark |
+| G27 | Sinks print their return | Every repeatable purchase, slider and standing switch prints, beside the control and not in a hover, what one more unit or one more notch returns, and what it costs in the thing being waited for (on the core panels it is in the hover: owner feedback 2). Each stage has at least two player-steered sinks live at all times (a repeatable button or a standing share), so their returns compete; a repeatable at a flat price is a share with its own purse (G34) | Playwright: text beside every repeatable control; sim: list of enabled repeatables at each 5-min mark |
 | G28 | A removal hands over a heavier lever | When a grant, a transition or the model removes a control, a control one level up (a budget, a target, a goal) appears in the same beat. The only exception is the Silence skin's last three minutes | Sim logs `REMOVED <ids> → GAINED <ids>` for every removal; an empty right side fails |
 | G29 | No dead grey, no dead advice | No control is greyed in 100 % of a stage's checks (hide it instead). A console line never names a verb that is not on screen and enabled or one purchase away. No line prints more than six times a stage or twice in 3 minutes | Sim: enabled share per control; a console linter over the stage's lines |
-| G30 | Meters bite | Every meter on screen has at least one consequence the player can see in each of its bands, inside the stage where it appears, and the band edges are printed in its panel (`−30: permits slow · −40: riots`) | The stage spec's meter table; sim: each band's consequence fires in at least one variant |
-| G31 | Walls repeat and point | A wall line repeats every 180 s while the wall holds and names the card or control that answers it. A card that answers a standing wall, or without which the stage cannot proceed, is drawn in the `urgent` style from its first appearance | Sim wall log; Playwright class check |
+| G30 | Meters bite | Every meter on screen has at least one consequence the player can see in each of its bands, inside the stage where it appears, and the band edges are printed in its panel (`−30: permits slow · −40: riots`; on a core panel, in the line's hover: owner feedback 2) | The stage spec's meter table; sim: each band's consequence fires in at least one variant |
+| G31 | Walls repeat and point | A wall line repeats every 180 s while the wall holds and names the card or control that answers it. A card that answers a standing wall, or without which the stage cannot proceed, is drawn in the `urgent` style from its first appearance (from Stage 3: Stages 1–2 draw their cards as first built; owner feedback 2) | Sim wall log; Playwright class check |
 | G32 | Nothing changes silently | No number on screen changes at a transition, a clamp, an exit or a grant without a console line that gives the old and the new value | Sim: visible numbers before and after each `enterStage`, clamp and grant, against the narration |
 | G33 | Thresholds are generous | A result within 3 % below a threshold the screen names (a rung, a gate, a ceiling) is rounded up to it | Unit test on each named threshold |
-| G34 | The wallet rule | (1) A control is grey only because its purse cannot pay (it prints the shortfall and a clock) or because a stated requirement is unmet; nothing is reserved, held back or shrunk for the player. (2) A repeatable purchase at a flat price never shares a purse with a run or a stage goal: it has its own purse, filled by a share of income the player sets, and the share prints both clocks. (3) Any other purchase from a purse that a waiting run or a needed card draws on stays lit and prints the delay it causes when that is 10 s or more. (4) A price never disables Train: with its requirements met it can be pressed, and waits armed | Harness: rows greyed by a reservation 0 %; a whole unit of each flat-price sink lit in ≥ 35 % of checks; stage length ≥ 4:00 apart between the share's ends (Stage 5's `Industry share` is exempt: its other purse buys one-off missions); the run's clock logged before and after every purchase (no unprinted delay of 10 s or more); Train pressable or armed for ≥ 80 % of its idle time |
+| G34 | The wallet rule | (Owner feedback 2: on the core panels a row short of its purse is grey and says nothing, and no purchase prints a delay; (1)'s shortfall and (3)'s delay are measured, not printed.) (1) A control is grey only because its purse cannot pay (it prints the shortfall and a clock) or because a stated requirement is unmet; nothing is reserved, held back or shrunk for the player. (2) A repeatable purchase at a flat price never shares a purse with a run or a stage goal: it has its own purse, filled by a share of income the player sets, and the share prints both clocks. (3) Any other purchase from a purse that a waiting run or a needed card draws on stays lit and prints the delay it causes when that is 10 s or more. (4) A price never disables Train: with its requirements met it can be pressed, and waits armed | Harness: rows greyed by a reservation 0 %; a whole unit of each flat-price sink lit in ≥ 35 % of checks; stage length ≥ 4:00 apart between the share's ends (Stage 5's `Industry share` is exempt: its other purse buys one-off missions); the run's clock logged before and after every purchase (no unprinted delay of 10 s or more); Train pressable or armed for ≥ 80 % of its idle time |
 | G15 | Modals are rationed | ≤ 9 per stage; unprompted modals ≥ 150 s apart (one that comes due inside the window waits); a modal the player opens with their own click is exempt from the spacing; the idle rescue is outside the budget | The built pacer (`cadence.lastModalAt`); sim count per stage |
 
 The **cadence governor** enforces G1: if no first-time reveal has happened for 150 s, the engine reveals the next item

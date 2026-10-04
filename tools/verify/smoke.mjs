@@ -12,9 +12,11 @@
  * first purchase; no yield wording; the Train row's GPU shortfall; numeric-token counts at minutes
  * 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
  * width at every fill; no horizontal overflow at 390 px. Round 3 (stage1-round3-fixes.md, the wallet
- * rule): the Train row costs money only and arms when short; a printed delay; First Datacenter's two
- * status lines before and at the wall; the power and quota rows with their capacity; Focus's three
- * trades and `Next run:`; each event's default listed first; no `… first` hold anywhere.
+ * rule): the Train row costs money only and arms when short; each event's default listed first; no
+ * `… first` hold anywhere. Owner feedback 2 (the core screen reads as it did at a2117b5): no delay
+ * printed beside a purchase; First Datacenter a plain card before and at the wall; `Power [bar] 968
+ * kWh` and `GPUs rented [bar] 61 / 80`; three plain Focus buttons and one note line; the Train row's
+ * bar a whole bar when it shows.
  * Screenshots go to agent-tools/shots/stage1/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
@@ -104,6 +106,8 @@ const SNAPSHOT = () => {
     stage: s.stage,
     numbers: tokens.length,
     numbersOutside: outsideTokens.length,
+    // The lab's capacity is half of the research pair (`837 / 1,000`): one reading, counted once in a beat.
+    capHalves: vis(document.getElementById('researchCap')) ? 1 : 0,
     interactive: buttons.length,
     words,
     panels: panels.map((p) => p.id),
@@ -118,11 +122,19 @@ const SNAPSHOT = () => {
     // Owner feedback 1: no yield anywhere; the Train row names the GPU shortfall and its fix.
     banned: /undertrained|Train now/i.test(text),
     trainShort: vis(document.getElementById('trainGpuMeter')) ? document.getElementById('trainGpus').innerText : '',
+    // The Train row's bar, when shown, is a bar: the width of the others, with a fill as tall as its track.
+    trainMeter: (() => {
+      const m = document.getElementById('trainGpuMeter');
+      const fill = m.querySelector('.meterFill');
+      if (!vis(m) || !fill) return null;
+      return { w: Math.round(m.getBoundingClientRect().width), fillH: Math.round(fill.getBoundingClientRect().height), other: Math.round(document.getElementById('powerMeter').getBoundingClientRect().width) };
+    })(),
     // G3 as amended: a greyed purchase on screen; in the first three minutes the next GPU or power block counts lit.
     greyed: buttons.some((b) => b.disabled && /^(btn-|proj-)/.test(b.id) && !/^btn-(task|lowerPrice|raisePrice)$/.test(b.id)),
     unitShown: ['btn-gpu', 'btn-buyPower'].some((id) => vis(document.getElementById(id))),
-    // Round 3 (stage1-round3-fixes.md, the wallet rule): the Train row, printed delays, First
-    // Datacenter's status lines, capacity rows with their capacity, the Focus row, the event order.
+    // Round 3 (stage1-round3-fixes.md, the wallet rule) as amended by owner feedback 2 (the core screen
+    // reads as it did at a2117b5): the Train row; no printed delays; First Datacenter a plain card; the
+    // power and quota rows; three plain Focus buttons and one note; the event order.
     train: (() => {
       const b = document.getElementById('btn-train');
       if (!vis(b)) return null;
@@ -132,16 +144,21 @@ const SNAPSHOT = () => {
         short: s.funds < (window.__game.state.stage === 1 ? Number(document.getElementById('trainCost').innerText.replace(/[^0-9.]/g, '')) : 0),
       };
     })(),
-    delays: (text.match(/· (?:Sage-\d+\.\d+|First Datacenter) \d+:\d\d later/g) ?? []),
+    delays: (text.match(/· (?:Sage-\d+(?:\.\d+)?|First Datacenter|next run) (?:\d+:\d\d|much) later/g) ?? []),
     dc: (() => {
-      const need = document.getElementById('dcNeedLine');
-      if (!need || !vis(need)) return null;
-      return { need: need.innerText, money: document.getElementById('dcMoneyLine').innerText, wall: s.flags['wallAt'] !== undefined };
+      const card = document.getElementById('proj-p_datacenter');
+      if (!card || !vis(card)) return null;
+      return { text: card.innerText.trim(), meters: card.querySelectorAll('.meter').length, wall: s.flags['wallAt'] !== undefined };
     })(),
     powerLine: vis(document.getElementById('panel-power')) ? document.getElementById('panel-power').innerText.split('\n')[0] : '',
     quotaLine: vis(document.getElementById('quotaMeter')) ? document.getElementById('quotaMeter').parentElement.parentElement.innerText.split('\n')[0] : '',
     focus: vis(document.getElementById('focusRow'))
-      ? { head: document.getElementById('focusHead').innerText, trades: ['capability', 'efficiency', 'safety'].map((f) => document.getElementById(`focusTrade-${f}`).innerText), running: !!s.training.run }
+      ? {
+        row: document.getElementById('focusRow').innerText.replace(/\s+/g, ' ').trim(),
+        labels: ['capability', 'efficiency', 'safety'].map((f) => document.getElementById(`btn-focus-${f}`).innerText.trim()),
+        note: document.getElementById('focusNote').innerText.trim(),
+        running: !!s.training.run,
+      }
       : null,
     held: /\b(?:the run|the plant|the hall|First Datacenter) first\b|keeps [^.]*'s price/.test(text),
     event: modal && modal.classList.contains('shown')
@@ -180,26 +197,42 @@ try {
     const text = await page.evaluate(() => document.body.innerText);
     check('0:00: no power, no funds, no date on screen', !/kWh|Funds|Jul 2025/.test(text) && /Welcome to OpenMind\. Customers are waiting\./.test(text));
     await shot(page, '00-opening-0m00');
-    // The meter is one width at every fill (halfwidth glyphs, or the monospace fallback).
-    const widths = await page.evaluate(() => {
-      // A copy of the power meter's span in a visible spot (the Power panel is hidden at 0:00).
-      const probe = document.getElementById('powerMeter').cloneNode();
+    // Every bar is the training bar: its border, track, height and fill, at one width for every fill.
+    const bars = await page.evaluate(() => {
+      const look = (bar, fill) => {
+        const b = getComputedStyle(bar);
+        const f = getComputedStyle(fill);
+        return [b.height, b.borderTopWidth, b.borderTopStyle, b.borderTopColor, b.backgroundColor, f.backgroundColor].join(' ');
+      };
+      const run = document.getElementById('runBar');
+      const want = look(run.parentElement, run);
+      const fillOf = (bar, cls) => bar.querySelector(`.${cls}`) ?? bar.appendChild(Object.assign(document.createElement('span'), { className: cls, probe: true }));
+      const off = [];
+      const all = [...document.querySelectorAll('.benchBar, .meter')];
+      for (const bar of all) {
+        const fill = fillOf(bar, bar.classList.contains('meter') ? 'meterFill' : 'benchFill');
+        const got = look(bar, fill);
+        if (got !== want) off.push(`${bar.id || bar.parentElement.id}: ${got}`);
+        if (fill.probe) fill.remove();
+      }
+      // A copy of the power meter in a visible spot (the Power panel is hidden at 0:00), filled 0–100 %.
+      const probe = document.getElementById('powerMeter').cloneNode(true);
       probe.id = 'meterProbe';
-      probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;white-space:nowrap';
+      probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden';
       document.getElementById('columns').appendChild(probe);
-      const mono = document.body.classList.contains('meterMono');
-      const g = mono ? ['[', '■', '□', ']'] : ['｢', '￭', '･', '｣'];
-      const out = [];
+      const fill = fillOf(probe, 'meterFill');
+      const widths = [];
       for (let k = 0; k <= 10; k++) {
-        probe.textContent = g[0] + g[1].repeat(k) + g[2].repeat(10 - k) + g[3];
-        out.push(probe.getBoundingClientRect().width);
+        fill.style.width = `${k * 10}%`;
+        widths.push(probe.getBoundingClientRect().width);
       }
       probe.remove();
-      return { out, mono };
+      return { want, count: all.length, off, widths };
     });
-    const spread = Math.max(...widths.out) - Math.min(...widths.out);
-    check('the meter is one width at every fill (0–10 cells)', spread <= 1 && widths.out[0] > 0,
-      `${widths.mono ? 'monospace fallback' : 'halfwidth glyphs'}: ${widths.out.map((w) => w.toFixed(1)).join(' / ')} px`);
+    check('every meter and eval bar is the training bar (border, track, height, fill)', bars.count >= 17 && bars.off.length === 0,
+      bars.off.length ? bars.off.join(' | ') : `${bars.count} bars: ${bars.want}`);
+    const spread = Math.max(...bars.widths) - Math.min(...bars.widths);
+    check('the meter is one width at every fill (0–100 %)', spread <= 1 && bars.widths[0] > 0, `${bars.widths.map((w) => w.toFixed(1)).join(' / ')} px`);
     await context.close();
   }
   // The first GPU at 1.5, 2 and 4 clicks a second (every click pays $0.25 at once; the GPU is $6).
@@ -310,9 +343,10 @@ try {
   let arrival = null;
   let bannedAt = null;
   const shortLines = new Set();
+  const trainMeters = [];
   const trainRows = new Set();
   // Round 3's observations (stage1-round3-fixes.md §1–§4 and the wallet rule).
-  const r3 = { armed: null, clicked: null, delay: null, dcBefore: null, dcWall: null, powerOf: null, quotaOf: null, focusFirst: null, focusRunHeads: new Set(), events: new Map(), heldAt: null };
+  const r3 = { armed: null, clicked: null, delay: null, dcBefore: null, dcWall: null, powerRow: null, powerOf: null, quotaRow: null, focusFirst: null, focusRows: new Set(), events: new Map(), heldAt: null };
   let firstPurchase = null;
   const goal = { ticks: 0, ok: 0, misses: [] };
   const shotsAt = { 1: '02-minute1', 3: '03-minute3', 5: '04-minute5', 10: '05-minute10', 20: '07-minute20' };
@@ -327,9 +361,10 @@ try {
     if (snap.modal && !first.has(`modal:${snap.modal}`)) first.set(`modal:${snap.modal}`, snap.t);
     // A beat = one 2-s snapshot; count only elements the player has never seen before.
     const newButtons = snap.buttons.filter((b) => firstTime.includes(b.id)).map((b) => b.id);
-    beats.push({ t: snap.t, newButtons, dNumbers: firstTime.length ? snap.numbersOutside - prev.numbersOutside : 0 });
+    beats.push({ t: snap.t, newButtons, dNumbers: firstTime.length ? (snap.numbersOutside - snap.capHalves) - (prev.numbersOutside - prev.capHalves) : 0 });
     if (snap.banned && bannedAt === null) bannedAt = snap.t;
     if (snap.stage === 1 && snap.trainShort) shortLines.add(snap.trainShort);
+    if (snap.stage === 1 && snap.trainMeter) trainMeters.push(snap.trainMeter);
     if (snap.stage === 1) {
       if (snap.train) {
         trainRows.add(`${snap.train.cost} | ${snap.train.reason}`);
@@ -351,11 +386,12 @@ try {
       if (snap.delays.length && !r3.delay) r3.delay = { t: snap.t, text: snap.delays[0] };
       if (snap.dc && !snap.dc.wall && !r3.dcBefore) r3.dcBefore = { t: snap.t, ...snap.dc };
       if (snap.dc && snap.dc.wall && !r3.dcWall) r3.dcWall = { t: snap.t, ...snap.dc };
-      if (!r3.powerOf && /[\d,]+ of [\d,]+ kWh/.test(snap.powerLine)) r3.powerOf = { t: snap.t, line: snap.powerLine };
-      if (!r3.quotaOf && /[\d,]+ of [\d,]+/.test(snap.quotaLine)) r3.quotaOf = { t: snap.t, line: snap.quotaLine };
+      if (!r3.powerRow && /^Power\s+[\d,]+ kWh/.test(snap.powerLine)) r3.powerRow = { t: snap.t, line: snap.powerLine };
+      if (!r3.powerOf && / of [\d,]+ kWh/.test(snap.powerLine)) r3.powerOf = { t: snap.t, line: snap.powerLine };
+      if (!r3.quotaRow && snap.quotaLine) r3.quotaRow = { t: snap.t, line: snap.quotaLine };
       if (snap.focus) {
         r3.focusFirst ??= { t: snap.t, ...snap.focus };
-        if (snap.focus.running) r3.focusRunHeads.add(snap.focus.head);
+        r3.focusRows.add(`${snap.focus.labels.join(' ')} | ${snap.focus.note}`);
       }
       if (snap.event && !r3.events.has(snap.modal)) r3.events.set(snap.modal, snap.event);
     }
@@ -426,13 +462,15 @@ try {
         const s = window.__game.state;
         const vis = (id) => document.getElementById(id).checkVisibility();
         const infraEnabled = ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter((id) => vis(id) && !document.getElementById(id).disabled);
-        // The wallet rule (arc G34): a lot is lit, or grey with the build fund's shortfall and clock.
+        // The wallet rule (arc G34): a lot is lit, or grey beside the build fund's row in Stores (the
+        // row itself says nothing when it is only short of money: owner feedback 2).
         const lotReason = document.getElementById('gpuReason').innerText;
+        const lotGrey = vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund');
         const cap = s.labSpace * 1000 * s.labMult;
         const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
         const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
         const need = Math.round(raw / unit) * unit;
-        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, lotReason, buildFund: Math.round(s.buildFund), trust: s.trust, cap, need };
+        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, lotReason, lotGrey, buildFund: Math.round(s.buildFund), trust: s.trust, cap, need };
       });
       transitionAt = arrival.t;
       for (const id of await page.evaluate(() => [...document.querySelectorAll('[id]')].filter((el) => !el.closest('#dev') && el.checkVisibility()).map((el) => el.id))) {
@@ -472,6 +510,7 @@ try {
   check('G3: a greyed goal on screen ≥ 99 % of Stage 1 from the first purchase (the next GPU or power block counts in the first 3 min)',
     goalShare >= 0.99, `${(goalShare * 100).toFixed(1)} % of ${goal.ticks} snapshots from ${firstPurchase === null ? '—' : clock(firstPurchase)}${goal.misses.length ? `; none at ${goal.misses.join(', ')}` : ''}`);
   // G5 as amended: the first five minutes add at most 4 numbers and 2 controls a beat; later, 8 and 3.
+  // Research prints its capacity beside the amount (owner, 2026-10-04); the pair counts as one number.
   const early = beats.filter((b) => b.t <= 300);
   const late = beats.filter((b) => b.t > 300);
   const worst = (list, key) => list.reduce((w, b) => ((key === 'n' ? b.newButtons.length : b.dNumbers) > (key === 'n' ? w.newButtons.length : w.dNumbers) ? b : w), list[0]);
@@ -493,34 +532,41 @@ try {
   const okLine = (l) => /^Needs [\d,]+ GPUs\. [\d,]+ rented\. Rent [\d,]+ more\.$/.test(l) ||
     /^Needs [\d,]+ GPUs\. The cloud rents [\d,]+\.( .+ adds 20\.)?$/.test(l) ||
     /^Needs [\d,]+ GPUs\. The cloud will rent [\d,]+\. Build the First Datacenter\.$/.test(l);
-  check('a Train short of GPUs names the shortfall and its fix', lines.length > 0 && lines.every(okLine), lines.slice(0, 4).join(' | '));
+  // A first-timer may never come up short: it rents as it goes, and the test breaks ground before the wall.
+  check('a Train short of GPUs names the shortfall and its fix', (lines.length > 0 || POLICY !== 'bot') && lines.every(okLine),
+    lines.length ? lines.slice(0, 4).join(' | ') : 'never short in this run');
+  check('the Train row\'s bar is a whole bar when it shows (the width of the power bar, a fill as tall as its track)',
+    (trainMeters.length > 0 || POLICY !== 'bot') && trainMeters.every((m) => m.w === m.other && m.fillH >= 10),
+    trainMeters.length ? `${trainMeters[0].w} px wide (power bar ${trainMeters[0].other} px), fill ${trainMeters[0].fillH} px tall` : 'never shown');
 
   // ----- round 3: a run costs money and GPUs; the wallet rule (stage1-round3-fixes.md §1–§4) -----
   const rows = [...trainRows];
   check('the Stage 1 Train row costs money only (no research line, no research price)', rows.length > 0 && rows.every((r) => !/research/i.test(r)),
     rows.slice(0, 3).join(' || '));
   const a = r3.armed;
-  check('Train short of money is lit and arms: `Sage-1.x starts when paid for — about m:ss`',
-    !!a && a.enabled && /^Sage-\d+\.\d+ starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+$/.test(a.cost),
+  check('Train short of money is lit and arms: `starts when paid for — about m:ss`',
+    !!a && a.enabled && /^starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+$/.test(a.cost),
     a ? `${clock(a.t)} ${a.label}: ${a.cost} · ${a.reason}` : 'never armed');
-  check('a purchase that delays the waiting run prints it (`· Sage-1.x 0:41 later` / `· First Datacenter 0:15 later`)', !!r3.delay,
-    r3.delay ? `${clock(r3.delay.t)} ${r3.delay.text}` : 'no delay printed');
+  // Owner feedback 2: the core screen reads as it did at a2117b5.
+  check('no purchase prints a delay beside it (no `· Sage-1.x 0:41 later` anywhere)', !r3.delay,
+    r3.delay ? `${clock(r3.delay.t)} ${r3.delay.text}` : '');
+  const plainCard = (d) => /^First Datacenter \(\$[\d,]+(; the rented GPUs return \$[\d,]+)?\)\s+1,000 GPUs of our own at Abilene\. Stop renting\.$/.test(d.text) && d.meters === 0;
   const dcb = r3.dcBefore;
-  check('First Datacenter, before the wall: the cloud meter `… 45 of 80` and `Price: N minutes of income.`',
-    !!dcb && /^Cloud GPUs the next model needs \S+ [\d,]+ of [\d,]+(\. The one after will not fit\.)?$/.test(dcb.need) && /^Price: ([\d,]+ minutes|\d+:\d\d) of income\.$/.test(dcb.money),
-    dcb ? `${clock(dcb.t)} ${dcb.need} / ${dcb.money}` : 'card never seen before the wall');
+  check('First Datacenter is a plain card before the wall: its title and price, its sentence, nothing else',
+    !!dcb && plainCard(dcb), dcb ? `${clock(dcb.t)} ${dcb.text.replace(/\s+/g, ' ')}` : 'card never seen before the wall');
   const dcw = r3.dcWall;
   // A first-timer may buy the card before the wall (the test clicks it as soon as it can).
-  check('First Datacenter, at the wall: the money meter `｢…｣ $87,000 short — about 2:25`',
-    dcw ? /^\S+ (\$[\d,.]+[MBK]? short( — about \d+:\d\d)?|in hand)$/.test(dcw.money) : POLICY !== 'bot',
-    dcw ? `${clock(dcw.t)} ${dcw.money}` : 'no wall in this run');
-  check('capacity rows print the capacity: power `968 of 1,000 kWh`, the quota `61 of 80`',
-    !!r3.powerOf && !!r3.quotaOf, `${r3.powerOf ? `${clock(r3.powerOf.t)} "${r3.powerOf.line}"` : 'power: none'} · ${r3.quotaOf ? `${clock(r3.quotaOf.t)} "${r3.quotaOf.line}"` : 'quota: none'}`);
+  check('First Datacenter is the same plain card at the wall', dcw ? plainCard(dcw) : POLICY !== 'bot',
+    dcw ? `${clock(dcw.t)} ${dcw.text.replace(/\s+/g, ' ')}` : 'no wall in this run');
+  check('the power row is its bar and the amount (`Power 968 kWh`); the quota reads `61 / 80` beside its bar',
+    !!r3.powerRow && !r3.powerOf && !!r3.quotaRow && /^GPUs rented\s+[\d,]+ \/ [\d,]+$/.test(r3.quotaRow.line.trim()),
+    `${r3.powerRow ? `${clock(r3.powerRow.t)} "${r3.powerRow.line}"` : 'power: none'}${r3.powerOf ? ` (but "${r3.powerOf.line}")` : ''} · ${r3.quotaRow ? `${clock(r3.quotaRow.t)} "${r3.quotaRow.line}"` : 'quota: none'}`);
   const ff = r3.focusFirst;
-  check('Focus prints all three trades from its first appearance, and reads `Next run:` during a run',
-    !!ff && ff.trades.join(' · ') === '+10–14% capability · +5%, copies per GPU ×1.25 · +5%, fewer issues for good' &&
-      r3.focusRunHeads.size > 0 && [...r3.focusRunHeads].every((h) => h === 'Next run:'),
-    ff ? `${clock(ff.t)} ${ff.head} ${ff.trades.join(' · ')}; during runs: ${[...r3.focusRunHeads].join(', ') || '—'}` : 'never shown');
+  const focusNotes = ['The most capable next model (about +12%).', 'Copies per GPU ×1.25; a smaller capability gain.', 'Fewer red-team issues, now and on every later run.'];
+  check('Focus is three plain buttons and one note line under them, and reads `Focus:` during a run',
+    !!ff && /^Focus: Capability Efficiency Safety /.test(ff.row) && ff.labels.join(' ') === 'Capability Efficiency Safety' &&
+      [...r3.focusRows].every((r) => r.startsWith('Capability Efficiency Safety | ') && focusNotes.includes(r.split(' | ')[1])),
+    ff ? `${clock(ff.t)} ${ff.row}` : 'never shown');
   const evs = [...r3.events.entries()];
   check('every event lists the timer\'s default first', evs.length > 0 && evs.every(([, e]) => e.then && e.first === e.then),
     evs.map(([title, e]) => `${title}: ${e.first}${e.first === e.then ? '' : ` (default ${e.then})`}`).join(' · '));
@@ -584,13 +630,12 @@ try {
     const i3 = firstIdx(/Tasks per second ×/);
     check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
     check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
-    // Under the wallet rule the deposit starts the build fund; a first lot is lit, or its row prints
-    // the fund's shortfall and clock (the build before round 3 already arrived with $48,000–$56,000
+    // Under the wallet rule the deposit starts the build fund; a first lot is lit, or it is grey beside
+    // the build fund's row in Stores (the build before round 3 already arrived with $48,000–$56,000
     // against a $120,000 lot: a Stage 2 matter, reported, not changed here).
-    const lotWaits = /^\$[\d,.]+[MK]? short — \d+:\d\d$/.test(arrival.lotReason);
-    check('Stage 2 arrival: an Infrastructure button is affordable, or the lot row names the build fund\'s wait',
-      arrival.infraEnabled.length >= 1 || lotWaits,
-      arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}: "${arrival.lotReason}"`);
+    check('Stage 2 arrival: an Infrastructure button is affordable, or the lot is grey beside the build fund in Stores',
+      arrival.infraEnabled.length >= 1 || (arrival.lotGrey && arrival.lotReason === ''),
+      arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}; lot row grey, reason "${arrival.lotReason}"`);
     check('Stage 2 arrival: Trust ≥ 2 and research cap ≥ next run', arrival.trust >= 2 && arrival.cap >= arrival.need, `Trust ${arrival.trust}, cap ${arrival.cap} vs ${arrival.need}`);
     console.log(`      console during the narration: ${JSON.stringify(narration.frames[13])}`);
   } else {
@@ -636,12 +681,12 @@ try {
         stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
         need: Math.round(raw / unit) * unit, infra: vis('panel-infrastructure'),
         compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
-        lotReason: document.getElementById('gpuReason').innerText,
+        lotGrey: vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund'),
       };
     });
     await shot(p3, '12-stage2-preset');
-    // As at the arrival above: a lot lit, or grey with the build fund's shortfall and clock (arc G34).
-    const presetLot = pre.batch || /^\$[\d,.]+[MK]? short — \d+:\d\d$/.test(pre.lotReason);
+    // As at the arrival above: a lot lit, or grey beside the build fund's row in Stores (arc G34).
+    const presetLot = pre.batch || pre.lotGrey;
     check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && presetLot, JSON.stringify(pre));
     await c3.close();
   }

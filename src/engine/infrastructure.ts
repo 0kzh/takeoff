@@ -1,5 +1,5 @@
 import { GameState, PowerOrder, Shipment, say, logNews, press, isBought, bump, counter, buildFundOpen, payBuild } from './state.js';
-import { fmtInt, fmtClock, fmtMoneyShort } from './format.js';
+import { fmtInt, fmtClock } from './format.js';
 
 /**
  * Stage 2 infrastructure (stage2.md §2.1): datacenters give room, plants give power, GPUs arrive
@@ -369,14 +369,6 @@ export function buildEta(s: GameState, cost: number): number {
   return r > 0 ? short / r : Infinity;
 }
 
-/** `$12,400 short — 0:09`: what a build row is missing and when the share brings it ('' when paid). */
-export function buildShortLine(s: GameState, cost: number): string {
-  const short = cost - s.buildFund;
-  if (short <= 0) return '';
-  const eta = buildEta(s, cost);
-  return `${fmtMoneyShort(Math.ceil(short))} short${Number.isFinite(eta) && eta < 3600 ? ` — ${fmtClock(Math.max(1, eta))}` : ''}`;
-}
-
 /** The build share, cycled by its button: 25 → 50 → 75 % → 25 %. */
 export const BUILD_SHARES = [0.25, 0.5, 0.75];
 
@@ -479,19 +471,6 @@ export function lotReturn(s: GameState, n: number): number {
 
 export function standingOrderOn(s: GameState): boolean {
   return s.standingOrder && isBought(s, 'p_standing_order');
-}
-
-/** The Standing order's row: `Standing order: on · next lot in 0:31`, or the wall it waits on. */
-export function standingLine(s: GameState): string {
-  if (!isBought(s, 'p_standing_order')) return '';
-  if (!s.standingOrder) return 'Standing order: off';
-  const stall = standingStall(s);
-  if (stall === 'power') return `Standing order: waiting for power: ${fmtInt(freePowerGpus(s) / 1000)} MW free`;
-  if (stall === 'room') return `Standing order: waiting for room: ${fmtInt(freeSlots(s))} slots left`;
-  const fitting = lotSizes(s).filter((n) => lotFits(s, n));
-  if (!fitting.length) return 'Standing order: on';
-  const eta = buildEta(s, lotCostOf(s, fitting[0]!));
-  return eta >= 1 && eta < 3600 ? `Standing order: on · next lot in ${fmtClock(eta)}` : 'Standing order: on';
 }
 
 function addLot(s: GameState, lot: number, cost: number): void {

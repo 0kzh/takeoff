@@ -424,9 +424,10 @@ export function trainBlocker(s: GameState): string {
 }
 
 /**
- * Why Train is grey, and roughly for how long (arc G6: every wait is named): the evaluation
- * month, the pipeline, the lab's size, or the shortfall that will take longest to fill —
- * `short 41,000 research — about 1:20`, `short 5.6 T data — about 2:10`, `short $1.2M — about 0:45`.
+ * Why a run is not starting, and roughly for how long (arc G6: every wait is named): the evaluation
+ * month, the pipeline, the lab's size, or the one shortfall that will take longest to fill —
+ * `money — about 0:45` in Stage 1 (its cost line is right above), `short $1.2M — about 0:45` or
+ * `short 5.6 T data — about 2:10` from Stage 2. Armed, the same clock reads `starts when paid for`.
  */
 export function trainWait(s: GameState): string {
   const t = s.training;
@@ -435,31 +436,23 @@ export function trainWait(s: GameState): string {
   if (!trainSlotFree(s)) return 'waiting for the pipeline';
   const cost = trainCost(s);
   const cap = researchCap(s);
-  const fixes = s.stage === 2 ? runFixNames(s) : '';
-  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}${fixes ? ` — ${fixes}` : ''}`;
-  // A run short of GPUs says so on its own line (trainGpuLine); this line names every shortfall, one
-  // clock (arc G34: `short $6.5M and 8,750 research — about 1:22`). Stage 1 names the resource words
-  // only (`money — about 0:45`: its cost line is right above, and minute 10 stays at 38 numbers).
+  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}`;
+  // A run short of GPUs says so on its own line (trainGpuLine); this line names the longest wait.
   const r = runIncome(s);
-  const parts: string[] = [];
-  const words: string[] = [];
-  let eta = 0;
+  const amounts = s.stage >= 2;
+  const waits: [number, string][] = [];
   const add = (short: number, rate: number, label: string, word: string) => {
     if (short <= 1e-9) return;
-    parts.push(label);
-    words.push(word);
-    eta = Math.max(eta, etaOf(short, rate));
+    waits.push([etaOf(short, rate), amounts ? `short ${label}` : word]);
   };
   add((cost.funds ?? 0) - s.funds, r.funds, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
   add((cost.research ?? 0) - s.research, r.research, `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
   if (cost.data) add(cost.data - s.data, r.data, `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
-  if (!parts.length) return '';
+  if (!waits.length) return '';
+  waits.sort((x, y) => y[0] - x[0]);
+  const [eta, what] = waits[0]!;
   const clock = Number.isFinite(eta) && eta >= 1 && eta < 3600 ? ` — about ${fmtClock(eta)}` : '';
-  const what = s.stage >= 2 ? `short ${parts.join(' and ')}` : words.join(' and ');
-  // Stage 2: a wall with a card on screen names the card (critic C9: `needs 11.6 T data — Synthetic data`).
-  if (fixes && cost.data && s.data + 1e-9 < cost.data && !Number.isFinite(eta)) return `needs ${fmtNum(cost.data - s.data, 1)} T data — ${fixes}`;
-  if (s.training.armed) return `${nextRunName(s)} starts when paid for${clock}`;
-  return `${what}${clock}${fixes ? ` — ${fixes}` : ''}`;
+  return `${s.training.armed ? 'starts when paid for' : what}${clock}`;
 }
 
 /**
@@ -606,11 +599,6 @@ function runIncome(s: GameState): { funds: number; research: number; data: numbe
 function etaOf(short: number, rate: number): number {
   if (short <= 1e-9) return 0;
   return rate > 0 ? short / rate : Infinity;
-}
-
-/** Seconds until the next run is paid for (0 when it is; Infinity when a purse has no income). */
-export function runPaidInSeconds(s: GameState): number {
-  return runPaidIn(s);
 }
 
 /** Seconds until the next run is paid for, after spending `spent` (0 when it already is). */

@@ -585,7 +585,7 @@ const REVEAL_RULES: RevealRule[] = [
     when: (s) => s.revealed['buyPower'] === true && s.unbilled >= 20 && s.unbilled > ((s.flags['unbilledSeen'] as number) ?? 0) && spaced(s),
     then: (s) => {
       beat(s);
-      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Unsold tasks are piling up.`);
+      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Unbilled tasks are piling up.`);
     },
   },
   // Beat 7: more customers at every price (and revenue per second with it).

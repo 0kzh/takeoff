@@ -17,7 +17,7 @@ import { orderThreshold } from '../engine/oversight.js';
 import { catchPerMin } from '../engine/alignment.js';
 import { fmtInt, fmtNum, fmtClock, fmtShortNum } from '../engine/format.js';
 import { byId, setText, setTitle, setDisabled, make } from './dom.js';
-import { meter } from './meter.js';
+import { renderMeter } from './meter.js';
 import { setOff } from './render3.js';
 import type { Perform } from './render.js';
 
@@ -142,8 +142,8 @@ function renderStores4(s: GameState): void {
 
 /** A Stores meter with its label in the hover and for assistive tech (Stage 5's two use it too). */
 export function meterSpan(id: string, fraction: number, label: string): void {
-  setText(id, meter(Math.max(0, Math.min(1, fraction)), 'use'));
   const el = byId(id);
+  renderMeter(el, fraction);
   if (el.title !== label) {
     el.title = label;
     el.setAttribute('aria-label', label);

@@ -10,7 +10,7 @@ import {
 import {
   LOT_SIZES_S3, lotCostOf, orderReasonS3, lotReturn, freeSlots, freePowerGpus, nextDatacenter, datacenterBuilding,
   dcBuildSeconds, needsSite2, nuclearCost, reactorQueueFull, REACTOR_MW_S3, KW_PER_GPU, standingOrderOn, inTransit,
-  buildShortLine, standingLine, buildEta, roomFixS3, powerFixS3,
+  buildEta, roomFixS3, powerFixS3,
 } from '../engine/infrastructure.js';
 import { shipmentLine, buildoutLine, buildBudget, hallUrgent, reactorUrgent } from '../engine/stage3.js';
 import {
@@ -28,8 +28,8 @@ import { sl3Cost, SECURITY_NOTES } from '../engine/world.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import type { ProjectDef } from '../data/projects.js';
 import { fmtInt, fmtNum, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
-import { byId, setText, setDisabled, setTitle, setWidth, make, showId } from './dom.js';
-import { meter } from './meter.js';
+import { byId, setText, setDisabled, setTitle, make, showId } from './dom.js';
+import { renderMeter, renderCooldown } from './meter.js';
 import type { Perform } from './render.js';
 
 /**
@@ -166,11 +166,11 @@ export function renderTraining3(s: GameState): void {
   // The run's GPUs are shown while they bind (within 15 % of what the fleet has free).
   const need = gpusNeeded(s);
   if (need > 0) showId('trainGpuLine', gpusAvailable(s) < 1.15 * need);
-  // Focus: the trade under each button (G17); the alignment remark is in the hover.
-  setText('focusTrade-capability', '+16–22%');
-  setText('focusTrade-efficiency', '+10% · copies ×1.2');
-  setText('focusTrade-safety', '+10% · measured +6');
-  setText('focusNote', '');
+  // Focus: three plain buttons and the selected one's trade under them (G17); the alignment remark is in the hover.
+  const focus = s.training.focus;
+  setText('focusNote', focus === 'capability' ? 'The most capable next model (+16–22%).'
+    : focus === 'efficiency' ? 'Copies per GPU ×1.2; a smaller capability gain (+10%).'
+      : 'Measured alignment +6; a smaller capability gain (+10%).');
   setTitle('btn-focus-capability', 'Capability: +16–22% a run. Each costs some of the alignment nobody can see.');
   setTitle('btn-focus-efficiency', 'Efficiency: +10% capability, copies per GPU ×1.2, more jobs displaced.');
   setTitle('btn-focus-safety', 'Safety: +10% capability, measured alignment +6.');
@@ -246,38 +246,37 @@ export function gpuShort3(s: GameState): { have: number; need: number } | null {
 
 export function renderInfrastructure3(s: GameState): void {
   const sizes: [number, string, string][] = [[LOT_SIZES_S3[0], '', 'gpuLotSize'], [LOT_SIZES_S3[1], '5', 'gpuLot5Size'], [LOT_SIZES_S3[2], '25', 'gpuLot25Size']];
-  let freeSaid = false;
   let greyShown = false;
   for (const [n, suffix, sizeId] of sizes) {
     setText(sizeId, fmtInt(n));
     const cost = lotCostOf(s, n);
     setText(suffix ? `gpuBatch${suffix}Cost` : 'gpuBatchCost', fmtMoneyShort(cost));
     const why = orderReasonS3(s, n);
-    // Grey only for the build fund's shortfall, power, room or the queue (arc G34): nothing is held.
-    const short = why ? '' : buildShortLine(s, cost);
+    // Grey for the build fund's shortfall (the button says nothing: the fund is in Stores), or for
+    // power, room or the queue, which the row names.
+    const short = !why && s.buildFund < cost;
     const reason = why === 'no room'
       ? `No room: ${roomFixS3(s)}.`
       : why === 'no power'
         ? `No power: ${powerFixS3(s)}.`
         : why === '2 / 2 on order'
           ? 'queue full'
-          : why || short;
+          : why;
     setText(suffix ? `gpuReason${suffix}` : 'gpuReason', reason);
     const g6 = s.flags['g6'] === true;
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
-    const uses = `uses ${fmtInt(mw)} MW${freeSaid ? '' : ` of ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free`}`;
-    if (!why) freeSaid = true;
-    setText(suffix ? `gpuReturn${suffix}` : 'gpuReturn', why || short ? '' : `${uses} · +${fmtMoneyShort(Math.round(lotReturn(s, n)))}/s`);
-    setDisabled(suffix ? `btn-gpuBatch${suffix}` : 'btn-gpuBatch', !!why || !!short);
+    const id = suffix ? `btn-gpuBatch${suffix}` : 'btn-gpuBatch';
+    setDisabled(id, !!why || short);
     // One grey lot row at most, and only one the share fills within three minutes or a wall it names.
     const lit = !why && !short;
     const drawn = lit || (!greyShown && (!!why || buildEta(s, cost) <= 180));
     if (!lit && drawn) greyShown = true;
     setOff(suffix ? `lot${suffix}Row` : 'lotRow', !drawn);
-    if (!suffix) setTitle('btn-gpuBatch', `${g6 ? 'Nimbus G6s, each the work of 2.5 G4s' : 'Nimbus G5s, each the work of 1.5 G4s'}. Every order is a shipment of 75 s, landing one at a time, two on order; a small lot rides in the shipment that waits.`);
+    // What the lot uses and adds is in its hover.
+    setTitle(id, `${g6 ? 'Nimbus G6s, each the work of 2.5 G4s' : 'Nimbus G5s, each the work of 1.5 G4s'}. Every order is a shipment of 75 s, landing one at a time, two on order; a small lot rides in the shipment that waits. The lot uses ${fmtInt(mw)} MW (${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free) and adds about ${fmtMoneyShort(Math.round(lotReturn(s, n)))} a second.`);
   }
-  setText('btn-standing', standingOrderOn(s) ? 'Standing order: on' : 'Standing order: off');
-  setText('standingNote', standingLine(s).replace(/^Standing order: (on|off) ?·? ?/, '').replace(/^Standing order: /, ''));
+  setText('btn-standing', standingOrderOn(s) ? 'ON' : 'OFF');
+  setOn('btn-standing', standingOrderOn(s));
 
   // Halls and the reactor, until the build-out takes them.
   const dc = nextDatacenter(s);
@@ -287,21 +286,21 @@ export function renderInfrastructure3(s: GameState): void {
   // While a hall goes up its price is not a choice: the row shows the clock only.
   setText('datacenterCost', building ? '' : fmtMoneyShort(dc.cost));
   const site = needsSite2(s);
-  const dcShort = building || site ? '' : buildShortLine(s, dc.cost);
-  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : site ? 'needs the New Carlisle campus' : dcShort);
-  setText('dcNote', building || site || dcShort ? '' : `room for ${fmtInt(Math.floor(dc.add / LOT_SIZES_S3[2]))} more lots · ${fmtClock(dcBuildSeconds(s))}`);
-  setDisabled('btn-datacenter', !!building || site || !!dcShort);
+  const dcShort = !building && !site && s.buildFund < dc.cost;
+  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : site ? 'needs the New Carlisle campus' : '');
+  setTitle('btn-datacenter', `Room for ${fmtInt(Math.floor(dc.add / LOT_SIZES_S3[2]))} more lots once it is built (${fmtClock(dcBuildSeconds(s))}). Paid from the build fund.`);
+  setDisabled('btn-datacenter', !!building || site || dcShort);
   const hall = hallUrgent(s);
   if (byId('btn-datacenter').classList.contains('urgent') !== hall) byId('btn-datacenter').classList.toggle('urgent', hall);
-  setText('nuclearLabel', `Reactor (+${fmtInt(REACTOR_MW_S3)} MW)`);
+  setText('nuclearLabel', 'Reactor');
+  setText('nuclearMW', ` (+${fmtInt(REACTOR_MW_S3)} MW)`);
+  showId('nuclearMW', true);
   const rCost = nuclearCost(s);
   setText('nuclearCost', fmtMoneyShort(rCost));
   const full = reactorQueueFull(s);
-  const rShort = full ? '' : buildShortLine(s, rCost);
-  setText('nuclearReason', full ? 'two restarting' : rShort);
-  setText('nuclearNote', full || rShort ? '' : `runs ${fmtInt((REACTOR_MW_S3 * 1000) / KW_PER_GPU)} GPUs · in two minutes`);
-  setDisabled('btn-nuclear', full || !!rShort);
-  setTitle('btn-nuclear', 'A shuttered reactor, restarted for OpenMind: +1,000 MW after a two-minute restart.');
+  setText('nuclearReason', full ? 'two restarting' : '');
+  setDisabled('btn-nuclear', full || s.buildFund < rCost);
+  setTitle('btn-nuclear', `A shuttered reactor, restarted for OpenMind: +1,000 MW after a two-minute restart, enough for ${fmtInt((REACTOR_MW_S3 * 1000) / KW_PER_GPU)} GPUs.`);
   const reactor = reactorUrgent(s);
   if (byId('btn-nuclear').classList.contains('urgent') !== reactor) byId('btn-nuclear').classList.toggle('urgent', reactor);
 
@@ -342,8 +341,8 @@ export function renderAlignment(s: GameState): void {
   setOff('driftCaughtPart', true);
   setTitle('driftLine', `Lost to value drift: ${fmtInt(Math.floor(s.stats.lostToDrift ?? 0))} · recaptured by the monitors: ${fmtInt(Math.floor(s.stats.recaptured ?? 0))}`);
   const share = rogueShare(s);
-  setText('rogueMeter', meter(share / ROGUE_BREAKOUT, 'use'));
   const rm = byId('rogueMeter');
+  renderMeter(rm, share / ROGUE_BREAKOUT);
   const label = `${fmtNum(share * 100, 1)}% of the fleet against the 5% line`;
   if (rm.title !== label) {
     rm.title = label;
@@ -435,7 +434,7 @@ export function renderSecurity3(s: GameState): void {
     setOff('btn-reimage', rogueShare(s) < 0.005 && reimageCooldown(s) <= 0);
     const cd = reimageCooldown(s);
     setDisabled('btn-reimage', cd > 0);
-    setWidth(byId('reimageBar'), cd / REIMAGE_COOLDOWN);
+    renderCooldown(byId('btn-reimage'), byId('reimageBar'), cd / REIMAGE_COOLDOWN);
     setText('reimageNote', cd > 0 ? `ready in ${fmtClock(Math.ceil(cd))}` : '');
   }
 }
@@ -490,7 +489,9 @@ export function renderOversight(s: GameState): void {
   }
   if (!seated) return;
   const n = seats(s);
-  setText('seatsMeter', meter(n / 10, 'use'));
+  renderMeter(byId('seatsMeter'), n / 10);
+  setTitle('seatsMeter', `${n} of 10 Committee seats`);
+  byId('seatsMeter').setAttribute('aria-label', `${n} of 10 Committee seats`);
   setText('committeeSeats', fmtInt(n));
   const order = Math.max(0, Math.floor(orderThreshold(s) / 10));
   setText('seatsNote', n >= 8 ? '— escorts the chips' : n >= 6 ? (n === 6 ? '— will hear a halt · 5: no halt' : '— will hear a halt') : n > order ? (n === order + 1 ? `— shipments slow · ${order}: an order` : '— shipments slow') : '— drafts an order');

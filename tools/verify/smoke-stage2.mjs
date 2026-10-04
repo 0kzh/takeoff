@@ -11,8 +11,10 @@
  * capability graph drawn; every Stage 2 panel appears; the event panel (two-line options, focus,
  * click-through, Escape takes the default); reload mid-run, mid-queue and mid-cooldown restore
  * their timers; numeric tokens, controls and words on screen at each 5-minute mark against
- * stage2.md §6.3; owner feedback 1 (no yield wording, the Stores meters, the Train row's GPU
- * shortfall); the Stage 3 narration and a usable dev overlay; no horizontal overflow at 390 px.
+ * stage2.md §6.3; owner feedback 1 (no yield wording, the Train row's GPU shortfall); owner
+ * feedback 2 (the core screen reads as it did at a2117b5: Stores one line a row with no bars, no
+ * printed delays, clocks or band hints, plain Focus buttons, cards with their sentence); the
+ * Stage 3 narration and a usable dev overlay; no horizontal overflow at 390 px.
  * Screenshots go to agent-tools/shots/stage2/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
@@ -127,11 +129,13 @@ const SNAPSHOT = () => {
     revPerSec: s.stats.revPerSec,
     unbilled: s.unbilled,
     revealed: Object.keys(s.revealed).filter((k) => s.revealed[k]),
-    // Owner feedback 1: no yield wording; the Train row names a GPU shortfall; the Stores meters.
+    // Owner feedback 1: no yield wording; the Train row names a GPU shortfall. Owner feedback 2: Stores has no bars.
     banned: /undertrained|Train now/i.test(text),
     trainShort: vis(document.getElementById('trainGpuMeter')) ? document.getElementById('trainGpus').innerText : '',
     gpuRow: vis(document.getElementById('row-gpus')) ? document.getElementById('row-gpus').innerText : '',
     powerRow: vis(document.getElementById('row-power')) ? document.getElementById('row-power').innerText : '',
+    researchRow: vis(document.getElementById('row-research')) ? document.getElementById('row-research').innerText : '',
+    storeMeters: [...document.querySelectorAll('#panel-stores .meter')].filter(vis).length,
   };
 };
 
@@ -237,8 +241,10 @@ try {
   let stage3 = null;
   let bannedAt = null;
   const shortLines = new Set();
-  const meterRows = { gpu: '', power: '' };
+  const storeRows = { gpu: new Set(), power: new Set(), research: new Set(), meters: 0 };
   const wallet = { hold: [], share: false, fund: false, armed: '', delay: '', capacity: '', greyMarks: [] };
+  // Owner feedback 2: rows that read as they did at a2117b5 (every distinct shape seen, digits folded).
+  const plain = { share: new Set(), lots: new Set(), standing: new Set(), focus: new Set(), notes: new Set(), folded: 0, cards: 0, slider: new Set() };
   for (let step = 0; step < (MAX_MINUTES * 60 * 1000) / STEP_MS; step++) {
     const snap = await page.evaluate((ms) => {
       window.__game.tick(ms);
@@ -250,8 +256,11 @@ try {
     if (bad && !stage1Line) stage1Line = `${clock(ts)} ${bad}`;
     if (snap.banned && bannedAt === null) bannedAt = ts;
     if (snap.stage === 2 && snap.trainShort) shortLines.add(snap.trainShort);
-    if (snap.stage === 2 && !meterRows.gpu && snap.gpuRow) meterRows.gpu = snap.gpuRow;
-    if (snap.stage === 2 && !meterRows.power && snap.powerRow) meterRows.power = snap.powerRow;
+    const shape = (x) => x.replace(/\s+/g, ' ').trim().replace(/[\d,.]+/g, '#');
+    if (snap.stage === 2 && snap.gpuRow) storeRows.gpu.add(shape(snap.gpuRow));
+    if (snap.stage === 2 && snap.powerRow) storeRows.power.add(shape(snap.powerRow));
+    if (snap.stage === 2 && snap.researchRow) storeRows.research.add(shape(snap.researchRow));
+    if (snap.stage === 2) storeRows.meters = Math.max(storeRows.meters, snap.storeMeters);
     if (snap.stage === 2) {
       const w = await page.evaluate(() => {
         const vis = (el) => !!el && el.checkVisibility();
@@ -262,8 +271,15 @@ try {
           share: vis(document.getElementById('buildShareRow')),
           fund: vis(document.getElementById('row-buildFund')),
           armed: train.classList.contains('armed') ? document.getElementById('trainReason').innerText : '',
-          delay: [...document.querySelectorAll('#projectList .projectButton')].filter(vis).map((b) => b.querySelector('.projectTitle').innerText).find((x) => / later$/.test(x)) ?? '',
+          delay: (text.match(/· (?:Sage-\d+(?:\.\d+)?|next run) (?:\d+:\d\d|much) later/) ?? [''])[0],
           capacity: document.getElementById('row-gpus').innerText.replace(/\s+/g, ' '),
+          shareRow: vis(document.getElementById('buildShareRow')) ? document.getElementById('buildShareRow').innerText : '',
+          lots: ['lotRow', 'lot5Row', 'lot25Row'].map((id) => document.getElementById(id)).filter(vis).map((el) => el.innerText),
+          standing: vis(document.getElementById('standingRow')) ? document.getElementById('standingRow').innerText : '',
+          focus: vis(document.getElementById('focusRow')) ? ['capability', 'efficiency', 'safety'].map((f) => document.getElementById(`btn-focus-${f}`).innerText.trim()).join(' ') : '',
+          notes: ['govNote', 'approvalNote', 'alignNote', 'allocRate'].map((id) => document.getElementById(id).innerText.trim()).filter(Boolean).join(' / '),
+          lead: vis(document.getElementById('leadLine')) ? document.getElementById('leadLine').innerText : '',
+          cards: [...document.querySelectorAll('#projectList .projectButton')].filter(vis).map((b) => vis(b.querySelector('.projectDesc')) && b.querySelector('.projectDesc').innerText.trim().length > 0),
         };
       });
       const hold = w.text.match(HOLD_WORDS);
@@ -272,7 +288,15 @@ try {
       wallet.fund ||= w.fund;
       if (!wallet.armed && w.armed) wallet.armed = w.armed;
       if (!wallet.delay && w.delay) wallet.delay = w.delay;
-      if (!wallet.capacity && /[\d,]+ of [\d,]+/.test(w.capacity)) wallet.capacity = w.capacity;
+      if (!wallet.capacity && /[\d,]+ \/ [\d,]+/.test(w.capacity)) wallet.capacity = w.capacity;
+      if (w.shareRow) plain.share.add(shape(w.shareRow));
+      for (const l of w.lots) plain.lots.add(shape(l));
+      if (w.standing) plain.standing.add(shape(w.standing));
+      if (w.focus) plain.focus.add(w.focus);
+      if (w.notes) plain.notes.add(w.notes);
+      if (/ — /.test(w.lead)) plain.notes.add(w.lead);
+      plain.cards += w.cards.length;
+      plain.folded += w.cards.filter((ok) => !ok).length;
     }
 
     // The event panel, on the first timed modal: two lines per option, focus inside, the page
@@ -366,8 +390,12 @@ try {
 
   check('Stage 2 reaches the Stage 3 arrival', !!stage3, stage3 ? `exit at ${clock(stage3.t)}` : `not in ${MAX_MINUTES} min`);
   check('no "undertrained" and no "Train now" anywhere on screen', bannedAt === null, bannedAt === null ? '' : `seen at ${clock(bannedAt)}`);
-  const meterGlyph = /[｢\[][￭･■□]{10}[｣\]]/;
-  check('Stores: the GPU and power rows carry a meter', meterGlyph.test(meterRows.gpu) && meterGlyph.test(meterRows.power), `${meterRows.gpu.replace(/\s+/g, ' ')} | ${meterRows.power.replace(/\s+/g, ' ')}`);
+  const shapes = (set) => [...set].join(' | ');
+  check('Stores: one line a row and no bars — `research # / #`, `GPUs # / #`, `power # MW`',
+    storeRows.meters === 0 && storeRows.gpu.size > 0 && [...storeRows.gpu].every((r) => r === 'GPUs # / #') &&
+      [...storeRows.research].every((r) => r === 'research # / #') &&
+      [...storeRows.power].every((r) => /^power (all in use: |# GPUs dark: )?# MW$/.test(r)),
+    `${shapes(storeRows.research)} | ${shapes(storeRows.gpu)} | ${shapes(storeRows.power)}${storeRows.meters ? ` (${storeRows.meters} bars)` : ''}`);
   const lines = [...shortLines];
   check('a Train short of GPUs names the shortfall (free or dark GPUs)', lines.every((l) => /^Needs [\d,]+ GPUs\. [\d,]+ free\.$/.test(l) || /^Needs [\d,]+ powered GPUs\. [\d,]+ are dark: add power\.$/.test(l)),
     lines.length ? lines.slice(0, 4).join(' | ') : 'never short (the bot builds ahead)');
@@ -394,8 +422,16 @@ try {
   check('no hold strings on screen (arc G34)', wallet.hold.length === 0, wallet.hold.join(' | '));
   check('the build share row and the build fund row are on screen', wallet.share && wallet.fund, JSON.stringify({ share: wallet.share, fund: wallet.fund }));
   check('Train armed while short: `… starts when paid for`', /starts when paid for/.test(wallet.armed), wallet.armed);
-  check('a card prints the delay it causes the waiting run (`· Sage-N m:ss later`)', !!wallet.delay, wallet.delay);
-  check('the GPU row prints its amount and its capacity (`17,105 of 25,000`)', !!wallet.capacity, wallet.capacity);
+  check('nothing prints a delay beside a purchase (no `· Sage-N m:ss later`)', !wallet.delay, wallet.delay);
+  check('the GPU row prints its amount and its capacity (`17,105 / 25,000`)', !!wallet.capacity, wallet.capacity);
+  check('Infrastructure rows are a verb, a price and at most a short reason: `Build share: #%`, `Buy GPUs (#) $#`, `Standing order: ON`',
+    plain.share.size > 0 && [...plain.share].every((r) => r === 'Build share: #%') &&
+      plain.lots.size > 0 && [...plain.lots].every((r) => /^Buy GPUs \(#\) \$#[MK]?( no room| no power)?$/.test(r)) &&
+      [...plain.standing].every((r) => /^Standing order: (ON|OFF)$/.test(r)),
+    `${shapes(plain.share)} | ${shapes(plain.lots)} | ${shapes(plain.standing) || 'no standing order yet'}`);
+  check('Focus is three plain buttons; no band hints or rates after a row', plain.focus.size === 1 && [...plain.focus][0] === 'Capability Efficiency Safety' && plain.notes.size === 0,
+    `${shapes(plain.focus)}${plain.notes.size ? ` | notes: ${shapes(plain.notes)}` : ''}`);
+  check('every card on the shelf shows its sentence (none folded into a hover)', plain.cards > 0 && plain.folded === 0, `${plain.folded} of ${plain.cards} card-ticks without a description`);
   check('fewer than half the controls are grey at every 5-minute mark after 5:00', wallet.greyMarks.slice(1).every((g) => { const [a, b] = g.split('/').map(Number); return 2 * a < b; }), wallet.greyMarks.join(' '));
   check(`on-screen controls ≤ ${BUDGET.interactive} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.interactive <= BUDGET.interactive), marks.map((m) => m.interactive).join(' '));
 
@@ -437,7 +473,7 @@ try {
     const { context: cs, page: ps } = await freshPage('train-short');
     const read = () => ({
       line: document.getElementById('trainGpus').innerText,
-      meter: document.getElementById('trainGpuMeter').checkVisibility() ? document.getElementById('trainGpuMeter').innerText : '',
+      meter: document.getElementById('trainGpuMeter').checkVisibility() ? document.querySelector('#trainGpuMeter > .meterFill')?.style.width ?? '' : '',
       train: !document.getElementById('btn-train').disabled,
     });
     const free = await ps.evaluate((r) => {

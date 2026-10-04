@@ -32,13 +32,14 @@ const SEED = Number(argOf('--seed', '1'));
 const STEP_MS = 3000;
 const MAX_MINUTES = 70;
 /**
- * The on-screen budget (stage3.md §6.3, arc G14; the coordinator's round-3 load limits): 30 controls,
- * 85 numbers and 350 words at every five-minute mark. Explanations fold into hovers once read, band
- * edges print only when near, each fact has one home (the build reaches 73–83 numbers and 206–293
- * words from the rebuilt preset, 73–85 from the careless start); the spec's 65 numbers is not met
- * (rates beside the sliders and the printed returns of G27 stay on screen).
+ * The on-screen budget (stage3.md §6.3, arc G14; the coordinator's round-3 load limits, as amended by
+ * owner feedback 2): 30 controls, 90 numbers and 380 words at every five-minute mark. Stage 3's own
+ * notes fold into hovers once read, band edges print only when near, each fact has one home; a
+ * project card keeps its sentence for as long as it is on screen, as in Stages 1–2 (the owner's note
+ * outranks the budget: with the cards unfolded the build reaches 72–88 numbers and 235–370 words from
+ * the rebuilt preset, where the folded cards gave 73–83 and 206–293).
  */
-const BUDGET = { numbers: 85, interactive: 30, words: 350 };
+const BUDGET = { numbers: 90, interactive: 30, words: 380 };
 /** The wallet rule (arc G34): no row is held back with a `… first` or `keeps …'s price` reason. */
 const HOLD_WORDS = /\b(the run|the plant|the hall|the offer|the reactor) first\b|keeps [^.]*'s price/;
 
