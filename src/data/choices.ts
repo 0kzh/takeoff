@@ -772,8 +772,8 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'lock it down',
         record: 'locked down',
-        tooltip: `Research stops for ${LOCKDOWN_SECONDS} s while every credential is rotated. Security level 3 is 25 % off for 5 minutes.`,
-        line: 'research stops 1:00 · security level 3 25% off for 5:00',
+        tooltip: `Research stops for ${LOCKDOWN_SECONDS} s while every credential is rotated. With the building already locked down, Security level 3 costs a fifth and no Trust for 5 minutes.`,
+        line: 'research stops 1:00 · security level 3 at a fifth, no Trust, for 5:00',
         effect: (s) => {
           s.effects.push({ id: 'lockdown', remaining: LOCKDOWN_SECONDS, demandMult: 1, researchMult: 0 });
           s.flags['sl3DiscountUntil'] = s.stats.timePlayed + 300;

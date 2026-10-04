@@ -1,6 +1,7 @@
 import { rng } from './rng.js';
 import { GameState, say, canPay, pay, press, isBought, bump } from './state.js';
-import { trainingShare } from './training.js';
+import { trainingShare, trainCost } from './training.js';
+import { visibleProjects } from './projects.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
 import { effGpus } from './infrastructure.js';
 import { sellS2 } from './market.js';
@@ -477,15 +478,20 @@ export function trustCheck(s: GameState): void {
     s.fib1 = s.fib2;
     s.fib2 = next;
     s.flags['trustMilestones'] = ((s.flags['trustMilestones'] as number) || 0) + 1;
-    // The first milestone opens the Research panel, which prints its own line.
-    if (s.revealed['research']) say(s, trustRewardLine(s));
+    // The first milestone opens the Research panel, which prints its own line. From Stage 2 the line
+    // prints only when the Trust reaches something new (critic C6).
+    const line = s.revealed['research'] ? trustRewardLine(s) : '';
+    if (line) say(s, line);
   }
 }
 
 /** Milestone lines say what the Trust is for (or that it only paid back what the lab owed). */
 export function trustRewardLine(s: GameState): string {
+  if (s.stage >= 2) {
+    const reach = trustReach(s);
+    return reach.length ? `Trust ${s.trust}: ${reach.join(', ')} within reach.` : '';
+  }
   if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
-  if (s.stage >= 2) return s.revealed['expandLab'] ? 'Trust +1. Expand the lab, or save it.' : 'Trust +1.';
   return s.revealed['expandLab'] ? 'Trust +1. Hire a researcher or expand the lab.' : 'Trust +1. Hire a researcher.';
 }
 
@@ -586,8 +592,38 @@ export function buyMarketing(s: GameState): boolean {
   return true;
 }
 
+/**
+ * What Trust reaches at exactly this count (Stage 2): a Trust-priced card or Security level 3 that
+ * costs this much, and Expand Lab while the next run needs more than the lab holds.
+ */
+export function trustReach(s: GameState): string[] {
+  const out: string[] = [];
+  if (s.trust >= 1 && s.revealed['expandLab'] && s.trust === 1 && researchWantedOverCap(s)) out.push('Expand Lab');
+  for (const p of visibleProjects(s)) {
+    const tr = p.cost(s).trust ?? 0;
+    if (tr > 0 && tr === s.trust) out.push(p.title);
+  }
+  if (s.revealed['sl3Button'] && s.securityLevel < 3 && s.trust === 3) out.push('Security level 3');
+  return out;
+}
+
+function researchWantedOverCap(s: GameState): boolean {
+  const want = trainCost(s).research ?? 0;
+  return want > researchCap(s);
+}
+
+/** Stage 2: once the copies do nine-tenths of the research, a hire is not worth a Trust (critic C6). */
+export const HIRE_FADE_SHARE = 0.1;
+
+export function hireFadeCheck(s: GameState): void {
+  if (s.stage !== 2 || s.revealed['hireFaded'] || !s.revealed['hireResearcher'] || !isBought(s, 'p_ai_assistants')) return;
+  if (humanShare(s) >= HIRE_FADE_SHARE) return;
+  s.revealed['hireFaded'] = true;
+  say(s, `Human share of research: ${Math.max(1, Math.round(humanShare(s) * 100))}%. Hiring stops; Trust goes to the lab and the capitol.`);
+}
+
 export function hireResearcher(s: GameState): boolean {
-  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || !canPay(s, { trust: 1 })) return false;
+  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || s.revealed['hireFaded'] || !canPay(s, { trust: 1 })) return false;
   pay(s, { trust: 1 });
   s.researchers += 1;
   if (s.stage >= 2) press(s, 'hire');

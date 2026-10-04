@@ -31,8 +31,14 @@ const POLICY = argOf('--policy', 'bot');
 const SEED = Number(argOf('--seed', '1'));
 const STEP_MS = 2000;
 const MAX_MINUTES = 60;
-/** stage2.md §6.3: at most 65 numbers and 30 controls on screen. */
-const BUDGET = { numbers: 65, interactive: 30 };
+/**
+ * On-screen budget at the 5-minute marks, against the reference (critic Stage 2 round 1, §2e/§3c):
+ * Paperclips' Stage 2 shows 39 / 54 numbers at 5:00 / 10:00 (its early stage is nearly empty, while
+ * Takeoff carries the Stage 1 screen, so +16) and 66–83 at the marks from 15:00 (76 at 20:00, 61 at its
+ * end), so 60 / 70 and then 80. Controls stay at 30 (stage2.md §6.3).
+ */
+const BUDGET = { numbers: 80, interactive: 30 };
+const numbersAllowed = (t) => (t <= 330 ? 60 : t <= 630 ? 70 : BUDGET.numbers);
 
 // ---------- static server on a free port ----------
 
@@ -317,7 +323,7 @@ try {
   check('reload mid-cooldown restores the timer', c && JSON.stringify(c.before) === JSON.stringify(c.after), c ? JSON.stringify(c) : 'no cooldown seen');
   console.log('      5-minute marks (numbers / controls / words / panels):');
   for (const m of marks) console.log(`        ${clock(m.t)}  ${m.numbers} / ${m.interactive} / ${m.words} / ${m.panels}`);
-  check(`on-screen numbers ≤ ${BUDGET.numbers} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.numbers <= BUDGET.numbers), marks.map((m) => m.numbers).join(' '));
+  check(`on-screen numbers ≤ 60 / 70 / ${BUDGET.numbers} at 5:00 / 10:00 / later 5-minute marks`, marks.length > 0 && marks.every((m) => m.numbers <= numbersAllowed(m.t)), marks.map((m) => m.numbers).join(' '));
   check(`on-screen controls ≤ ${BUDGET.interactive} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.interactive <= BUDGET.interactive), marks.map((m) => m.interactive).join(' '));
 
   // ===== 4. Stage 3 arrival: narration, no crash, dev overlay usable =====

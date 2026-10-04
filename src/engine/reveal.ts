@@ -30,6 +30,8 @@ export const LATE_SECONDS = 75;
 export const GOVERNOR_SECONDS = 170;
 /** No new panel or mechanic for this long: the governor pulls the next mechanic row (arc G2). */
 export const MECHANIC_GOVERNOR_SECONDS = 240;
+/** The late drip's spacing between two mechanics of the approach. */
+export const LATE_MECHANIC_SPACING = 150;
 
 /** Projects on screen at once (Stage 1: rescues, urgent fixes, the stage goal and side-offers not counted; Stage 2: only rescues and G6). */
 export function maxVisible(s: GameState): number {
@@ -222,7 +224,11 @@ export function updateProjects(s: GameState): void {
     return !!def && !s.projects[id]?.shown && eligible(s, def);
   });
 
-  if (s.cadence.queue.length && now - s.cadence.lastDripAt >= dripSeconds(s)) {
+  // A release redraws the Training panel and prints its lines: the next card waits 4 s so the two
+  // are separate beats (no beat adds more than ~8 numbers).
+  const released = s.flags['releasedAt'];
+  const releaseBeat = typeof released === 'number' && now - released < 4;
+  if (s.cadence.queue.length && !releaseBeat && now - s.cadence.lastDripAt >= dripSeconds(s)) {
     // The first queued project that fits: side-offers never wait for room. After a quiet spell
     // (Stage 1: 140 s; Stage 2: 160 s) the next one comes out over the cap (Stage 2: eight cards at most).
     const quiet = s.stage === 1
@@ -316,9 +322,13 @@ function lateDrip(s: GameState, approach: boolean): void {
   const pinnedFirst = [...c.lateQueue].sort((x, y) => Number(projectDef(y)?.pinned === true) - Number(projectDef(x)?.pinned === true));
   // A full shelf holds the approach back until the stage has been quiet for a while.
   const over = overdue(s) ? OVERFLOW : 0;
+  // The approach's mechanics are spaced (critic C8: a late stretch with nothing new after a bunch of
+  // three): a mechanic row waits until the last mechanic is 150 s old.
+  const mechanicSpaced = s.stats.timePlayed - c.lastMechanicAt >= LATE_MECHANIC_SPACING;
   for (const id of pinnedFirst) {
     const row = rowById(id);
     if (!row || !rowPrereq(s, row)) continue;
+    if (row.mechanic && !mechanicSpaced) continue;
     if (revealRow(s, row, over)) {
       c.lastLateAt = s.stats.timePlayed;
       c.lateQueue = c.lateQueue.filter((q) => q !== id);

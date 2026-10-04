@@ -33,7 +33,8 @@ const QUIET_RETIRE = ['p_contractor', 'p_cooling', 'p_expedite', 'p_soundwall', 
 export const DEPOSIT_PER_GPU = 400;
 export const MIN_DEPOSIT = 25000;
 /** Flags shown only while their stage is on screen; Stage 3 hides these (stage3.md §1.1). */
-const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'autoPrice', 'gasButton', 'solarButton', 'alignShare', 'dataRow'];
+// The AUTO billing line stays (critic C11: Stage 3 opened on the manual line, `0.0/s of 0.0/s produced: idle`).
+const STAGE2_ONLY_FLAGS = ['marketing', 'hireResearcher', 'expandLab', 'gasButton', 'solarButton', 'alignShare', 'dataRow'];
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;
@@ -135,8 +136,16 @@ const STAGE3_GRANTS = ['p_ai_assistants', 'p_parallel', 'p_auto_evals', 'p_stand
 function enterTakeoff(s: GameState): void {
   const now = s.stats.timePlayed;
   s.alignmentTrue = Math.min(75, Math.max(30, s.alignmentTrue));
-  s.govRelations = Math.min(85, Math.max(25, s.govRelations + Math.min(10, 2 * Math.max(0, s.trust))));
+  // The arc's clamps, narrated (critic C7, G32): a meter the player built up is not cut in silence.
+  const govBefore = Math.round(s.govRelations);
+  const trustBonus = Math.min(10, 2 * Math.max(0, s.trust));
+  s.govRelations = Math.min(85, Math.max(25, s.govRelations + trustBonus));
+  const govAfter = Math.round(s.govRelations);
+  if (govAfter < govBefore) logNews(s, `A new Congress sits. Relations start again at ${govAfter} (from ${govBefore}).`);
+  else if (govAfter > govBefore && trustBonus > 0) logNews(s, `Unspent Trust buys goodwill in Washington: relations ${govBefore} → ${govAfter}.`);
+  const approvalBefore = Math.round(s.approval);
   s.approval = Math.min(30, Math.max(-45, s.approval));
+  if (Math.round(s.approval) !== approvalBefore) logNews(s, `The news moves on. Approval settles at ${Math.round(s.approval)} (from ${approvalBefore}).`);
   s.lead = Math.min(9, Math.max(1, s.lead));
   s.trust = 0;
   if (!isBought(s, 'p_retention')) {
@@ -166,9 +175,11 @@ function enterTakeoff(s: GameState): void {
   s.cadence.lastRevealAt = now;
 
   const deployed = s.training.modelName.startsWith('Sage-3') ? s.training.modelName : 'Sage-3';
+  // Kept internal, the model that sells is still the old one (critic C11: no claim of a release).
+  const internal = s.flags['sage3Released'] === 'internal';
   const lines: [number, string][] = [
     [0.1, `${deployed} writes better code than anyone at OpenMind.`],
-    [2, `Marketing is closed. ${deployed} sells itself.`],
+    [2, internal ? `Marketing is closed. Customers keep ${s.training.deployedName}; ${deployed} works inside.` : `Marketing is closed. ${deployed} sells itself.`],
     [2, 'Hiring is frozen. The researchers manage copies now.'],
     [2, `Runs are research programs now: ${fmtInt(trainCost(s).research ?? 0)} research for ${nextRunName(s)}. No data, no invoice.`],
     [2, 'Trust is not a number any more. The Committee will keep its own count.'],

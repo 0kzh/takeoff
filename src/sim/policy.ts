@@ -8,7 +8,7 @@ import {
   trainSlotFree, evalRun, canTrainNow,
 } from '../engine/training.js';
 import {
-  lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost, standingOrderOn,
+  lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost,
   GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, RUN_HOLD_YIELD } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
@@ -610,7 +610,10 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
 
   // 3. The binding wall: power (the cheapest MW; solar ahead at 80 % with an empty queue), then room.
   const reason = lotReason(s);
-  if (reason === 'no power' || (standingOrderOn(s) && freePowerGpus(s) < 1000 && freeSlots(s) >= 1000)) {
+  // Power binds when fewer than a thousand GPUs' worth is left and room is not shorter (the main lot
+  // still sells the last hundreds, so its reason stays clear until the very end).
+  const powerShort = freePowerGpus(s) < 1000 && freePowerGpus(s) <= freeSlots(s);
+  if (reason === 'no power' || powerShort) {
     // The cheapest MW (§9.1) — but solar waits in the queue, so with a farm already queued the
     // binding wall is fixed with power that arrives now (gas, or nuclear when cheaper per MW).
     let kind = cheapestPower(s);
@@ -677,7 +680,13 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     let guard = 0;
     while (guard++ < 4) {
       const size = [25000, 5000, 1000].find((n) => lotFits(s, n) && s.funds - lotCostOf(s, n) >= saving);
-      if (!size || !a.buyGpuBatch(s, size)) break;
+      if (size) {
+        if (!a.buyGpuBatch(s, size)) break;
+        continue;
+      }
+      // Under 1,000 free: the main lot sells what fits, in hundreds.
+      const part = lotSize(s);
+      if (part < 100 || s.funds - lotCostOf(s, part) < saving || !a.buyGpuBatch(s, 1000)) break;
     }
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s)) && s.funds - sl3Cost(s).funds >= reserve) a.buySL3(s);

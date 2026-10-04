@@ -433,9 +433,13 @@ export function idleGuard(s: GameState, dt: number): void {
   if (s.idle.quiet < 60) return;
   s.idle.quiet = 0;
   if (diagnoseStall(s)) return;
+  // Stage 2: Stage 1's valve only for a lab with nothing at all to buy, and never for pocket change
+  // against the funds on hand (critic C11: a $14,642 prepayment to a lab holding $715,523).
+  if (s.stage === 2 && enabledPurchases(s).length > 0) return;
   const presses = (s.flags['pressReleases'] as number) || 0;
   const emails = (s.flags['emailsThisStage'] as number) || 0;
-  const amount = customerEmailAmount(s);
+  const raw = customerEmailAmount(s);
+  const amount = s.stage === 2 && raw < Math.max(0.25 * s.funds, 30 * s.stats.revPerSec) ? 0 : raw;
   if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress'] && presses < MAX_PRESS_PER_STAGE) {
     s.flags['idlePress'] = true;
     s.flags['pressReleases'] = presses + 1;

@@ -93,7 +93,7 @@ export function fundsFor(c: number): number {
 export const S2_FUNDS_EXPONENT = 7;
 
 /** Scale-1 base of a Stage 2 run (stage2.md has $25,000; the held lots and Train now made the stage a minute or two short). */
-export const S2_RUN_BASE = 28000;
+export const S2_RUN_BASE = 29000;
 
 export function fundsForS2(c: number): number {
   return Math.round(S2_RUN_BASE * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
@@ -717,6 +717,7 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   t.modelName = run.name;
   applyFocusRewards(s, run);
   s.stats.releases += 1;
+  s.flags['releasedAt'] = s.stats.timePlayed;
   t.models.push({ name: run.name, capability: run.capAfter, date: s.date, public: isPublic });
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
   // The first release is when the second run becomes possible: the Focus row appears now.
@@ -802,6 +803,16 @@ function releasedInStage2(s: GameState, run: TrainingRun, isPublic: boolean): vo
     if (superhuman && !s.flags['sage3Released']) s.flags['sage3Released'] = 'internal';
   }
   if (superhuman) s.flags['superhumanReleased'] = true;
+}
+
+/**
+ * What a run changes when it ships, for the evaluation line (critic C5): `copies per GPU 1.88 → 2.35`,
+ * `measured alignment 62 → 70`, or the capability step itself.
+ */
+export function focusChange(s: GameState, run: TrainingRun): string {
+  if (run.focus === 'efficiency') return `copies per GPU ${fmtNum(s.copiesPerGPU, 2)} → ${fmtNum(s.copiesPerGPU * 1.25, 2)}`;
+  if (run.focus === 'safety') return `measured alignment ${Math.round(s.alignmentApparent)} → ${Math.round(Math.min(100, s.alignmentApparent + 8))}`;
+  return `capability ${fmtNum(run.capBefore, 2)}× → ${fmtNum(run.capAfter, 2)}×`;
 }
 
 function applyFocusRewards(s: GameState, run: TrainingRun): void {

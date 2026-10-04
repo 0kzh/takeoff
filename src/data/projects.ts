@@ -382,7 +382,8 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_blogpost',
     title: 'Research blog post',
-    cost: { insight: 10 },
+    // Insight-priced cards stand grey for a minute or two first (critic C12: cards are goals).
+    cost: { insight: 40 },
     description: 'Mostly charts. +1 Trust.',
     trigger: (s) => s.insightUnlocked && s.insight >= 1,
     buy: (s) => {
@@ -445,7 +446,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_demo',
     title: 'Launch demo video',
-    cost: { insight: 25 },
+    cost: { insight: 60 },
     description: 'Three minutes, no cuts. Marketing level +2.',
     // A launch video needs a launch: after the post, once a model has shipped.
     trigger: (s) => isBought(s, 'p_blogpost') && releases(s) >= 1,
@@ -530,6 +531,7 @@ export const PROJECTS: ProjectDef[] = [
     description: '+$20,000, +2 Trust, marketing level +2.',
     trigger: (s) => s.tasks >= 60000 && releases(s) >= 1,
     buy: (s) => {
+      s.flags['seriesAAt'] = s.stats.timePlayed;
       // A lab that waited for a real round (A Bridge Round) is paid for the patience.
       addFunds(s, 20000 + seriesABonus(s));
       s.trust += 2;
@@ -684,7 +686,8 @@ export const PROJECTS: ProjectDef[] = [
     // The sales team brings the custom deals in.
     urgent: (s) => rungHelper(s) === 'p_contract',
     // The first contract does not wait for the sales team (critic C13): the Series A brings the first bank.
-    trigger: (s) => isBought(s, 'p_enterprise') || isBought(s, 'p_series_a'),
+    // A minute after the round closes, so the round and the first bank are two beats (critic C12).
+    trigger: (s) => isBought(s, 'p_enterprise') || (isBought(s, 'p_series_a') && sinceFlag(s, 'seriesAAt') >= 60),
     uses: Infinity,
     // A standing offer once it exists: it never takes a slot from something new.
     sideline: true,
@@ -799,8 +802,10 @@ export const PROJECTS: ProjectDef[] = [
     cost: { funds: 15000 },
     description: 'More desks. Research capacity ×2.',
     // The Research Plateau's named fix (or, late in the stage, room for the runs to come).
-    trigger: (s) => s.training.runIndex >= 4 || plateauSeconds(s) >= 30,
-    urgent: (s) => plateauSeconds(s) >= 30,
+    // A plateau names the Experiment tracker first; the floor follows if the lab is still full a
+    // minute later (critic C12: two fixes drawn in one beat).
+    trigger: (s) => s.training.runIndex >= 4 || plateauSeconds(s) >= 90,
+    urgent: (s) => plateauSeconds(s) >= 90,
     buy: (s) => {
       s.labMult *= 2;
     },
@@ -855,7 +860,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_workshop',
     title: 'Workshop paper',
-    cost: { insight: 50 },
+    cost: { insight: 100 },
     description: 'Eight pages, one good idea. +1 Trust.',
     trigger: (s) => isBought(s, 'p_demo') && releases(s) >= 3,
     buy: (s) => {
@@ -1124,7 +1129,9 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_parallel',
-      revealFunds: 90,
+      // Mid-stage cards are spread from a minute to over three of revenue (critic C8: a queue of cards
+      // priced just under the next run held the model still for seven minutes).
+      revealFunds: 60,
       title: 'Parallel pipelines',
       cost: { research: 200000, insight: 120 },
       description: 'A second pipeline: the next run starts while the last is in evaluation.',
@@ -1168,7 +1175,7 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_brief',
-      revealFunds: 90,
+      revealFunds: 200,
       title: 'Brief the administration',
       cost: { research: 200000 },
       description: 'A windowless room, a deck and a model that answers questions: relations +8.',
@@ -1184,7 +1191,7 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_memory',
-      revealFunds: 90,
+      revealFunds: 150,
       title: 'Long-horizon memory',
       cost: { research: 250000 },
       description: 'Copies remember yesterday: they finish a quarter more tasks.',
@@ -1237,7 +1244,7 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_distill',
-      revealFunds: 90,
+      revealFunds: 120,
       title: 'Distillation: Sage-mini',
       cost: { research: 350000, insight: 150 },
       description: 'A small model taught by the big one: twice the copies per GPU, and a wider market.',
@@ -1344,9 +1351,10 @@ function stage2Projects(): ProjectDef[] {
       // row at 3.0×; a run that jumps from 2.9× to 3.2× would leave it too little lead.
       pinned: true,
       title: 'Let Sage-3 write the code',
-      priceTag: (s) => (exitReady(s) ? '(ready)' : '(needs a released 4.00× model)'),
+      priceTag: (s) => (exitReady(s) ? '(ready)' : '(needs a 4.00× model, public or internal)'),
       cost: {},
-      description: 'Every engineer at OpenMind becomes a manager of copies.',
+      // What the click ends, not only what it starts (critic C11).
+      description: 'Every engineer becomes a manager of copies. Hiring, marketing, data and Trust end here.',
       trigger: (s) => best(s) >= 2.8,
       canAfford: exitReady,
       buy: (s) => {

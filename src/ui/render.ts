@@ -7,15 +7,15 @@ import {
 } from '../engine/economy.js';
 import {
   lotSize, shownLot, lotReason, lotReasonOf, lotHoldReason, holdNote, lotCostOf, lotReturn, lotNote, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
-  queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, BTM_QUEUE_SECONDS, SOLAR_QUEUE_SECONDS, REACTOR_SECONDS,
+  queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, freeSlots, solarSeconds,
 } from '../engine/infrastructure.js';
 import { marketBreakdown } from '../engine/market.js';
 import {
-  trainCost, canStartTraining, canTrainNow, trainNowYield, TRAIN_NOW_SHARE, fullRunWait, runOtherwiseReady, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
+  trainCost, canStartTraining, canTrainNow, trainNowYield, TRAIN_NOW_SHARE, fullRunWait, focusChange, runOtherwiseReady, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
   trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
 } from '../engine/training.js';
-import { govMood, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
+import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
 import { chipsOnOrder } from '../engine/stores.js';
 import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
 import { endingById, endStats } from '../engine/endings.js';
@@ -76,6 +76,8 @@ export function mount(p: Perform): void {
 
 /** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
 export function render(s: GameState): void {
+  // The stage on the body, for the one-column order at 390 px (critic C10: the stage's controls first).
+  if (document.body.dataset['stage'] !== String(s.stage)) document.body.dataset['stage'] = String(s.stage);
   for (const el of revealEls) setShown(el, s.revealed[el.dataset['reveal']!] === true);
   for (const el of hideEls) {
     const hide = s.revealed[el.dataset['hide']!] === true;
@@ -227,7 +229,8 @@ function renderInfrastructure(s: GameState): void {
     const cost = lotCostOf(s, size);
     setText(n === 1000 ? 'gpuBatchCost' : `gpuBatch${suffix}Cost`, fmtMoneyShort(cost));
     const why = lotReasonOf(s, n) || lotHoldReason(s, n);
-    setText(`gpuReason${suffix}`, why);
+    // The hold's clock is printed once, on the main lot; the bigger lots name the hold only.
+    setText(`gpuReason${suffix}`, n === 1000 ? why : why.replace(/ — .*$/, ''));
     const kept = n === 1000 && !why ? holdNote(s) : '';
     setText(`gpuReturn${suffix}`, why ? '' : `+${fmtMoneyShort(Math.round(lotReturn(s, size)))}/s${kept ? ` · ${kept}` : ''}`);
     setDisabled(id, !!why || (n === 1000 ? lotSize(s) < 100 : s.funds < cost));
@@ -246,7 +249,8 @@ function renderInfrastructure(s: GameState): void {
   setText('datacenterCost', fmtMoneyShort(dc.cost));
   const building = datacenterBuilding(s);
   setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : '');
-  setText('dcNote', building ? '' : wall === 'no room' ? `${fmtClock(dcBuildSeconds(s))} to build · room is the wall` : `${fmtClock(dcBuildSeconds(s))} to build`);
+  // The build time is printed when room is the wall (or nearly); otherwise it is in the hover.
+  setText('dcNote', building ? '' : wall === 'no room' || freeSlots(s) < 2000 ? `${fmtClock(dcBuildSeconds(s))} to build · room is the wall` : '');
   setDisabled('btn-datacenter', !!building || s.funds < dc.cost);
   setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}). Building ahead of the wall keeps the lots coming.`);
 
@@ -254,7 +258,7 @@ function renderInfrastructure(s: GameState): void {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
     setText(reasonId, why);
-    const when = kind === 'gas' ? 'now' : kind === 'solar' ? `in ${fmtClock(s.btm ? BTM_QUEUE_SECONDS : SOLAR_QUEUE_SECONDS)}` : `in ${fmtClock(REACTOR_SECONDS)}`;
+    const when = kind === 'gas' ? 'now' : kind === 'solar' ? `in ${fmtClock(solarSeconds(s))}` : 'in two minutes';
     const extra = kind === 'nuclear' && s.govRelations >= 60 ? ' · cheaper: good relations' : '';
     setText(noteId, why ? '' : `${when}${wall === 'no power' ? ' · power is the wall' : ''}${extra}`);
     setDisabled(id, !!why || s.funds < cost);
@@ -356,7 +360,12 @@ function renderTraining(s: GameState): void {
   } else {
     setTitle('btn-focus-safety', 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.');
   }
-  // The trade under the buttons, not only in their tooltips (critic round 2 §5).
+  // The trade under the buttons, not only in their tooltips (critic round 2 §5); from Stage 2 all
+  // three trades are printed on the buttons themselves (critic C5).
+  const s2 = s.stage === 2;
+  setText('focusTrade-capability', s2 ? '+12% capability' : '');
+  setText('focusTrade-efficiency', s2 ? 'copies ×1.25' : '');
+  setText('focusTrade-safety', s2 ? 'alignment +8' : '');
   setText('focusNote', focusNote(s, t.focus));
 
   const slotRun = evalRun(s);
@@ -379,9 +388,10 @@ function renderTraining(s: GameState): void {
  */
 function focusNote(s: GameState, focus: Focus): string {
   const s2 = s.stage >= 2;
-  if (focus === 'capability') return s2 ? 'The most capable next model.' : 'The most capable next model (about +17%).';
-  if (focus === 'efficiency') return s2 ? 'More copies on every GPU; a smaller capability gain.' : 'Copies per GPU ×1.25; a smaller capability gain.';
-  return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
+  // Stage 2: the default is not the fast road to 4×, and the note says so (critic C5).
+  if (focus === 'capability') return s2 ? 'The biggest step per run; Efficiency\'s copies pay for the next runs sooner.' : 'The most capable next model (about +17%).';
+  if (focus === 'efficiency') return s2 ? 'More copies: more money for runs, more jobs displaced.' : 'Copies per GPU ×1.25; a smaller capability gain.';
+  return s2 ? 'Fewer issues on every later run; the slowest road to 4×.' : 'Fewer red-team issues, now and on every later run.';
 }
 
 function renderIdle(s: GameState): void {
@@ -471,6 +481,8 @@ function renderEval(s: GameState, run: TrainingRun): void {
     });
   }
   setText('evalScore', evalP >= 1 ? fmtInt(totalScore(run)) : '…');
+  // What the run changes when it ships (critic C5: `copies per GPU 1.88 → 2.35`).
+  setText('evalChange', evalP >= 1 && s.stage === 2 && run.focus !== 'capability' ? `· ${focusChange(s, run)}` : '');
   setText('evalCap', evalP >= 1 ? fmtNum(run.capAfter, 2) : '…');
   setTitle('evalTotal', evalP >= 1 ? `Reviewers' score: ${totalScore(run)}/40.` : '');
   if (condensed) {
@@ -536,13 +548,17 @@ function renderWorld(s: GameState): void {
   if (s.revealed['security']) {
     setText('securityNote', SECURITY_NOTES[s.securityLevel] ?? `SL${s.securityLevel}`);
     const c = sl3Cost(s);
-    setText('sl3Cost', `${fmtMoneyShort(c.funds)}, ${c.trust} Trust`);
+    setText('sl3Cost', c.trust ? `${fmtMoneyShort(c.funds)}, ${c.trust} Trust` : fmtMoneyShort(c.funds));
     setDisabled('btn-sl3', s.securityLevel >= 3 || s.funds < c.funds || s.trust < c.trust);
     showId('btn-sl3', s.securityLevel < 3);
     showId('sl3Cost', s.securityLevel < 3);
   }
   setText('govRelations', fmtInt(Math.round(s.govRelations)));
   setText('govMood', govMood(s));
+  // A consequence per band, with its threshold on screen (critic C7).
+  setText('govNote', s.stage === 2 ? govBandNote(s) : '');
+  setText('approvalNote', s.stage === 2 ? approvalBandNote(s) : '');
+  setText('alignNote', s.stage === 2 ? alignBandNote(s) : '');
   setToggle('btn-shareEvals', s.shareEvals, s.shareEvals ? 'ON' : 'OFF');
   const a = Math.round(s.approval);
   setText('approval', `${a < 0 ? '−' : a > 0 ? '+' : ''}${fmtInt(Math.abs(a))}`);

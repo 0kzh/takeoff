@@ -55,7 +55,10 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
         return b;
       }),
     );
-    if (opening) takeFocus();
+    if (opening) {
+      placeModal();
+      takeFocus();
+    }
   }
   def.options.forEach((opt, i) => {
     const b = document.getElementById(`choice-${def.id}-${i}`) as HTMLButtonElement | null;
@@ -70,6 +73,23 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
   });
   const fallback = def.options[def.defaultOption ?? def.options.length - 1];
   setText('modalTimer', def.timer && fallback ? `${Math.ceil(active.remaining)} s — then: ${fallback.label}` : '');
+}
+
+/**
+ * The panel opens beside the Stores, not over them (critic C10: its options are priced in the funds it
+ * covered): its left edge on the middle column. One column (≤ 700 px) keeps the stylesheet's place.
+ */
+function placeModal(): void {
+  const modal = byId('modal');
+  const mid = document.getElementById('middleColumn');
+  if (window.innerWidth <= 700 || !mid) {
+    modal.style.left = '';
+    modal.style.transform = '';
+    return;
+  }
+  const left = Math.max(8, Math.min(window.innerWidth - modal.offsetWidth - 8, Math.round(mid.getBoundingClientRect().left)));
+  modal.style.left = `${left}px`;
+  modal.style.transform = 'none';
 }
 
 function takeFocus(): void {

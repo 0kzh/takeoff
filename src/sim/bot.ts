@@ -481,6 +481,9 @@ export function simulate(args: Args): SimResult {
 
   const beginStage2 = (t: number) => {
     s2Start = t;
+    // Release intervals count from the arrival, not from the start of the game.
+    lastCap = s.capability;
+    lastCapAt = t;
     s2LogStart = s.log.length;
     incidentsAtStart = s.stats.incidents;
     prevPresses = { ...s.stats.pressCounts };
@@ -500,7 +503,7 @@ export function simulate(args: Args): SimResult {
     policyStep(s, tracked, mem);
     step(s);
     const t = s.stats.timePlayed;
-    if (s.stage === 2 && s.capability > lastCap + 1e-9) {
+    if (s.stage === 2 && s2Start !== null && s.capability > lastCap + 1e-9) {
       if (t - lastCapAt > longestRelease) {
         longestRelease = t - lastCapAt;
         longestReleaseAt = lastCapAt;
@@ -876,8 +879,9 @@ export function simulate(args: Args): SimResult {
     void s2LogStart;
   }
 
-  // The densest six minutes of first-time reveals in Stage 1.
-  const s1Reveals = revealTimes.filter((x) => x <= horizon).sort((x, y) => x - y);
+  // The densest six minutes of first-time reveals in Stage 1 (what is on screen at second 0 is the
+  // opening screen, not a reveal).
+  const s1Reveals = revealTimes.filter((x) => x > t0 && x <= horizon).sort((x, y) => x - y);
   let maxReveals6min = 0;
   let maxReveals6minAt = 0;
   for (let a = 0, b = 0; b < s1Reveals.length; b++) {

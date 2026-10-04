@@ -1,5 +1,5 @@
 import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay } from './state.js';
-import { fmtInt, fmtClock, fmtMoneyShort } from './format.js';
+import { fmtInt, fmtClock } from './format.js';
 import { trainCost, trainSlotFree, computeYield, runOtherwiseReady } from './training.js';
 import { visibleProjects } from './projects.js';
 import { choiceById, optionCost } from './events.js';
@@ -235,13 +235,13 @@ function holdName(s: GameState, hold: number): string {
   return wallFix(s)?.what === 'hall' ? 'the hall first' : 'the plant first';
 }
 
-/** The main lot's note while something is held: `$840k kept for the next hall`. */
+/** The main lot's note while something is held: `keeps the next hall's price` (its price is on its own row). */
 export function holdNote(s: GameState): string {
   const hold = lotHold(s);
   if (hold <= 0) return '';
   const name = holdName(s, hold);
-  const what = name === 'the run first' ? 'the run' : name === 'the offer first' ? 'the offer' : name === 'the hall first' ? 'the next hall' : name === 'the plant first' ? 'the next plant' : name.replace(/ first$/, '');
-  return `${fmtMoneyShort(hold)} kept for ${what}`;
+  const what = name === 'the run first' ? 'the run\'s' : name === 'the offer first' ? 'the offer\'s' : name === 'the hall first' ? 'the next hall\'s' : name === 'the plant first' ? 'the next plant\'s' : `${name.replace(/ first$/, '')}'s`;
+  return `keeps ${what} price`;
 }
 
 /**
@@ -482,8 +482,13 @@ export function solarQueueFull(s: GameState): boolean {
   return queued(s, 'solar').length >= SOLAR_QUEUE_MAX;
 }
 
-function solarSeconds(s: GameState): number {
-  return s.btm ? BTM_QUEUE_SECONDS : SOLAR_QUEUE_SECONDS;
+/** Relations from which the utility puts OpenMind's farms at the front of the queue (critic C7). */
+export const GOV_QUEUE_BAND = 80;
+
+/** Seconds a new solar farm waits in the interconnect queue: behind-the-meter 0:30; halved at relations 80+. */
+export function solarSeconds(s: GameState): number {
+  const base = s.btm ? BTM_QUEUE_SECONDS : SOLAR_QUEUE_SECONDS;
+  return s.govRelations >= GOV_QUEUE_BAND ? Math.round(base / 2) : base;
 }
 
 /** Gas turbines: instant, cheap at first, and the county notices (approval −1.5 each, in the target). */
@@ -596,7 +601,7 @@ export function updatePowerQueue(s: GameState, dt: number): void {
   }
 }
 
-/** The panel's queue line: `Interconnect queue: solar farm — 2:41 · 1 waiting`; '' when empty. */
+/** The panel's queue line: `Interconnect queue: solar farm — 2:41 · 1 waiting`; '' when empty (a hall's build is on its own row). */
 export function queueLine(s: GameState): string {
   const parts: string[] = [];
   const solar = queued(s, 'solar');
@@ -607,7 +612,6 @@ export function queueLine(s: GameState): string {
   for (const o of s.powerQueue) {
     if (o.kind === 'nuclear') parts.push(`Reactor restart — ${fmtClock(Math.ceil(o.remaining))}`);
     if (o.kind === 'gulf') parts.push(`Al-Marsa — ${fmtClock(Math.ceil(o.remaining))}`);
-    if (o.kind === 'datacenter') parts.push(`${o.label} — ${fmtClock(Math.ceil(o.remaining))}`);
   }
   return parts.join(' · ');
 }

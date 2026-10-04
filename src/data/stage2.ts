@@ -158,7 +158,9 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_distill'),
   devChoiceRow('c_defense', 'd_pentagon', { prereq: (s) => s.revealed['government'] === true && s.govRelations >= 40 }),
   flagRow('btn-jobFund', 'jobFund', {
-    governed: false,
+    // A mechanic the governor may bring forward once the Public panel is up (critic C8: the middle's
+    // mechanic holes).
+    mechanic: true,
     trigger: (s) => s.revealed['public'] === true && (s.jobsDisplaced >= 0.5 || s.approval <= -8),
     prereq: (s) => s.revealed['public'] === true,
   }),
@@ -198,6 +200,8 @@ export const STAGE2_TABLE: ContentRow[] = [
     trigger: (s) =>
       (bestCapability(s) >= LATE_AT(3.7) && trainingRun(s) !== null) ||
       (s.revealed['shareEvals'] === true && s.date >= monthOf(2026, 12)),
+    // The governor may bring it forward, but not before the model is most of the way to 4×.
+    prereq: (s) => bestCapability(s) >= LATE_AT(3.6),
     onReveal: (s) => say(s, 'Alignment compute: a share of the copies can check the others. It is 1% now.'),
   }),
   project('p_honesty_evals'),

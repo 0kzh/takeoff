@@ -137,8 +137,8 @@
         <b>Research</b>
         <hr>
         <span data-hide="stores">Trust: <span id="trust">2</span><br></span>
-        <span data-hide="takeoff">Next Trust at <span id="nextTrust">3,000</span> tasks<br>
-        <span data-reveal="hireResearcher"><button class="button2" id="btn-hireResearcher" title="1 Trust: one more researcher, +10 research per second.">Hire Researcher</button></span>
+        <span data-hide="takeoff"><span data-hide="stores">Next Trust at <span id="nextTrust">3,000</span> tasks<br></span>
+        <span data-reveal="hireResearcher"><span data-hide="hireFaded"><button class="button2" id="btn-hireResearcher" title="1 Trust: one more researcher, +10 research per second.">Hire Researcher</button></span></span>
         <span data-reveal="expandLab"><button class="button2" id="btn-expandLab" title="1 Trust: room for more research.">Expand Lab</button></span>
         <span class="note" id="trustCostNote">(costs Trust)</span><br>
         <span data-hide="stores">Researchers: <span id="researchers">1</span><br></span>
@@ -179,9 +179,9 @@
         <span id="rivalLine" title="Anthrosoft's latest Cadence model"><span id="rivalStanding">Level with Anthrosoft</span><span class="hiddenIds"> (<span id="rivalCap">1.00</span>×)</span></span><br>
         <div id="focusRow" data-reveal="focus">
           Focus:
-          <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 14–20% more capable. Customers notice.">Capability</button>
-          <button class="button2 focusButton" id="btn-focus-efficiency" data-focus="efficiency" title="Efficiency: +5% capability, and 25% more copies on every GPU.">Efficiency</button>
-          <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety" title="Safety: +5% capability, fewer red-team issues, better alignment.">Safety</button>
+          <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 14–20% more capable. Customers notice.">Capability<small class="focusTrade" id="focusTrade-capability"></small></button>
+          <button class="button2 focusButton" id="btn-focus-efficiency" data-focus="efficiency" title="Efficiency: +5% capability, and 25% more copies on every GPU.">Efficiency<small class="focusTrade" id="focusTrade-efficiency"></small></button>
+          <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety" title="Safety: +5% capability, fewer red-team issues, better alignment.">Safety<small class="focusTrade" id="focusTrade-safety"></small></button>
           <div id="focusNote" class="note"></div>
         </div>
 
@@ -201,7 +201,7 @@
             <div class="card" id="card-2"><b class="cardName">Enterprise analyst</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
             <div class="card" id="card-3"><b class="cardName">Safety Institute</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
           </div>
-          <div id="evalTotal">Capability <span id="evalCap">1.00</span>×<span class="hiddenIds"> · score <span id="evalScore">0</span>/40</span></div>
+          <div id="evalTotal">Capability <span id="evalCap">1.00</span>×<span class="hiddenIds"> · score <span id="evalScore">0</span>/40</span> <span id="evalChange" class="note"></span></div>
           <div id="evalLine" class="hasTip"></div>
         </div>
 
@@ -258,15 +258,15 @@
       <div id="panel-government" class="panel" data-panel="government" data-reveal="government">
         <b>Government</b>
         <hr>
-        <span id="govLine">Relations: <span id="govRelations">50</span> (<span id="govMood">cordial</span>)</span><br>
+        <span id="govLine">Relations: <span id="govRelations">50</span> (<span id="govMood">cordial</span>)</span> <span id="govNote" class="note"></span><br>
         <div data-reveal="shareEvals">Share evals with the Safety Institute: <button class="button2 toggle" id="btn-shareEvals" title="Each release: relations +1, measured alignment +1, lead −0.1 months.">OFF</button></div>
       </div>
 
       <div id="panel-public" class="panel" data-panel="public" data-reveal="public">
         <b>Public</b>
         <hr>
-        <span id="approvalLine" class="hasTip">Approval: <span id="approval">0</span></span><br>
-        Jobs displaced: <span id="jobsDisplaced">0</span><br>
+        <span id="approvalLine" class="hasTip">Approval: <span id="approval">0</span></span> <span id="approvalNote" class="note"></span><br>
+        Jobs displaced: <span id="jobsDisplaced">0</span> <span class="note" title="Jobs follow the tasks the copies do and the skill of the best model.">by the copies' tasks</span><br>
         <div data-reveal="jobFund">Job-transition fund: <button class="button2 toggle" id="btn-jobFund" title="2% of revenue while it is on. Approval +10.">OFF</button></div>
       </div>
 
@@ -274,9 +274,9 @@
         <b>Stats</b>
         <hr>
         Copies think at <span id="statSpeed">1</span>× human speed<span class="hiddenIds"> (<span id="statCopies">0</span>)</span><br>
-        Revenue run-rate: <span id="statRunRate">$ 0</span> / yr<br>
+        <span class="hiddenIds">Revenue run-rate: <span id="statRunRate">$ 0</span> / yr<br></span>
         Lead over Baiwen: <span id="statLead">3</span> months<br>
-        Alignment (as measured): <span id="statAlignment">50</span>
+        <span data-hide="alignment">Alignment (as measured): <span id="statAlignment">50</span> <span id="alignNote" class="note"></span></span>
         <span class="hiddenIds">Tasks per sec: <span id="statTasksPerSec">0</span> · Revenue per sec: <span id="statRevPerSec">$ 0.00</span> · Capability: <span id="statCapability">1.00</span>×</span>
       </div>
 

@@ -3,7 +3,7 @@ import {
   TICK_SECONDS, autoBuyPower, produce, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, payContracts, trackStuck, updateInterconnect,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, toggleAutoPrice, setResearchAlloc,
+  toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck,
 } from './economy.js';
 import {
   buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
@@ -128,6 +128,7 @@ function slowStats(s: GameState): void {
   rungRelief(s);
   trustPace(s);
   wallWatch(s);
+  hireFadeCheck(s);
   if (s.stage === 2) {
     runStandingOrder(s);
     updateWorld(s);

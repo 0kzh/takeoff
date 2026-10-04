@@ -116,9 +116,10 @@ export const RIVAL_LINES_S2: string[] = [
 export function rivalReleaseS2(s: GameState): void {
   s.rivalVersion += 1;
   const before = qualityMult(s);
+  // Anthrosoft keeps its own pace (critic C7: a lab that stalls falls behind); it is never left
+  // further back than 0.8 × Sage's best.
   const lo = 0.8 * bestCapability(s);
-  const hi = 1.08 * s.capability;
-  const next = Math.min(hi, Math.max(lo, s.rivalCapability * rand(s, 1.1, 1.22)));
+  const next = Math.max(lo, rivalPace(s) * rand(s, 0.96, 1.06));
   s.rivalCapability = Math.max(s.rivalCapability, next);
   s.nextRivalIn = Math.round(rand(s, 240, 420));
   const name = `Cadence-${s.rivalVersion}`;
@@ -135,6 +136,11 @@ export function rivalReleaseS2(s: GameState): void {
     say(s, `Anthrosoft ships ${name}. Sage is still ahead.`);
   }
   s.flags['graphDirty'] = true;
+}
+
+/** Anthrosoft's Stage 2 pace, whatever Sage does: 1.55× at the arrival, 4.2× forty minutes on. */
+export function rivalPace(s: GameState): number {
+  return 1.55 * Math.pow(4.2 / 1.55, Math.max(0, s.stats.timeInStage) / 2400);
 }
 
 /** A dot on the graph's dashed line for each Cadence release (kept in the state for reloads). */
@@ -176,9 +182,39 @@ export function moveGov(s: GameState, by: number): void {
 }
 
 export function govMood(s: GameState): string {
-  if (s.govRelations >= 65) return 'close';
-  if (s.govRelations >= 40) return 'cordial';
+  if (s.govRelations >= 80) return 'allied';
+  if (s.govRelations >= 60) return 'close';
+  if (s.govRelations >= 30) return 'cordial';
   return 'wary';
+}
+
+/**
+ * What the current band of relations buys, and the next edge (critic C7: a consequence per band, its
+ * threshold on screen): `reactors 25% off · at 80 the queue halves`.
+ */
+export function govBandNote(s: GameState): string {
+  const g = s.govRelations;
+  if (g >= 80) return 'the solar queue is halved';
+  if (g >= 60) return 'at 80 the solar queue halves';
+  if (g >= 40) return 'at 60 reactors cost a quarter less';
+  if (g >= 30) return 'under 30: a subpoena';
+  return 'a subpoena is coming';
+}
+
+/** Approval's bands, named as the meter nears them: permits slow under −30, the fence is cut at −40. */
+export function approvalBandNote(s: GameState): string {
+  const a = s.approval;
+  if (a <= -40) return 'protests at Abilene; permits slow';
+  if (a < -30) return 'datacenter permits take a minute longer';
+  if (a < -15) return 'under −30 permits slow';
+  return '';
+}
+
+/** Measured alignment's band once models pass 3×: under 55, the Safety Institute issues an advisory. */
+export function alignBandNote(s: GameState): string {
+  if (s.alignmentApparent < 55) return 'advisories from 3×';
+  if (s.alignmentApparent < 65) return 'under 55: advisories';
+  return '';
 }
 
 // ---------- jobs and approval (§2.9) ----------
@@ -269,10 +305,11 @@ export const SECURITY_NOTES: Record<number, string> = {
 };
 
 /** SL3: $20M (scale 1) and 3 Trust; 25 % off for five minutes after "lock it down". */
+/** Security level 3: $20M at scale 1 and 3 Trust; after a lock-down, a fifth of the price and no Trust for 5:00. */
 export function sl3Cost(s: GameState): { funds: number; trust: number } {
   const until = s.flags['sl3DiscountUntil'];
-  const discount = typeof until === 'number' && s.stats.timePlayed < until ? 0.75 : 1;
-  return { funds: s2(20000000 * discount), trust: 3 };
+  const discounted = typeof until === 'number' && s.stats.timePlayed < until;
+  return discounted ? { funds: s2(4000000), trust: 0 } : { funds: s2(20000000), trust: 3 };
 }
 
 export function buySL3(s: GameState): boolean {

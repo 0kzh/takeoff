@@ -157,6 +157,8 @@ function draw(s: GameState): void {
   }
 
   // Reference rungs: up to the first one above everything plotted; that one black, the rest grey.
+  // Their labels are drawn last, on a white ground, so the series never overdraws them (critic C10).
+  const labels: { text: string; x: number; y: number; color: string }[] = [];
   for (const r of RUNGS) {
     if (r.at > above.at) break;
     const py = Math.round(y(r.at)) + 0.5;
@@ -168,10 +170,9 @@ function draw(s: GameState): void {
     ctx.lineTo(W - PAD_R, py);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = r.at === 1 ? '#2a623d' : isNext ? '#000' : '#888';
     const label = `${fmtNum(r.at, r.at % 1 ? 1 : 0)}× ${r.label}`;
     const w = ctx.measureText(label).width;
-    ctx.fillText(label, W - PAD_R - w, py - 2);
+    labels.push({ text: label, x: W - PAD_R - w, y: py - 2, color: r.at === 1 ? '#2a623d' : isNext ? '#000' : '#888' });
   }
 
   dots = [];
@@ -240,6 +241,13 @@ function draw(s: GameState): void {
       ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
     }
     dots.push({ x: px, y: py, text: `${m.name} · ${dateLabel(m.date)} · ${fmtNum(m.capability, 2)}× · roughly IQ ${iq(m.capability)}${m.public ? '' : ' · internal'}` });
+  }
+  for (const l of labels) {
+    const w = ctx.measureText(l.text).width;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillRect(l.x - 2, l.y - 9, w + 4, 10);
+    ctx.fillStyle = l.color;
+    ctx.fillText(l.text, l.x, l.y);
   }
   // Baiwen's current position is hoverable too.
   const bNow = baiwenAt(s, s.date);

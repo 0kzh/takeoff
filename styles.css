@@ -476,6 +476,9 @@ div.storeRow[data-reveal].shown { display: flex; }
   #panel-task { order: 1; }
   #panel-stores { order: 2; }
   #panel-power { order: 3; }
+  /* From Stage 2 the stage's controls come first: the lots, Train and the slider (critic C10). */
+  body[data-stage="2"] #panel-infrastructure { order: 3; }
+  body[data-stage="2"] #panel-research { order: 4; }
   #panel-training { order: 4; }
   #panel-projects { order: 5; }
   #panel-business { order: 6; }
@@ -507,3 +510,7 @@ div.storeRow[data-reveal].shown { display: flex; }
   .modalButton { min-height: 44px; }
   #toast { display: none; }
 }
+
+/* Focus: each button carries its trade from Stage 2 (critic C5). */
+.focusTrade { display: block; font-size: 10px; line-height: 1.1; color: #555; }
+.focusTrade:empty { display: none; }
