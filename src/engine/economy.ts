@@ -14,9 +14,9 @@ export const GRID_MW = 5;
 
 // ---------- costs ----------
 
-/** UP AutoClipper curve: `6 + 1.1^n` (→ `1.08^n` after Bulk GPU lease). */
+/** UP AutoClipper curve: `5 + 1.1^n`, so the first GPU is $6 (→ `1.08^n` after Bulk GPU lease). */
 export function gpuCost(s: GameState): number {
-  return Math.round((6 + Math.pow(s.gpuCostGrowth, s.gpus)) * 100) / 100;
+  return Math.round((5 + Math.pow(s.gpuCostGrowth, s.gpus)) * 100) / 100;
 }
 
 export function marketingCost(s: GameState): number {
@@ -144,12 +144,7 @@ function completeTasks(s: GameState, n: number): void {
   s.unbilled += n;
 }
 
-/** Every 100 ms: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by unbilled. */
-export function sell(s: GameState): void {
-  const d = demand(s);
-  if (rng(s) >= d / 100) return;
-  if (s.unbilled <= 0) return;
-  const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
+function bill(s: GameState, n: number): void {
   if (n <= 0) return;
   const revenue = Math.floor(n * s.price * 1000) / 1000;
   s.unbilled -= n;
@@ -158,6 +153,15 @@ export function sell(s: GameState): void {
   s.totalRevenue += revenue;
   s.stats.secRevenue += revenue;
   s.stats.secSold += n;
+}
+
+/** Every 100 ms: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by unbilled. */
+export function sell(s: GameState): void {
+  const d = demand(s);
+  if (rng(s) >= d / 100) return;
+  if (s.unbilled <= 0) return;
+  const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
+  bill(s, n);
 }
 
 // ---------- power (Stage 1, UP wire) ----------
@@ -220,12 +224,11 @@ export function researchTick(s: GameState, dt: number): void {
 
 // ---------- player verbs ----------
 
+/** Always works. With nothing unsold, the customer pays for the click at once. */
 export function clickTask(s: GameState): boolean {
-  if (s.stage < 2) {
-    if (s.power < 1) return false;
-    s.power -= 1;
-  }
+  const payNow = s.stage === 1 && s.unbilled <= 0;
   completeTasks(s, 1);
+  if (payNow) bill(s, 1);
   s.flags['clicks'] = ((s.flags['clicks'] as number) || 0) + 1;
   return true;
 }
@@ -242,18 +245,17 @@ export function rentGpu(s: GameState): boolean {
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.gpus += 1;
-  if (s.gpus === 1) say(s, 'GPU rented. A copy of Sage-1 is running.');
   return true;
 }
 
 export function lowerPrice(s: GameState): boolean {
-  if (!s.revealed['business'] || s.price <= MIN_PRICE + 1e-9) return false;
+  if (!s.revealed['pricing'] || s.price <= MIN_PRICE + 1e-9) return false;
   s.price = Math.max(MIN_PRICE, Math.round((s.price - 0.01) * 100) / 100);
   return true;
 }
 
 export function raisePrice(s: GameState): boolean {
-  if (!s.revealed['business']) return false;
+  if (!s.revealed['pricing']) return false;
   s.price = Math.round((s.price + 0.01) * 100) / 100;
   s.priceRaises += 1;
   return true;

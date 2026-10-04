@@ -1,7 +1,8 @@
 import { GameState, say, blackout, logNews } from './state.js';
 import { monthOf } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, gpuCost } from './economy.js';
+import { GRID_MW } from './economy.js';
+import { fmtMoneyShort } from './format.js';
 
 /**
  * Stages own the UI layout: `enter(state)` flips `state.revealed[...]` flags, and the renderer
@@ -37,8 +38,9 @@ export const STAGES: StageDef[] = [
     endMonth: monthOf(2025, 12),
     secondsPerMonth: 270,
     enter: (s) => {
-      show(s, ['console', 'task', 'power']);
-      say(s, 'Welcome to OpenMind.');
+      // The opening is one verb. Funds, then the GPU rental, arrive from the reveal rules.
+      show(s, ['console', 'task']);
+      say(s, 'Welcome to OpenMind. Customers are waiting.');
     },
     exit: () => 0,
   },
@@ -51,7 +53,7 @@ export const STAGES: StageDef[] = [
     enter: (s) => {
       blackout(s, 2, 'Ground broken outside Abilene.');
       hide(s, ['power', 'buyPower', 'compute', 'gridContract']);
-      show(s, ['infrastructure']);
+      show(s, ['infrastructure', 'pricing']);
       s.gridAuto = false;
       s.datacenters = Math.max(1, s.datacenters);
       s.gpus += 1000;
@@ -136,16 +138,32 @@ export const STUCK = (s: GameState): boolean => s.power < 1 && s.funds < s.power
 
 /** Stage 1 trigger-driven reveals (stages.md "Reveal order"). Once set, flags persist. */
 const REVEAL_RULES: RevealRule[] = [
-  { id: 'business', stages: [1], when: (s) => s.tasks >= 1 },
-  { id: 'buyPower', stages: [1], when: (s) => s.power < 900 || s.funds >= 5 },
+  // A finished task pays. The panel is only the funds line until a GPU is rented.
+  {
+    id: 'business',
+    stages: [1],
+    when: (s) => s.tasks >= 1,
+    then: (s) => say(s, `Task complete. The customer pays ${fmtMoneyShort(s.price)}.`),
+  },
+  // The first thing to save for: a greyed Rent GPU, before it can be afforded.
   {
     id: 'compute',
     stages: [1],
-    when: (s) => s.funds >= 5 || s.tasks >= 50,
-    then: (s) => say(s, `GPUs available to rent. $${gpuCost(s).toFixed(2)} each.`),
+    when: (s) => s.funds >= 3 || s.tasks >= 20,
+    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of Sage.'),
   },
-  { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 1 },
-  { id: 'marketing', stages: [1, 2], when: (s) => s.funds >= 20 },
+  // Renting one ends the opening. The count, the price, and power come back with it.
+  {
+    id: 'fleet',
+    stages: [1],
+    when: (s) => s.gpus >= 1,
+    then: (s) => say(s, 'GPU rented. A copy of Sage completes a task every second.'),
+  },
+  { id: 'power', stages: [1], when: (s) => s.gpus >= 1 },
+  { id: 'pricing', stages: [1], when: (s) => s.gpus >= 1 },
+  { id: 'buyPower', stages: [1], when: (s) => s.revealed['power'] === true && (s.power < 900 || s.funds >= 5) },
+  { id: 'revPerSec', stages: [1, 2, 3], when: (s) => s.tasksSold >= 1 && (s.stage > 1 || s.revealed['pricing'] === true) },
+  { id: 'marketing', stages: [1, 2], when: (s) => s.funds >= 20 && (s.stage > 1 || s.gpus >= 1) },
   {
     id: 'research',
     stages: [1, 2],

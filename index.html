@@ -23,7 +23,7 @@
 
   <div id="topDiv">
     <h2 id="tasksHeader">Tasks Completed: <span id="tasks">0</span></h2>
-    <div id="gameDate">Jul 2025</div>
+    <div id="gameDate" data-reveal="log">Jul 2025</div>
   </div>
 
   <div id="columns">
@@ -58,13 +58,15 @@
         Available Funds: <span id="funds">$ 0.00</span><br>
         <span data-reveal="revPerSec">Avg. Rev. per sec: <span id="revPerSec">$ 0.00</span><br></span>
         <span data-reveal="revPerSec">Avg. Tasks Sold per sec: <span id="soldPerSec">0</span><br></span>
-        Unbilled Tasks: <span id="unbilled">0</span><br>
-        <br>
-        <button class="button2" id="btn-lowerPrice">lower</button>
-        <button class="button2" id="btn-raisePrice">raise</button>
-        Price per Task: <span id="price">$ 0.25</span><br>
-        Public Demand: <span id="demand">0</span>%<br>
-        <span id="hypeLine">Release hype: ×<span id="hype">1.0</span><br></span>
+        <span data-reveal="pricing">
+          Unbilled Tasks: <span id="unbilled">0</span><br>
+          <br>
+          <button class="button2" id="btn-lowerPrice">lower</button>
+          <button class="button2" id="btn-raisePrice">raise</button>
+          Price per Task: <span id="price">$ 0.25</span><br>
+          Public Demand: <span id="demand">0</span>%<br>
+          <span id="hypeLine">Release hype: ×<span id="hype">1.0</span><br></span>
+        </span>
         <span data-reveal="apiCustomers">API customers: <span id="apiCustomers">0</span><br></span>
         <div data-reveal="marketing" id="marketingBlock">
           <br>
@@ -78,10 +80,12 @@
         <b>Compute</b>
         <hr>
         <button class="button2" id="btn-gpu">Rent GPU</button>
-        Cost: <span id="gpuCost">$ 7.00</span><br>
-        GPUs rented: <span id="gpus">0</span><br>
-        Copies running: <span id="copies">0</span><br>
-        Tasks per sec: <span id="tasksPerSec">0</span>
+        Cost: <span id="gpuCost">$ 6.00</span><br>
+        <span data-reveal="fleet">
+          GPUs rented: <span id="gpus">0</span><br>
+          Copies running: <span id="copies">0</span><br>
+          Tasks per sec: <span id="tasksPerSec">0</span>
+        </span>
       </div>
 
       <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="infrastructure">

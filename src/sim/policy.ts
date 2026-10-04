@@ -103,7 +103,7 @@ function answerChoice(s: GameState, a: Actions): void {
  * demand can bill, the bot prices to clear production instead (as UP players do).
  */
 function nudgePrice(s: GameState, a: Actions, mem: BotMemory): void {
-  if (!s.revealed['business'] || mem.ticks - mem.lastPriceTick < 10) return;
+  if (!s.revealed['pricing'] || mem.ticks - mem.lastPriceTick < 10) return;
   mem.lastPriceTick = mem.ticks;
   const pct = demandPercent(s);
   const supply = Math.max(s.stats.tasksPerSec, s.gpus === 0 ? 4 : 0);
