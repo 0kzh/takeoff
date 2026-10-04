@@ -2,7 +2,7 @@ import { GameState, isBought, counter } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import type { BotMemory } from './policy.js';
 import {
-  trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct,
+  trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct, runDelaySeconds,
   trainSlotFree, EXPERIMENTS_MAX,
 } from '../engine/training.js';
 import {
@@ -172,10 +172,16 @@ function budgetTarget(mem: BotMemory): number {
 }
 
 /** A research price the bot will pay now (§9.1 item 3). */
-function researchOk(s: GameState, research: number): boolean {
+/**
+ * A research price the bot will pay now (§9.1 item 3, under the wallet rule): never more than a run,
+ * and nothing whose printed delay for the waiting run is 30 s or more (arc G34: it reads the delays).
+ */
+function researchOk(s: GameState, research: number, exempt = false): boolean {
   if (research <= 0) return true;
   const run = trainCost(s).research ?? 0;
   if (research > run) return false;
+  // The approach's tests and a wall's named fix are bought whatever they delay.
+  if (!exempt && runDelaySeconds(s, { research }) >= 30) return false;
   return !(s.research >= 0.6 * run && research > 0.2 * run);
 }
 
@@ -266,7 +272,7 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   for (const p of visibleProjects(s)) {
     if (p.id === 'p_pause' || !wanted(s, mem, p.id) || !p.canAfford(s)) continue;
     const cost = p.cost(s);
-    if (!researchOk(s, cost.research ?? 0) || (saving && (cost.funds ?? 0) > 0)) continue;
+    if (!researchOk(s, cost.research ?? 0, p.instrument === true || p.urgent?.(s) === true) || (saving && (cost.funds ?? 0) > 0)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
   if (saving) return;
@@ -297,7 +303,7 @@ function experiments(s: GameState, a: Actions): void {
   for (const rung of [10, 25]) {
     if (c0 >= rung) continue;
     const land = c0 * (1 + nextGainPct(s) / 100);
-    if (land >= 0.98 * rung || land < 0.9 * rung) return;
+    if (land >= 0.97 * rung || land < 0.9 * rung) return;
     if (counter(s, 'expPts') >= EXPERIMENTS_MAX) return;
     a.runExperiments(s, 1);
     return;

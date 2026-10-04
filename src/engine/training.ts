@@ -15,8 +15,9 @@ export const EVALUATORS = ['HumanBench', 'Tech press', 'Enterprise analyst', 'Sa
 const BENCH_WEIGHT = [0.9, 0.6, 0.5, 0.55, 0.3, 0.35];
 /** Crossing each tier bumps the major version: Sage-2 at 2×, Sage-3 at 4×, Sage-4 at 10× (the next name comes from the vote). */
 export const MAJOR_TIERS = [2, 4, 10];
-/** Stage 3 rounds a run that lands just under a named rung up to it (G33: the built 2 %). */
+/** Stage 3 rounds a run that lands within 3 % under a named rung up to it (arc G33's 3 %). */
 export const S3_RUNGS = [10, 25];
+export const NEAR_MISS_S3 = 0.97;
 export const FRONTIER_SCORE = 32;
 /** Insight each public release brings the lab (critic round 2 §6.7: insight was dead UI for an efficient player). */
 export const RELEASE_INSIGHT = 6;
@@ -727,7 +728,7 @@ function computeResults(s: GameState, run: TrainingRun): void {
     if (tier) run.capAfter = tier;
   }
   if (s.stage >= 3) {
-    const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
+    const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS_S3 * x && run.capBefore < x);
     if (rung) run.capAfter = rung;
   }
   run.benchmarks = BENCHMARKS.map((_, i) => {
@@ -1117,7 +1118,7 @@ export function sendBack(s: GameState): boolean {
   const run = s.training.run!;
   const gain = run.capAfter / run.capBefore - 1;
   run.capAfter = run.capBefore * (1 + 0.7 * gain);
-  const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS * x && run.capBefore < x);
+  const rung = S3_RUNGS.find((x) => run.capAfter < x && run.capAfter >= NEAR_MISS_S3 * x && run.capBefore < x);
   if (rung) run.capAfter = rung;
   const m = majorFor(run.capAfter);
   if (m < run.major) {
