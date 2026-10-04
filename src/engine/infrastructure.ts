@@ -1,6 +1,6 @@
-import { GameState, PowerOrder, say, logNews, addFunds, press, isBought } from './state.js';
-import { fmtInt, fmtClock } from './format.js';
-import { trainCost, trainSlotFree, computeYield } from './training.js';
+import { GameState, PowerOrder, say, logNews, addFunds, press, isBought, canPay } from './state.js';
+import { fmtInt, fmtClock, fmtMoneyShort } from './format.js';
+import { trainCost, trainSlotFree, computeYield, runOtherwiseReady } from './training.js';
 import { visibleProjects } from './projects.js';
 import { choiceById, optionCost } from './events.js';
 
@@ -43,15 +43,16 @@ export const G5_PRICE = 110;
 /** Datacenters, hand-tuned (UP factory style): slots added and scale-1 price. The first is Break ground. */
 const DC_TABLE: [number, number][] = [
   [10000, 0],
-  // stage2.md has $250k; the second hall is the first room wall and lands by minute ten.
-  [15000, 150000],
-  [25000, 800000],
-  [50000, 2000000],
-  [75000, 4000000],
-  [125000, 8000000],
-  [200000, 15000000],
-  [300000, 27000000],
-  [450000, 50000000],
+  // stage2.md has $250k; the second hall is the first room wall and lands by minute ten. A slot costs
+  // about a sixth of a GPU (critic C2: the room wall is a short wait, not half the stage).
+  [15000, 80000],
+  [25000, 160000],
+  [50000, 350000],
+  [75000, 700000],
+  [125000, 1400000],
+  [200000, 2600000],
+  [300000, 4800000],
+  [450000, 9000000],
 ];
 
 function dcRow(n: number): [number, number] {
@@ -68,8 +69,17 @@ export function datacenterSlots(n: number): number {
   return total;
 }
 
+/** Slots: the halls built, plus the part of the one under construction that is finished (a quarter at a time). */
 export function gpuCapacity(s: GameState): number {
-  return datacenterSlots(s.datacenters);
+  return datacenterSlots(s.datacenters) + openedSlots(s);
+}
+
+/** A hall opens a quarter at a time as it is built, so the first lots go in before it is done. */
+function openedSlots(s: GameState): number {
+  const b = s.powerQueue.find((o) => o.kind === 'datacenter');
+  if (!b || !b.total) return 0;
+  const done = Math.max(0, Math.min(1, 1 - b.remaining / b.total));
+  return Math.floor(done * 4) / 4 * dcRow(s.datacenters + 1)[0];
 }
 
 /** The next datacenter: its number, the slots it adds and its price. */
@@ -132,57 +142,178 @@ export function freeSlots(s: GameState): number {
 
 // ---------- GPU lots ----------
 
-/** 1,000 while the fleet is under 25,000; 5,000 under 100,000; 25,000 after. */
-export function nominalLot(s: GameState): number {
-  if (s.gpus < 25000) return 1000;
-  if (s.gpus < 100000) return 5000;
-  return 25000;
+/**
+ * The lots on the Infrastructure panel, side by side (critic C1: the growth verb stays in the player's
+ * hands, each with what it returns printed beside it).
+ */
+export const LOT_SIZES = [1000, 5000, 25000] as const;
+
+/** The smallest lot (the main button, `btn-gpuBatch`). */
+export function nominalLot(_s: GameState): number {
+  return LOT_SIZES[0];
 }
 
-/** What the lot button sells now: the nominal lot, cut to the room and power there is, in thousands. */
+/** A lot of `n` GPUs fits the room and the power there is. */
+export function lotFits(s: GameState, n: number): boolean {
+  return freeSlots(s) >= n && freePowerGpus(s) >= n;
+}
+
+/**
+ * What the lot buttons keep in hand: the next run's price when only money is missing (a free slot,
+ * its research and data, most of its compute), and an open offer the lab cannot pay yet. The row
+ * says so ("the run first — 0:40"); Train now is the other way through (critic C1/C3).
+ */
+export function lotHold(s: GameState): number {
+  return Math.max(runHold(s), offerOnTable(s), wallFix(s)?.price ?? 0, urgentCard(s)?.price ?? 0);
+}
+
+/** The run's compute yield from which the lots save for it rather than grow the cluster toward it. */
+export const RUN_HOLD_YIELD = 0.7;
+
+function runHold(s: GameState): number {
+  return runOtherwiseReady(s) && computeYield(s) >= RUN_HOLD_YIELD ? trainCost(s).funds ?? 0 : 0;
+}
+
+/**
+ * The cheapest urgent card on screen (a wall's named fix: the research cap, the data wall) whose other
+ * costs are in hand: the lots keep its price, or a player who buys GPUs first never reaches it (critic C9).
+ */
+export function urgentCard(s: GameState): { price: number; title: string } | null {
+  let best: { price: number; title: string } | null = null;
+  for (const p of visibleProjects(s)) {
+    if (p.rescue || p.urgent?.(s) !== true) continue;
+    const c = p.cost(s);
+    const price = c.funds ?? 0;
+    if (price <= 0 || !canPay(s, { ...c, funds: 0 })) continue;
+    if (!best || price < best.price) best = { price, title: p.title };
+  }
+  if (best && best.price > 90 * Math.max(1, s.stats.revPerSec)) return null;
+  return best;
+}
+
+/**
+ * The fix for the wall the lots reach first, while that wall is less than a minute of income away:
+ * the cheapest plant for power, the next hall for room. The lots keep its price in hand, so the fix
+ * is affordable when the wall arrives and the lots never wait on it (critic C1/C2). A plant already
+ * in the queue counts as power to come; a hall being built, as room to come.
+ */
+export function wallFix(s: GameState): { price: number; what: 'plant' | 'hall' } | null {
+  if (s.stage !== 2 || !s.revealed['infrastructure']) return null;
+  const reach = (60 * Math.max(0, s.stats.revPerSec)) / gpuUnitPrice(s);
+  const power = freePowerGpus(s) + Math.floor((queuedMW(s) * 1000) / KW_PER_GPU);
+  const room = datacenterBuilding(s) ? Infinity : freeSlots(s);
+  if (Math.min(power, room) >= reach) return null;
+  let fix: { price: number; what: 'plant' | 'hall' } | null = null;
+  if (room <= power) {
+    if (s.revealed['dcButton']) fix = { price: datacenterCost(s), what: 'hall' };
+  } else {
+    const prices: number[] = [];
+    if (s.revealed['gasButton']) prices.push(gasCost(s));
+    if (s.revealed['solarButton'] && !solarQueueFull(s)) prices.push(solarCost(s));
+    if (prices.length) fix = { price: Math.min(...prices), what: 'plant' };
+  }
+  // A fix more than two minutes of income away is the player's to save for, not the lots'.
+  if (fix && fix.price > 120 * Math.max(1, s.stats.revPerSec)) return null;
+  return fix;
+}
+
+/** The reason a lot of `n` waits on the hold ('' when it does not; the main lot needs 100 GPUs' worth). */
+export function lotHoldReason(s: GameState, n: number): string {
+  const hold = lotHold(s);
+  const need = n === LOT_SIZES[0] ? lotCostOf(s, 100) : lotCostOf(s, n);
+  if (hold <= 0 || s.funds - need >= hold) return '';
+  const eta = (hold + need - s.funds) / Math.max(1, s.stats.revPerSec);
+  const what = holdName(s, hold);
+  return eta < 600 ? `${what} — ${fmtClock(eta)}` : what;
+}
+
+function holdName(s: GameState, hold: number): string {
+  if (runHold(s) >= hold) return 'the run first';
+  if (offerOnTable(s) >= hold) return 'the offer first';
+  const card = urgentCard(s);
+  if (card && card.price >= hold) return `${card.title} first`;
+  return wallFix(s)?.what === 'hall' ? 'the hall first' : 'the plant first';
+}
+
+/** The main lot's note while something is held: `$840k kept for the next hall`. */
+export function holdNote(s: GameState): string {
+  const hold = lotHold(s);
+  if (hold <= 0) return '';
+  const name = holdName(s, hold);
+  const what = name === 'the run first' ? 'the run' : name === 'the offer first' ? 'the offer' : name === 'the hall first' ? 'the next hall' : name === 'the plant first' ? 'the next plant' : name.replace(/ first$/, '');
+  return `${fmtMoneyShort(hold)} kept for ${what}`;
+}
+
+/**
+ * What the main lot button sells now: up to 1,000 — as many as fit, the money above the hold can pay
+ * for, in hundreds (at least 100; 0 when not even that). The first lot is always within reach of the
+ * next few seconds of income, so the growth verb is never a goal the player waits on (critic C1).
+ */
 export function lotSize(s: GameState): number {
-  return Math.floor(Math.min(nominalLot(s), freeSlots(s), freePowerGpus(s)) / 1000) * 1000;
+  const room = Math.min(LOT_SIZES[0], freeSlots(s), freePowerGpus(s));
+  const money = (s.funds - lotHold(s)) / gpuUnitPrice(s);
+  const n = Math.floor(Math.min(room, money) / 100) * 100;
+  return n >= 100 ? n : 0;
+}
+
+/** The main lot when it is not affordable: what it would buy with room and power alone (for its label). */
+function lotRoom(s: GameState): number {
+  return Math.max(100, Math.floor(Math.min(LOT_SIZES[0], freeSlots(s), freePowerGpus(s)) / 100) * 100);
 }
 
 export function gpuUnitPrice(s: GameState): number {
   return (s.g5 ? G5_PRICE : G4_PRICE) * S2_FUNDS_SCALE;
 }
 
-/** The lot the button names: the actual lot, or the nominal one while it is blocked. */
+/** The lot the main button names: what it would buy now, or what room and power allow. */
 export function shownLot(s: GameState): number {
-  const lot = lotSize(s);
-  return lot >= 1000 ? lot : nominalLot(s);
+  return lotSize(s) || lotRoom(s);
+}
+
+export function lotCostOf(s: GameState, n: number): number {
+  return Math.round(n * gpuUnitPrice(s));
 }
 
 export function lotCost(s: GameState): number {
-  return Math.round(shownLot(s) * gpuUnitPrice(s));
+  return lotCostOf(s, shownLot(s));
 }
 
-/** Why the lot button is greyed for a reason other than money ('' when it is not). */
-/** What stops the next lot: room or power (the standing order never locks the button). */
-export function lotReason(s: GameState): '' | 'no room' | 'no power' {
-  if (lotSize(s) >= 1000) return '';
-  if (freeSlots(s) < 1000 && freeSlots(s) <= freePowerGpus(s)) return 'no room';
+/** What stops a lot of `n`: room or power ('' when it fits; the standing order never locks a button). */
+export function lotReasonOf(s: GameState, n: number): '' | 'no room' | 'no power' {
+  if (lotFits(s, n === LOT_SIZES[0] ? 100 : n)) return '';
+  if (freeSlots(s) < n && freeSlots(s) <= freePowerGpus(s)) return 'no room';
   return 'no power';
 }
 
+export function lotReason(s: GameState): '' | 'no room' | 'no power' {
+  return lotReasonOf(s, LOT_SIZES[0]);
+}
+
 /**
- * With the standing order on and room and power free: when it will buy the next lot, as progress
- * (`standing order: next lot in about 0:40`; the lot's price is beside it); '' when it buys this second.
+ * Task revenue a lot of `n` adds at today's market, per second: AUTO prices to clear, so task revenue
+ * grows with the square root of output (contracts pay a fixed rate and do not move).
  */
+export function lotReturn(s: GameState, n: number): number {
+  const eff = Math.max(1, effGpus(s));
+  const add = n * (s.g5 ? G5_COMPUTE : 1);
+  const taskRevenue = Math.max(0, s.stats.revPerSec - Math.max(0, s.contractIncome || 0));
+  return taskRevenue * (Math.sqrt(1 + add / eff) - 1);
+}
+
+/** The standing order's note beside the main lot: its share of income and when it buys next. */
 export function lotNote(s: GameState): string {
-  if (!standingOrderOn(s) || lotReason(s)) return '';
-  const lot = lotSize(s);
-  const cost = Math.round(lot * gpuUnitPrice(s));
-  const need = cost + standingReserve(s);
-  if (s.funds >= need) return '';
-  const eta = (need - s.funds) / Math.max(1, s.stats.revPerSec);
-  if (eta < 1) return '';
-  return eta < 600 ? `standing order: next lot in about ${fmtClock(eta)}` : 'standing order: saving for the next lot';
+  if (!standingOrderOn(s)) return '';
+  const share = `standing order: ${Math.round(s.standingBudget * 100)}% of income`;
+  if (lotReason(s)) return share;
+  const size = LOT_SIZES.slice().reverse().find((n) => lotFits(s, n)) ?? LOT_SIZES[0];
+  const cost = Math.min(lotCostOf(s, size), lotCostOf(s, LOT_SIZES[0]) * 5);
+  const rate = Math.max(1, s.standingBudget * s.stats.revPerSec);
+  const eta = Math.max(0, cost - s.standingPool) / rate;
+  return eta >= 1 && eta < 600 ? `${share} · next lot in ${fmtClock(eta)}` : share;
 }
 
 export function standingOrderOn(s: GameState): boolean {
-  return s.standingOrder && isBought(s, 'p_standing_order');
+  return s.standingOrder && s.standingBudget > 0 && isBought(s, 'p_standing_order');
 }
 
 function addLot(s: GameState, lot: number, cost: number): void {
@@ -191,34 +322,29 @@ function addLot(s: GameState, lot: number, cost: number): void {
   if (s.g5) s.gpusG5 += lot;
 }
 
-/**
- * The player's Buy GPUs. While the standing order is on, it buys the lots (keeping the next run's
- * money in reserve) and the button waits on it: no verb is pressed by hand once it is automated.
- */
-/** Buy a lot by hand (also with the standing order on: the order never takes the button away). */
-export function buyGpuBatch(s: GameState): boolean {
-  if (s.stage < 2 || !s.revealed['infrastructure']) return false;
-  const lot = lotSize(s);
-  if (lot < 1000) return false;
-  const cost = Math.round(lot * gpuUnitPrice(s));
+/** Buy a lot of `n` by hand (also with the standing order on: the order never takes the buttons away). */
+export function buyGpuBatch(s: GameState, size: number = LOT_SIZES[0]): boolean {
+  if (s.stage < 2 || !s.revealed['infrastructure'] || !(LOT_SIZES as readonly number[]).includes(size)) return false;
+  // The main lot buys what fits and what the money above the hold pays for; the others are whole.
+  const n = size === LOT_SIZES[0] ? lotSize(s) : size;
+  if (n < 100 || !lotFits(s, n) || (size !== LOT_SIZES[0] && lotHoldReason(s, n))) return false;
+  const cost = lotCostOf(s, n);
   if (s.funds < cost) return false;
-  addLot(s, lot, cost);
+  addLot(s, n, cost);
   s.gpuBatches += 1;
+  s.flags['lotByHandAt'] = s.stats.timePlayed;
   press(s, 'gpuLot');
   return true;
 }
 
 /**
- * Standing order, once a second: a lot that fits, keeping money in hand for what the next run is
- * waiting on — its own price when everything else is ready (research, data, a free pipeline and
- * most of its compute), otherwise the price of the wall's named fix on screen (a data licence, a
- * research-cap project).
+ * What the standing order keeps in hand when it buys: the next run's price when its research is most
+ * of the way there and the cluster is near what it wants, the wall's named fix on screen, and an open
+ * offer the lab cannot pay yet.
  */
 export function standingReserve(s: GameState): number {
-  // The next run's money once its research is most of the way there (data may still be coming);
-  // a run short of compute is waiting for exactly what the order buys: no reserve for it then.
   let run = 0;
-  if (s.revealed['training'] && trainSlotFree(s) && computeYield(s) >= 0.85) {
+  if (s.revealed['training'] && trainSlotFree(s) && computeYield(s) >= RUN_HOLD_YIELD) {
     const cost = trainCost(s);
     if (s.research >= 0.6 * (cost.research ?? 0)) run = cost.funds ?? 0;
   }
@@ -228,7 +354,7 @@ export function standingReserve(s: GameState): number {
     const f = p.cost(s).funds ?? 0;
     if (f > 0 && (fix === 0 || f < fix)) fix = f;
   }
-  return Math.max(run, fix, offerOnTable(s));
+  return Math.max(run, fix, offerOnTable(s), wallFix(s)?.price ?? 0);
 }
 
 /**
@@ -246,63 +372,80 @@ function offerOnTable(s: GameState): number {
   return price;
 }
 
+/**
+ * The standing order, once a second: its share of income goes into a pool (at most two minutes of
+ * that share), and the largest lot that fits and that the pool covers is bought, the reserve kept —
+ * unless the player has ordered by hand in the last 20 s.
+ */
 export function runStandingOrder(s: GameState): void {
-  if (s.stage < 2 || !standingOrderOn(s)) return;
+  if (s.stage < 2 || !standingOrderOn(s)) {
+    s.standingPool = 0;
+    return;
+  }
+  // The order fills in for a player who is not ordering: a lot bought by hand in the last 20 s
+  // means the player is steering, and the order keeps its share in the pool (critic C1).
+  const byHand = s.flags['lotByHandAt'];
+  if (typeof byHand === 'number' && s.stats.timePlayed - byHand < 20) return;
+  const share = s.standingBudget * Math.max(0, s.stats.revPerSec);
+  s.standingPool = Math.min(s.standingPool + share, Math.max(120 * share, lotCostOf(s, LOT_SIZES[0])));
   const reserve = standingReserve(s);
   let guard = 0;
   while (guard++ < 3) {
-    const lot = lotSize(s);
-    if (lot < 1000) return;
-    const cost = Math.round(lot * gpuUnitPrice(s));
-    if (s.funds < cost + reserve) return;
-    addLot(s, lot, cost);
+    const size = LOT_SIZES.slice().reverse().find((n) => lotFits(s, n) && s.standingPool >= lotCostOf(s, n) && s.funds - lotCostOf(s, n) >= reserve);
+    if (!size) return;
+    const cost = lotCostOf(s, size);
+    addLot(s, size, cost);
+    s.standingPool -= cost;
     s.flags['standingLots'] = ((s.flags['standingLots'] as number) || 0) + 1;
   }
 }
 
+/** The standing order's share of income, cycled by its button: 25 → 50 → 75 → 100 % → off → 25 %. */
+export const BUDGET_STEPS = [0.25, 0.5, 0.75, 1, 0];
+
 export function toggleStanding(s: GameState): boolean {
   if (!isBought(s, 'p_standing_order') || !s.revealed['standingOrder']) return false;
-  s.standingOrder = !s.standingOrder;
+  const i = BUDGET_STEPS.findIndex((b) => Math.abs(b - s.standingBudget) < 1e-9);
+  s.standingBudget = BUDGET_STEPS[(i + 1) % BUDGET_STEPS.length]!;
+  s.standingOrder = true;
   press(s, 'toggleStanding');
   return true;
 }
 
-/**
- * Room to spare: free slots already exceed the fleet, so another hall would stand empty. (An
- * addition to stage2.md §2.1, like `no power` on the lot button: building ahead is allowed up to
- * twice the fleet; past that the button says why it waits.)
- */
-export function roomToSpare(s: GameState): boolean {
-  return freeSlots(s) > Math.max(5000, s.gpus);
+// ---------- datacenters ----------
+
+/** A hall takes time to build (critic C2: building ahead is the skill), opening a quarter at a time; longer when approval is low. */
+export const DC_BUILD_SECONDS = 90;
+export const DC_PERMIT_SECONDS = 60;
+
+export function dcBuildSeconds(s: GameState): number {
+  return DC_BUILD_SECONDS + (s.approval < -30 ? DC_PERMIT_SECONDS : 0);
 }
 
-/**
- * Power to spare: the plants online already cover every GPU slot. (Plants still in the queue do
- * not count: a farm three minutes away is no reason to grey the turbines that arrive now.)
- */
-export function powerToSpare(s: GameState): boolean {
-  return s.powerCapacityMW >= gpuCapacity(s) / 1000;
+/** The hall under construction (one crew at a time). */
+export function datacenterBuilding(s: GameState): PowerOrder | undefined {
+  return s.powerQueue.find((o) => o.kind === 'datacenter');
 }
 
-export function datacenterReason(s: GameState): '' | 'room to spare' {
-  return roomToSpare(s) ? 'room to spare' : '';
+export function datacenterReason(s: GameState): '' | 'building' {
+  return datacenterBuilding(s) ? 'building' : '';
 }
 
-/** Why a plant button is greyed for a reason other than money ('' when it is not). */
-export function plantReason(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): '' | 'power to spare' | 'queue full' {
+/** Why a plant button is greyed for a reason other than money ('' when it is not): only a full queue. */
+export function plantReason(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): '' | 'queue full' {
   if (kind === 'solar' && solarQueueFull(s)) return 'queue full';
-  if (powerToSpare(s)) return 'power to spare';
   return '';
 }
 
 export function buildDatacenter(s: GameState): boolean {
-  if (s.stage < 2 || !s.revealed['dcButton'] || roomToSpare(s)) return false;
+  if (s.stage < 2 || !s.revealed['dcButton'] || datacenterBuilding(s)) return false;
   const next = nextDatacenter(s);
   if (s.funds < next.cost) return false;
   addFunds(s, -next.cost);
-  s.datacenters = next.n;
+  const seconds = dcBuildSeconds(s);
+  s.powerQueue.push({ kind: 'datacenter', mw: 0, remaining: seconds, total: seconds, label: `Datacenter ${next.n}` });
   press(s, 'datacenter');
-  say(s, `Datacenter complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
+  say(s, `Datacenter ${next.n} — ${fmtClock(seconds)} until the halls are ready${seconds > DC_BUILD_SECONDS ? ' (the permit took a minute longer)' : ''}.`);
   return true;
 }
 
@@ -433,6 +576,11 @@ export function updatePowerQueue(s: GameState, dt: number): void {
   if (done.length === 0) return;
   s.powerQueue = s.powerQueue.filter((o) => !done.includes(o));
   for (const o of done) {
+    if (o.kind === 'datacenter') {
+      s.datacenters += 1;
+      say(s, `${o.label} complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
+      continue;
+    }
     s.powerCapacityMW += o.mw;
     if (o.kind === 'solar') {
       s.solarFarms += 1;
@@ -459,6 +607,7 @@ export function queueLine(s: GameState): string {
   for (const o of s.powerQueue) {
     if (o.kind === 'nuclear') parts.push(`Reactor restart — ${fmtClock(Math.ceil(o.remaining))}`);
     if (o.kind === 'gulf') parts.push(`Al-Marsa — ${fmtClock(Math.ceil(o.remaining))}`);
+    if (o.kind === 'datacenter') parts.push(`${o.label} — ${fmtClock(Math.ceil(o.remaining))}`);
   }
   return parts.join(' · ');
 }

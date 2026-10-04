@@ -6,12 +6,12 @@ import {
   humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM,
 } from '../engine/economy.js';
 import {
-  lotSize, lotCost, shownLot, lotReason, lotNote, gasCost, solarCost, nuclearCost, nextDatacenter, datacenterReason, plantReason,
-  queueLine, standingOrderOn, gpuUnitPrice,
+  lotSize, shownLot, lotReason, lotReasonOf, lotHoldReason, holdNote, lotCostOf, lotReturn, lotNote, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
+  queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, BTM_QUEUE_SECONDS, SOLAR_QUEUE_SECONDS, REACTOR_SECONDS,
 } from '../engine/infrastructure.js';
 import { marketBreakdown } from '../engine/market.js';
 import {
-  trainCost, canStartTraining, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
+  trainCost, canStartTraining, canTrainNow, trainNowYield, TRAIN_NOW_SHARE, fullRunWait, runOtherwiseReady, canRedTeam, canRelease, canReleasePublic, nextRunName, trainingCompute, requiredCompute,
   trainingDuration, computeYield, needsOwnedCompute, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
 } from '../engine/training.js';
@@ -48,7 +48,9 @@ export function mount(p: Perform): void {
   bind('btn-marketing', () => perform('buyMarketing'));
   bind('btn-gpu', () => perform('rentGpu'));
   bind('btn-datacenter', () => perform('buildDatacenter'));
-  bind('btn-gpuBatch', () => perform('buyGpuBatch'));
+  bind('btn-gpuBatch', () => perform('buyGpuBatch', 1000));
+  bind('btn-gpuBatch5', () => perform('buyGpuBatch', 5000));
+  bind('btn-gpuBatch25', () => perform('buyGpuBatch', 25000));
   bind('btn-turbines', () => perform('buyTurbines'));
   bind('btn-solar', () => perform('buySolar'));
   bind('btn-nuclear', () => perform('buyNuclear'));
@@ -57,6 +59,7 @@ export function mount(p: Perform): void {
   bind('btn-expandLab', () => perform('expandLab'));
   bind('btn-alignShare', () => perform('cycleAlignShare'));
   bind('btn-train', () => perform('startTraining'));
+  bind('btn-trainNow', () => perform('trainNow'));
   bind('btn-redteam', () => perform('redTeam'));
   bind('btn-release', () => perform('release'));
   bind('btn-releaseInternal', () => perform('releaseInternal'));
@@ -215,45 +218,54 @@ function renderInfrastructure(s: GameState): void {
   setText('data', fmtNum(s.data, 1));
   setText('chipsOnOrder', chipsOnOrder(s) > 0 ? fmtInt(chipsOnOrder(s)) : 'none yet');
 
+  // GPU lots, side by side, each with its price and what it adds at today's market (critic C1).
+  const wall = lotReason(s);
+  for (const [n, suffix] of [[1000, ''], [5000, '5'], [25000, '25']] as const) {
+    const id = `btn-gpuBatch${suffix}`;
+    // The main lot buys up to 1,000 with the money there is; the others are whole lots.
+    const size = n === 1000 ? shownLot(s) : n;
+    const cost = lotCostOf(s, size);
+    setText(n === 1000 ? 'gpuBatchCost' : `gpuBatch${suffix}Cost`, fmtMoneyShort(cost));
+    const why = lotReasonOf(s, n) || lotHoldReason(s, n);
+    setText(`gpuReason${suffix}`, why);
+    const kept = n === 1000 && !why ? holdNote(s) : '';
+    setText(`gpuReturn${suffix}`, why ? '' : `+${fmtMoneyShort(Math.round(lotReturn(s, size)))}/s${kept ? ` · ${kept}` : ''}`);
+    setDisabled(id, !!why || (n === 1000 ? lotSize(s) < 100 : s.funds < cost));
+  }
   setText('gpuLotSize', fmtInt(shownLot(s)));
-  setText('gpuBatchCost', fmtMoneyShort(lotCost(s)));
-  const reason = lotReason(s);
-  // Room and power are walls; the standing order is progress (its next purchase), never a lock.
-  setText('gpuReason', reason || lotNote(s));
-  setDisabled('btn-gpuBatch', !!reason || s.funds < lotCost(s) || lotSize(s) < 1000);
   setTitle(
     'btn-gpuBatch',
-    `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each. A lot fits the room and power there is.${standingOrderOn(s) ? ' The standing order also buys them.' : ''}`,
+    `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each. The return is the task revenue the lot adds at today's market; the cluster also trains on it.`,
   );
+  setText('standingNote', lotNote(s).replace(/^standing order: \d+% of income ?·? ?/, ''));
+  setText('btn-standing', standingOrderOn(s) ? `${Math.round(s.standingBudget * 100)}%` : 'off');
 
   const dc = nextDatacenter(s);
   setText('dcNumber', String(dc.n));
   setText('dcSlots', fmtInt(dc.add));
   setText('datacenterCost', fmtMoneyShort(dc.cost));
-  const dcWhy = datacenterReason(s);
-  setText('dcReason', dcWhy);
-  setDisabled('btn-datacenter', !!dcWhy || s.funds < dc.cost);
-  setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs, at once.`);
+  const building = datacenterBuilding(s);
+  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : '');
+  setText('dcNote', building ? '' : wall === 'no room' ? `${fmtClock(dcBuildSeconds(s))} to build · room is the wall` : `${fmtClock(dcBuildSeconds(s))} to build`);
+  setDisabled('btn-datacenter', !!building || s.funds < dc.cost);
+  setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}). Building ahead of the wall keeps the lots coming.`);
 
-  const plant = (id: string, costId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
+  const plant = (id: string, costId: string, noteId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
-    const note = why || (kind === 'solar' ? 'joins the queue' : kind === 'nuclear' && s.govRelations >= 60 ? 'cheaper: good relations' : '');
-    setText(reasonId, note);
+    setText(reasonId, why);
+    const when = kind === 'gas' ? 'now' : kind === 'solar' ? `in ${fmtClock(s.btm ? BTM_QUEUE_SECONDS : SOLAR_QUEUE_SECONDS)}` : `in ${fmtClock(REACTOR_SECONDS)}`;
+    const extra = kind === 'nuclear' && s.govRelations >= 60 ? ' · cheaper: good relations' : '';
+    setText(noteId, why ? '' : `${when}${wall === 'no power' ? ' · power is the wall' : ''}${extra}`);
     setDisabled(id, !!why || s.funds < cost);
   };
-  plant('btn-turbines', 'turbineCost', 'gasReason', 'gas', gasCost(s));
-  plant('btn-solar', 'solarCost', 'solarReason', 'solar', solarCost(s));
-  plant('btn-nuclear', 'nuclearCost', 'nuclearReason', 'nuclear', nuclearCost(s));
-  // A plant's size is on its button until the first one is built (then in its tooltip and the Stores).
-  showId('gasMW', s.gasPlants === 0);
-  showId('solarMW', s.solarFarms + s.powerQueue.filter((o) => o.kind === 'solar').length === 0);
-  showId('nuclearMW', s.reactors + s.powerQueue.filter((o) => o.kind === 'nuclear').length === 0);
+  plant('btn-turbines', 'turbineCost', 'gasNote', 'gasReason', 'gas', gasCost(s));
+  plant('btn-solar', 'solarCost', 'solarNote', 'solarReason', 'solar', solarCost(s));
+  plant('btn-nuclear', 'nuclearCost', 'nuclearNote', 'nuclearReason', 'nuclear', nuclearCost(s));
 
   const q = queueLine(s);
   setText('interconnectLine', q);
   showId('interconnectLine', q.length > 0);
-  setToggle('btn-standing', s.standingOrder, s.standingOrder ? 'ON' : 'OFF');
 }
 
 /** Trust on screen is never negative: what the lab owes is said in words (critic round 2 §4.3). */
@@ -317,6 +329,9 @@ function renderProjects(s: GameState): void {
     if (title.textContent !== label) title.textContent = label;
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
+    // The card that answers a standing wall, or that the stage cannot go on without (arc G31).
+    const urgent = def.urgent?.(s) === true;
+    if (b.classList.contains('urgent') !== urgent) b.classList.toggle('urgent', urgent);
   });
 }
 
@@ -375,6 +390,20 @@ function renderIdle(s: GameState): void {
   setText('trainCost', costLabel({ research: cost.research, funds: cost.funds }));
   setText('trainData', cost.data ? `, ${fmtNum(cost.data, 1)} T data` : '');
   setDisabled('btn-train', !canStartTraining(s));
+  // The short run (critic C3): what the money buys now, against waiting for the full price.
+  if (s.revealed['trainNow']) {
+    const now = canTrainNow(s);
+    setDisabled('btn-trainNow', !now);
+    const price = cost.funds ?? 0;
+    const note = now
+      ? `${fmtMoneyShort(Math.floor(s.funds))} · keeps ${Math.round(trainNowYield(s) * 100)}%`
+      : canStartTraining(s) || !runOtherwiseReady(s)
+        ? ''
+        : s.funds < TRAIN_NOW_SHARE * price
+          ? `at ${fmtMoneyShort(Math.ceil(TRAIN_NOW_SHARE * price))}`
+          : `the full run in ${fmtClock(Math.ceil(fullRunWait(s)))}`;
+    setText('trainNowNote', note);
+  }
   const have = trainingCompute(s);
   const want = requiredCompute(s);
   setText('trainCompute', fmtInt(have));

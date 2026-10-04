@@ -11,12 +11,13 @@ import {
 } from './infrastructure.js';
 import { updateAutoPrice, recordPrice, floodedCheck } from './market.js';
 import {
-  updateData, dataWallCheck, updateWorld, buySL3, toggleJobFund, toggleShareEvals, cycleAlignShare,
+  updateData, dataWallCheck, dataWall, updateWorld, buySL3, toggleJobFund, toggleShareEvals, cycleAlignShare,
 } from './world.js';
 import {
-  updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau,
+  updateTraining, startTraining, trainNow, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames,
 } from './training.js';
-import { buyProject, visibleProjects } from './projects.js';
+import { buyProject, visibleProjects, projectById } from './projects.js';
+import { farRung, rungHelper, rungRelief } from '../data/projects.js';
 import { updateProjects, updateStageContent, noteReveals } from './reveal.js';
 import {
   updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
@@ -24,7 +25,7 @@ import {
 import { updateReveals, checkStageExit, updateStage2 } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
-import { fmtInt, fmtDuration } from './format.js';
+import { fmtInt, fmtNum, fmtDuration, fmtMoneyShort } from './format.js';
 
 export const TICK_MS = 100;
 export const SLOW_TICK_EVERY = 10;
@@ -123,6 +124,10 @@ function slowStats(s: GameState): void {
   taskMilestones(s);
   bottleneckMessages(s);
   researchWall(s);
+  rungWatch(s);
+  rungRelief(s);
+  trustPace(s);
+  wallWatch(s);
   if (s.stage === 2) {
     runStandingOrder(s);
     updateWorld(s);
@@ -220,6 +225,65 @@ function researchWall(s: GameState): void {
   }
 }
 
+/**
+ * Stage 1: a pinned rung more than four minutes away at the current income names the card that
+ * shortens it (drawn urgent), again every three minutes while that holds (critic C13, arc G31).
+ */
+function rungWatch(s: GameState): void {
+  const far = farRung(s);
+  const helper = far ? rungHelper(s) : '';
+  if (!far || !helper) return;
+  const now = s.stats.timePlayed;
+  if (now - ((s.flags['rungWatchAt'] as number) ?? -999) < 180) return;
+  s.flags['rungWatchAt'] = now;
+  const rung = projectById(far.id)?.title ?? 'The next rung';
+  const card = projectById(helper)?.title ?? 'A revenue card';
+  say(s, `${rung} is ${Math.ceil(far.seconds / 60)} minutes away at ${fmtMoneyShort(Math.round(s.stats.revPerSec))}/s. ${card} shortens it.`);
+}
+
+/**
+ * Stage 2: a wall in front of the next run (the lab's research cap, the data wall) that has stood for
+ * three minutes is named again with the cards that answer it, every three minutes (critic C9, G31).
+ */
+function wallWatch(s: GameState): void {
+  if (s.stage !== 2 || !s.revealed['training'] || !trainSlotFree(s)) return;
+  const cost = trainCost(s);
+  const plateau = atPlateau(s);
+  const data = !plateau && dataWall(s);
+  const now = s.stats.timePlayed;
+  if (!plateau && !data) {
+    delete s.flags['wallWatchSince'];
+    return;
+  }
+  const since = s.flags['wallWatchSince'];
+  if (typeof since !== 'number') {
+    s.flags['wallWatchSince'] = now;
+    s.flags['wallWatchAt'] = now;
+    return;
+  }
+  if (now - ((s.flags['wallWatchAt'] as number) ?? now) < 180) return;
+  s.flags['wallWatchAt'] = now;
+  const fixes = runFixNames(s);
+  const minutes = Math.max(1, Math.round((now - since) / 60));
+  if (plateau) {
+    const fix = fixes ? ` ${fixes} make${fixes.includes(',') ? '' : 's'} room.` : ' Expand Lab with the next Trust.';
+    say(s, `The lab has held ${fmtInt(researchCap(s))} research for ${minutes} minutes; the next run needs ${fmtInt(cost.research ?? 0)}.${fix}`);
+  } else {
+    const fix = fixes ? ` ${fixes} close${fixes.includes(',') ? '' : 's'} it.` : '';
+    say(s, `The Data Wall, ${minutes} minutes on — the next run needs ${fmtNum((cost.data ?? 0) - s.data, 1)} T more.${fix}`);
+  }
+}
+
+/**
+ * Stage 1: the next Trust milestone is never more than 2½ minutes away at the current task rate
+ * (critic C13: a slow player went sixteen minutes without one, Hire and Expand grey throughout).
+ */
+function trustPace(s: GameState): void {
+  if (s.stage !== 1 || !s.revealed['research']) return;
+  const soon = Math.ceil((s.tasks + 150 * Math.max(1, s.stats.tasksPerSec)) / 100) * 100;
+  if (s.nextTrust > soon) s.nextTrust = soon;
+}
+
 /** Every player verb. Each returns true when it changed state. */
 export const actions = {
   clickTask,
@@ -244,6 +308,7 @@ export const actions = {
   toggleShareEvals,
   cycleAlignShare,
   startTraining,
+  trainNow,
   setFocus,
   redTeam,
   release,

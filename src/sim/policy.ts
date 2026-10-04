@@ -5,18 +5,22 @@ import {
 } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, trainingCompute, requiredCompute,
-  trainSlotFree, evalRun,
+  trainSlotFree, evalRun, canTrainNow,
 } from '../engine/training.js';
 import {
-  lotSize, lotCost, lotReason, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost, standingOrderOn,
-  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity,
-} from '../engine/infrastructure.js';
+  lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost, standingOrderOn,
+  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, RUN_HOLD_YIELD } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
 
-export type PolicyName = 'bot' | 'naive' | 'greedy';
+/**
+ * `trainfirst` mirrors the critic harness's first-timer (tools/critic/games/takeoff*.mjs): it trains
+ * whenever Train is enabled, holds the GPU/marketing drip while a big funds goal is on screen, buys
+ * every other affordable thing, and in Stage 2 buys infrastructure by the lot row's reason.
+ */
+export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst';
 
 /** The stage goal: the Abilene site ladder, rung by rung. */
 export const LADDER = ['p_site', 'p_interconnect', 'p_substation', 'p_datacenter'];
@@ -81,8 +85,10 @@ function readModal(s: GameState, mem: BotMemory): boolean {
 /** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.stage >= 2) {
-    if (mem.policy === 'naive' || mem.policy === 'greedy') naiveStepS2(s, a, mem);
-    else botStepS2(s, a, mem);
+    // The first-timers follow the critic harness's Stage 2 rules (infrastructure by the lot row's
+    // reason; every other enabled purchase); greedy presses the lots five times a pass.
+    if (mem.policy === 'bot') botStepS2(s, a, mem);
+    else trainfirstStepS2(s, a, mem);
     return;
   }
   stage1Step(s, a, mem);
@@ -275,6 +281,9 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   }
 
   if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
+  // The harness's first-timer: Train whenever it is enabled, before anything else is bought.
+  const trainFirst = mem.policy === 'trainfirst';
+  if (trainFirst && !s.training.run && canStartTraining(s)) a.startTraining(s);
   // The greedy variant never saves: no reserve, and GPUs first whenever one is affordable.
   const greedy = mem.policy === 'greedy';
   const reserve = greedy ? heldGoalPrice(s, mem) : Math.max(s.stage < 2 ? powerBlockCost(s) : 0, heldGoalPrice(s, mem));
@@ -310,7 +319,8 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
       if (!ok) break;
     }
   }
-  const bigTicket = !greedy && !!currentRung(s);
+  // The harness's goal rule: any project on screen priced at $10,000 and a minute of revenue or more.
+  const bigTicket = trainFirst ? harnessGoal(s) : !greedy && !!currentRung(s);
   if (!bigTicket && s.stage < 2 && s.revealed['compute']) {
     let guard = 0;
     while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {
@@ -318,6 +328,12 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
     }
   }
   if (!bigTicket && s.revealed['marketing'] && s.funds - marketingCost(s) >= reserve) a.buyMarketing(s);
+}
+
+/** The critic harness's `goalRule`: a visible project priced in funds at ≥ max($10,000, 60 s of revenue). */
+function harnessGoal(s: GameState): boolean {
+  const floor = Math.max(10000, 60 * s.stats.revPerSec);
+  return visibleProjects(s).some((p) => (p.cost(s).funds ?? 0) >= floor);
 }
 
 /**
@@ -406,7 +422,8 @@ const CHOICE_POLICY_S2: Record<string, number[]> = {
 const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
 
 /** Training compute the bot waits for before a run: have / wanted ≥ 0.6 (the run keeps ≥ 77 % of its gain). */
-export const TRAIN_COMPUTE_GATE = 0.6;
+/** The compute ratio from which the bot trains: the game's run hold (the lots save for the run from there). */
+export const TRAIN_COMPUTE_GATE = RUN_HOLD_YIELD * RUN_HOLD_YIELD;
 
 function runsS2(s: GameState): number {
   return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
@@ -607,23 +624,27 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   ) {
     a.buySolar(s);
   }
-  if ((reason === 'no room' || (standingOrderOn(s) && freeSlots(s) < 1000)) && s.revealed['dcButton'] && s.funds >= datacenterCost(s)) {
+  if ((reason === 'no room' || freeSlots(s) < 1000) && s.revealed['dcButton'] && s.funds >= datacenterCost(s)) {
     a.buildDatacenter(s);
-  } else if (s.revealed['dcButton'] && freeSlots(s) < 0.2 * gpuCapacity(s) && s.funds - datacenterCost(s) >= reserve) {
-    // The hall fills: the next one goes up before the last slot does, when the run's money allows.
+  } else if (s.revealed['dcButton'] && freeSlots(s) < 0.3 * gpuCapacity(s) && s.funds - datacenterCost(s) >= reserve) {
+    // The hall fills: a hall takes a minute and a half to build, so the next one goes up early.
     a.buildDatacenter(s);
   }
 
-  // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 60 % of the compute wanted.
+  // 4. Train when a slot is free, the data is in hand and the cluster gives ≥ 60 % of the compute wanted;
+  //    a short run when only money is missing and the rest of it is more than 45 s away.
   if (slot && canStartTraining(s) && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE) {
     a.setFocus(s, focusFor(s, mem));
     a.startTraining(s);
+  } else if (slot && canTrainNow(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE && (runFunds - s.funds) / rev > 45 && mem.variant !== 'full-runs') {
+    a.setFocus(s, focusFor(s, mem));
+    a.trainNow(s);
   }
 
   // 5. Other projects in table order: keep the run's money, and its research while it is otherwise ready.
   const otherwiseReady = slot && s.funds >= runFunds && dataReady(s) && computeRatio(s) >= TRAIN_COMPUTE_GATE;
   // A free slot waiting for compute: money goes to GPU lots before cards that are not named fixes.
-  const computeBound = slot && dataReady(s) && computeRatio(s) < TRAIN_COMPUTE_GATE && lotSize(s) >= 1000;
+  const computeBound = slot && dataReady(s) && computeRatio(s) < TRAIN_COMPUTE_GATE && lotSize(s) >= 100;
   // Insight is kept for the Stage 2 projects on screen before the shelf of Stage 1 leftovers.
   const insightHeld = ordered
     .filter((p) => !p.stages.includes(1))
@@ -651,10 +672,12 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   // 6. GPU lots by hand until the standing order, saving first for the next Stage 2 project that
   //    only lacks money (within two minutes of revenue); SL3 when it is on screen.
   const saving = reserve + (computeBound ? 0 : nextProjectPrice(s, rev, reserve));
-  if (!standingOrderOn(s)) {
+  {
+    // The largest lot that fits and leaves the saving in hand (the standing order spends its share too).
     let guard = 0;
-    while (lotSize(s) >= 1000 && s.funds - lotCost(s) >= saving && guard++ < 5 && a.buyGpuBatch(s)) {
-      /* buy while there is room, power and money */
+    while (guard++ < 4) {
+      const size = [25000, 5000, 1000].find((n) => lotFits(s, n) && s.funds - lotCostOf(s, n) >= saving);
+      if (!size || !a.buyGpuBatch(s, size)) break;
     }
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s)) && s.funds - sl3Cost(s).funds >= reserve) a.buySL3(s);
@@ -729,6 +752,58 @@ function trustSpare(s: GameState, amount: number, forId = ''): boolean {
  * Expand alternately; never the slider or a toggle. `greedy` presses the infrastructure first and
  * as often as it can.
  */
+/**
+ * The harness first-timer in Stage 2 (tools/critic/games/takeoff-late.mjs): Train first; red-team to
+ * zero and release; infrastructure from the GPU lot row's reason (a lot when it is enabled, the
+ * cheapest MW at "no power", a datacenter at "no room"), up to three a check; then every other
+ * enabled purchase once (cards, Trust, the bigger lots, a short run, Security level 3).
+ */
+export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void {
+  mem.ticks += 1;
+  mem.bought = [];
+  if (s.ending) return;
+  if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) answerFirst(s, a);
+  if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
+  if (canStartTraining(s)) a.startTraining(s);
+  redTeamAndRelease(s, a, mem);
+  const presses = mem.policy === 'greedy' ? 15 : 3;
+  for (let i = 0; i < presses; i++) {
+    const reason = lotReason(s);
+    let done = false;
+    if (!reason && lotSize(s) >= 100 && s.funds >= lotCost(s)) done = a.buyGpuBatch(s);
+    else if (reason === 'no power') {
+      const kinds = (['gas', 'solar', 'nuclear'] as const).filter((k) => plantEnabled(s, k));
+      const best = kinds.sort((x, y) => powerCostOf(s, x) / mwOf(x) - powerCostOf(s, y) / mwOf(y))[0];
+      if (best) done = buyPowerKind(s, a, best);
+    } else if (reason === 'no room' && s.revealed['dcButton'] && s.funds >= datacenterCost(s)) done = a.buildDatacenter(s);
+    if (!done) break;
+  }
+  for (const p of visibleProjects(s)) {
+    if (!p.canAfford(s)) continue;
+    if (a.buyProject(s, p.id)) mem.bought.push(p.id);
+  }
+  if (s.trust >= 1 && s.revealed['hireResearcher']) a.hireResearcher(s);
+  if (s.trust >= 1 && s.revealed['expandLab']) a.expandLab(s);
+  sweepExtras(s, a);
+  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
+}
+
+/** What the harness's sweep also presses in Stage 2 when it is enabled: the bigger lots, the short run. */
+function sweepExtras(s: GameState, a: Actions): void {
+  if (s.revealed['lot5']) a.buyGpuBatch(s, 5000);
+  if (s.revealed['lot25']) a.buyGpuBatch(s, 25000);
+  if (canTrainNow(s)) a.trainNow(s);
+}
+
+function plantEnabled(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): boolean {
+  const shown = kind === 'gas' ? s.revealed['gasButton'] : kind === 'solar' ? s.revealed['solarButton'] : s.revealed['nuclearButton'];
+  return shown === true && !plantReason(s, kind) && s.funds >= powerCostOf(s, kind);
+}
+
+function mwOf(kind: 'gas' | 'solar' | 'nuclear'): number {
+  return kind === 'gas' ? GAS_MW : kind === 'solar' ? SOLAR_MW : NUCLEAR_MW;
+}
+
 export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
@@ -742,7 +817,7 @@ export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     const presses = greedy ? 5 : 1;
     for (let i = 0; i < presses; i++) {
       let any = false;
-      if (s.revealed['infrastructure'] && lotSize(s) >= 1000 && s.funds >= lotCost(s)) any = a.buyGpuBatch(s) || any;
+      if (s.revealed['infrastructure'] && lotSize(s) >= 100 && s.funds >= lotCost(s)) any = a.buyGpuBatch(s) || any;
       if (s.revealed['dcButton'] && s.funds >= datacenterCost(s)) any = a.buildDatacenter(s) || any;
       if (s.revealed['gasButton'] && s.funds >= gasCost(s)) any = a.buyTurbines(s) || any;
       if (s.revealed['solarButton'] && s.funds >= solarCost(s)) any = a.buySolar(s) || any;

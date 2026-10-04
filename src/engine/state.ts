@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -24,10 +24,13 @@ export interface Cost {
 
 /** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
 export interface PowerOrder {
-  kind: 'solar' | 'nuclear' | 'gulf';
+  /** A plant coming online, or (`datacenter`) a hall under construction (mw 0). */
+  kind: 'solar' | 'nuclear' | 'gulf' | 'datacenter';
   mw: number;
   /** Seconds left; only the first solar order counts down. */
   remaining: number;
+  /** Seconds it started with (datacenters: they open a quarter at a time). */
+  total?: number;
   label: string;
 }
 
@@ -52,6 +55,8 @@ export interface TrainingRun {
   duration: number;
   /** Fraction of the focus gain kept when the run had less compute than it needed. */
   computeYield: number;
+  /** Stage 2: the share of the run's price paid when it was started short (`Train now`); 1 or absent: the full run. */
+  moneyYield?: number;
   evalElapsed: number;
   flavorShown: number;
   eventAt: number;
@@ -298,6 +303,10 @@ export interface GameState {
   gpuBatches: number;
   /** Standing order toggle (on once bought). */
   standingOrder: boolean;
+  /** Stage 2: the share of income the standing order may spend on GPU lots (0 = off). */
+  standingBudget: number;
+  /** Money the standing order has set aside from that share and not yet spent. */
+  standingPool: number;
   gulfExposure: number;
 
   hypeLevel: number;
@@ -477,6 +486,8 @@ export function newGame(seed: number = Date.now()): GameState {
     g5: false,
     gpuBatches: 0,
     standingOrder: false,
+    standingBudget: 0.5,
+    standingPool: 0,
     gulfExposure: 0,
 
     hypeLevel: 1,
@@ -726,7 +737,14 @@ function migrateV3(raw: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3];
+/** v4 → v5: the standing order became a budget (half the income by default). */
+function migrateV4(raw: Record<string, unknown>): Record<string, unknown> {
+  if (raw['standingBudget'] === undefined) raw['standingBudget'] = 0.5;
+  if (raw['standingPool'] === undefined) raw['standingPool'] = 0;
+  return raw;
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

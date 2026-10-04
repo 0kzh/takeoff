@@ -576,7 +576,8 @@ export function toggleAutoPrice(_s: GameState): boolean {
 }
 
 export function buyMarketing(s: GameState): boolean {
-  if (!s.revealed['marketing']) return false;
+  // Stage 1's money verb; from Stage 2 the market cards widen the market (critic C4: no dead grey box).
+  if (!s.revealed['marketing'] || s.stage >= 2) return false;
   const cost = marketingCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;

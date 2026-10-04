@@ -120,6 +120,41 @@ function twoFigures(raw: number): number {
 
 const releases = (s: GameState) => s.stats.publicReleases;
 const bought = (s: GameState, id: string) => s.projects[id]?.bought ?? 0;
+
+/** The Abilene rungs, bottom to top. */
+export const RUNGS = ['p_site', 'p_interconnect', 'p_substation', 'p_datacenter'];
+/** Stage 1 cards that lift income, in the order a player short of money should take them. */
+const INCOME_CARDS = ['p_auto_pricing', 'p_contract', 'p_enterprise', 'p_pricing', 'p_api', 'p_batch', 'p_agents'];
+/** A pinned rung further away than this at the current income gets its shortcut named (critic C13). */
+export const RUNG_FAR_SECONDS = 240;
+
+/** The rung on screen waiting for money, with how long it is at the current income (or null). */
+export function farRung(s: GameState): { id: string; seconds: number } | null {
+  if (s.stage !== 1) return null;
+  for (const id of RUNGS) {
+    const st = s.projects[id];
+    if (!st?.shown || st.bought > 0) continue;
+    const def = PROJECTS.find((p) => p.id === id);
+    const funds = def ? (def.cost(s).funds ?? 0) : 0;
+    if (funds <= s.funds) return null;
+    const seconds = (funds - s.funds) / Math.max(1, s.stats.revPerSec);
+    return seconds > RUNG_FAR_SECONDS ? { id, seconds } : null;
+  }
+  return null;
+}
+
+/**
+ * The income card that shortens a far rung: the first one on screen, unbought, that the player
+ * could take (arc G31: drawn urgent, named in the console every 3 minutes while it holds).
+ */
+export function rungHelper(s: GameState): string {
+  if (!farRung(s)) return '';
+  for (const id of INCOME_CARDS) {
+    const st = s.projects[id];
+    if (st?.shown && (id === 'p_contract' || st.bought === 0)) return id;
+  }
+  return '';
+}
 /** True once the game date reaches `month` of `year` (fractional: 10.5 = mid-October). */
 const dateAtLeast = (s: GameState, year: number, month: number) => s.date >= monthOf(year, 1) + month - 1;
 
@@ -129,9 +164,53 @@ const sinceFlag = (s: GameState, key: string): number => {
   return typeof at === 'number' ? s.stats.timePlayed - at : -1;
 };
 
-/** The Substation: $120,000 and 8,000 research, less a county tax abatement if one was taken. */
+/** The Substation: $150,000 (less if it waits, like every rung), a sixth less with the county tax abatement. */
+/**
+ * A rung's money price: its list price, until it has waited 3½ minutes on screen without being
+ * affordable. Then, once, it drops to what the funds plus a minute of income can cover (never
+ * under a quarter of the list), with a console line (critic C13: no rung on screen past six minutes
+ * for a player who has not found the income cards yet; arc G32: nothing changes silently).
+ */
+export const RUNG_WAIT_SECONDS = 210;
+export function rungScale(s: GameState, id: string): number {
+  const fixed = s.flags[`rungScale:${id}`];
+  return typeof fixed === 'number' ? fixed : 1;
+}
+/** A rung's price on screen: the list price, or the one it dropped to, to three significant figures. */
+export function rungFunds(s: GameState, id: string, list: number): number {
+  return threeSig(list * rungScale(s, id));
+}
+/** Slow tick, Stage 1: the one-time drop for a rung that has waited four minutes. */
+export function rungRelief(s: GameState): void {
+  if (s.stage !== 1) return;
+  for (const id of RUNGS) {
+    const st = s.projects[id];
+    if (!st || st.bought > 0) continue;
+    if (!st.shown) return;
+    const shownAt = s.flags[`rungShownAt:${id}`];
+    if (typeof shownAt !== 'number') {
+      s.flags[`rungShownAt:${id}`] = s.stats.timePlayed;
+      return;
+    }
+    if (s.flags[`rungScale:${id}`] !== undefined || s.stats.timePlayed - shownAt < RUNG_WAIT_SECONDS) return;
+    const def = PROJECTS.find((p) => p.id === id);
+    const price = def ? (def.cost(s).funds ?? 0) : 0;
+    const reach = s.funds + 60 * Math.max(1, s.stats.revPerSec);
+    if (!def || price <= reach || def.canAfford(s)) return;
+    s.flags[`rungScale:${id}`] = Math.max(0.25, Math.min(1, Math.round((reach / price) * rungScale(s, id) * 100) / 100));
+    say(s, `${def.title}: the county wants the jobs. The price drops from ${fmtMoneyShort(price)} to ${fmtMoneyShort(def.cost(s).funds ?? 0)}.`);
+    return;
+  }
+}
+function threeSig(raw: number): number {
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 2));
+  return Math.round(raw / unit) * unit;
+}
+
 export function substationCost(s: GameState): Cost {
-  return { funds: isBought(s, 'p_abatement') || s.flags['abatement'] === true ? 100000 : 120000, research: 8000 };
+  const abated = isBought(s, 'p_abatement') || s.flags['abatement'] === true;
+  // Money only (critic C13): a rung that also wants research is held hostage by every research card.
+  return { funds: threeSig(rungFunds(s, 'p_substation', 150000) * (abated ? 5 / 6 : 1)) };
 }
 
 /** What turning the bridge round down adds to the Series A. */
@@ -144,9 +223,9 @@ export const AUTO_PRICING_MOVES = 20;
 export const AUTO_PRICING_TASKS = 90000;
 export const AUTO_PRICING_LATE = 400000;
 
-/** Break ground: $185,000, or $145,000 with a general contractor. */
+/** Break ground: $230,000 (less if it waits, like every rung), a fifth less with a general contractor. */
 export function breakGroundPrice(s: GameState): number {
-  return isBought(s, 'p_contractor') ? 145000 : 185000;
+  return threeSig(rungFunds(s, 'p_datacenter', 230000) * (isBought(s, 'p_contractor') ? 0.8 : 1));
 }
 
 /** The general contractor's crew takes a minute to arrive; Break ground waits for it. */
@@ -355,6 +434,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Public API',
     cost: { research: 3000 },
     description: 'Developers build on Sage. Demand ×2.',
+    urgent: (s) => rungHelper(s) === 'p_api',
     trigger: (s) => sinceFlag(s, 'firstReleaseAt') >= 30,
     buy: (s) => {
       s.demandMult *= 2;
@@ -377,12 +457,14 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_auto_pricing',
-    revealResearch: 100,
+    // A short step (critic C13): a lab that prices by hand below the market finds the fix within reach.
+    revealResearch: 60,
     title: 'Dynamic pricing',
-    cost: { research: 6000 },
+    cost: { research: 5000 },
     description: 'Finance prices to clear what the copies make. Pricing goes AUTO.',
     // Like the Grid Contract after the first Buy Power: offered to a lab that has priced by hand,
     // once there is a market worth automating; to anyone, late (critic round 2 §6.4).
+    urgent: (s) => rungHelper(s) === 'p_auto_pricing',
     trigger: (s) => (counter(s, 'priceMoves') >= AUTO_PRICING_MOVES && s.tasks >= AUTO_PRICING_TASKS) || s.tasks >= AUTO_PRICING_LATE,
     buy: (s) => {
       s.autoPrice = true;
@@ -433,6 +515,7 @@ export const PROJECTS: ProjectDef[] = [
     cost: { research: 9000 },
     description: 'Bill per token. Demand +50% at any price.',
     // API customers want to pay per call; it follows the Public API (or a long backlog after a release).
+    urgent: (s) => rungHelper(s) === 'p_pricing',
     trigger: (s) => (isBought(s, 'p_api') && releases(s) >= 2) || sinceFlag(s, 'firstReleaseAt') >= 300,
     buy: (s) => {
       s.demandMult *= 1.5;
@@ -459,7 +542,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_site',
     title: 'Reserve the Abilene site',
-    cost: { funds: 40000 },
+    cost: (s) => ({ funds: rungFunds(s, 'p_site', 50000) }),
     description: 'Nine hundred acres of scrub near a substation. Somewhere to own compute.',
     // After the Series A, or as soon as the provider runs out of G4s to rent (the named fix).
     trigger: (s) => isBought(s, 'p_series_a') || atRentQuota(s),
@@ -474,7 +557,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_interconnect',
     title: 'Interconnect queue',
-    cost: { funds: 80000 },
+    cost: (s) => ({ funds: rungFunds(s, 'p_interconnect', 100000) }),
     description: 'Get in line for the grid. The utility takes a while.',
     trigger: (s) => isBought(s, 'p_site'),
     buy: (s) => {
@@ -490,8 +573,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_substation',
     title: 'Substation',
     priceTag: (s) => {
-      const c = substationCost(s);
-      const tag = `$${(c.funds ?? 0).toLocaleString('en-US')}, ${(c.research ?? 0).toLocaleString('en-US')} research`;
+      const tag = `$${(substationCost(s).funds ?? 0).toLocaleString('en-US')}`;
       return s.flags['interconnectDone'] ? `(${tag})` : `(${tag}, after the queue)`;
     },
     cost: (s) => substationCost(s),
@@ -543,9 +625,10 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Pay to expedite the interconnect',
     cost: { funds: 15000 },
     description: 'One minute off the interconnect queue.',
-    trigger: (s) => s.interconnectLeft > 5 && sinceFlag(s, 'interconnectAt') >= 25,
-    canAfford: (s) => s.interconnectLeft > 5 && canPay(s, { funds: 15000 }),
-    expires: (s) => s.interconnectLeft <= 5,
+    // Gone once the queue has less than its minute left: paying then would buy nothing.
+    trigger: (s) => s.interconnectLeft > 60 && sinceFlag(s, 'interconnectAt') >= 25,
+    canAfford: (s) => s.interconnectLeft > 60 && canPay(s, { funds: 15000 }),
+    expires: (s) => s.interconnectLeft <= 60,
     buy: (s) => {
       s.interconnectLeft = Math.max(1, s.interconnectLeft - 60);
     },
@@ -569,7 +652,7 @@ export const PROJECTS: ProjectDef[] = [
     sideline: true,
     title: 'Take the county\'s tax abatement',
     cost: { trust: 1 },
-    description: 'Promise Abilene two hundred jobs. The substation costs $20,000 less.',
+    description: 'Promise Abilene two hundred jobs. The substation costs a sixth less.',
     trigger: (s) => s.flags['interconnectDone'] === true && !isBought(s, 'p_substation'),
     expires: (s) => isBought(s, 'p_substation'),
     buy: () => undefined,
@@ -580,8 +663,9 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_contractor',
     sideline: true,
     title: 'Hire a general contractor',
-    cost: { funds: 25000 },
-    description: 'Break ground costs $40,000 less. The crew needs 1:00 to arrive.',
+    // Scaled with Break ground, so the fifth it saves is always worth more than it costs.
+    cost: (s) => ({ funds: threeSig(25000 * rungScale(s, 'p_datacenter')) }),
+    description: 'Break ground costs a fifth less. The crew needs 1:00 to arrive.',
     trigger: (s) => sinceFlag(s, 'substationAt') >= 45,
     buy: (s) => {
       s.flags['crewAt'] = s.stats.timePlayed + CREW_SECONDS;
@@ -598,7 +682,9 @@ export const PROJECTS: ProjectDef[] = [
     description: 'A bank that buys at your price. Demand +12%.',
     repeatable: true,
     // The sales team brings the custom deals in.
-    trigger: (s) => isBought(s, 'p_enterprise'),
+    urgent: (s) => rungHelper(s) === 'p_contract',
+    // The first contract does not wait for the sales team (critic C13): the Series A brings the first bank.
+    trigger: (s) => isBought(s, 'p_enterprise') || isBought(s, 'p_series_a'),
     uses: Infinity,
     // A standing offer once it exists: it never takes a slot from something new.
     sideline: true,
@@ -609,11 +695,14 @@ export const PROJECTS: ProjectDef[] = [
   }),
   project({
     id: 'p_enterprise',
-    revealFunds: 100,
+    // Research-priced (critic follow-up C13): the door to contracts must not wait on out-saving a
+    // funds card while a bigger rung is pinned above it.
+    revealResearch: 100,
     title: 'Enterprise sales team',
-    cost: { funds: 20000, research: 6000 },
+    cost: { research: 6000 },
     description: 'Procurement questionnaires, answered. Demand ×2.',
     trigger: (s) => isBought(s, 'p_series_a'),
+    urgent: (s) => rungHelper(s) === 'p_enterprise',
     buy: (s) => {
       s.demandMult *= 2;
     },
@@ -695,6 +784,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Batch inference',
     cost: { research: 8000 },
     description: 'Run requests together. Copies per GPU ×1.25.',
+    urgent: (s) => rungHelper(s) === 'p_batch',
     trigger: (s) => s.gpus >= 100 || dateAtLeast(s, 2025, 10),
     buy: (s) => {
       s.copiesPerGPU *= 1.25;
@@ -737,6 +827,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Agent mode',
     cost: { research: 12000 },
     description: 'Sage gets a credit card. Copies 20% faster.',
+    urgent: (s) => rungHelper(s) === 'p_agents',
     trigger: (s) => dateAtLeast(s, 2025, 11) || s.capability >= 1.6,
     buy: (s) => {
       s.copyBoost *= 1.2;
@@ -898,7 +989,7 @@ function stage2Projects(): ProjectDef[] {
       cost: assistantsCost,
       description: 'Copies of Sage join the research team; a slider decides how many.',
       trigger: (s) => s2Releases(s) >= 1 || researchSecondsAway(s) > 180,
-      urgent: (s) => s.flags['assistantsHalf'] === true,
+      urgent: (s) => s.flags['assistantsHalf'] === true || researchSecondsAway(s) > 120,
       buy: (s) => {
         s.researchAlloc = 0.15;
         s.revealed['allocation'] = true;
@@ -1060,9 +1151,11 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_license_code',
+      // Paid in research, which sits at the lab's cap through the data wall (critic C9: a card the stage
+      // cannot go on without must not wait on out-saving the GPU lots); about two minutes of research.
+      revealResearch: 120,
       title: 'License the code hosts',
-      // stage2.md: $1.5M at scale 1; $1.0M keeps the mid-stage data wall to a few minutes.
-      cost: () => ({ funds: s2(1000000) }),
+      cost: { research: 300000 },
       description: 'Every public repository, its history and its issues: +20 T of data.',
       // "Data short after the publishers": the wall is up again (or never came down).
       trigger: (s) => s.flags['publishersDone'] === true && (counter(s, 'dataShortCount') >= 2 || dataWall(s)),
@@ -1187,8 +1280,9 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_license_archive',
+      revealResearch: 150,
       title: 'License the archives',
-      cost: () => ({ funds: s2(9000000) }),
+      cost: { research: 1000000 },
       description: 'Four national archives of books, broadcasts and court records: +40 T.',
       // "Data short a third time": the wall is up again after the code hosts.
       trigger: (s) => isBought(s, 'p_license_code') && dataWall(s),
@@ -1203,7 +1297,8 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_checkpoint_farm',
       revealFunds: 60,
       title: 'Checkpoint farm',
-      cost: () => ({ funds: s2(12000000) }),
+      // stage2.md has $12M at scale 1; a cap fix that costs two runs held a stalled lab for minutes (critic C9).
+      cost: () => ({ funds: s2(2500000) }),
       description: 'Every run keeps every checkpoint: four times the research capacity.',
       trigger: (s) => isBought(s, 'p_exp_scheduler') && capWall(s),
       prereq: (s) => isBought(s, 'p_exp_scheduler'),

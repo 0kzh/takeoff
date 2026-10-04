@@ -1,5 +1,5 @@
 import { GameState, projectState } from './state.js';
-import { PROJECTS, ProjectDef } from '../data/projects.js';
+import { PROJECTS, ProjectDef, RUNGS } from '../data/projects.js';
 import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, MECHANIC_FLAGS, inApproach, rowById } from '../data/stage2.js';
 import { visibleProjects } from './projects.js';
 
@@ -86,10 +86,49 @@ function uncapped(s: GameState, def: ProjectDef): boolean {
   return def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
+/** Side offers that shorten the rung they sit beside (they may appear while it waits). */
+const RUNG_SHORTCUTS = ['p_expedite', 'p_contractor', 'p_abatement'];
+
+/**
+ * Stage 1: while a pinned Abilene rung waits for money, a new side offer priced in money waits too
+ * (critic C13: a first-timer bought every cheaper offer first and the rung sat for eight minutes).
+ * Offers that shorten the rung, urgent cards and rescues are not held; cards already shown stay.
+ */
+function heldForRung(s: GameState, def: ProjectDef): boolean {
+  if (s.stage !== 1 || def.pinned || def.rescue || RUNG_SHORTCUTS.includes(def.id) || def.urgent?.(s) === true) return false;
+  if (!def.revealFunds && !(def.cost(s).funds ?? 0)) return false;
+  // The next rung up: the first unbought one whose trigger holds (shown or about to be). The hold
+  // lasts until it has been affordable for 15 s, so an offer cannot slip in ahead of the click.
+  for (const id of RUNGS) {
+    if ((s.projects[id]?.bought ?? 0) > 0) continue;
+    const rung = projectDef(id);
+    if (!rung || !(s.projects[id]?.shown || rung.trigger(s))) return false;
+    if (!rung.canAfford(s)) return true;
+    const since = s.flags[`rungAffordable:${id}`];
+    return typeof since !== 'number' || s.stats.timePlayed - since < 15;
+  }
+  return false;
+}
+
+/** Stage 1: when the next rung first became affordable (for the side-offer hold above). */
+function trackRungAffordable(s: GameState): void {
+  if (s.stage !== 1) return;
+  for (const id of RUNGS) {
+    if ((s.projects[id]?.bought ?? 0) > 0) continue;
+    const rung = projectDef(id);
+    const key = `rungAffordable:${id}`;
+    if (rung && s.projects[id]?.shown && rung.canAfford(s)) {
+      if (typeof s.flags[key] !== 'number') s.flags[key] = s.stats.timePlayed;
+    } else if (s.flags[key] !== undefined) delete s.flags[key];
+    return;
+  }
+}
+
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
   // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6).
   if (s.stage >= 3 && def.late) return false;
+  if (!s.projects[def.id]?.shown && heldForRung(s, def)) return false;
   // Before the Research panel, only rescues can appear (their prices are not in research).
   return def.rescue === true || s.revealed['research'] === true;
 }
@@ -154,6 +193,7 @@ function room(s: GameState): number {
 /** Every tick: triggers feed the queue; the drip releases from it. */
 export function updateProjects(s: GameState): void {
   if (!s.revealed['projects']) return;
+  trackRungAffordable(s);
   const now = s.stats.timePlayed;
   let free = room(s);
   const approach = inApproach(s);

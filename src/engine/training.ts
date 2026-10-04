@@ -1,4 +1,4 @@
-import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter } from './state.js';
+import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { activeGpus, effGpus, S2_FUNDS_SCALE } from './infrastructure.js';
 import { researchCap, researchRate } from './economy.js';
@@ -6,6 +6,7 @@ import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
 import { fmtNum, fmtClock, fmtMoneyShort } from './format.js';
+import { visibleProjects } from './projects.js';
 import { crawlRate, synthRate, flywheelRate, moveGov } from './world.js';
 
 export const EVAL_SECONDS = 5;
@@ -91,8 +92,11 @@ export function fundsFor(c: number): number {
  */
 export const S2_FUNDS_EXPONENT = 7;
 
+/** Scale-1 base of a Stage 2 run (stage2.md has $25,000; the held lots and Train now made the stage a minute or two short). */
+export const S2_RUN_BASE = 28000;
+
 export function fundsForS2(c: number): number {
-  return Math.round(25000 * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
+  return Math.round(S2_RUN_BASE * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
 }
 
 /**
@@ -214,7 +218,8 @@ export function trainWait(s: GameState): string {
   if (!trainSlotFree(s)) return 'waiting for the pipeline';
   const cost = trainCost(s);
   const cap = researchCap(s);
-  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}`;
+  const fixes = s.stage === 2 ? runFixNames(s) : '';
+  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}${fixes ? ` — ${fixes}` : ''}`;
   const waits: [number, string][] = [];
   // Stage 1 names the resource and the time only (`research — about 0:45`: its cost line is right
   // above, and minute 10 stays at 38 numbers); from Stage 2 the shortfall too (critic follow-up B8).
@@ -229,7 +234,23 @@ export function trainWait(s: GameState): string {
   if (cost.data) add(cost.data - s.data, crawlRate(s) + synthRate(s) + flywheelRate(s), `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
   add((cost.funds ?? 0) - s.funds, s.stats.revPerSec, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
   waits.sort((x, y) => y[0] - x[0]);
-  return waits[0]?.[1] ?? '';
+  const top = waits[0]?.[1] ?? '';
+  // Stage 2: a wall with a card on screen names the card (critic C9: `needs 11.6 T data — Synthetic data`).
+  if (fixes && cost.data && top.startsWith('short') && top.includes(' T data')) return `needs ${fmtNum(cost.data - s.data, 1)} T data — ${fixes}`;
+  if (fixes && top.includes(' research')) return `${top} — ${fixes}`;
+  return top;
+}
+
+/** The cards that answer the wall in front of the next run, by id (drawn urgent while it stands). */
+const RUN_FIXES = ['p_research_cluster', 'p_exp_scheduler', 'p_checkpoint_farm', 'p_lab_cluster', 'p_floor', 'p_desks', 'p_ai_assistants', 'p_synth', 'p_license_code', 'p_license_archive', 'p_beg_data'];
+
+/** `Synthetic data, License the code hosts`: the urgent run fixes on screen ('' when none). */
+export function runFixNames(s: GameState): string {
+  const names = visibleProjects(s)
+    .filter((p) => RUN_FIXES.includes(p.id) && (p.rescue || p.urgent?.(s) === true))
+    .map((p) => p.title);
+  if (atPlateau(s) && s.revealed['expandLab'] && s.trust >= 1) names.push('Expand Lab');
+  return names.join(', ');
 }
 
 /** A slot is free for a new run: none training, and the release slot empty (or a second pipeline). */
@@ -260,14 +281,62 @@ export function setFocus(s: GameState, focus: Focus): boolean {
   return true;
 }
 
+/**
+ * Stage 2's short run (critic C3): with everything else ready and at least this share of the money,
+ * the run can start now on what the money buys and keep that share of its gain (it still spends all
+ * its research and data). Waiting for the full price is the other choice.
+ */
+export const TRAIN_NOW_SHARE = 0.4;
+/** Train now is offered only when the full run is at least this far away (seconds of income). */
+export const TRAIN_NOW_WAIT = 30;
+
+export function canTrainNow(s: GameState): boolean {
+  if (s.stage !== 2 || !s.revealed['trainNow'] || !runOtherwiseReady(s)) return false;
+  const price = trainCost(s).funds ?? 0;
+  if (!(price > 0 && s.funds < price && s.funds >= TRAIN_NOW_SHARE * price)) return false;
+  return fullRunWait(s) >= TRAIN_NOW_WAIT;
+}
+
+/** Seconds of income until the full run's price is in hand. */
+export function fullRunWait(s: GameState): number {
+  const price = trainCost(s).funds ?? 0;
+  return Math.max(0, price - s.funds) / Math.max(1, s.stats.revPerSec);
+}
+
+/**
+ * The share of its gain a run on part of the money keeps: a smaller run is worth more than its
+ * share of the price (the square root of it: 40 % of the money keeps 63 %), times the compute yield.
+ */
+export function moneyShareYield(share: number): number {
+  return Math.sqrt(Math.max(0, Math.min(1, share)));
+}
+
+export function trainNowYield(s: GameState): number {
+  const price = trainCost(s).funds ?? 0;
+  return price > 0 ? moneyShareYield(s.funds / price) * computeYield(s) : 0;
+}
+
+export function trainNow(s: GameState): boolean {
+  if (!canTrainNow(s)) return false;
+  const cost = trainCost(s);
+  const paid = Math.floor(s.funds);
+  const share = moneyShareYield(paid / (cost.funds ?? 1));
+  const ok = startRun(s, { ...cost, funds: paid }, share);
+  if (ok) press(s, 'trainNow');
+  return ok;
+}
+
 export function startTraining(s: GameState): boolean {
   if (!canStartTraining(s)) return false;
+  return startRun(s, trainCost(s), 1);
+}
+
+function startRun(s: GameState, cost: Cost, moneyYield: number): boolean {
   const t = s.training;
   const yieldNow = computeYield(s);
   const duration = Math.round(trainingDuration(s));
   const capBefore = startCapability(s);
   const version = nextVersion(s);
-  const cost = trainCost(s);
   const synthetic = cost.data && s.data > 0 ? Math.min(1, s.dataSynthetic / s.data) : 0;
   pay(s, cost);
   const run: TrainingRun = {
@@ -278,6 +347,7 @@ export function startTraining(s: GameState): boolean {
     elapsed: 0,
     duration,
     computeYield: yieldNow,
+    moneyYield,
     evalElapsed: 0,
     flavorShown: 0,
     eventAt: chance(s, 0.3) ? rand(s, 0.35, 0.7) : -1,
@@ -307,8 +377,12 @@ export function startTraining(s: GameState): boolean {
   // (from Stage 2; in Stage 1 the Training panel's own line says half the GPUs are training).
   if (s.stage >= 2) s.revealed['copies'] = true;
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  say(s, `Training ${run.name}. Half the compute is diverted.`);
-  if (yieldNow < 0.999) say(s, `Not enough compute: this run trains to ${Math.round(yieldNow * 100)}%.`);
+  if (moneyYield < 0.999) {
+    say(s, `Training ${run.name} now, on ${fmtMoneyShort(cost.funds ?? 0)}: it keeps ${Math.round(moneyYield * yieldNow * 100)}% of its gain.`);
+  } else {
+    say(s, `Training ${run.name}. Half the compute is diverted.`);
+    if (yieldNow < 0.999) say(s, `Not enough compute: this run trains to ${Math.round(yieldNow * 100)}%.`);
+  }
   if (s.stage >= 2) startedInStage2(s, run);
   return true;
 }
@@ -471,7 +545,7 @@ export function focusBase(s: GameState, run: TrainingRun): number {
 
 function computeResults(s: GameState, run: TrainingRun): void {
   // Everything a run gains — focus, lucky events, the frontier bonus — scales with its compute.
-  const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.computeYield * run.capMult;
+  const gain = (focusBase(s, run) + run.gainBonus + s.training.frontierBonus) * run.computeYield * (run.moneyYield ?? 1) * run.capMult;
   run.capAfter = run.capBefore * (1 + gain);
   // Within 2 % below a named tier, the evaluators call it the tier (Stage 2: no 4-minute run for a
   // hair at 3.97×). The rename below prints "good enough to be called Sage-N".

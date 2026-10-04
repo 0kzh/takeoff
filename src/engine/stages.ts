@@ -3,9 +3,9 @@ import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight } from './economy.js';
 import { withdrawProject } from './reveal.js';
-import { trainCost, atPlateau, nextRunName } from './training.js';
+import { trainCost, atPlateau, nextRunName, runOtherwiseReady } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
-import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW } from './infrastructure.js';
+import { G4_PRICE, S2_FUNDS_SCALE, SUBSTATION_MW, lotCostOf } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
@@ -113,7 +113,7 @@ function enterScale(s: GameState): void {
     [2, `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
     [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW at Abilene. Power is bought in megawatts now.`],
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
-    [2, 'Prices set themselves from here. The price falls to meet supply; watch revenue.'],
+    [2, 'Prices set themselves from here. Marketing ends; the market cards widen the market now.'],
   ];
   narrate(s, lines, 10);
   logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
@@ -349,6 +349,14 @@ export function updateStage2(s: GameState): void {
     s.flags['arrivalPrice'] = s.price;
     s.flags['r0'] = Math.max(1, s.stats.revPerSec - s.contractIncome);
   }
+  // The short run arrives the first time a run waits for money and nothing else (critic C3).
+  if (!s.revealed['trainNow'] && runOtherwiseReady(s) && s.funds < (trainCost(s).funds ?? 0)) {
+    s.revealed['trainNow'] = true;
+    say(s, 'Train now: a run can start on the money there is and keep that share of its gain.');
+  }
+  // The bigger GPU lots join the row as the fleet grows into them (critic C1: sizes side by side).
+  if (!s.revealed['lot5'] && (s.gpus >= 3000 || s.funds >= lotCostOf(s, 5000))) s.revealed['lot5'] = true;
+  if (!s.revealed['lot25'] && (s.gpus >= 15000 || s.funds >= lotCostOf(s, 25000))) s.revealed['lot25'] = true;
   const arrival = s.flags['arrivalPrice'];
   if (typeof arrival === 'number' && s.price < 0.6 * arrival) {
     if (typeof s.flags['priceLowSince'] !== 'number') s.flags['priceLowSince'] = now;

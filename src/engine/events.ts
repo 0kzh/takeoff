@@ -4,11 +4,12 @@ import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
-import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate } from './economy.js';
+import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate, rentQuota } from './economy.js';
 import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
+  LOT_SIZES, lotFits, lotCostOf, lotHoldReason, datacenterReason, plantReason,
 } from './infrastructure.js';
-import { canStartTraining, canRedTeam, trainCost, trainingRun } from './training.js';
+import { canStartTraining, canRedTeam, canRelease, canTrainNow, trainCost, trainingRun } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
 import { stageDef } from './stages.js';
@@ -42,7 +43,9 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   const d = developmentById(id);
   if (!d) return false;
   s.developments[id] = true;
-  if (d.crisis) fireCrisis(s, d.crisis);
+  // A development that also opens a choice lets the panel land first: the crisis line follows 4 s later.
+  if (d.crisis && d.choice) s.scheduled.push({ id: d.crisis, delay: 4 });
+  else if (d.crisis) fireCrisis(s, d.crisis);
   const text = typeof d.text === 'function' ? d.text(s) : d.text;
   if (text) logNews(s, text);
   if (d.console) say(s, d.console);
@@ -337,7 +340,7 @@ export function noveltyKeys(s: GameState): string[] {
   if (second) keys.push(`phase:${second.id}:${second.elapsed >= second.duration ? 'trained' : 'training'}`);
   if (s.stage >= 2 && s.revealed['infrastructure']) {
     if (s.revealed['dcButton'] && s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
-    if (!standingOrderOn(s) && lotSize(s) >= 1000 && s.funds >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
+    if (!standingOrderOn(s) && lotSize(s) >= 100 && s.funds >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
     if (s.revealed['gasButton'] && s.funds >= gasCost(s)) keys.push(`aff:gas:${s.gasPlants}`);
     if (s.revealed['solarButton'] && !solarQueueFull(s) && s.funds >= solarCost(s)) keys.push(`aff:solar:${s.solarFarms + s.powerQueue.length}`);
     if (s.revealed['nuclearButton'] && s.funds >= nuclearCost(s)) keys.push(`aff:nuclear:${s.reactors}`);
@@ -347,6 +350,36 @@ export function noveltyKeys(s: GameState): string[] {
   }
   if (s.activeChoice) keys.push(`choice:${s.activeChoice.id}`);
   return keys;
+}
+
+/**
+ * The distinct purchases a player could press right now (arc G24/G25, the critic's "affordable
+ * things"): every enabled non-setting control but a modal option; the GPU lot sizes count once.
+ */
+export function enabledPurchases(s: GameState): string[] {
+  const out: string[] = [];
+  for (const p of visibleProjects(s)) if (p.canAfford(s)) out.push(p.id);
+  if (canStartTraining(s)) out.push('train');
+  if (canTrainNow(s)) out.push('trainNow');
+  const run = s.training.run;
+  if (run && run.phase === 'redteam' && canRedTeam(s)) out.push('redteam');
+  if (run && run.phase === 'redteam' && canRelease(s)) out.push('release');
+  if (s.revealed['research'] && s.revealed['hireResearcher'] && s.trust >= 1) out.push('hire');
+  if (s.revealed['expandLab'] && s.trust >= 1) out.push('expand');
+  if (s.stage < 2) {
+    if (s.revealed['compute'] && s.funds >= gpuCost(s) && s.gpus < rentQuota(s)) out.push('gpu');
+    if (s.revealed['marketing'] && s.funds >= marketingCost(s)) out.push('marketing');
+    if (s.revealed['buyPower'] && s.funds >= powerBlockCost(s)) out.push('power');
+    return out;
+  }
+  if (!s.revealed['infrastructure']) return out;
+  if (lotSize(s) >= 100 || LOT_SIZES.some((n) => n > 1000 && s.revealed[n === 5000 ? 'lot5' : 'lot25'] && lotFits(s, n) && !lotHoldReason(s, n) && s.funds >= lotCostOf(s, n))) out.push('gpuLot');
+  if (s.revealed['dcButton'] && !datacenterReason(s) && s.funds >= datacenterCost(s)) out.push('datacenter');
+  if (s.revealed['gasButton'] && !plantReason(s, 'gas') && s.funds >= gasCost(s)) out.push('gas');
+  if (s.revealed['solarButton'] && !plantReason(s, 'solar') && s.funds >= solarCost(s)) out.push('solar');
+  if (s.revealed['nuclearButton'] && !plantReason(s, 'nuclear') && s.funds >= nuclearCost(s)) out.push('nuclear');
+  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
+  return out;
 }
 
 /** Keys created by the guard itself; the sim ignores them when it measures idle gaps. */
@@ -453,7 +486,7 @@ function unaffordableFundsCosts(s: GameState): number[] {
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
   if (s.stage >= 2 && s.revealed['infrastructure']) {
     if (s.revealed['dcButton']) add(datacenterCost(s));
-    if (lotSize(s) >= 1000) add(lotCost(s));
+    if (lotSize(s) >= 100) add(lotCost(s));
     if (s.revealed['gasButton']) add(gasCost(s));
     if (s.revealed['solarButton'] && !solarQueueFull(s)) add(solarCost(s));
   }

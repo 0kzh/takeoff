@@ -22,7 +22,7 @@ export type RowKind = 'project' | 'flag' | 'choice';
 export const MECHANIC_FLAGS = [
   'stores', 'infrastructure', 'autoPrice', 'gasButton', 'dataRow', 'graph', 'allocation', 'dcButton', 'solarButton',
   'queue', 'standingOrder', 'releaseInternal', 'government', 'secondPipeline', 'security', 'public', 'nuclearButton',
-  'jobFund', 'stats', 'sl3Button', 'alignShare', 'shareEvals', 'chipsRow',
+  'jobFund', 'stats', 'sl3Button', 'alignShare', 'shareEvals', 'chipsRow', 'trainNow',
 ];
 
 export interface ContentRow {

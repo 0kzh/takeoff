@@ -85,7 +85,7 @@
         <span data-reveal="demandPct">Public Demand: <span id="demand">0</span>%<br></span>
         <span id="hypeLine">Release hype: <span id="hype">strong</span><br></span>
         <span data-reveal="apiCustomers">API customers: <span id="apiCustomers">0</span><br></span>
-        <div data-reveal="marketing" id="marketingBlock">
+        <div data-reveal="marketing" data-hide="stores" id="marketingBlock">
           <br>
           <button class="button2" id="btn-marketing" title="More demand at every price: ×1.1 per level.">Marketing</button>
           <span data-hide="stores">Level: <span id="hypeLevel">1</span></span><br>
@@ -105,13 +105,15 @@
       <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="infrastructure">
         <b>Infrastructure</b>
         <hr>
-        <div class="infraRow"><button class="button2" id="btn-gpuBatch">Buy GPUs (<span id="gpuLotSize">1,000</span>)</button> <span id="gpuBatchCost">$ 75,000</span> <span id="gpuReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="dcButton"><button class="button2" id="btn-datacenter">Build Datacenter<span class="hiddenIds"> <span id="dcNumber">2</span></span> (+<span id="dcSlots">15,000</span> slots)</button> <span id="datacenterCost">$ 250,000</span> <span id="dcReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="gasButton"><button class="button2" id="btn-turbines" title="Gas turbines: +20 MW at once. The county notices each one.">Gas turbines<span id="gasMW"> (+20 MW)</span></button> <span id="turbineCost">$ 90,000</span> <span id="gasReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="solarButton"><button class="button2" id="btn-solar" title="Solar + storage: +50 MW, cheaper, but it waits in the interconnect queue. Rides through curtailment.">Solar + storage<span id="solarMW"> (+50 MW)</span></button> <span id="solarCost">$ 300,000</span> <span id="solarReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="nuclearButton"><button class="button2" id="btn-nuclear" title="A shuttered reactor, restarted for OpenMind: +500 MW after a two-minute restart.">Nuclear PPA<span id="nuclearMW"> (+500 MW)</span></button> <span id="nuclearCost">$ 15.0M</span> <span id="nuclearReason" class="reason"></span></div>
+        <div class="infraRow"><button class="button2" id="btn-gpuBatch">Buy GPUs (<span id="gpuLotSize">1,000</span>)</button> <span id="gpuBatchCost">$ 120,000</span> <span id="gpuReturn" class="note"></span> <span id="gpuReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="lot5"><button class="button2" id="btn-gpuBatch5">Buy GPUs (5,000)</button> <span id="gpuBatch5Cost">$ 600,000</span> <span id="gpuReturn5" class="note"></span> <span id="gpuReason5" class="reason"></span></div>
+        <div class="infraRow" data-reveal="lot25"><button class="button2" id="btn-gpuBatch25">Buy GPUs (25,000)</button> <span id="gpuBatch25Cost">$ 3.0M</span> <span id="gpuReturn25" class="note"></span> <span id="gpuReason25" class="reason"></span></div>
+        <div data-reveal="standingOrder" id="standingRow">Standing order: <button class="button2 toggle" id="btn-standing" title="Buys the largest GPU lot that fits from this share of income, keeping the next run's money in hand. It never buys plants or datacenters. Click to change the share.">50%</button> of income <span id="standingNote" class="note"></span></div>
+        <div class="infraRow" data-reveal="dcButton"><button class="button2" id="btn-datacenter">Build Datacenter<span class="hiddenIds"> <span id="dcNumber">2</span></span> (+<span id="dcSlots">15,000</span> slots)</button> <span id="datacenterCost">$ 250,000</span> <span id="dcNote" class="note"></span> <span id="dcReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="gasButton"><button class="button2" id="btn-turbines" title="Gas turbines: +20 MW at once. The county notices each one.">Gas turbines (+20 MW)</button> <span id="turbineCost">$ 90,000</span> <span id="gasNote" class="note"></span> <span id="gasReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="solarButton"><button class="button2" id="btn-solar" title="Solar + storage: +50 MW, cheaper, but it waits in the interconnect queue. Rides through curtailment.">Solar + storage (+50 MW)</button> <span id="solarCost">$ 300,000</span> <span id="solarNote" class="note"></span> <span id="solarReason" class="reason"></span></div>
+        <div class="infraRow" data-reveal="nuclearButton"><button class="button2" id="btn-nuclear" title="A shuttered reactor, restarted for OpenMind: +500 MW after a two-minute restart.">Nuclear PPA (+500 MW)</button> <span id="nuclearCost">$ 15.0M</span> <span id="nuclearNote" class="note"></span> <span id="nuclearReason" class="reason"></span></div>
         <div id="interconnectLine" class="note"></div>
-        <div data-reveal="standingOrder">Standing order: <button class="button2 toggle" id="btn-standing" title="Buys a GPU lot whenever there is room, power and money, keeping the next run's cost in hand. It never buys plants or datacenters.">ON</button></div>
         <span data-hide="stores">GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>Copies running: <span id="infraCopies">0</span><br></span>
         <span class="hiddenIds">Datacenters: <span id="datacenters">0</span> · Nimbus chip price: <span id="chipPrice">$ 50.00</span> · Powered GPUs: <span id="activeGpus">0</span> · Tasks per sec: <span id="infraTasksPerSec">0</span></span>
       </div>
@@ -213,6 +215,7 @@
 
         <div id="train-idle">
           <button class="button2" id="btn-train" title="Train the next model. Half the compute is diverted while it trains.">Train <span id="nextRunName">Sage-1.1</span></button>
+          <span data-reveal="trainNow"><button class="button2" id="btn-trainNow" title="Start the run now on the money there is: it keeps that share of its gain, and spends all its research and data.">Train now</button> <span id="trainNowNote" class="note"></span></span>
           Cost: <span id="trainCost">2,000 research, $290</span><span id="trainData"></span><br>
           <span id="trainComputeLine" title="More GPUs train a better model.">Compute: <span id="trainComputeOf"><span data-hide="stores"><span id="trainCompute">0</span> of </span><span id="trainRequired">9</span> GPUs wanted</span><span id="trainEnough">enough</span> · <span id="trainEta">est. 60 s</span></span><br>
           <span id="trainReason" class="reason"></span>

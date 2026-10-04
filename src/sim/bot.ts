@@ -6,7 +6,7 @@
 import { newGame, GameState, isBought } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
-import { noveltyKeys, isRescueKey, PLAYER_MODALS } from '../engine/events.js';
+import { noveltyKeys, isRescueKey, PLAYER_MODALS, enabledPurchases } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
@@ -41,7 +41,7 @@ function parseArgs(argv: string[]): Args {
     if (k === '--stop-at-stage' && v) args.stopAtStage = Number(v);
     if (k === '--preset' && v) args.preset = Number(v);
     if (k === '--variant' && v) args.variant = v;
-    if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy')) args.policy = v;
+    if (k === '--policy' && (v === 'bot' || v === 'naive' || v === 'greedy' || v === 'trainfirst')) args.policy = v;
     if (k === '--quiet') args.quiet = true;
     if (k === '--json') args.json = true;
   }
@@ -205,6 +205,14 @@ export interface Stage2Summary {
   exitState: ExitState | null;
   /** Stage 2 modal answers, `id:option`. */
   choices: string[];
+  /** Hands and eyes (arc G24–G26): 2-s checks after minute 3 with nothing enabled / two or more things. */
+  handsNonePct: number;
+  handsTwoPct: number;
+  /** Share of the time after minute 10 inside stretches of 30 s or more without a player action. */
+  clickGapPct: number;
+  /** Longest stretch between two changes of the deployed model's capability (the stage end closes the last). */
+  longestRelease: number;
+  longestReleaseAt: number;
 }
 
 export interface ExitState {
@@ -226,6 +234,18 @@ export interface SimResult {
   idleGaps: [number, number][];
   lines: string[];
   summary: Summary;
+}
+
+/** Share (%) of [from, to] inside gaps of 30 s or more between consecutive actions (the edges count). */
+function clickGapShare(times: number[], from: number, to: number): number {
+  if (to <= from) return 0;
+  const pts = [from, ...times.filter((x) => x > from && x < to).sort((a, b) => a - b), to];
+  let inGap = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const g = pts[k]! - pts[k - 1]!;
+    if (g >= 30) inGap += g;
+  }
+  return Math.round((100 * inGap) / (to - from));
 }
 
 function median(xs: number[]): number {
@@ -258,7 +278,7 @@ function greyedGoal(s: GameState): boolean {
   if (s.revealed['graph']) return true;
   if (visibleProjects(s).some((p) => !p.canAfford(s))) return true;
   if (s.revealed['infrastructure']) {
-    if (lotSize(s) >= 1000 && s.funds < lotCost(s)) return true;
+    if (lotSize(s) >= 100 && s.funds < lotCost(s)) return true;
     if (s.revealed['dcButton'] && s.funds < datacenterCost(s)) return true;
     if (s.revealed['gasButton'] && s.funds < gasCost(s)) return true;
   }
@@ -273,7 +293,7 @@ function meaningfulChoice(s: GameState): boolean {
     const f = p.cost(s).funds ?? 0;
     if (f > 0 && p.canAfford(s)) prices.push(f);
   }
-  if (s.revealed['infrastructure'] && lotSize(s) >= 1000 && s.funds >= lotCost(s)) prices.push(lotCost(s));
+  if (s.revealed['infrastructure'] && lotSize(s) >= 100 && s.funds >= lotCost(s)) prices.push(lotCost(s));
   if (s.revealed['dcButton'] && s.funds >= datacenterCost(s)) prices.push(datacenterCost(s));
   if (s.revealed['gasButton'] && s.funds >= gasCost(s)) prices.push(gasCost(s));
   if (s.revealed['solarButton'] && !solarQueueFull(s) && s.funds >= solarCost(s)) prices.push(solarCost(s));
@@ -388,6 +408,26 @@ export function simulate(args: Args): SimResult {
   let standingAt: number | null = null;
   const marks: Mark[] = [];
   let nextMark = 0;
+  // Hands and eyes: the player's actions (all but the task button), and the 2-s purchase checks.
+  const actionTimes: number[] = [];
+  let handsChecks = 0;
+  let handsNone = 0;
+  let handsTwo = 0;
+  let lastCap = s.capability;
+  let lastCapAt = s.stats.timePlayed;
+  let longestRelease = 0;
+  let longestReleaseAt = 0;
+  const tracked = new Proxy(actions, {
+    get(target, prop: string) {
+      const fn = (target as unknown as Record<string, (...args: unknown[]) => unknown>)[prop];
+      if (typeof fn !== 'function') return fn;
+      return (...args: unknown[]) => {
+        const r = fn(...args);
+        if (r && prop !== 'clickTask') actionTimes.push(s.stats.timePlayed);
+        return r;
+      };
+    },
+  }) as typeof actions;
   /** Per second in Stage 2: what kept the next run from starting (for the longest interval). */
   const blockLog: [number, string][] = [];
   const revHistory: [number, number][] = [];
@@ -451,9 +491,23 @@ export function simulate(args: Args): SimResult {
   };
 
   for (let i = 0; i < totalTicks; i++) {
-    policyStep(s, actions, mem);
+    if (s.stage === 2 && i % 20 === 0 && s2Start !== null && s.stats.timePlayed - s2Start >= 180) {
+      const n = enabledPurchases(s).length;
+      handsChecks++;
+      if (n === 0) handsNone++;
+      if (n >= 2) handsTwo++;
+    }
+    policyStep(s, tracked, mem);
     step(s);
     const t = s.stats.timePlayed;
+    if (s.stage === 2 && s.capability > lastCap + 1e-9) {
+      if (t - lastCapAt > longestRelease) {
+        longestRelease = t - lastCapAt;
+        longestReleaseAt = lastCapAt;
+      }
+      lastCap = s.capability;
+      lastCapAt = t;
+    }
 
     for (const id of mem.bought) {
       out(t, `BUY ${projectById(id)?.title ?? id}`);
@@ -813,6 +867,11 @@ export function simulate(args: Args): SimResult {
       latencies: s2Latency,
       exitState: exitSnap,
       choices: s2Choices,
+      handsNonePct: handsChecks ? Math.round((100 * handsNone) / handsChecks) : 0,
+      handsTwoPct: handsChecks ? Math.round((100 * handsTwo) / handsChecks) : 0,
+      clickGapPct: clickGapShare(actionTimes, startT + 600, stop),
+      longestRelease: Math.round(Math.max(longestRelease, stop - lastCapAt)),
+      longestReleaseAt: rel(longestRelease >= stop - lastCapAt ? longestReleaseAt : lastCapAt),
     };
     void s2LogStart;
   }
@@ -902,6 +961,10 @@ function printStage2(sum: Stage2Summary): void {
   console.log(`   reveal gaps > 120 s    ${sum.revealGapsOver120.length ? sum.revealGapsOver120.map(span).join(', ') : 'none'}`);
   console.log(`A3 last 10 minutes        ${sum.lastTenGap} s (${span(sum.lastTenGapAt)})   (≤ 180)${ok(sum.lastTenGap <= 180)}`);
   console.log(`A4 panels/mechanics gap   ${sum.mechanicGap} s (${span(sum.mechanicGapAt)})   (≤ 270)${ok(sum.mechanicGap <= 270)}`);
+  console.log(`G24 nothing enabled       ${sum.handsNonePct}% of 2-s checks after 3:00   (≤ 50%)${ok(sum.handsNonePct <= 50)}`);
+  console.log(`G25 two or more things    ${sum.handsTwoPct}% of checks   (≥ 25%)${ok(sum.handsTwoPct >= 25)}`);
+  console.log(`G26 hands idle ≥ 30 s     ${sum.clickGapPct}% of the time after 10:00   (≤ 35%)${ok(sum.clickGapPct <= 35)}`);
+  console.log(`G26 longest release gap   ${clock(sum.longestRelease)} from ${clock(sum.longestReleaseAt)}   (≤ 5:30)${ok(sum.longestRelease <= 330)}`);
   console.log(`   mechanics              ${sum.mechanics.join(' · ')}`);
   console.log(`A5 training runs          ${sum.runs}   (bot 9–12, naive 7–10)`);
   console.log(`A6 interval between starts mean ${sum.intervalMean ?? '—'} s, max ${sum.intervalMax ?? '—'} s   (bot mean 170–260, max ≤ 360; naive max ≤ 540)`);
