@@ -18,6 +18,9 @@ import { visibleProjects } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled } from '../engine/events.js';
 import { canPay } from '../engine/state.js';
 
+
+/** `refuse` on the Committee's order: the fourth option since Stage 4 added `hand over the keys` third. */
+const ORDER_REFUSE = 3;
 /**
  * Stage 3's policies (stage3.md §9.1–§9.2). `bot` is the reasonable bot; `racer` and `cautious` are
  * the reasonable bot with one temperament changed; `naive` is the first-timer of §9.2; `greedy`
@@ -91,7 +94,8 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
     case 'c_memo':
       return racer || has(mem, 'memo-bury') ? [1] : [0];
     case 'c_order':
-      return has(mem, 'refuse') ? [2] : [0, 1, 2];
+      // The order's options are concede, favours, the keys (Stage 4 only) and refuse: refuse is the last.
+      return has(mem, 'refuse') ? [ORDER_REFUSE] : [0, 1, 2];
     case 'c_vote':
       return [0];
     default:
@@ -349,7 +353,7 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.activeChoice && readModal3(s, mem)) {
     const def = choiceById(s.activeChoice.id);
     if (def) {
-      if (has(mem, 'refuse') && def.id === 'c_order') a.resolveChoice(s, 2);
+      if (has(mem, 'refuse') && def.id === 'c_order') a.resolveChoice(s, ORDER_REFUSE);
       else {
         const first = def.options.map((_, i) => i).find((i) => choiceOptionEnabled(s, def, i));
         if (first !== undefined) a.resolveChoice(s, first);

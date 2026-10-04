@@ -86,11 +86,15 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
 function buyMissions(s: GameState, a: Actions, mem: BotMemory): void {
   for (const p of visibleProjects(s)) {
     if (!p.mission || !p.canAfford(s)) continue;
-    if (p.id === 'p_reflection' && has(mem, 'linger')) {
+    // `linger` leaves the last project five minutes; `linger-10` ten (D20: the far goals light meanwhile).
+    const wait = has(mem, 'linger-10') ? 600 : has(mem, 'linger') ? 300 : 0;
+    if (p.id === 'p_reflection' && wait > 0) {
       const m = mem5(mem);
       if (m.reflectionSeen === undefined) m.reflectionSeen = s.stats.timePlayed;
-      if (s.stats.timePlayed - m.reflectionSeen < 300) continue;
+      if (s.stats.timePlayed - m.reflectionSeen < wait) continue;
     }
+    // `missions-stop-15` (Silence's self-start, D21): no mission bought from 15:00 on.
+    if (has(mem, 'missions-stop-15') && s.stats.timeInStage >= 900) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
 }
