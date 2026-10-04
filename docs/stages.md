@@ -26,13 +26,13 @@ The first stage is by far the simplest. OpenMind has a model, a cloud bill, and 
 
 ### What is on screen
 
-*Minute 0:* black console (`Welcome to OpenMind.`), `Tasks Completed: 0`, the date `Jul 2025`, and one button: **Complete Task**. Below it, `Power: 1,000 kWh`.
+*Minute 0:* black console (`Welcome to OpenMind. Customers are waiting.`), `Tasks Completed: 0`, and one button: **Complete Task**. No date, no funds, no power.
 
 *Reveal order (triggers, not timers; typical minute in brackets):*
 
-1. **Business** panel after the first task is completed [0:05] — `Available Funds`, `Unbilled Tasks`, `lower / raise` price, `Public Demand`.
-2. **Buy Power (1,000 kWh) — $20.00** when power < 900 or funds ≥ 5 [0:30].
-3. **Rent GPU — $7.00** and `GPUs rented: 0 / Copies running: 0` at funds ≥ 5 or tasks ≥ 50 [1:00]. First GPU affordable around [1:30].
+1. **Business** panel after the first task [0:01] — `Available Funds` only. The click pays `$0.25` at once. Console: `Task complete. The customer pays $0.25.`
+2. **Rent GPU — $6.00**, greyed, at funds ≥ $3 or 20 tasks [0:06]. Console: `GPUs can be rented. Each one runs a copy of Sage.` Nothing else in the panel yet.
+3. The first GPU [0:12] ends the opening: `GPUs rented`, `Copies running`, `Tasks per sec`, the price and demand lines, and `Power: 1,000 kWh`. **Buy Power** when that panel is up and power < 900 or funds ≥ $5.
 4. **Developments log** (left column) on the first world development, `Jul 2025 — Agents can order food and fill spreadsheets. Sometimes.` [1:30].
 5. **Marketing — Level 1 — $100.00** at funds ≥ 20 [3:00]. Affordable around [6:00].
 6. **Research** panel at the first Trust milestone (3,000 tasks) [3:00]: `Trust: 2`, `+1 Trust at: 5,000 tasks`, `Researchers: 1`, `Lab Space: 1`, `Research: 0 / 1,000`, `Hire Researcher (1 Trust)`, `Expand Lab (1 Trust)`.

@@ -102,7 +102,7 @@ function stage2(seed: number): GameState {
   });
   for (const id of STAGE1_BOUGHT) s.projects[id] = { shown: true, bought: 1 };
   for (const d of DEVELOPMENTS) if (d.stage === 1) s.developments[d.id] = true;
-  for (const id of ['business', 'revPerSec', 'log', 'marketing', 'research', 'hireResearcher', 'expandLab', 'projects', 'insight', 'training', 'apiCustomers', 'compute', 'buyPower']) {
+  for (const id of ['business', 'pricing', 'revPerSec', 'log', 'marketing', 'research', 'hireResearcher', 'expandLab', 'projects', 'insight', 'training', 'apiCustomers', 'compute', 'fleet', 'buyPower']) {
     s.revealed[id] = true;
   }
   s.log = [];

@@ -71,7 +71,7 @@ Visibility is state. `state.revealed` is a map of flag → boolean. Any element 
 `data-reveal="flag"` is shown exactly when that flag is true; `render.ts` is the only code that
 toggles it. Flags are set by:
 
-* reveal rules in `engine/stages.ts` (e.g. `business` after the first task, `compute` at $5),
+* reveal rules in `engine/stages.ts` (e.g. `business` after the first task, `compute` at $3),
 * project effects (Training Pipeline sets `training`),
 * stage `enter()` functions, which also hide panels (Stage 2 hides `power`, `buyPower`, `compute`).
 

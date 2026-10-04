@@ -71,7 +71,6 @@ export function render(s: GameState): void {
 function renderPower(s: GameState): void {
   setText('power', fmtInt(s.power));
   setText('powerCost', fmtMoney(s.powerPrice));
-  setDisabled('btn-task', s.stage < 2 && s.power < 1);
   setDisabled('btn-buyPower', s.funds < s.powerPrice);
   setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
   setText('gridStatus', s.gridAuto ? 'buys power when it runs low' : 'idle');
