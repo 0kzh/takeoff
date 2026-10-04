@@ -37,7 +37,8 @@ export const LATE_MECHANIC_SPACING = 150;
 
 /** Projects on screen at once (Stage 1: rescues, urgent fixes, the stage goal and side-offers not counted; Stage 2: only rescues and G6). */
 export function maxVisible(s: GameState): number {
-  return s.stage === 1 ? 4 : 6;
+  // Stage 3 holds five: its grants have a list of their own, and the screen is the densest yet (arc G14).
+  return s.stage === 1 ? 4 : s.stage === 3 ? 5 : 6;
 }
 
 /** Stage 3: grants on offer at once, and their spacing (stage3.md §4.1 item 1). */
@@ -460,7 +461,8 @@ function lateDrip3(s: GameState, approach: boolean): void {
     const due = best >= lateAtOf(id) - 1e-9;
     // The date fallback releases rows whose threshold has not come, in table order, 90 s apart.
     if (!due && !(fallback && since >= FALLBACK_SECONDS)) continue;
-    if (revealRow(s, row, OVERFLOW)) {
+    // One card past the shelf at most: the approach is the densest screen of the stage (arc G14).
+    if (revealRow(s, row, 1)) {
       c.lastLateAt = now;
       c.lateQueue = c.lateQueue.filter((q) => q !== id);
       return;

@@ -67,6 +67,11 @@ function labName(id: string): string {
   return ({ p_interp1: 'Interpretability lab I', p_interp2: 'Interpretability lab II', p_interp3: 'Interpretability lab III', p_interp4: 'Interpretability lab IV' } as Record<string, string>)[id] ?? id;
 }
 
+/** A motion is already before the Committee (open or waiting behind another card). */
+function voteOpen(s: GameState): boolean {
+  return s.activeChoice?.id === 'c_vote' || s.choiceQueue.some((c) => c.id === 'c_vote');
+}
+
 /** The two motions' tag: `(needs a 25× model and the Committee in session)`, then `(ready)`. */
 function motionTag(s: GameState): string {
   return voteReady(s) ? '(ready)' : '(needs a 25× model and the Committee in session)';
@@ -84,7 +89,7 @@ function motion(id: string, title: string, motionKey: 'slow' | 'race', descripti
     stages: [3],
     uses: Infinity,
     trigger: (s) => best(s) >= 12 || ts3(s) >= 1830,
-    canAfford: voteReady,
+    canAfford: (s) => voteReady(s) && !voteOpen(s),
     buy: (s) => {
       openChoice(s, 'c_vote', { motion: motionKey });
     },
@@ -607,7 +612,7 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       uses: Infinity,
       trigger: (s) => inSession(s) && sessionAge(s) >= SESSION_HALT_AT && pauseEligible(s),
       expires: (s) => !pauseEligible(s),
-      canAfford: (s) => inSession(s) && pauseEligible(s),
+      canAfford: (s) => inSession(s) && pauseEligible(s) && !voteOpen(s) && s.flags['pauseSigned'] !== true,
       buy: (s) => {
         openChoice(s, 'c_vote', { motion: 'pause' });
       },

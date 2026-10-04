@@ -64,10 +64,10 @@ mountDev({
     speed = n;
   },
   getAutoplay: () => autoplay,
-  setAutoplay: (on, which, holdTransition) => {
+  setAutoplay: (on, which, holdTransition, variant) => {
     autoplay = on;
     if (which) policy = which;
-    bot = newBotMemory(policy, holdTransition === true);
+    bot = newBotMemory(policy, holdTransition === true, variant ?? '');
   },
   advance,
 });

@@ -39,6 +39,13 @@ import type { Perform } from './render.js';
  */
 
 let perform: Perform;
+let current: GameState | null = null;
+const stateRef = (): GameState => current!;
+
+/** The state the last render drew (the switch buttons read it to know which way to step). */
+export function noteState3(s: GameState): void {
+  current = s;
+}
 
 export function mount3(p: Perform): void {
   perform = p;
@@ -47,14 +54,14 @@ export function mount3(p: Perform): void {
   bind('btn-sendBack', () => perform('sendBack'));
   bind('btn-experiments', () => perform('runExperiments', 1));
   bind('btn-experiments5', () => perform('runExperiments', 5));
-  bind('btn-depth-quick', () => perform('setRedteamDepth', 'quick'));
-  bind('btn-depth-thorough', () => perform('setRedteamDepth', 'thorough'));
-  bind('btn-step-small', () => perform('setStepSize', 'small'));
-  bind('btn-step-normal', () => perform('setStepSize', 'normal'));
-  bind('btn-step-large', () => perform('setStepSize', 'large'));
+  // The standing switches are one button each that steps through its settings (arc G14: fewer controls).
+  bind('btn-depth', () => perform('setRedteamDepth', redteamDepth(stateRef()) === 'quick' ? 'thorough' : 'quick'));
+  bind('btn-step', () => {
+    const v = (stateRef().flags['stepSize'] as string) || 'normal';
+    perform('setStepSize', v === 'small' ? 'normal' : v === 'normal' ? 'large' : 'small');
+  });
   bind('btn-hold', () => perform('toggleHold'));
-  bind('btn-budget-lean', () => perform('setBuildBudget', 'lean'));
-  bind('btn-budget-ahead', () => perform('setBuildBudget', 'ahead'));
+  bind('btn-budget', () => perform('setBuildBudget', buildBudget(stateRef()) === 'lean' ? 'ahead' : 'lean'));
   bind('btn-alignWork', () => perform('alignWork', 1));
   bind('btn-alignWork5', () => perform('alignWork', 5));
   bind('btn-lobby', () => perform('lobby'));
@@ -156,6 +163,8 @@ export function renderTraining3(s: GameState): void {
     const room = pts < EXPERIMENTS_MAX - 1e-9;
     setDisabled('btn-experiments', !room || s.research < unit);
     setDisabled('btn-experiments5', !room || s.research < 5 * unit);
+    // Experiments takes twenty units a run at most: one button is enough (arc G14's thirty controls).
+    setOff('btn-experiments5', true);
     const name = s.training.pending?.name ?? (s.training.run?.phase === 'training' ? s.training.run.name : nextRunName(s));
     setText('experimentsNote', room
       ? `${nextRunName(s)}: +${fmtNum(nextGainPct(s), 1)}% → +${fmtNum(nextGainPct(s, 0.25), 1)}% · delays it ${fmtClock(delaySeconds(s, unit))}`
@@ -163,15 +172,14 @@ export function renderTraining3(s: GameState): void {
   }
   if (s.revealed['redteamDepth']) {
     const d = redteamDepth(s);
-    setOn('btn-depth-quick', d === 'quick');
-    setOn('btn-depth-thorough', d === 'thorough');
+    setText('btn-depth', d);
+    setOn('btn-depth', d === 'thorough');
     setText('redteamDepthNote', d === 'quick' ? 'issues ship; no wait' : `+${THOROUGH_SECONDS} s a run; nothing ships; measured +0.5`);
   }
   if (s.revealed['stepSize']) {
     const v = (s.flags['stepSize'] as string) || 'normal';
-    setOn('btn-step-small', v === 'small');
-    setOn('btn-step-normal', v === 'normal');
-    setOn('btn-step-large', v === 'large');
+    setText('btn-step', v);
+    setOn('btn-step', v !== 'normal');
     setText('stepSizeNote', v === 'small' ? 'gains ×0.6; the alignment team has time to look' : v === 'large' ? 'gains ×1.3; the run the alignment team likes least' : 'the gains as they come');
   }
   if (s.revealed['holdRuns']) {
@@ -253,8 +261,8 @@ export function renderInfrastructure3(s: GameState): void {
   if (s.revealed['buildout']) setText('buildoutLine', buildoutLine(s));
   if (s.revealed['buildBudget']) {
     const b = buildBudget(s);
-    setOn('btn-budget-lean', b === 'lean');
-    setOn('btn-budget-ahead', b === 'ahead');
+    setText('btn-budget', b);
+    setOn('btn-budget', b === 'ahead');
     setText('buildBudgetNote', b === 'lean' ? 'orders a hall or reactor when the next lot would not fit' : 'keeps one of each building; never stalls; about a tenth more of revenue');
   }
   // Chips on order: what is on its way (Stores).
@@ -300,6 +308,7 @@ export function renderAlignment(s: GameState): void {
     const unit = researchUnit(s);
     setDisabled('btn-alignWork', s.research < unit);
     setDisabled('btn-alignWork5', s.research < 5 * unit);
+    setOff('btn-alignWork5', !(s.stats.pressCounts['alignWork'] > 0));
     const after = Math.min(100, measured + ALIGN_WORK_MEASURED);
     // Once the weights can be read, the unit's return is the number that matters (the measured one moves too).
     const ret = s.interpretability >= 3
@@ -357,6 +366,8 @@ export function renderSecurity3(s: GameState): void {
   if (byId('btn-sl3').classList.contains('urgent') !== urgent) byId('btn-sl3').classList.toggle('urgent', urgent);
   setText('theftNote', theftRiskNote(s));
   if (s.revealed['reimage']) {
+    // The manual answer to a climbing rogue share: on screen while there is a share to answer (or a recharge to watch).
+    setOff('btn-reimage', rogueShare(s) < 0.005 && reimageCooldown(s) <= 0);
     const cd = reimageCooldown(s);
     setDisabled('btn-reimage', cd > 0);
     setWidth(byId('reimageBar'), cd / REIMAGE_COOLDOWN);

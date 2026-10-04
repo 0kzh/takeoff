@@ -271,7 +271,7 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (!saving && !orderReasonS3(s, big) && s.standingBudget > 0) hold += Math.min(s.standingPool, lotCostOf(s, big));
   // Projects: grants (not the Spec revision), then table order; research under the run rule.
   for (const p of visibleProjects(s)) {
-    if (!wanted(s, mem, p.id) || !p.canAfford(s)) continue;
+    if (p.id === 'p_pause' || !wanted(s, mem, p.id) || !p.canAfford(s)) continue;
     const cost = p.cost(s);
     if (!researchOk(s, cost.research ?? 0) || !spare(cost.funds ?? 0)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
@@ -299,7 +299,8 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
 
   // The vote (§9.1 item 1), or the Pause when the variant signs it.
   if (has(mem, 'pause') && visibleProjects(s).some((p) => p.id === 'p_pause' && p.canAfford(s)) && !s.activeChoice) a.buyProject(s, 'p_pause');
-  if (voteReady(s) && !s.activeChoice) a.buyProject(s, slowByReading(s) ? 'p_steward' : 'p_race');
+  // With `holdTransition` the vote is left to the player (the browser smoke test brings it).
+  if (voteReady(s) && !s.activeChoice && !mem.holdTransition) a.buyProject(s, slowByReading(s) ? 'p_steward' : 'p_race');
 }
 
 function setBudget(s: GameState, a: Actions, target: number): void {
@@ -376,6 +377,7 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (trainfirst) infraByReason(s, a);
   for (const p of visibleProjects(s)) {
     if (p.id === 'p_pause' || p.id === 'p_race' || !p.canAfford(s)) continue;
+    if (p.id === 'p_steward' && mem.holdTransition) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);

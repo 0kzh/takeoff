@@ -145,7 +145,7 @@ export function gpusForS3(c: number): number {
  * three figures — 18.0M for Sage-3.1, 35M at 5×, 144M at 8×, 281M at 10×, 4.4B at 25×. A re-base,
  * not a continuation: the arrival's narration names the number.
  */
-export const S3_RUN_BASE = 17000000;
+export const S3_RUN_BASE = 16800000;
 export const S3_RUN_EXPONENT = 3.15;
 
 export function researchForS3(c: number): number {

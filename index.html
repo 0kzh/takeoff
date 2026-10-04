@@ -119,7 +119,7 @@
         <div id="interconnectLine" class="note"></div>
         <div data-reveal="shipments" id="shipmentRow"><span id="shipmentLine">Shipment: none on order</span></div>
         <div data-reveal="buildout"><span id="buildoutLine">Build-out: waiting for the next lot to need it</span></div>
-        <div data-reveal="buildBudget" id="buildBudgetRow">Build-out: <button class="button2 toggle" id="btn-budget-lean">lean</button> <button class="button2 toggle" id="btn-budget-ahead">ahead</button> <span id="buildBudgetNote" class="note"></span></div>
+        <div data-reveal="buildBudget" id="buildBudgetRow">Build-out: <button class="button2 toggle" id="btn-budget" title="Lean or ahead: click to switch.">lean</button> <span id="buildBudgetNote" class="note"></span></div>
         <span data-hide="stores">GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>Copies running: <span id="infraCopies">0</span><br></span>
         <span class="hiddenIds">Datacenters: <span id="datacenters">0</span> · Nimbus chip price: <span id="chipPrice">$ 50.00</span> · Powered GPUs: <span id="activeGpus">0</span> · Tasks per sec: <span id="infraTasksPerSec">0</span></span>
       </div>
@@ -242,8 +242,8 @@
           <span id="runLine">Training on 10 GPUs — 0:45 left.</span><span class="hiddenIds"> <span id="runRemaining">60 s</span></span>
         </div>
         <div data-reveal="experiments" id="experimentsRow"><button class="button2" id="btn-experiments" title="What goes into the next run: +0.25 points on its gain a unit, at most +5. Resets each run.">Experiments</button> <button class="button2" id="btn-experiments5">×5</button> <span id="experimentsNote" class="note"></span></div>
-        <div data-reveal="redteamDepth" id="redteamDepthRow">Red-team depth: <button class="button2 toggle" id="btn-depth-quick">quick</button> <button class="button2 toggle" id="btn-depth-thorough">thorough</button> <span id="redteamDepthNote" class="note"></span></div>
-        <div data-reveal="stepSize" id="stepSizeRow">Step size: <button class="button2 toggle" id="btn-step-small">small</button> <button class="button2 toggle" id="btn-step-normal">normal</button> <button class="button2 toggle" id="btn-step-large">large</button> <span id="stepSizeNote" class="note"></span></div>
+        <div data-reveal="redteamDepth" id="redteamDepthRow">Red-team depth: <button class="button2 toggle" id="btn-depth" title="Quick or thorough: click to switch.">quick</button> <span id="redteamDepthNote" class="note"></span></div>
+        <div data-reveal="stepSize" id="stepSizeRow">Step size: <button class="button2 toggle" id="btn-step" title="Small, normal, large: click to step.">normal</button> <span id="stepSizeNote" class="note"></span></div>
         <div data-reveal="holdRuns" id="holdRow">Training: <button class="button2 toggle" id="btn-hold" title="Held, no run starts. Research keeps coming.">running</button></div>
       </div>
 

@@ -1,5 +1,8 @@
 import { GameState, newGame, ModelRecord, RivalRecord, ChoiceRecord } from '../engine/state.js';
 import { enterStage } from '../engine/stages.js';
+import { step, actions } from '../engine/tick.js';
+import { voteReady } from '../engine/oversight.js';
+import { policyStep, newBotMemory } from '../sim/policy.js';
 import { DEVELOPMENTS } from './developments.js';
 
 export interface Preset {
@@ -383,17 +386,53 @@ function stage3Careless(seed: number): GameState {
   return s;
 }
 
+// ---------- Stage 4 starts: the sim's median Stage 3 exits, the vote applied (stage3.md §7.3, §9.6) ----------
+
+/**
+ * The median seed of the policy's five exits from its Stage 3 preset (seeds 1–5): the reasonable bot
+ * from `Stage 3 start` (41:37–46:57, median seed 1), the naive player from the careless start.
+ */
+const S3_MEDIAN_SEED = 1;
+const S3_MEDIAN_SEED_CARELESS = 2;
+
+/**
+ * Plays Stage 3 with the simulator's policy until a model has passed 25× and the session is ready,
+ * then brings the chosen motion: the state on Stage 4's first tick is a real exit, not a sketch.
+ * Deterministic (seeded); about a second of CPU.
+ */
+function stage4From(start: (seed: number) => GameState, seed: number, policy: 'bot' | 'naive', motion: 'slow' | 'race'): GameState {
+  const s = start(seed);
+  const mem = newBotMemory(policy);
+  for (let i = 0; i < 90 * 600 && s.stage === 3 && !s.ending; i++) {
+    if (voteReady(s) && !s.activeChoice) {
+      actions.buyProject(s, motion === 'slow' ? 'p_steward' : 'p_race');
+      const open = s.activeChoice as { id: string } | null;
+      if (open?.id === 'c_vote') actions.resolveChoice(s, 0);
+      if ((s.stage as number) === 4) break;
+    }
+    // The policy answers modals and buys; it never brings its own motion here (voteReady is checked first).
+    policyStep(s, actions, mem);
+    step(s);
+  }
+  s.log = s.log.slice(-6);
+  return s;
+}
+
 export const PRESETS: Preset[] = [
   { stage: 1, label: 'Stage 1 start', ready: true, build: (seed) => newGame(seed) },
   { stage: 2, label: 'Stage 2 start', ready: true, build: stage2 },
   { stage: 3, label: 'Stage 3 start', ready: true, build: stage3 },
-  { stage: 4, label: 'Stage 4 start', ready: false, build: stage3 },
-  { stage: 5, label: 'Stage 5 start', ready: false, build: stage3 },
+  { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
+  { stage: 5, label: 'Stage 5 start', ready: false, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
 ];
 
 /** Presets that are variants of a stage's start (`--preset 3c`, the dev overlay's second row). */
 export const EXTRA_PRESETS: Record<string, Preset> = {
   '3c': { stage: 3, label: 'Stage 3 start (careless)', ready: true, build: stage3Careless },
+  '4s': { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'slow') },
+  '4r': { stage: 4, label: 'Stage 4 start (race)', ready: true, build: () => stage4From(stage3, S3_MEDIAN_SEED, 'bot', 'race') },
+  '4cs': { stage: 4, label: 'Stage 4 start (careless, slow)', ready: true, build: () => stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'slow') },
+  '4cr': { stage: 4, label: 'Stage 4 start (careless, race)', ready: true, build: () => stage4From(stage3Careless, S3_MEDIAN_SEED_CARELESS, 'naive', 'race') },
 };
 
 export function presetFor(stage: number): Preset {

@@ -31,7 +31,7 @@ import { renderGraph } from './graph.js';
 import { mountStores, renderStores } from './stores.js';
 import {
   mount3, renderResearch3, renderTraining3, renderInfrastructure3, renderAlignment, renderSecurity3, renderGeopolitics,
-  renderOversight, renderPublic3, renderStats3,
+  renderOversight, renderPublic3, renderStats3, noteState3,
 } from './render3.js';
 
 type Rest<T> = T extends (s: GameState, ...rest: infer R) => unknown ? R : never;
@@ -86,6 +86,7 @@ export function mount(p: Perform): void {
 
 /** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
 export function render(s: GameState): void {
+  noteState3(s);
   // The stage on the body, for the one-column order at 390 px (critic C10: the stage's controls first).
   if (document.body.dataset['stage'] !== String(s.stage)) document.body.dataset['stage'] = String(s.stage);
   for (const el of revealEls) setShown(el, s.revealed[el.dataset['reveal']!] === true);

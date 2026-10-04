@@ -89,6 +89,7 @@ function bringMotion(s: GameState, ctx: Ctx): void {
   const hostile = seats(s) < 6;
   if (hostile) s.flags['committeeHostile'] = true;
   if (m === 'pause') {
+    if (s.flags['pauseSigned'] === true) return;
     s.flags['pauseVoteLines'] = hostile ? 1 : 0;
     s.flags['pauseSigned'] = true;
     s.flags['pauseAt'] = s.stats.timePlayed;

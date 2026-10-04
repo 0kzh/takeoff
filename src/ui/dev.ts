@@ -24,7 +24,7 @@ export interface DevHost {
    * `which` picks the simulator policy that plays: 'bot' (default) or 'naive' (the critic's
    * first-timer). `holdTransition` leaves Break ground for the player to click.
    */
-  setAutoplay: (on: boolean, which?: PolicyName, holdTransition?: boolean) => void;
+  setAutoplay: (on: boolean, which?: PolicyName, holdTransition?: boolean, variant?: string) => void;
   /** Game advance used by the main loop (honours autoplay). */
   advance: (dtMs: number) => void;
 }

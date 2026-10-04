@@ -519,6 +519,8 @@ export function simulate(args: Args): SimResult {
     policyStep(s, tracked, mem);
     step(s);
     t3.tick(s, actionTimes);
+    // An ending stops the run (tick() would; the sim steps directly).
+    if (s.ending) break;
     const t = s.stats.timePlayed;
     // Stage 1: a free slot with Train blocked by the GPU requirement (owner feedback U1's measure).
     if (s.stage === 1) {
