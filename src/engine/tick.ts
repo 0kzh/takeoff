@@ -6,7 +6,7 @@ import {
   toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota, setMonitorShare, powerBlockNews,
 } from './economy.js';
 import {
-  buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue,
+  buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue, cycleBuildShare,
   runStandingOrder, infrastructureMessages,
 } from './infrastructure.js';
 import { updateAutoPrice, recordPrice, floodedCheck } from './market.js';
@@ -15,7 +15,7 @@ import {
 } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames, needsDatacenter, nextRunName, gpusNeeded,
-  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments,
+  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun,
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
 import { alignWork, reimage } from './alignment.js';
@@ -87,6 +87,7 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
+  fireArmedRun(s);
   stage3Tick(s, dt);
 
   updateReveals(s);
@@ -142,6 +143,7 @@ function slowStats(s: GameState): void {
     floodedCheck(s);
     updateStage2(s);
   }
+  if (s.stage === 3) infrastructureMessages(s);
   stage3Slow(s);
 }
 
@@ -343,6 +345,7 @@ export const actions = {
   counterintel,
   stepPayments,
   setBuildBudget,
+  cycleBuildShare,
   buyProject,
   resolveChoice,
   takeDefault,

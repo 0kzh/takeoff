@@ -1,4 +1,4 @@
-import { GameState, say, narrate, logNews, addFunds, isBought, counter, projectState } from './state.js';
+import { GameState, say, narrate, logNews, isBought, counter, projectState } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { snapToStage } from './clock.js';
@@ -6,7 +6,7 @@ import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contrac
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName, arrivalRunScale } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
-import { SUBSTATION_MW, lotCostOf } from './infrastructure.js';
+import { SUBSTATION_MW, lotCostOf, arrivalScaleS2 } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
@@ -62,6 +62,9 @@ function retireProjects(s: GameState, next: number, quiet: string[]): string[] {
 function enterScale(s: GameState): void {
   const now = s.stats.timePlayed;
   const before = Math.max(1, s.stats.tasksPerSec);
+  // Stage 2's prices follow the lab that arrives: frozen here from Stage 1's best revenue, the figure
+  // the Stage 1 row was already quoting (engine/infrastructure.ts, s2Scale).
+  s.flags['s2Scale'] = arrivalScaleS2(Math.max(s.stats.revPerSec, counter(s, 'peakRev')));
   const contracts = s.projects['p_contract']?.bought ?? 0;
   // Frozen before anything else changes: what Stage 1 was selling sets the market, contracts their
   // rate. The contract customers' share of Stage 1's sales becomes that fixed rate.
@@ -75,7 +78,7 @@ function enterScale(s: GameState): void {
 
   // Power, its price and the grid toggle stay frozen as they were; the engine stops using them.
   hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'contracts']);
-  show(s, ['infrastructure', 'stores', 'autoPrice']);
+  show(s, ['infrastructure', 'stores', 'autoPrice', 'buildShare']);
   s.autoPrice = true;
   s.datacenters = Math.max(1, s.datacenters);
   s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);
@@ -97,11 +100,16 @@ function enterScale(s: GameState): void {
   const researchGift = Math.max(0, Math.round(0.75 * firstRun - s.research));
   s.research += researchGift;
 
-  // The deposit is what the card said: $400 a rented GPU, at least a first lot (critic round 3 §6.4:
-  // it was $120,000 whatever was rented, and never announced).
+  // The deposit is what the card said: $400 a rented GPU (critic round 3 §6.4). It starts the build
+  // fund (arc G34): lots, plants and halls have a purse of their own from the first second.
   const rented = s.gpus;
   const deposit = rentDeposit(s);
-  addFunds(s, deposit);
+  s.buildFund = Math.round((s.buildFund + deposit) * 100) / 100;
+  s.buildShare = 0.5;
+  // Hire and Expand Lab leave (stage2-round2-fixes.md item 5): the copies do the research and cards
+  // size the lab; Trust buys only what names it.
+  hide(s, ['hireResearcher', 'expandLab']);
+  s.revealed['hireFaded'] = true;
   s.gpus = 1000;
   s.gpusG5 = 0;
   const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / before));
@@ -115,13 +123,22 @@ function enterScale(s: GameState): void {
   // Five lines, the console's height; they stay whole for 10 s before routine lines follow.
   const lines: [number, string][] = [
     [0.1, 'First Datacenter online outside Abilene.'],
-    [2, `The ${fmtInt(rented)} rented GPUs go back. Deposit returned: ${fmtMoneyShort(deposit)}.`],
+    [2, `The ${fmtInt(rented)} rented GPUs go back. The deposit, ${fmtMoneyShort(deposit)}, starts the build fund.`],
     [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW. Each MW powers 1,000 GPUs; power is bought in megawatts now.`],
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
-    [2, 'Prices set themselves from here. Marketing ends; the market cards widen the market now.'],
+    [2, 'Half of income builds from here; the rest pays for runs and cards. Prices set themselves.'],
   ];
   narrate(s, lines, 10);
   logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
+  logNews(s, 'Marketing ends; the market cards widen the market now.');
+  logNews(s, 'Hiring stops. The copies do the research; cards size the lab.');
+  // What a run costs changes here, and is said once the arrival's lines have had their 10 s (arc
+  // amendments, round 3; critic S2 round 2 §8.8.9: the price changed on screen with no line).
+  const cost = trainCost(s);
+  s.consoleQueue.splice(lines.length + 1, 0, {
+    delay: 18,
+    text: `Runs this size need research as well as money: ${fmtInt(cost.research ?? 0)} research and ${fmtMoneyShort(cost.funds ?? 0)} for ${nextRunName(s)}.`,
+  });
   if (contracts > 0) {
     logNews(s, `No new custom contracts. The ${fmtInt(contracts)} signed keep paying ${fmtMoneyShort(Math.round(s.contractIncome))} a second.`);
   }
@@ -271,7 +288,7 @@ function enterSuperintelligence(s: GameState): void {
   hide(s, [
     'business', 'marketing', 'training', 'infrastructure', 'geopolitics', 'projects', 'shipments', 'buildout',
     'buildBudget', 'research', 'allocation', 'monitors', 'session', 'order', 'holdRuns', 'alignWork', 'experiments',
-    'lobby', 'counterintel', 'payments', 'reimage',
+    'lobby', 'counterintel', 'payments', 'reimage', 'buildShare', 'standingOrder',
   ]);
   logNews(s, 'Retired with the vote: the business, the training loop, the build-out and the projects.');
   s.cadence.lastRevealAt = s.stats.timePlayed;

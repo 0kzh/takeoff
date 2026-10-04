@@ -7,9 +7,9 @@ import { visibleProjects, costLabel } from './projects.js';
 import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate, rentQuota } from './economy.js';
 import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
-  LOT_SIZES, lotFits, lotCostOf, lotHoldReason, datacenterReason, plantReason,
+  LOT_SIZES, lotFits, lotCostOf, datacenterReason, plantReason,
 } from './infrastructure.js';
-import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun } from './training.js';
+import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun, delayNote } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
 import { dateLabel } from './format.js';
 import { stageDef } from './stages.js';
@@ -316,7 +316,10 @@ export function takeDefault(s: GameState): boolean {
 /** Stage 2 on: the option's effect and cost, printed under its label (`+10 T data · $675k`). */
 export function optionLine(s: GameState, opt: ChoiceOption): string {
   const ctx = s.activeChoice?.context ?? {};
-  return (typeof opt.line === 'function' ? opt.line(s, ctx) : opt.line) ?? '';
+  const line = (typeof opt.line === 'function' ? opt.line(s, ctx) : opt.line) ?? '';
+  // A priced answer prints what it costs the waiting run (arc G34 rule 3).
+  const cost = optionCost(s, opt);
+  return cost && canPay(s, cost) ? `${line}${delayNote(s, cost)}` : line;
 }
 
 /** A greyed option says what it needs: its own words, or the price it cannot pay. */
@@ -354,11 +357,11 @@ export function noveltyKeys(s: GameState): string[] {
   const second = s.training.pending;
   if (second) keys.push(`phase:${second.id}:${second.elapsed >= second.duration ? 'trained' : 'training'}`);
   if (s.stage >= 2 && s.revealed['infrastructure']) {
-    if (s.revealed['dcButton'] && s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
-    if (!standingOrderOn(s) && lotSize(s) >= 100 && s.funds >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
-    if (s.revealed['gasButton'] && s.funds >= gasCost(s)) keys.push(`aff:gas:${s.gasPlants}`);
-    if (s.revealed['solarButton'] && !solarQueueFull(s) && s.funds >= solarCost(s)) keys.push(`aff:solar:${s.solarFarms + s.powerQueue.length}`);
-    if (s.revealed['nuclearButton'] && s.funds >= nuclearCost(s)) keys.push(`aff:nuclear:${s.reactors}`);
+    if (s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
+    if (!standingOrderOn(s) && lotSize(s) > 0 && s.buildFund >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
+    if (s.revealed['gasButton'] && s.buildFund >= gasCost(s)) keys.push(`aff:gas:${s.gasPlants}`);
+    if (s.revealed['solarButton'] && !solarQueueFull(s) && s.buildFund >= solarCost(s)) keys.push(`aff:solar:${s.solarFarms + s.powerQueue.length}`);
+    if (s.revealed['nuclearButton'] && s.buildFund >= nuclearCost(s)) keys.push(`aff:nuclear:${s.reactors}`);
     if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) keys.push('aff:sl3');
     // Hardware arriving is news: the fleet and the power online are keys of their own.
     keys.push(`fleet:${s.gpus}:${s.powerCapacityMW}`);
@@ -387,11 +390,11 @@ export function enabledPurchases(s: GameState): string[] {
     return out;
   }
   if (!s.revealed['infrastructure']) return out;
-  if (lotSize(s) >= 100 || LOT_SIZES.some((n) => n > 1000 && s.revealed[n === 5000 ? 'lot5' : 'lot25'] && lotFits(s, n) && !lotHoldReason(s, n) && s.funds >= lotCostOf(s, n))) out.push('gpuLot');
-  if (s.revealed['dcButton'] && !datacenterReason(s) && s.funds >= datacenterCost(s)) out.push('datacenter');
-  if (s.revealed['gasButton'] && !plantReason(s, 'gas') && s.funds >= gasCost(s)) out.push('gas');
-  if (s.revealed['solarButton'] && !plantReason(s, 'solar') && s.funds >= solarCost(s)) out.push('solar');
-  if (s.revealed['nuclearButton'] && !plantReason(s, 'nuclear') && s.funds >= nuclearCost(s)) out.push('nuclear');
+  if (LOT_SIZES.some((n) => (n === 1000 || s.revealed[n === 5000 ? 'lot5' : 'lot25']) && lotFits(s, n) && s.buildFund >= lotCostOf(s, n))) out.push('gpuLot');
+  if (s.revealed['dcButton'] && !datacenterReason(s) && s.buildFund >= datacenterCost(s)) out.push('datacenter');
+  if (s.revealed['gasButton'] && !plantReason(s, 'gas') && s.buildFund >= gasCost(s)) out.push('gas');
+  if (s.revealed['solarButton'] && !plantReason(s, 'solar') && s.buildFund >= solarCost(s)) out.push('solar');
+  if (s.revealed['nuclearButton'] && !plantReason(s, 'nuclear') && s.buildFund >= nuclearCost(s)) out.push('nuclear');
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
   return out;
 }
@@ -501,12 +504,7 @@ function unaffordableFundsCosts(s: GameState): number[] {
   if (s.revealed['marketing']) add(marketingCost(s));
   if (s.revealed['training'] && (s.stage < 2 ? !s.training.run : !trainingRun(s))) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
-  if (s.stage >= 2 && s.revealed['infrastructure']) {
-    if (s.revealed['dcButton']) add(datacenterCost(s));
-    if (lotSize(s) >= 100) add(lotCost(s));
-    if (s.revealed['gasButton']) add(gasCost(s));
-    if (s.revealed['solarButton'] && !solarQueueFull(s)) add(solarCost(s));
-  }
+  // Lots, plants and halls are paid from the build fund (arc G34): a prepayment to funds does not buy them.
   return out;
 }
 

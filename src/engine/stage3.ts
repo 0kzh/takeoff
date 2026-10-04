@@ -1,16 +1,16 @@
-import { GameState, say, counter, isBought, addFunds, canPay } from './state.js';
+import { GameState, say, counter, isBought, canPay, payBuild } from './state.js';
 import { fmtInt, fmtClock } from './format.js';
 import {
   updateShipments, runStandingOrder, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost, nuclearCost,
   queueNuclear, reactorQueueFull, needsSite2, nextDatacenter, gpuCapacity, LOT_SIZES_S3, dcBuildSeconds, orderReasonS3,
-  lotCostOf, lotHold,
+  lotCostOf,
 } from './infrastructure.js';
 import {
   updateTakeoffTraining, gpusShort, gpusNeeded, gpusAvailable, trainSlotFree, trainCost, nextRunName, canStartTraining,
   canRedTeam, canApprove, canSendBack, researchUnit, EXPERIMENTS_MAX,
 } from './training.js';
 import { updateDrift, driftWatch, reimageCooldown } from './alignment.js';
-import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX, sinkHold } from './world3.js';
+import { updateWorld3, lobbyCost, counterintelCost, paymentsLevel, PAYMENT_MAX } from './world3.js';
 import { sl3Cost } from './world.js';
 import { humanShare } from './economy.js';
 import { visibleProjects } from './projects.js';
@@ -61,7 +61,7 @@ export function setBuildBudget(s: GameState, v: BuildBudget): boolean {
 /**
  * `Let Sage plan the build-out` (§2.1, §2.6): halls and reactors order themselves. Lean orders one
  * when the next lot would not fit; ahead keeps one of each under construction (about a tenth of
- * revenue more). The lots and the standing budget stay the player's.
+ * revenue more). Both are paid from the build fund (arc G34); the lots stay the player's.
  */
 export function runBuildout(s: GameState): void {
   if (s.flags['buildout'] !== true) return;
@@ -71,8 +71,8 @@ export function runBuildout(s: GameState): void {
   const powerShort = freePowerGpus(s) < big;
   if (!datacenterBuilding(s) && !needsSite2(s) && (ahead || roomShort)) {
     const next = nextDatacenter(s);
-    if (s.funds >= next.cost) {
-      addFunds(s, -next.cost);
+    if (s.buildFund >= next.cost) {
+      payBuild(s, next.cost);
       const seconds = dcBuildSeconds(s);
       s.powerQueue.push({ kind: 'datacenter', mw: 0, remaining: seconds, total: seconds, label: `Datacenter ${next.n}` });
       s.flags['buildoutLine'] = `Datacenter ${next.n} ordered`;
@@ -81,8 +81,8 @@ export function runBuildout(s: GameState): void {
   const reactorQueued = s.powerQueue.some((o) => o.kind === 'nuclear');
   if (!reactorQueued && !reactorQueueFull(s) && (ahead || powerShort)) {
     const cost = nuclearCost(s);
-    if (s.funds >= cost) {
-      addFunds(s, -cost);
+    if (s.buildFund >= cost) {
+      payBuild(s, cost);
       queueNuclear(s);
       s.flags['buildoutReactor'] = s.reactors + 1;
     }
@@ -167,15 +167,15 @@ export function enabledPurchasesS3(s: GameState): string[] {
   if (canApprove(s)) out.push('approve');
   if (canSendBack(s)) out.push('sendBack');
   if (s.revealed['infrastructure']) {
-    if (LOT_SIZES_S3.some((n) => !orderReasonS3(s, n) && s.funds >= lotCostOf(s, n) && s.funds - lotCostOf(s, n) >= lotHold(s))) out.push('gpuLot');
-    if (s.flags['buildout'] !== true && s.revealed['dcButton'] && !datacenterBuilding(s) && !needsSite2(s) && s.funds >= datacenterCost(s)) out.push('datacenter');
-    if (s.flags['buildout'] !== true && s.revealed['nuclearButton'] && !reactorQueueFull(s) && s.funds >= nuclearCost(s)) out.push('nuclear');
+    if (LOT_SIZES_S3.some((n) => !orderReasonS3(s, n) && s.buildFund >= lotCostOf(s, n))) out.push('gpuLot');
+    if (s.flags['buildout'] !== true && s.revealed['dcButton'] && !datacenterBuilding(s) && !needsSite2(s) && s.buildFund >= datacenterCost(s)) out.push('datacenter');
+    if (s.flags['buildout'] !== true && s.revealed['nuclearButton'] && !reactorQueueFull(s) && s.buildFund >= nuclearCost(s)) out.push('nuclear');
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
   if (s.revealed['alignWork'] && s.research >= researchUnit(s)) out.push('alignWork');
   if (s.revealed['experiments'] && counter(s, 'expPts') < EXPERIMENTS_MAX && s.research >= researchUnit(s)) out.push('experiments');
-  if (s.revealed['lobby'] && s.funds - lobbyCost(s) >= sinkHold(s)) out.push('lobby');
-  if (s.revealed['counterintel'] && s.funds - counterintelCost(s) >= sinkHold(s)) out.push('counterintel');
+  if (s.revealed['lobby'] && s.funds >= lobbyCost(s)) out.push('lobby');
+  if (s.revealed['counterintel'] && s.funds >= counterintelCost(s)) out.push('counterintel');
   if (s.revealed['payments'] && paymentsLevel(s) < PAYMENT_MAX) out.push('payments');
   if (s.revealed['reimage'] && reimageCooldown(s) <= 0) out.push('reimage');
   return out;

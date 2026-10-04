@@ -8,9 +8,9 @@ import {
   canSendBack, autoApproveOn, redteamDepth, gpusNeeded, gpusAvailable, canRedTeam, THOROUGH_SECONDS,
 } from '../engine/training.js';
 import {
-  LOT_SIZES_S3, lotCostOf, orderReasonS3, lotReturn, lotHold, freeSlots, freePowerGpus, nextDatacenter, datacenterBuilding,
+  LOT_SIZES_S3, lotCostOf, orderReasonS3, lotReturn, freeSlots, freePowerGpus, nextDatacenter, datacenterBuilding,
   dcBuildSeconds, needsSite2, nuclearCost, reactorQueueFull, REACTOR_MW_S3, KW_PER_GPU, standingOrderOn, inTransit,
-  wallFix,
+  buildShortLine, standingLine,
 } from '../engine/infrastructure.js';
 import { shipmentLine, buildoutLine, buildBudget, hallUrgent, reactorUrgent } from '../engine/stage3.js';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../engine/alignment.js';
 import {
   seats, baiwenWords, leadTrend, lobbyCost, lobbyGain, counterintelCost, paymentsLevel, approvalTermsS3, approvalTargetS3,
-  PAYMENT_APPROVAL, PAYMENT_MAX, PAYMENT_SHARE, publicCap, nextSeatAt, sinkHold,
+  PAYMENT_APPROVAL, PAYMENT_MAX, PAYMENT_SHARE, publicCap, nextSeatAt,
 } from '../engine/world3.js';
 import { memoLine, sessionLine, orderLine, orderThreshold } from '../engine/oversight.js';
 import { theftRiskNote } from '../engine/events3.js';
@@ -206,33 +206,31 @@ export function gpuShort3(s: GameState): { have: number; need: number } | null {
 export function renderInfrastructure3(s: GameState): void {
   const sizes: [number, string, string][] = [[LOT_SIZES_S3[0], '', 'gpuLotSize'], [LOT_SIZES_S3[1], '5', 'gpuLot5Size'], [LOT_SIZES_S3[2], '25', 'gpuLot25Size']];
   let freeSaid = false;
-  const hold = lotHold(s);
   for (const [n, suffix, sizeId] of sizes) {
     setText(sizeId, fmtInt(n));
     const cost = lotCostOf(s, n);
     setText(suffix ? `gpuBatch${suffix}Cost` : 'gpuBatchCost', fmtMoneyShort(cost));
     const why = orderReasonS3(s, n);
-    const held = !why && hold > 0 && s.funds - cost < hold;
+    // Grey only for the build fund's shortfall, power, room or the queue (arc G34): nothing is held.
+    const short = why ? '' : buildShortLine(s, cost);
     const reason = why === 'no room'
       ? `No room: ${needsSite2(s) ? 'Datacenter 10 needs New Carlisle' : s.flags['buildout'] === true ? 'the build-out orders a hall' : 'build the next datacenter'}.`
       : why === 'no power'
         ? `No power: ${s.flags['buildout'] === true ? 'the build-out orders a reactor' : 'a reactor adds 1,000 MW'}.`
         : why === '2 / 2 on order'
           ? 'queue full'
-          : why
-            ? why
-            : held ? `keeps ${wallFix(s)?.what === 'hall' ? 'the hall\'s' : 'the reactor\'s'} price` : '';
+          : why || short;
     setText(suffix ? `gpuReason${suffix}` : 'gpuReason', reason);
     const g6 = s.flags['g6'] === true;
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
     const uses = `uses ${fmtInt(mw)} MW${freeSaid ? '' : ` of ${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free`}`;
     if (!why) freeSaid = true;
-    setText(suffix ? `gpuReturn${suffix}` : 'gpuReturn', why || held ? '' : `${uses} · +${fmtMoneyShort(Math.round(lotReturn(s, n)))}/s`);
-    setDisabled(suffix ? `btn-gpuBatch${suffix}` : 'btn-gpuBatch', !!why || held || s.funds < cost);
+    setText(suffix ? `gpuReturn${suffix}` : 'gpuReturn', why || short ? '' : `${uses} · +${fmtMoneyShort(Math.round(lotReturn(s, n)))}/s`);
+    setDisabled(suffix ? `btn-gpuBatch${suffix}` : 'btn-gpuBatch', !!why || !!short);
     if (!suffix) setTitle('btn-gpuBatch', `${g6 ? 'Nimbus G6s, each the work of 2.5 G4s' : 'Nimbus G5s, each the work of 1.5 G4s'}. Every order is a shipment of 75 s, landing one at a time, two on order; a small lot rides in the shipment that waits.`);
   }
-  setText('btn-standing', standingOrderOn(s) ? `${Math.round(s.standingBudget * 100)}%` : 'off');
-  setText('standingNote', standingOrderOn(s) ? 'saves for the largest lot it can reach' : '');
+  setText('btn-standing', standingOrderOn(s) ? 'Standing order: on' : 'Standing order: off');
+  setText('standingNote', standingLine(s).replace(/^Standing order: (on|off) ?·? ?/, '').replace(/^Standing order: /, ''));
 
   // Halls and the reactor, until the build-out takes them.
   const dc = nextDatacenter(s);
@@ -241,18 +239,20 @@ export function renderInfrastructure3(s: GameState): void {
   setText('datacenterCost', fmtMoneyShort(dc.cost));
   const building = datacenterBuilding(s);
   const site = needsSite2(s);
-  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : site ? 'needs the New Carlisle campus' : '');
-  setText('dcNote', building || site ? '' : `room for ${fmtInt(Math.floor(dc.add / LOT_SIZES_S3[2]))} more lots · ${fmtClock(dcBuildSeconds(s))}`);
-  setDisabled('btn-datacenter', !!building || site || s.funds < dc.cost);
+  const dcShort = building || site ? '' : buildShortLine(s, dc.cost);
+  setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : site ? 'needs the New Carlisle campus' : dcShort);
+  setText('dcNote', building || site || dcShort ? '' : `room for ${fmtInt(Math.floor(dc.add / LOT_SIZES_S3[2]))} more lots · ${fmtClock(dcBuildSeconds(s))}`);
+  setDisabled('btn-datacenter', !!building || site || !!dcShort);
   const hall = hallUrgent(s);
   if (byId('btn-datacenter').classList.contains('urgent') !== hall) byId('btn-datacenter').classList.toggle('urgent', hall);
   setText('nuclearLabel', `Reactor (+${fmtInt(REACTOR_MW_S3)} MW)`);
   const rCost = nuclearCost(s);
   setText('nuclearCost', fmtMoneyShort(rCost));
   const full = reactorQueueFull(s);
-  setText('nuclearReason', full ? 'two restarting' : '');
-  setText('nuclearNote', full ? '' : `runs ${fmtInt((REACTOR_MW_S3 * 1000) / KW_PER_GPU)} GPUs · in two minutes`);
-  setDisabled('btn-nuclear', full || s.funds < rCost);
+  const rShort = full ? '' : buildShortLine(s, rCost);
+  setText('nuclearReason', full ? 'two restarting' : rShort);
+  setText('nuclearNote', full || rShort ? '' : `runs ${fmtInt((REACTOR_MW_S3 * 1000) / KW_PER_GPU)} GPUs · in two minutes`);
+  setDisabled('btn-nuclear', full || !!rShort);
   setTitle('btn-nuclear', 'A shuttered reactor, restarted for OpenMind: +1,000 MW after a two-minute restart.');
   const reactor = reactorUrgent(s);
   if (byId('btn-nuclear').classList.contains('urgent') !== reactor) byId('btn-nuclear').classList.toggle('urgent', reactor);
@@ -361,8 +361,7 @@ export function renderSecurity3(s: GameState): void {
   const c = sl3Cost(s);
   setText('sl3Cost', fmtMoneyShort(c.funds));
   setDisabled('btn-sl3', s.securityLevel >= 3 || s.funds < c.funds);
-  setOff('btn-sl3', s.securityLevel >= 3);
-  setOff('sl3Cost', s.securityLevel >= 3);
+  setOff('sl3Row', s.securityLevel >= 3);
   const urgent = s.securityLevel < 3;
   if (byId('btn-sl3').classList.contains('urgent') !== urgent) byId('btn-sl3').classList.toggle('urgent', urgent);
   setText('theftNote', theftRiskNote(s));
@@ -396,10 +395,9 @@ export function renderGeopolitics(s: GameState): void {
   if (s.revealed['counterintel']) {
     const cost = counterintelCost(s);
     setText('counterintelCost', fmtMoneyShort(cost));
-    const blocked = s.funds - cost < sinkHold(s);
-    setDisabled('btn-counterintel', s.funds < cost || blocked);
+    setDisabled('btn-counterintel', s.funds < cost);
     const m = Math.round(Math.abs(s.lead) * 10) / 10;
-    setText('counterintelNote', blocked && s.funds >= cost ? 'keeps the wall\'s fix' : `Baiwen: ${fmtNum(m, 1)} → ${fmtNum(Math.round((s.lead + 0.1) * 10) / 10, 1)} months behind`);
+    setText('counterintelNote', `Baiwen: ${fmtNum(m, 1)} → ${fmtNum(Math.round((s.lead + 0.1) * 10) / 10, 1)} months behind`);
   }
 }
 
@@ -417,11 +415,10 @@ export function renderOversight(s: GameState): void {
   if (s.revealed['lobby']) {
     const cost = lobbyCost(s);
     setText('lobbyCost', fmtMoneyShort(cost));
-    const blocked = s.funds - cost < sinkHold(s);
-    setDisabled('btn-lobby', s.funds < cost || blocked);
+    setDisabled('btn-lobby', s.funds < cost);
     const g = s.govRelations;
     const next = nextSeatAt(s);
-    setText('lobbyNote', blocked && s.funds >= cost ? 'keeps the wall\'s fix' : `relations ${fmtNum(g, 1)} → ${fmtNum(Math.min(100, g + lobbyGain(s)), 1)}${next <= 100 ? ` · seat ${next / 10} at ${next}` : ''}`);
+    setText('lobbyNote', `relations ${fmtNum(g, 1)} → ${fmtNum(Math.min(100, g + lobbyGain(s)), 1)}${next <= 100 ? ` · seat ${next / 10} at ${next}` : ''}`);
   }
   if (!seated) return;
   const n = seats(s);

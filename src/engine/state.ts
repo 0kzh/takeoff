@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -135,6 +135,11 @@ export interface TrainingState {
   cooldown: number;
   /** Seconds before a model at 4× or more may ship publicly (the joint statement's outside evaluation). */
   releaseWait: number;
+  /**
+   * Train pressed while the run's price is short (arc G34 rule 4): the run starts by itself once it is
+   * paid for. Pressing again stands it down. Arming reserves nothing.
+   */
+  armed?: boolean;
 }
 
 /** A temporary multiplier (incidents, rival releases, crises). Remaining time in seconds. */
@@ -322,12 +327,19 @@ export interface GameState {
   g5: boolean;
   /** GPU lots bought by hand. */
   gpuBatches: number;
-  /** Standing order toggle (on once bought). */
+  /** Standing order toggle (on once bought): the build fund's automation, whole lots only. */
   standingOrder: boolean;
-  /** Stage 2: the share of income the standing order may spend on GPU lots (0 = off). */
+  /** Retired by the wallet rule (arc G34); kept for old saves. */
   standingBudget: number;
-  /** Money the standing order has set aside from that share and not yet spent. */
+  /** Retired by the wallet rule (arc G34); an old save's pool joins the build fund. */
   standingPool: number;
+  /**
+   * Stages 2–3 (arc G34): the build fund, a purse of its own for lots, plants and halls, filled by
+   * `buildShare` of income. `funds` keeps the rest and pays for runs, cards and events.
+   */
+  buildFund: number;
+  /** The share of income that goes to the build fund: 0.25, 0.5 or 0.75. */
+  buildShare: number;
   gulfExposure: number;
 
   hypeLevel: number;
@@ -429,6 +441,7 @@ export function newTraining(): TrainingState {
     pending: null,
     cooldown: 0,
     releaseWait: 0,
+    armed: false,
   };
 }
 
@@ -519,6 +532,8 @@ export function newGame(seed: number = Date.now()): GameState {
     standingOrder: false,
     standingBudget: 0.5,
     standingPool: 0,
+    buildFund: 0,
+    buildShare: 0.5,
     gulfExposure: 0,
 
     hypeLevel: 1,
@@ -695,6 +710,27 @@ export function addFunds(s: GameState, amount: number): void {
   s.funds = Math.round((s.funds + amount) * 100) / 100;
 }
 
+/** Stages 2–3 have two dollar purses (arc G34): the build fund takes its share of every dollar earned. */
+export function buildFundOpen(s: GameState): boolean {
+  return (s.stage === 2 || s.stage === 3) && s.revealed['infrastructure'] === true;
+}
+
+/** Income: the build share to the build fund, the rest to funds (Stage 1 and from Stage 4: all to funds). */
+export function creditIncome(s: GameState, amount: number): void {
+  if (!buildFundOpen(s) || amount <= 0) {
+    s.funds = Math.round((s.funds + amount) * 100) / 100;
+    return;
+  }
+  const build = amount * s.buildShare;
+  s.buildFund = Math.round((s.buildFund + build) * 100) / 100;
+  s.funds = Math.round((s.funds + amount - build) * 100) / 100;
+}
+
+/** Pays a lot, a plant or a hall out of the build fund. */
+export function payBuild(s: GameState, cost: number): void {
+  s.buildFund = Math.max(0, Math.round((s.buildFund - cost) * 100) / 100);
+}
+
 export function serialize(s: GameState): string {
   return JSON.stringify(s);
 }
@@ -844,7 +880,21 @@ function migrateV6(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, training, flags };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6];
+/**
+ * v7 → v8 (the wallet rule, arc G34): the build fund and its share are new. The standing order's pool
+ * counted money that sat in funds; that much moves into the build fund. Train starts unarmed.
+ */
+function migrateV7(raw: Record<string, unknown>): Record<string, unknown> {
+  const pool = typeof raw['standingPool'] === 'number' ? (raw['standingPool'] as number) : 0;
+  const funds = typeof raw['funds'] === 'number' ? (raw['funds'] as number) : 0;
+  const moved = Math.max(0, Math.min(pool, funds));
+  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}), armed: false };
+  const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
+  if (revealed['infrastructure'] === true) revealed['buildShare'] = true;
+  return { ...raw, training, revealed, funds: funds - moved, buildFund: moved, buildShare: 0.5, standingPool: 0 };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

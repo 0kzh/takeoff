@@ -86,7 +86,7 @@ function gulfPrice(s: GameState): number {
 }
 
 function gulfBaseNow(s: GameState): number {
-  const raw = Math.max(s2(1000000), 60 * s.stats.revPerSec);
+  const raw = Math.max(s2(s, 1000000), 60 * s.stats.revPerSec);
   const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
   return Math.round(raw / unit) * unit;
 }
@@ -96,7 +96,7 @@ function runName(s: GameState, ctx: Ctx): string {
 }
 
 /** The publishers' licence (scale-1 dollars): about 20 s of revenue when the crawl runs out (critic follow-up B5). */
-const publishersLicence = (): number => s2(150000);
+const publishersLicence = (s: GameState): number => s2(s, 150000);
 
 import { CHOICES3 } from './choices3.js';
 
@@ -580,9 +580,9 @@ export const CHOICES: ChoiceDef[] = [
         label: 'license the archives',
         record: 'licensed',
         // stage2.md: $400,000 at scale 1; $250,000 is in reach when the crawl runs out.
-        tooltip: () => `${fmtMoneyShort(publishersLicence())}. +10 T of data now. Approval +2.`,
-        line: () => `+10 T data now · approval +2 · ${fmtMoneyShort(publishersLicence())}`,
-        cost: () => ({ funds: publishersLicence() }),
+        tooltip: (s) => `${fmtMoneyShort(publishersLicence(s))}. +10 T of data now. Approval +2.`,
+        line: (s) => `+10 T data now · approval +2 · ${fmtMoneyShort(publishersLicence(s))}`,
+        cost: (s) => ({ funds: publishersLicence(s) }),
         effect: (s) => {
           s.data += 10;
           s.flags['licensedPublishers'] = true;

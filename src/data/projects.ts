@@ -7,7 +7,7 @@ import {
 import { atPlateau, plateauSeconds, trainCost, researchFor, startCapability, gpusShort, needsDatacenter } from '../engine/training.js';
 import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.js';
-import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall } from '../engine/world.js';
+import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall, dataNotInHand } from '../engine/world.js';
 import { stage3Projects, granted } from './projects3.js';
 
 /**
@@ -809,7 +809,7 @@ const licences = (s: GameState) =>
 /** The AI research assistants price halves if a player is still without them at ts 900 (§8). */
 export function assistantsCost(s: GameState): Cost {
   // stage2.md has $150k; $100k lets a first-timer who buys everything get them by minute ten.
-  return { funds: s2(s.flags['assistantsHalf'] === true ? 50000 : 100000), insight: 15 };
+  return { funds: s2(s, s.flags['assistantsHalf'] === true ? 50000 : 100000), insight: 15 };
 }
 
 /** Synthetic data costs half for a lab that declined to license ("write our own"). */
@@ -851,7 +851,7 @@ function stage2Projects(): ProjectDef[] {
     s2project({
       id: 'p_research_cluster',
       title: 'Research cluster',
-      cost: () => ({ funds: s2(60000) }),
+      cost: (s) => ({ funds: s2(s, 60000) }),
       description: 'Experiment servers: four times the research capacity, and insight trickles in below it.',
       trigger: (s) => capWall(s) || ts(s) >= 60,
       urgent: atPlateau,
@@ -897,17 +897,17 @@ function stage2Projects(): ProjectDef[] {
       // stage2.md: 4M tasks; on the built economy 1.2M lands it just after the first release.
       trigger: (s) => s.tasks >= 1200000 && s2Releases(s) >= 1,
       buy: (s) => {
-        addFunds(s, s2(250000));
+        addFunds(s, s2(s, 250000));
         s.trust += 3;
         s.hypeLevel += 2;
-        say(s, `Series B closed. ${fmtMoneyShort(s2(250000))} and three new board seats.`);
+        say(s, `Series B closed. ${fmtMoneyShort(s2(s, 250000))} and three new board seats.`);
       },
       logMsg: 'OpenMind raises a Series B. The deck now has two charts.',
     }),
     s2project({
       id: 'p_agent_platform',
       title: 'Agent platform',
-      cost: () => ({ funds: s2(250000), research: 40000 }),
+      cost: (s) => ({ funds: s2(s, 250000), research: 40000 }),
       description: 'Customers hand over whole jobs instead of questions: market ×1.6.',
       trigger: (s) => s2Releases(s) >= 1 && priceLowFor(s) >= 30,
       stages: [2, 3],
@@ -919,10 +919,10 @@ function stage2Projects(): ProjectDef[] {
     }),
     s2project({
       id: 'p_standing_order',
-      revealFunds: 90,
+      // Research only (round 2 item 3): the build fund's automation is not paid from the run's purse.
       title: 'Standing order',
       cost: { research: 30000 },
-      description: 'Lots arrive by themselves when there is room, power and money for the next run.',
+      description: 'Whole GPU lots arrive by themselves whenever the build fund covers one and they fit.',
       trigger: (s) => s.gpuBatches >= 5,
       buy: (s) => {
         s.standingOrder = true;
@@ -978,7 +978,7 @@ function stage2Projects(): ProjectDef[] {
     s2project({
       id: 'p_auto_evals',
       title: 'Automated evals',
-      cost: () => ({ research: 100000, funds: s2(150000) }),
+      cost: (s) => ({ research: 100000, funds: s2(s, 150000) }),
       description: 'The model grades the model: red-teaming takes half the time and finds fewer issues.',
       trigger: (s) => s2Releases(s) >= 3 || counter(s, 'incidentsS2') >= 1,
       buy: (s) => {
@@ -990,7 +990,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_sl2',
       revealFunds: 90,
       title: 'Security level 2',
-      cost: () => ({ funds: s2(200000) }),
+      cost: (s) => ({ funds: s2(s, 200000) }),
       description: 'Background checks and a locked server room: holds against opportunists.',
       trigger: (s) => s.gpus >= 20000 || s.date >= monthOf(2026, 4),
       buy: (s) => {
@@ -1009,9 +1009,10 @@ function stage2Projects(): ProjectDef[] {
       priceTag: (s) => `(${fmtNum(synthCost(s).research ?? 0, 0)} research, ${synthCost(s).insight} insight)`,
       cost: synthCost,
       description: 'Research copies write training data; the more on research, the faster it comes.',
-      trigger: (s) => s.flags['publishersDone'] === true,
+      // On screen whenever the next run's data is not in hand (round 2 item 2), not after the publishers.
+      trigger: (s) => s.flags['publishersDone'] === true || dataNotInHand(s),
       prereq: (s) => isBought(s, 'p_ai_assistants'),
-      urgent: (s) => s.flags['publishersDone'] === true && dataWall(s),
+      urgent: (s) => dataNotInHand(s) || (s.flags['publishersDone'] === true && dataWall(s)),
       buy: () => undefined,
       consoleMsg: 'Sage writes its own training data now. Nobody has read all of it.',
       logMsg: 'OpenMind trains on text its own models wrote. The papers call it a flywheel.',
@@ -1034,7 +1035,7 @@ function stage2Projects(): ProjectDef[] {
     s2project({
       id: 'p_policy',
       title: 'Policy team',
-      cost: () => ({ funds: s2(250000), trust: 2 }),
+      cost: (s) => ({ funds: s2(s, 250000), trust: 2 }),
       description: 'Three former staffers and a rolodex: relations +5, then a little every month.',
       trigger: (s) => s.revealed['government'] === true,
       prereq: (s) => s.revealed['government'] === true,
@@ -1095,7 +1096,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_international',
       title: 'International launch',
       // Priced to be bought when it shows (minutes 13–15): the market widens before the sag (B5).
-      cost: () => ({ funds: s2(500000), research: 50000 }),
+      cost: (s) => ({ funds: s2(s, 500000), research: 50000 }),
       description: 'Forty countries on the same day: market ×1.6.',
       // Minutes 13–15 (May): the market widens before the mid-stage data wall (critic follow-up B5).
       trigger: (s) => (counter(s, 'r0') > 0 && s.stats.revPerSec >= 12 * counter(s, 'r0')) || s.date >= monthOf(2026, 5),
@@ -1109,7 +1110,7 @@ function stage2Projects(): ProjectDef[] {
     s2project({
       id: 'p_g5',
       title: 'Nimbus G5 order',
-      cost: () => ({ funds: s2(800000), research: 150000 }),
+      cost: (s) => ({ funds: s2(s, 800000), research: 150000 }),
       description: 'Next year\'s chip this year: new lots are G5s, half again the compute, powered first.',
       trigger: (s) => s.gpus >= 30000 || s.date >= monthOf(2026, 6),
       buy: (s) => {
@@ -1121,7 +1122,7 @@ function stage2Projects(): ProjectDef[] {
     s2project({
       id: 'p_free_tier',
       title: 'Free tier for students',
-      cost: () => ({ funds: s2(900000) }),
+      cost: (s) => ({ funds: s2(s, 900000) }),
       description: 'Homework help for anyone with a school email: approval up, the market a little wider.',
       trigger: (s) => s.revealed['public'] === true,
       prereq: (s) => s.revealed['public'] === true,
@@ -1151,7 +1152,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_flywheel',
       revealFunds: 60,
       title: 'Data flywheel',
-      cost: () => ({ research: 500000, funds: s2(4000000) }),
+      cost: (s) => ({ research: 500000, funds: s2(s, 4000000) }),
       description: 'Every billed task becomes training data: 0.6 T per billion.',
       trigger: (s) => s.flags['publishersDone'] === true && (s.tasksSold >= 1e9 || licences(s) >= 2),
       prereq: (s) => s.flags['publishersDone'] === true,
@@ -1164,7 +1165,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_btm',
       revealFunds: 60,
       title: 'Behind-the-meter',
-      cost: () => ({ funds: s2(500000) }),
+      cost: (s) => ({ funds: s2(s, 500000) }),
       description: 'Plants on our side of the meter: the queue drops to 30 s and curtailment stops mattering.',
       trigger: (s) => s.solarFarms + s.powerQueue.filter((o) => o.kind === 'solar').length >= 2,
       prereq: (s) => s.revealed['solarButton'] === true,
@@ -1212,9 +1213,9 @@ function stage2Projects(): ProjectDef[] {
       description: 'A pension fund leads: money and three more board seats of Trust.',
       trigger: (s) => s.tasks >= 2e9,
       buy: (s) => {
-        addFunds(s, s2(10000000));
+        addFunds(s, s2(s, 10000000));
         s.trust += 3;
-        say(s, `Series C closed. ${fmtMoneyShort(s2(10000000))}. The lead investor is a pension fund.`);
+        say(s, `Series C closed. ${fmtMoneyShort(s2(s, 10000000))}. The lead investor is a pension fund.`);
       },
       logMsg: 'OpenMind raises a Series C. Share of the public naming AI the top problem: 3%.',
     }),
@@ -1305,7 +1306,7 @@ function stage2Projects(): ProjectDef[] {
       ignoresCap: true,
       late: true,
       title: 'Nimbus G6 pre-order',
-      cost: () => ({ funds: s2(40000000) }),
+      cost: (s) => ({ funds: s2(s, 40000000) }),
       description: '2027\'s wafers paid for now: 100,000 G6s when Formosa Fab can ship them.',
       // The approach's last new row: the release before the exit, or a month after the pact (A4's tail).
       trigger: (s) => best(s) >= LATE_AT(3.7) || (s.revealed['shareEvals'] === true && s.date >= monthOf(2026, 11)),
@@ -1321,7 +1322,7 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_site2',
       late: true,
       title: 'Second campus: New Carlisle',
-      cost: () => ({ funds: s2(60000000) }),
+      cost: (s) => ({ funds: s2(s, 60000000) }),
       description: 'Land and a grid connection in Indiana, for when Abilene\'s slots run out.',
       trigger: (s) => gpuCapacity(s) >= 800000 || best(s) >= LATE_AT(3.85),
       buy: (s) => {
@@ -1335,7 +1336,7 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 90,
       late: true,
       title: 'Community benefits agreement',
-      cost: () => ({ funds: s2(5000000) }),
+      cost: (s) => ({ funds: s2(s, 5000000) }),
       description: 'A school, a clinic and a water study, signed with Abilene: approval up.',
       trigger: (s) => s.flags['protested'] === true,
       prereq: (s) => s.flags['protested'] === true,
@@ -1348,7 +1349,7 @@ function stage2Projects(): ProjectDef[] {
       revealFunds: 60,
       late: true,
       title: 'Counter-offer for the alignment lead',
-      cost: () => ({ funds: s2(20000000) }),
+      cost: (s) => ({ funds: s2(s, 20000000) }),
       description: 'She has not said no; if she leaves, she takes what she knows.',
       trigger: (s) => best(s) >= LATE_AT(3.9),
       onShow: (s) => say(s, 'Anthrosoft has offered the alignment lead twice her salary. She has not said no.'),

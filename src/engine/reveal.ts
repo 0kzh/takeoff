@@ -1,4 +1,4 @@
-import { GameState, projectState } from './state.js';
+import { GameState, projectState, counter } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
 import { STAGE2_TABLE, STAGE2_ORDER, ContentRow, MECHANIC_FLAGS, inApproach, rowById } from '../data/stage2.js';
 import { STAGE3_TABLE, STAGE3_ORDER, MECHANIC_FLAGS_S3, inApproach3, dateFallback3, rowById3 } from '../data/stage3.js';
@@ -105,6 +105,9 @@ function eligible(s: GameState, def: ProjectDef): boolean {
   // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6), except
   // the carried cards (their `stages` name Stage 3: code review, honesty evals, the second campus).
   if (s.stage >= 3 && def.late && !def.stages.includes(s.stage)) return false;
+  // Stage 2's first run comes first (stage2-round2-fixes.md item 1): a card priced in research waits
+  // for it to start, unless it answers a wall, so the arrival's research goes into the first model.
+  if (s.stage === 2 && counter(s, 'runsS2') < 1 && !exempt(s, def) && !def.stages.includes(1) && (def.cost(s).research ?? 0) > 0) return false;
   // Before the Research panel, only rescues can appear (their prices are not in research).
   return def.rescue === true || s.revealed['research'] === true;
 }

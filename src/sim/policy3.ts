@@ -3,12 +3,12 @@ import type { Actions } from '../engine/tick.js';
 import type { BotMemory } from './policy.js';
 import { researchRate } from '../engine/economy.js';
 import {
-  trainCost, canStartTraining, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct, researchUnit,
+  trainCost, canPressTrain, canRedTeam, canApprove, canSendBack, runReady, startCapability, nextGainPct, researchUnit,
   trainSlotFree, EXPERIMENTS_MAX,
 } from '../engine/training.js';
 import {
-  LOT_SIZES_S3, orderReasonS3, lotCostOf, lotHold, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost,
-  nuclearCost, reactorQueueFull, needsSite2, BUDGET_STEPS,
+  LOT_SIZES_S3, orderReasonS3, freeSlots, freePowerGpus, datacenterBuilding, datacenterCost,
+  nuclearCost, reactorQueueFull, needsSite2,
 } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { seats, lobbyCost, counterintelCost, approvalTargetS3, paymentsLevel, PAYMENT_APPROVAL } from '../engine/world3.js';
@@ -163,8 +163,10 @@ function alignShareOfResearch(mem: BotMemory): number {
   return 1 / 7;
 }
 
+/** The build share the bot keeps (arc G34): 50 %; the variants pin 25 % (`budget-0`) or 75 % (`budget-100`). */
 function budgetTarget(mem: BotMemory): number {
-  for (const v of [0, 25, 50, 75, 100]) if (has(mem, `budget-${v}`)) return v / 100;
+  if (has(mem, 'budget-0') || has(mem, 'budget-25')) return 0.25;
+  if (has(mem, 'budget-100') || has(mem, 'budget-75')) return 0.75;
   return 0.5;
 }
 
@@ -196,7 +198,7 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   const cycle = focusCycle(mem);
   const want = cycle[(s.stats.trainings - m.trainings0) % cycle.length]!;
   if (trainSlotFree(s) && s.training.focus !== want) a.setFocus(s, want as 'capability' | 'efficiency' | 'safety');
-  if (canStartTraining(s) && !isBought(s, 'p_auto_train')) a.startTraining(s);
+  if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
   const run = s.training.run;
   if (run && run.phase === 'redteam') {
     if (has(mem, 'sendback-always') && canSendBack(s)) a.sendBack(s);
@@ -227,53 +229,39 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   // Re-image at a rogue share of 4 %.
   if (s.revealed['reimage'] && rogueShare(s) >= 0.04 && reimageCooldown(s) <= 0 && !has(mem, 'monitors-0')) a.reimage(s);
 
-  // Money, in priority order: halls and reactors by hand until the build-out; SL3; then the cards.
-  // While Security level 3 is short, money is held for it (the theft is in February).
+  // The build fund (arc G34): halls and reactors by hand until the build-out; the Standing order spends
+  // the rest of the fund on whole lots. The second campus is a card, paid from funds.
   const buildout = isBought(s, 'p_buildout');
   const big = LOT_SIZES_S3[LOT_SIZES_S3.length - 1];
-  if (!buildout && !datacenterBuilding(s) && !needsSite2(s) && freeSlots(s) < 2 * big && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
-  let hold = 0;
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && !a.buySL3(s)) hold = sl3Cost(s).funds;
-  const spare = (price: number) => price <= 0 || s.funds - price >= hold;
-  if (!buildout && hold === 0) {
-    const reactorQueued = s.powerQueue.some((o) => o.kind === 'nuclear');
-    if (!reactorQueued && !reactorQueueFull(s) && freePowerGpus(s) < 2 * big && s.funds >= nuclearCost(s)) a.buyNuclear(s);
+  if (!buildout && !datacenterBuilding(s) && freeSlots(s) < 2 * big) {
+    if (needsSite2(s)) {
+      const site = visibleProjects(s).find((x) => x.id === 'p_site2');
+      if (site && site.canAfford(s) && a.buyProject(s, 'p_site2')) mem.bought.push('p_site2');
+    } else if (s.buildFund >= datacenterCost(s)) a.buildDatacenter(s);
   }
+  if (!buildout) {
+    const reactorQueued = s.powerQueue.some((o) => o.kind === 'nuclear');
+    if (!reactorQueued && !reactorQueueFull(s) && freePowerGpus(s) < 2 * big && s.buildFund >= nuclearCost(s)) a.buyNuclear(s);
+  }
+  if (isBought(s, 'p_standing_order') && !s.standingOrder) a.toggleStanding(s);
+  setShare(s, a, budgetTarget(mem));
 
-  // Then Distillation and the G6 allocation, before more chips (§9.1 item 5): each held for in turn.
+  // Funds: Security level 3 first (the theft is in February), then Distillation, code review and the
+  // G6 allocation (§9.1 item 5), then the cards. The bot waits for each in turn: its own saving.
+  let saving = false;
+  if (s.revealed['sl3Button'] && s.securityLevel < 3 && !a.buySL3(s)) saving = true;
   for (const id of ['p_distill', 'p_code_review', 'p_g6']) {
-    if (hold > 0) break;
+    if (saving) break;
     const p = visibleProjects(s).find((x) => x.id === id);
     if (!p || isBought(s, id)) continue;
     if (p.canAfford(s) && researchOk(s, p.cost(s).research ?? 0) && a.buyProject(s, id)) mem.bought.push(id);
-    else hold = p.cost(s).funds ?? 0;
+    else saving = (p.cost(s).funds ?? 0) > 0;
   }
-  // The standing budget: off while something is held for, else the policy's share.
-  const saving = hold > 0;
-  setBudget(s, a, saving ? 0 : budgetTarget(mem));
-  // Room and power come before the cards: the next hall (or the second campus it needs) and the next
-  // reactor are held for while they are short, so the fleet never stalls for a card. After the
-  // build-out grant the bot only keeps the money; Sage places the order.
-  if (hold === 0) {
-    if (!datacenterBuilding(s) && freeSlots(s) < 2 * big) {
-      if (needsSite2(s)) {
-        const site = visibleProjects(s).find((x) => x.id === 'p_site2');
-        if (site && site.canAfford(s) && a.buyProject(s, 'p_site2')) mem.bought.push('p_site2');
-        else if (site) hold += site.cost(s).funds ?? 0;
-      } else hold += datacenterCost(s);
-    }
-    const reactorQueued = s.powerQueue.some((o) => o.kind === 'nuclear');
-    if (!reactorQueued && !reactorQueueFull(s) && freePowerGpus(s) < 2 * big) hold += nuclearCost(s);
-    if (hold > s.funds * 4) hold = 0;
-  }
-
-  // The budget's share is the lots' (half of income keeps the queue full): the cards spend the rest.
-  if (!saving && !orderReasonS3(s, big) && s.standingBudget > 0) hold += Math.min(s.standingPool, lotCostOf(s, big));
   // Projects: grants (not the Spec revision), then table order; research under the run rule.
   for (const p of visibleProjects(s)) {
     if (p.id === 'p_pause' || !wanted(s, mem, p.id) || !p.canAfford(s)) continue;
     const cost = p.cost(s);
-    if (!researchOk(s, cost.research ?? 0) || !spare(cost.funds ?? 0)) continue;
+    if (!researchOk(s, cost.research ?? 0) || (saving && (cost.funds ?? 0) > 0)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
   if (saving) return;
@@ -291,11 +279,6 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['lobby'] && !has(mem, 'lobby-never') && seats(s) < 7 && counter(s, 'lobbyHeat') === 0 && s.funds >= lobbyCost(s)) a.lobby(s);
   if (s.revealed['counterintel'] && s.lead < 2 && counter(s, 'ciHeat') === 0 && s.funds >= counterintelCost(s)) a.counterintel(s);
   if (s.revealed['payments']) payments(s, a, mem);
-  // The big lot by hand when money piles up and the queue has room (the budget fills the rest).
-  if (s.revealed['infrastructure'] && !saving && !orderReasonS3(s, big)) {
-    const cost = lotCostOf(s, big);
-    if (s.funds - cost >= Math.max(cost, lotHold(s))) a.buyGpuBatch(s, big);
-  }
 
   // The vote (§9.1 item 1), or the Pause when the variant signs it.
   if (has(mem, 'pause') && visibleProjects(s).some((p) => p.id === 'p_pause' && p.canAfford(s)) && !s.activeChoice) a.buyProject(s, 'p_pause');
@@ -303,10 +286,9 @@ function botS3(s: GameState, a: Actions, mem: BotMemory): void {
   if (voteReady(s) && !s.activeChoice && !mem.holdTransition) a.buyProject(s, slowByReading(s) ? 'p_steward' : 'p_race');
 }
 
-function setBudget(s: GameState, a: Actions, target: number): void {
-  if (!s.revealed['standingOrder'] || !isBought(s, 'p_standing_order')) return;
+function setShare(s: GameState, a: Actions, target: number): void {
   let guard = 0;
-  while (Math.abs(s.standingBudget - target) > 1e-9 && guard++ < BUDGET_STEPS.length) a.toggleStanding(s);
+  while (Math.abs(s.buildShare - target) > 1e-9 && guard++ < 3) a.cycleBuildShare(s);
 }
 
 /** Experiments only when the next run would land within 10 % under a rung (§9.1 item 6). */
@@ -369,7 +351,7 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
       }
     }
   }
-  if (canStartTraining(s)) a.startTraining(s);
+  if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
   if (canApprove(s)) a.approve(s);
   if (mem.ticks % 10 !== 0) return;
   const greedy = mem.policy === 'greedy';
@@ -381,8 +363,8 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
-  if (hallUrgent(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
-  if (reactorUrgent(s) && s.funds >= nuclearCost(s)) a.buyNuclear(s);
+  if (hallUrgent(s) && s.buildFund >= datacenterCost(s)) a.buildDatacenter(s);
+  if (reactorUrgent(s) && s.buildFund >= nuclearCost(s)) a.buyNuclear(s);
   // A new button is pressed once, as a new card is bought: Payments goes up a level when it appears,
   // and again when an approval warning names it (the console's advice, to level 3 at most).
   const m3 = mem3(s, mem);
@@ -407,6 +389,6 @@ function firstTimerS3(s: GameState, a: Actions, mem: BotMemory): void {
 function infraByReason(s: GameState, a: Actions): void {
   const small = LOT_SIZES_S3[0];
   const why = orderReasonS3(s, small);
-  if (why === 'no room' && !datacenterBuilding(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
-  else if (why === 'no power' && !reactorQueueFull(s) && s.funds >= nuclearCost(s)) a.buyNuclear(s);
+  if (why === 'no room' && !datacenterBuilding(s) && s.buildFund >= datacenterCost(s)) a.buildDatacenter(s);
+  else if (why === 'no power' && !reactorQueueFull(s) && s.buildFund >= nuclearCost(s)) a.buyNuclear(s);
 }

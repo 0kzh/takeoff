@@ -1,4 +1,4 @@
-import { GameState, say } from './state.js';
+import { GameState, say, creditIncome } from './state.js';
 import { fmtMoneyShort } from './format.js';
 import { effectsDemandMult, marketingMult, productionPerSec, autoTarget1 } from './economy.js';
 
@@ -75,7 +75,7 @@ export function sellS2(s: GameState, dt: number): void {
   s.unbilled -= n;
   if (s.unbilled < 1e-6) s.unbilled = 0;
   s.tasksSold += n;
-  s.funds = Math.floor((s.funds + revenue) * 100) / 100;
+  creditIncome(s, revenue);
   s.totalRevenue += revenue;
   s.stats.secRevenue += revenue;
   s.stats.secSold += n;

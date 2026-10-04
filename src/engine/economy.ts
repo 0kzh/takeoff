@@ -1,5 +1,5 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, press, isBought, bump, counter } from './state.js';
+import { GameState, say, canPay, pay, press, isBought, bump, counter, creditIncome } from './state.js';
 import { busyGpus, trainCost } from './training.js';
 import { visibleProjects } from './projects.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
@@ -212,6 +212,20 @@ export function workingCopies(s: GameState): number {
 /** Tasks per second per copy: `capability^0.8 × prompting boosts` (Stage 3: the best model). */
 export function perCopyRate(s: GameState): number {
   return Math.pow(s.stage >= 3 ? bestCapability(s) : s.capability, 0.8) * s.copyBoost;
+}
+
+/**
+ * What the research slider costs in revenue, as a share (round 2 item 5's `revenue −24%`): the AUTO
+ * market's task revenue grows with the square root of what the copies on tasks make, so moving a share
+ * to research costs `1 − √(tasks now / tasks at none)` of task revenue; contracts do not move.
+ */
+export function revenueCostOfAlloc(s: GameState): number {
+  const extra = s.stage >= 3 ? (s.monitorShare ?? 0) : alignExtra(s);
+  const atNone = Math.max(1e-9, 1 - extra);
+  const now = Math.max(0, 1 - s.researchAlloc - extra);
+  const taskRevenue = Math.max(0, s.stats.revPerSec - Math.max(0, s.contractIncome || 0));
+  const share = s.stats.revPerSec > 0 ? taskRevenue / s.stats.revPerSec : 1;
+  return (1 - Math.sqrt(now / atNone)) * share;
 }
 
 /** Alignment compute above the 1 % baseline comes out of the copies on tasks (stage2.md §2.11). */
@@ -458,7 +472,7 @@ export function payContracts(s: GameState, dt: number): void {
   const rate = s.stage >= 2 ? s.contractIncome : 0;
   if (rate > 0) {
     const amount = rate * dt;
-    s.funds = Math.round((s.funds + amount) * 100) / 100;
+    creditIncome(s, amount);
     s.totalRevenue += amount;
     s.stats.secRevenue += amount;
   }

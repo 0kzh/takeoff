@@ -2,7 +2,7 @@ import { GameState, say, logNews, isBought, counter, press, canPay, pay } from '
 import { rand, pick } from './rng.js';
 import { fmtNum, fmtInt, fmtMoneyShort, monthOf } from './format.js';
 import { bestCapability, qualityMult } from './economy.js';
-import { secondsOfRevenue, wallFix } from './infrastructure.js';
+import { secondsOfRevenue } from './infrastructure.js';
 import { moveGov, recordRival, approvalTerms, RIVAL_LINES_S2 } from './world.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 
@@ -198,19 +198,11 @@ export function lobbyGain(s: GameState): number {
   return Math.min(1, (100 - s.govRelations) / 80);
 }
 
-/**
- * What the repeatable revenue sinks keep in hand: the wall's fix (the next hall or reactor) while the
- * lots are stopped by room or power, as the lot buttons do (stage3.md as-built deltas row 4).
- */
-export function sinkHold(s: GameState): number {
-  return wallFix(s)?.price ?? 0;
-}
-
 /** `Lobby`: relations +1 (tapered), once a unit; the price heats up. */
 export function lobby(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['lobby']) return false;
   const cost = lobbyCost(s);
-  if (!canPay(s, { funds: cost }) || s.funds - cost < sinkHold(s)) return false;
+  if (!canPay(s, { funds: cost })) return false;
   pay(s, { funds: cost });
   moveGov(s, 1);
   s.flags['lobbyHeat'] = heatOf(s, 'lobbyHeat') + 1;
@@ -223,7 +215,7 @@ export function lobby(s: GameState): boolean {
 export function counterintel(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['counterintel']) return false;
   const cost = counterintelCost(s);
-  if (!canPay(s, { funds: cost }) || s.funds - cost < sinkHold(s)) return false;
+  if (!canPay(s, { funds: cost })) return false;
   pay(s, { funds: cost });
   moveLead3(s, 0.1);
   s.flags['ciHeat'] = heatOf(s, 'ciHeat') + 1;

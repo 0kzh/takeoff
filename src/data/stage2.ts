@@ -2,8 +2,8 @@ import type { GameState } from '../engine/state.js';
 import { isBought, say } from '../engine/state.js';
 import { monthOf } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
-import { gpuCapacity, queuedMW } from '../engine/infrastructure.js';
-import { dataShort } from '../engine/world.js';
+import { gpuCapacity, queuedMW, powerDrawMW } from '../engine/infrastructure.js';
+import { dataShort, dataNotInHand } from '../engine/world.js';
 import { trainingRun } from '../engine/training.js';
 import { openChoice, fireDevelopment, modalCanOpen } from '../engine/events.js';
 import { LATE_AT } from './projects.js';
@@ -107,7 +107,8 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_research_cluster'),
   flagRow('btn-turbines', 'gasButton', { mechanic: true,
     trigger: (s) => s.gpus >= 0.6 * s.powerCapacityMW * 1000 || ts(s) >= 120,
-    onReveal: (s) => say(s, 'Power draw is 60% of the site\'s 5 MW. Gas turbines can be on site in a week.'),
+    // The draw it prints is the draw there is (critic S2 round 2 §8.8.1: `60%` printed at 20 %).
+    onReveal: (s) => say(s, `Power draw is ${Math.round((100 * powerDrawMW(s)) / Math.max(1, s.powerCapacityMW))}% of the site's ${s.powerCapacityMW} MW. Gas turbines can be on site in a week.`),
   }),
   project('p_web_crawl'),
   flagRow('panel-graph', 'graph', { mechanic: true, trigger: (s) => releasesS2(s) >= 1 || s.flags['rivalS2'] === true }),
@@ -135,7 +136,8 @@ export const STAGE2_TABLE: ContentRow[] = [
   project('p_sl2'),
   choiceRow('c_publishers', {
     governed: false,
-    trigger: (s) => isBought(s, 'p_web_crawl') && s.crawlLeft <= 0 && dataShort(s),
+    // At the first data shortfall (round 2 item 2), whether or not the crawl has run dry.
+    trigger: (s) => dataNotInHand(s) || (isBought(s, 'p_web_crawl') && s.crawlLeft <= 0 && dataShort(s)),
     prereq: (s) => isBought(s, 'p_web_crawl') && s.crawlLeft <= 0,
   }),
   project('p_synth'),

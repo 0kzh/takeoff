@@ -1,7 +1,7 @@
 import type { GameState } from '../engine/state.js';
 import { dateLabel, fmtNum } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
-import { baiwenAt, leadWords } from '../engine/world.js';
+import { baiwenAt, leadWords, leadBandNote } from '../engine/world.js';
 import { byId, setText, showId } from './dom.js';
 
 /**
@@ -102,7 +102,8 @@ export function renderGraph(s: GameState): void {
     ? 'The Committee votes'
     : goalUp && rung.label === 'superhuman coder' ? `Next: ${rung.label}` : `Next: ${rung.label === 'country of geniuses' ? 'a country of geniuses' : rung.label === 'superhuman AI researcher' ? 'superhuman AI researcher' : rung.label} at ${fmtNum(rung.at, rung.at < 10 ? 2 : 0)}×`;
   setText('nextTier', next);
-  setText('leadLine', `Baiwen: ${leadWords(s)}`);
+  const band = leadBandNote(s);
+  setText('leadLine', `Baiwen: ${leadWords(s)}${band ? ` — ${band}` : ''}`);
   // The Stats panel takes the lead over once it exists; the line under the graph goes.
   showId('leadLine', s.revealed['stats'] !== true);
 
@@ -290,6 +291,18 @@ function draw(s: GameState): void {
       ctx.setLineDash([]);
       const label = s.flags['neuralese'] === 'neuralese' ? 'neuralese' : 'transparent';
       labels.push({ text: label, x: Math.min(W - PAD_R - ctx.measureText(label).width, px + 2), y: H - PAD_B - 3, color: '#555' });
+    }
+  }
+  // A label never covers a point of the series (critic S2 round 2 §8.10: `4× superhuman coder` sat on
+  // the gate's model): it moves to the left edge, and below its line if that is taken too.
+  const covers = (lx: number, ly: number, w: number) => dots.some((d) => d.x >= lx - 4 && d.x <= lx + w + 4 && d.y >= ly - 12 && d.y <= ly + 4);
+  for (const l of labels) {
+    const w = ctx.measureText(l.text).width;
+    if (covers(l.x, l.y, w)) {
+      const left = PAD_L + 2;
+      if (!covers(left, l.y, w)) l.x = left;
+      else if (!covers(l.x, l.y + 11, w)) l.y += 11;
+      else l.x = left;
     }
   }
   for (const l of labels) {

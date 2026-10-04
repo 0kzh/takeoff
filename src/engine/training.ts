@@ -1,13 +1,13 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
-import { effGpus, S2_FUNDS_SCALE, poweredGpus } from './infrastructure.js';
+import { effGpus, S2_FUNDS_SCALE, poweredGpus, s2Scale, G5_COMPUTE, G6_COMPUTE } from './infrastructure.js';
 import { researchCap, researchRate, rentQuota, atRentQuota } from './economy.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
 import { fmtNum, fmtInt, fmtClock, fmtMoneyShort } from './format.js';
 import { visibleProjects } from './projects.js';
-import { crawlRate, synthRate, flywheelRate, moveGov } from './world.js';
+import { crawlRate, synthRate, flywheelRate, moveGov, ADVISORY_BELOW, TRUSTED_FROM } from './world.js';
 
 export const EVAL_SECONDS = 5;
 export const BENCHMARKS = ['Coding', 'Research', 'Persuasion', 'Agency', 'Bio', 'Cyber'] as const;
@@ -188,7 +188,7 @@ export function trainCost(s: GameState): Cost {
   if (s.stage < 2) return { research: researchFor(c), funds: fundsFor(c) };
   // Stage 3: a run is a research program and nothing else (stage3.md §2.5): no money, no data.
   if (s.stage >= 3) return { research: researchForS3(c, runScaleS3(s)) };
-  const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE) };
+  const cost: Cost = { research: researchFor(c), funds: Math.round(fundsForS2(c) * S2_FUNDS_SCALE * s2Scale(s)) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
 }
@@ -287,26 +287,29 @@ export function trainWait(s: GameState): string {
   const cap = researchCap(s);
   const fixes = s.stage === 2 ? runFixNames(s) : '';
   if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}${fixes ? ` — ${fixes}` : ''}`;
-  // A run short of GPUs says so on its own line (trainGpuLine); this line names what else it waits for.
-  const waits: [number, string][] = [];
-  // Stage 1 names the resource and the time only (`research — about 0:45`: its cost line is right
-  // above, and minute 10 stays at 38 numbers); from Stage 2 the shortfall too (critic follow-up B8).
-  const amounts = s.stage >= 2;
+  // A run short of GPUs says so on its own line (trainGpuLine); this line names every shortfall, one
+  // clock (arc G34: `short $6.5M and 8,750 research — about 1:22`). Stage 1 names the resource words
+  // only (`money — about 0:45`: its cost line is right above, and minute 10 stays at 38 numbers).
+  const r = runIncome(s);
+  const parts: string[] = [];
+  const words: string[] = [];
+  let eta = 0;
   const add = (short: number, rate: number, label: string, word: string) => {
     if (short <= 1e-9) return;
-    const eta = rate > 0 ? short / rate : Infinity;
-    const what = amounts ? `short ${label}` : word;
-    waits.push([eta, `${what}${Number.isFinite(eta) && eta >= 1 && eta < 3600 ? ` — about ${fmtClock(eta)}` : ''}`]);
+    parts.push(label);
+    words.push(word);
+    eta = Math.max(eta, etaOf(short, rate));
   };
-  add((cost.research ?? 0) - s.research, researchRate(s), `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
-  if (cost.data) add(cost.data - s.data, crawlRate(s) + synthRate(s) + flywheelRate(s), `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
-  add((cost.funds ?? 0) - s.funds, s.stats.revPerSec, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
-  waits.sort((x, y) => y[0] - x[0]);
-  const top = waits[0]?.[1] ?? '';
+  add((cost.funds ?? 0) - s.funds, r.funds, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
+  add((cost.research ?? 0) - s.research, r.research, `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
+  if (cost.data) add(cost.data - s.data, r.data, `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
+  if (!parts.length) return '';
+  const clock = Number.isFinite(eta) && eta >= 1 && eta < 3600 ? ` — about ${fmtClock(eta)}` : '';
+  const what = s.stage >= 2 ? `short ${parts.join(' and ')}` : words.join(' and ');
   // Stage 2: a wall with a card on screen names the card (critic C9: `needs 11.6 T data — Synthetic data`).
-  if (fixes && cost.data && top.startsWith('short') && top.includes(' T data')) return `needs ${fmtNum(cost.data - s.data, 1)} T data — ${fixes}`;
-  if (fixes && top.includes(' research')) return `${top} — ${fixes}`;
-  return top;
+  if (fixes && cost.data && s.data + 1e-9 < cost.data && !Number.isFinite(eta)) return `needs ${fmtNum(cost.data - s.data, 1)} T data — ${fixes}`;
+  if (s.training.armed) return `${nextRunName(s)} starts when paid for${clock}`;
+  return `${what}${clock}${fixes ? ` — ${fixes}` : ''}`;
 }
 
 /**
@@ -319,7 +322,7 @@ export function trainGpuLine(s: GameState): string {
   const need = gpusNeeded(s);
   if (need <= 0) return '';
   const have = gpusAvailable(s);
-  if (have >= need) return `Needs ${fmtInt(need)} GPUs for ${fmtClock(trainingDuration(s))}`;
+  if (have >= need) return `Needs ${fmtInt(s.stage >= 2 ? twoSig(need / computePerGpu(s)) : need)} GPUs for ${fmtClock(trainingDuration(s))}`;
   if (s.stage < 2) {
     if (needsDatacenter(s)) return `Needs ${fmtInt(need)} GPUs. The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`;
     if (atRentQuota(s) || need > rentQuota(s)) {
@@ -329,8 +332,21 @@ export function trainGpuLine(s: GameState): string {
     return `Needs ${fmtInt(need)} GPUs. ${fmtInt(have)} rented. Rent ${fmtInt(need - have)} more.`;
   }
   const dark = Math.max(0, s.gpus - poweredGpus(s));
-  if (dark > 0 && have + dark >= need) return `Needs ${fmtInt(need)} powered GPUs. ${fmtInt(dark)} are dark: add power.`;
-  return `Needs ${fmtInt(need)} GPUs. ${fmtInt(have)} free.`;
+  // Counted in the chips the player owns, as the Stores row counts them (critic S2 round 2 §8.8.2: a
+  // G5 counted as 1.5 printed `117,900 free` beside `GPUs 99,400`).
+  const k = computePerGpu(s);
+  const needN = twoSig(need / k);
+  if (dark > 0 && have / k + dark >= need / k) return `Needs ${fmtInt(needN)} powered GPUs. ${fmtInt(dark)} are dark: add power.`;
+  return `Needs ${fmtInt(needN)} GPUs. ${fmtInt(Math.floor(have / k))} free.`;
+}
+
+/** The fleet's work per chip: 1 for G4s, 1.5 for G5s, 2.5 for G6s, averaged over what is owned. */
+export function computePerGpu(s: GameState): number {
+  if (s.stage < 2 || s.gpus <= 0) return 1;
+  const g6 = s.gpusG6 ?? 0;
+  const g5 = s.gpusG5 ?? 0;
+  const g4 = Math.max(0, s.gpus - g5 - g6);
+  return (g4 + G5_COMPUTE * g5 + G6_COMPUTE * g6) / s.gpus;
 }
 
 /** Every rent the cloud will ever allow: the base quota and the three lease cards. */
@@ -365,11 +381,26 @@ export function runOtherwiseReady(s: GameState): boolean {
   return s.research >= (cost.research ?? 0) && s.data + 1e-9 >= (cost.data ?? 0);
 }
 
-export function canStartTraining(s: GameState): boolean {
+/**
+ * What may disable Train (arc G34 rule 4): a requirement, never a price — a free slot, the evaluation
+ * month, the GPUs, a lab that can hold the run's research, and Stage 3's Hold.
+ */
+export function trainRequirementsMet(s: GameState): boolean {
   if (!s.revealed['training'] || !trainSlotFree(s) || s.training.cooldown > 0 || gpusShort(s)) return false;
   // Stage 3: `Training: held` stops the next run from starting (stage3.md §2.5).
   if (s.stage >= 3 && s.flags['holdRuns'] === true) return false;
-  return canPay(s, trainCost(s));
+  if (s.stage < 3 && (trainCost(s).research ?? 0) > researchCap(s)) return false;
+  return true;
+}
+
+export function canStartTraining(s: GameState): boolean {
+  return trainRequirementsMet(s) && canPay(s, trainCost(s));
+}
+
+/** Train is pressable: its requirements are met (a short price arms it). */
+export function canPressTrain(s: GameState): boolean {
+  if (s.stage >= 3 && isBought(s, 'p_auto_train')) return false;
+  return trainRequirementsMet(s);
 }
 
 /** The Focus row appears after the first release; the first run trains with the default focus. */
@@ -380,11 +411,87 @@ export function setFocus(s: GameState, focus: Focus): boolean {
   return true;
 }
 
+/**
+ * The Train button (arc G34 rule 4): with the price in hand the run starts; with something short it
+ * is armed and starts by itself once paid for; pressed again while armed, it stands down.
+ */
 export function startTraining(s: GameState): boolean {
-  if (!canStartTraining(s)) return false;
-  // Stage 3 counts Train presses by hand (B10: Continual learning should come before the second).
-  if (s.stage >= 3 && !isBought(s, 'p_auto_train')) press(s, 'train');
-  return startRun(s, trainCost(s));
+  const t = s.training;
+  if (canStartTraining(s)) {
+    // Stage 3 counts Train presses by hand (B10: Continual learning should come before the second).
+    if (s.stage >= 3 && !isBought(s, 'p_auto_train')) press(s, 'train');
+    t.armed = false;
+    return startRun(s, trainCost(s));
+  }
+  if (!canPressTrain(s)) return false;
+  t.armed = !t.armed;
+  if (s.stage >= 3) press(s, 'train');
+  if (t.armed) bump(s, 'armedRuns');
+  return true;
+}
+
+/** Every tick: an armed run starts the moment it is paid for (requirements met). */
+export function fireArmedRun(s: GameState): void {
+  const t = s.training;
+  if (!t.armed) return;
+  if (s.stage >= 3 && isBought(s, 'p_auto_train')) {
+    t.armed = false;
+    return;
+  }
+  if (!canStartTraining(s)) return;
+  t.armed = false;
+  startRun(s, trainCost(s));
+}
+
+/** Income a second into each purse a run is paid from (Stage 2–3 funds: what the build share leaves). */
+function runIncome(s: GameState): { funds: number; research: number; data: number } {
+  const share = (s.stage === 2 || s.stage === 3) && s.revealed['infrastructure'] ? s.buildShare : 0;
+  return {
+    funds: Math.max(0, s.stats.revPerSec) * (1 - share),
+    research: researchRate(s),
+    data: s.stage === 2 ? crawlRate(s) + synthRate(s) + flywheelRate(s) : 0,
+  };
+}
+
+function etaOf(short: number, rate: number): number {
+  if (short <= 1e-9) return 0;
+  return rate > 0 ? short / rate : Infinity;
+}
+
+/** Seconds until the next run is paid for (0 when it is; Infinity when a purse has no income). */
+export function runPaidInSeconds(s: GameState): number {
+  return runPaidIn(s);
+}
+
+/** Seconds until the next run is paid for, after spending `spent` (0 when it already is). */
+function runPaidIn(s: GameState, spent: Cost = {}): number {
+  const cost = trainCost(s);
+  const r = runIncome(s);
+  return Math.max(
+    etaOf((cost.funds ?? 0) - (s.funds - (spent.funds ?? 0)), r.funds),
+    etaOf((cost.research ?? 0) - (s.research - (spent.research ?? 0)), r.research),
+    etaOf((cost.data ?? 0) - (s.data - (spent.data ?? 0)), r.data),
+  );
+}
+
+/**
+ * How much later the waiting run starts if `cost` is spent now (arc G34 rule 3): 0 unless a run waits
+ * (its slot free, no evaluation month) and draws on a purse this purchase spends from.
+ */
+export function runDelaySeconds(s: GameState, cost: Cost): number {
+  if (!s.revealed['training'] || s.stage >= 4 || !trainSlotFree(s) || s.training.cooldown > 0) return 0;
+  if (s.stage >= 3 && s.flags['holdRuns'] === true) return 0;
+  const before = runPaidIn(s);
+  const after = runPaidIn(s, cost);
+  if (!Number.isFinite(after)) return Infinity;
+  return Math.max(0, after - before);
+}
+
+/** ` · Sage-2.5 0:41 later` beside a purchase that delays the waiting run by 10 s or more ('' otherwise). */
+export function delayNote(s: GameState, cost: Cost): string {
+  const d = runDelaySeconds(s, cost);
+  if (d < 10) return '';
+  return ` · ${nextRunName(s)} ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'} later`;
 }
 
 function startRun(s: GameState, cost: Cost): boolean {
@@ -883,7 +990,8 @@ function releasedInStage2(s: GameState, run: TrainingRun, isPublic: boolean): vo
       s.lead -= 0.5;
     }
     // The Safety Institute reads every transcript of a model this strong.
-    if (run.capAfter >= 3 && s.alignmentApparent < 55) s.scheduled.push({ id: 'inc_advisory', delay: 20, source: run.name });
+    if (run.capAfter >= 3 && s.alignmentApparent < ADVISORY_BELOW) s.scheduled.push({ id: 'inc_advisory', delay: 20, source: run.name });
+    if (s.alignmentApparent >= TRUSTED_FROM) moveGov(s, 1);
   } else {
     bump(s, 'internalReleases');
     s.lead += superhuman ? 1 : 0.5;

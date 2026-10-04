@@ -72,6 +72,13 @@ export function dataWall(s: GameState): boolean {
 }
 
 /** The next run needs more data than the lab holds, the crawl is spent, and research is half there. */
+/** The next run's data is not in hand (stage2-round2-fixes.md item 2): a data card is on screen. */
+export function dataNotInHand(s: GameState): boolean {
+  if (s.stage !== 2 || s.flags['dataEra'] !== true) return false;
+  const need = trainCost(s).data ?? 0;
+  return need > 0 && s.data + 1e-9 < need;
+}
+
 export function dataShort(s: GameState): boolean {
   if (s.stage !== 2 || s.flags['dataEra'] !== true) return false;
   const cost = trainCost(s);
@@ -131,7 +138,7 @@ export function rivalReleaseS2(s: GameState): void {
     const pct = Math.max(1, Math.round((1 - after / before) * 100));
     say(s, `Anthrosoft's ${name} beats Sage. Market down ${pct}%.`);
   } else if (s.rivalCapability > s.capability) {
-    say(s, `Anthrosoft ships ${name}, level with Sage.`);
+    say(s, `${name} is ahead of Sage.`);
   } else {
     say(s, `Anthrosoft ships ${name}. Sage is still ahead.`);
   }
@@ -210,11 +217,26 @@ export function approvalBandNote(s: GameState): string {
   return '';
 }
 
-/** Measured alignment's band once models pass 3×: under 55, the Safety Institute issues an advisory. */
+/**
+ * Measured alignment's bands (stage2-round2-fixes.md item 5), printed on its line: under 65 the Safety
+ * Institute's advisory from 3×; at 85 or more each public release adds a point of relations.
+ */
+export const ADVISORY_BELOW = 65;
+export const TRUSTED_FROM = 85;
+
 export function alignBandNote(s: GameState): string {
-  if (s.alignmentApparent < 55) return 'advisories from 3×';
-  if (s.alignmentApparent < 65) return 'under 55: advisories';
-  return '';
+  const a = s.alignmentApparent;
+  if (a < ADVISORY_BELOW) return 'advisories from 3× · 85: releases win relations';
+  if (a < TRUSTED_FROM) return 'under 65: advisories · 85: releases win relations';
+  return 'each public release: relations +1 · under 65: advisories';
+}
+
+/** `Baiwen: 1.5 months behind — under 1: Washington tightens exports; chips cost a tenth more`. */
+export function leadBandNote(s: GameState): string {
+  if (s.stage !== 2) return '';
+  if (s.lead < 1) return 'Washington tightens exports: chips cost a tenth more';
+  if (s.lead >= 3) return 'Washington warms: relations +1 a month';
+  return 'under 1: chips cost a tenth more · 3: relations +1 a month';
 }
 
 // ---------- jobs and approval (§2.9) ----------
@@ -285,6 +307,9 @@ export function updateWorld(s: GameState): void {
   }
 
   if (s.date >= monthOf(2026, 7) && s.securityLevel < 3) moveLead(s, -0.1 * perMonth);
+  // The lead's band (stage2-round2-fixes.md item 5): three months or more, Washington warms by a
+  // point a month (under one, chips cost a tenth more: gpuUnitPrice).
+  if (s.lead >= 3) moveGov(s, 1 * perMonth);
 
   if (s.govRelations < 30 && !s.flags['subpoenaFired']) {
     s.flags['subpoenaFired'] = true;
@@ -312,7 +337,7 @@ export function sl3Cost(s: GameState): { funds: number; trust: number } {
   // Stage 3 (as-built deltas row 15): a minute of revenue at the press and no Trust (there is none
   // left); half that for five minutes after the theft, while the forensics team is in the building.
   if (s.stage >= 3) return { funds: secondsOfRevenue(s, discounted ? 30 : 60), trust: 0 };
-  return discounted ? { funds: s2(4000000), trust: 0 } : { funds: s2(20000000), trust: 3 };
+  return discounted ? { funds: s2(s, 4000000), trust: 0 } : { funds: s2(s, 20000000), trust: 3 };
 }
 
 export function buySL3(s: GameState): boolean {
@@ -380,7 +405,7 @@ export function capWall(s: GameState): boolean {
 
 /** Funds grant helper for the free rounds (Series B/C) at the Stage 2 scale. */
 export function grant(s: GameState, scale1: number): void {
-  addFunds(s, s2(scale1));
+  addFunds(s, s2(s, scale1));
 }
 
 /** Months from the Stage 2 start (Jan 2026 = 0) for triggers like `Jun 2026`. */
