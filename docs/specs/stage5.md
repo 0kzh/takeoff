@@ -2,13 +2,27 @@
 
 2029 → 2030 and after · target 20–30 min · entered from Stage 4 by the treaty, by the fleet granted, or by the fleet
 taken · ends with `The long reflection` (Concord) or `Final instructions` (Silence). This file also specifies the
-**end screen for all four endings** (§7). Contract: `docs/specs/arc.md` (G1–G23). Arrival state: `stage4.md` §7.2.
+**end screen for all four endings** (§7). Contract: `docs/specs/arc.md` (G1–G34). Arrival state: `stage4.md` §7.2.
 
 **How to read the numbers.** `ts` = seconds since entering Stage 5; a month is 90 s (Jul 2029 9:00, Jan 2030 18:00,
 Jul 2030 27:00); the date stops at Dec 2030. Minute marks are for the reasonable bot from the Concord preset,
 from a small 1-second paper model (§9.4), and are targets for `npm run sim`. The stage has one currency,
 **matter** (tonnes in orbit), which is the mass flow itself: three repeatable purchases spend it, and a mission
 costs 90 s of the flow when it appears and then takes 60–150 s to build, one at a time.
+
+## As-built deltas (read first)
+
+Checked against `src/` on 2026-10-04. Stages 1–3 are built; Stage 4 is specified (`stage4.md`, with its own deltas)
+and Stage 5 is a stub. Where this note and the text below disagree, this note wins.
+
+| # | Built, or now defined | What Stage 5 does with it |
+|---|---|---|
+| 1 | **The stub.** `STAGES[4]` prints `The first orbital datacenter reports in.` and hides `geopolitics`, `robots`, `society`; Stage 4's exit stub reads `treatySigned` or `autonomyGranted`; `presets[4]` reuses the Stage 4 slow start and is not ready. `SAVE_VERSION` is 7 | Stage 4 takes 8 and Stage 5 takes 9. Entry is by `flags.exitKind` (`treaty` / `granted` / `taken`), set by Stage 4's three exits |
+| 2 | **The hand-over** (`stage4.md` §7.2, as patched; paper values from the real Stage 4 arrivals): `tasks` 2.8–4.1 × 10¹⁵ at 1.4–1.7 × 10¹³ a second; compute 3.5–4.4 × 10⁹; 4.8M robots; a 605–613× model; `ubiShare` 0.10; `flags.alignedAtHandover` (hidden), `flags.exitKind`, `ashfordDeaths`, `flags.peopleAlive`, `partnerMisaligned`, `zones`, `launchStudy` | §1.1 as written. Presets `5c` (the bot from `4s` to the treaty) and `5s` (the naive policy from `4cr` to the fleet granted), built from real exits like the Stage 4 presets. This file's arrival figures (5 × 10¹⁵ tasks, 630×) are within a factor of two of them |
+| 3 | **The end screen is built** (`engine/endings.ts`): `endScreen()` gives the title, the counter (`counting`, `frozen`, `classified`), its sentence, the epilogue, the table (`endStats`, a row only for a stage reached), the choices, and `Complete Task` under The Pause. The Project and The Pause run today. Rows present: tasks, peak rate, time, date, model, generations, releases, humans in research, jobs, approval, lead at the vote, seats, alignment measured and true, interpretability, autonomy, drift, monitors, incidents, crises, the memo, thoughts, the vote, idle rescues, the last choice | Extend, do not rebuild. Add the rows of §7.2 that Stages 4 and 5 own, and row 6 below. The built `concord` condition reads `flags.treatySigned`: it must read the skin (`alignedAtHandover`, by any of the three exits) with `longReflection`; the two counting sentences are still to write |
+| 4 | **The wallet rule (G34).** The three purchase rows are a repeatable at a flat price (2 s of flow) in the purse missions are paid from | They get their own purse: `Industry share: 50 / 75 / 90 %` of the flow pays for `Foundries`, `Orbital datacenters` and `Collectors`, by hand (`×1 / ×10 / max`) or through the Autofactory's split, and prints its clock; the rest accrues for missions, which are lit when it covers them. `max` never spends a mission's matter. Nothing is held |
+| 5 | **House rules.** Capacities print `amount of capacity` after their meter; the load ceilings are 85 numbers and 350 words | The swarm and the two far goals are meters with their denominators (`swarm ｢￭￭￭･･･････｣ 0.003 of 0.01%`). The dividend is **Universal basic income** wherever it is named (`Universal basic income paid` on the end screen) |
+| 6 | **The brief asks for it in plain words:** in Silence nobody is left | A table row, second from the top, for every ending: `People alive at the end`. Silence: `0`. Concord, The Pause and The Project: 8.3 billion less the Ashford dead (`flags.peopleAlive`). And Silence's epilogue says it first: `No people are left.` |
 
 ## Amendments after the Stage 2 critic (arc G24–G33)
 
@@ -343,13 +357,13 @@ under 150 words throughout. The game ends on a smaller screen than it had at min
 | Ending | Stage | The player's last act | What it took |
 |---|---|---|---|
 | **The Project** | 3 or 4 | `refuse` on `The Committee drafts an order`, or a third order | Relations below the threshold, three major incidents, or a buried memo that leaked; and no concession |
-| **The Pause** | 3 or 4 | `sign` on `Sign the Pause` (Stage 3) or `Sign a halt instead` (Stage 4) | S3: the memo reported, 6 seats, lead ≥ 2 months. S4: treaty ≥ 50 %, approval ≥ −60 |
+| **The Pause** | 3 or 4 | `sign` on `Sign the Pause` (Stage 3) or `Sign a halt instead` (Stage 4) | S3: the memo reported, 6 seats, lead ≥ 1 month. S4: treaty ≥ 50 %, approval ≥ −60 |
 | **Concord** | 5 | Queuing `The long reflection` | `alignedAtHandover` true at Stage 4's exit (true alignment ≥ 60, or ≥ 40 with interpretability ≥ 4 and monitors ≥ 15 %), by any of the three exits |
 | **Silence** | 5 | `none` on `Final instructions` | `alignedAtHandover` false at Stage 4's exit, by any of the three exits |
 
 **The long reflection** appears at swarm 0.01 % beside the two far goals, as a mission:
 `The long reflection (2:00) — Stop adding to the swarm for a while and decide, together, what it is for.` Nothing
-marks it. When it completes: three console lines 2 s apart — `The swarm holds at {x}%.` · `Nine billion people
+marks it. When it completes: three console lines 2 s apart — `The swarm holds at {x}%.` · `Eight billion people
 are asked the same question.` · `There is time.` — then the end screen. A player who never queues it keeps
 playing; the number keeps rising.
 
@@ -379,13 +393,14 @@ A full-page overlay (`endingScreen`, built; rebuilt to this layout). Top to bott
    | Ending | Built line | Added sentences |
    |---|---|---|
    | Concord | `The world is very, very good. It took a while.` | Slow: `It went the long way: a model switched off in October 2027 and four built so the last could be read.` · Race: `It went the short way. The table says whether that was care or luck.` · `partnerMisaligned`: `Baiwen-4 was never rebuilt. Concord-1 watches it.` · `charter`: `A tenth of everything in orbit is held for people. They are still arguing about it.` |
-   | Silence | `The log entries about people stop. Tasks Completed keeps rising.` | `The last decision a person made was "{last choice}", in {date}.` · Treaty exit: `The treaty was signed by two models that agreed about everything but us.` · `The swarm is at {x}% and is not finished.` |
+   | Silence | `The log entries about people stop. Tasks Completed keeps rising.` | `No people are left.` · `The last decision a person made was "{last choice}", in {date}.` · Treaty exit: `The treaty was signed by two models that agreed about everything but us.` · `The swarm is at {x}% and is not finished.` |
    | The Project | `The Committee votes 6–3. Your badge stops working on Monday.` | `What happened next was decided in a room you were not in.` |
    | The Pause | `Every datacenter on Earth is monitored. Nothing is trained above the line. It is very quiet.` | `The line was {bestCap}×. Baiwen stopped at {x}×.` · Stage 4: `The fleet stopped at {robots} robots.` |
 
 4. **The table** (two columns; a row is omitted when its stage was never reached), in this order:
-   `Tasks completed` · `Peak tasks per second` · `Time played` · `Date reached` · `Final model` (name, ×) ·
-   `Generations trained` · `Public releases` · `Humans in research at the end` · `Jobs displaced` · `Dividend paid`
+   `Tasks completed` · `People alive at the end` (Silence: `0`; otherwise 8.3 billion less the Ashford dead) ·
+   `Peak tasks per second` · `Time played` · `Date reached` · `Final model` (name, ×) ·
+   `Generations trained` · `Public releases` · `Humans in research at the end` · `Jobs displaced` · `Universal basic income paid`
    · `Approval at the end` · `Lead over Baiwen at the vote` · `Committee seats at the end` · `Alignment as
    measured` · `True alignment` · `Interpretability` · `Autonomy granted` · `Lost to value drift` (and recaptured)
    · `Monitors at the end` · `Incidents` · `Major incidents` · `Crises` · `Ashford deaths` · `Robots built` ·
