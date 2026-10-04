@@ -119,11 +119,11 @@ export const S2_FUNDS_EXPONENT = 7;
 
 /**
  * Scale-1 base of a Stage 2 run (stage2.md has $25,000; the round-2 knob, `stage2-round2-fixes.md` §1).
- * $44,000 since the wallet rule: the run no longer borrows from lots, the first run is not starved and
- * cards cost seconds of what fills funds, so the stage came 3–5 minutes shorter at $32,000. The
- * reasonable bot moves least with it, its stage being more than half training.
+ * $52,000 since the wallet rule: the run no longer borrows from lots, the first run is not starved,
+ * cards cost 70 % of the seconds of what fills funds and runs take 90–120 s, so the stage came several
+ * minutes shorter at $32,000. The reasonable bot moves least with it, its stage being mostly training.
  */
-export const S2_RUN_BASE = 44000;
+export const S2_RUN_BASE = 52000;
 
 export function fundsForS2(c: number): number {
   return Math.round(S2_RUN_BASE * Math.pow(c / COST_KNEE, S2_FUNDS_EXPONENT));
@@ -259,16 +259,16 @@ export function gpusShort(s: GameState): boolean {
 
 /**
  * Seconds a run takes, by the GPUs it uses: Stage 1 `45 + 10 × log2(N / 10)` (45–80 s), Stage 2
- * `70 + 8 × log2(N / 1,000)` clamped to 70–120 s (G9's two minutes). Stage 2 was 60–110 s: with the
+ * `90 + 8 × log2(N / 1,000)` clamped to 90–120 s (G9's two minutes). Stage 2 was 60–110 s: with the
  * run no longer starved by lots or cards (arc G34) a player who reads the delays is training-bound,
- * and the reasonable bot ended at 33–36 minutes whatever the price.
+ * and the reasonable bot ended at 31–36 minutes whatever the price.
  */
 export function trainingDuration(s: GameState): number {
   const n = Math.max(1, gpusNeeded(s));
   if (s.stage < 2) return Math.min(80, Math.max(45, 45 + 10 * Math.log2(n / 10)));
   // Stage 3: `30 + 6 × log2(N / 300,000)`, 30–60 s, for every run, automatic or not (stage3.md §2.5).
   if (s.stage >= 3) return Math.min(60, Math.max(30, 30 + 6 * Math.log2(n / 300000)));
-  return Math.min(120, Math.max(70, 70 + 8 * Math.log2(n / 1000)));
+  return Math.min(120, Math.max(90, 90 + 8 * Math.log2(n / 1000)));
 }
 
 /**

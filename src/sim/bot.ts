@@ -447,6 +447,7 @@ export function simulate(args: Args): SimResult {
   // Stage 2 bookkeeping.
   let s2Start: number | null = s.stage === 2 ? t0 : null;
   let s2End: number | null = null;
+  let s2LotPresses: number | null = null;
   let s2Exit = '';
   let s2Cap = 0;
   const s2Reveals: number[] = [];
@@ -831,6 +832,8 @@ export function simulate(args: Args): SimResult {
         s2End = t;
         s2Exit = s.flags['exitReadySince'] === undefined ? 'bought' : 'bought';
         s2Cap = bestCapability(s);
+        // Stage 3 orders lots too: the G34 count is Stage 2's.
+        s2LotPresses = (s.stats.pressCounts['gpuLot'] ?? 0) - (pressesAtStart['gpuLot'] ?? 0);
       }
       prevStage = s.stage;
       if (args.stopAtStage && s.stage >= args.stopAtStage) break;
@@ -1074,7 +1077,7 @@ export function simulate(args: Args): SimResult {
       clickGapPct: clickGapShare(actionTimes, startT + 600, stop),
       lotLitPct: handsChecks ? Math.round((100 * lotLit) / handsChecks) : 0,
       trainReadyPct: trainIdleChecks ? Math.round((100 * trainReady) / trainIdleChecks) : 100,
-      lotPresses: (s.stats.pressCounts['gpuLot'] ?? 0) - (pressesAtStart['gpuLot'] ?? 0),
+      lotPresses: s2LotPresses ?? (s.stats.pressCounts['gpuLot'] ?? 0) - (pressesAtStart['gpuLot'] ?? 0),
       longestRelease: Math.round(Math.max(longestRelease, stop - lastCapAt)),
       longestReleaseAt: rel(longestRelease >= stop - lastCapAt ? longestReleaseAt : lastCapAt),
     };

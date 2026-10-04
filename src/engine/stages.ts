@@ -5,8 +5,8 @@ import { snapToStage } from './clock.js';
 import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contractWeight, rentQuota, researchCapacityAt } from './economy.js';
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName, arrivalRunScale, researchFor, MAJOR_TIERS, cardWallSeconds } from './training.js';
-import { calibrateMarket, autoTarget } from './market.js';
-import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES } from './infrastructure.js';
+import { calibrateMarket, autoTarget, wantedAt } from './market.js';
+import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES, setArrivalIncomeEstimator } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
@@ -59,6 +59,23 @@ function retireProjects(s: GameState, next: number, quiet: string[]): string[] {
  * 5 MW; the market is calibrated once and priced on AUTO; signed contracts keep paying a fixed
  * rate. Pre-flight leaves no wall behind: Trust +2, and room in the lab for the next run.
  */
+/**
+ * The income a lab would bring into Stage 2 if First Datacenter were bought now: the arrival run on a
+ * copy of the state (its 1,000 owned GPUs, the market calibrated from what Stage 1 sold, AUTO's
+ * clearing price and the contracts' frozen rate). About a tenth of a millisecond; Stage 1 asks at most
+ * once a second (engine/infrastructure.ts `s2Scale`).
+ */
+export function arrivalIncomeS2(s: GameState): number {
+  if (s.stage > 2) return Math.max(0, s.stats.revPerSec);
+  // Called from Stage 1, or from the arrival's first line (the stage already set, nothing else moved).
+  const c = JSON.parse(JSON.stringify(s)) as GameState;
+  c.stage = 1;
+  c.flags['estimatingArrival'] = true;
+  enterStage(c, 2);
+  return Math.max(0, wantedAt(c, c.price) * c.price * c.revenueMult + c.contractIncome);
+}
+setArrivalIncomeEstimator(arrivalIncomeS2);
+
 /** What Stage 2's three lab cards multiply the arrival's lab by (×4 each). */
 const S2_LAB_CARDS = 64;
 
@@ -67,7 +84,7 @@ function enterScale(s: GameState): void {
   const before = Math.max(1, s.stats.tasksPerSec);
   // Stage 2's prices follow the lab that arrives: frozen here from Stage 1's best revenue, the figure
   // the Stage 1 row was already quoting (engine/infrastructure.ts, s2Scale).
-  s.flags['s2Scale'] = arrivalScaleS2(Math.max(s.stats.revPerSec, counter(s, 'peakRev')));
+  if (s.flags['estimatingArrival'] !== true) s.flags['s2Scale'] = arrivalScaleS2(arrivalIncomeS2(s));
   const contracts = s.projects['p_contract']?.bought ?? 0;
   // Frozen before anything else changes: what Stage 1 was selling sets the market, contracts their
   // rate. The contract customers' share of Stage 1's sales becomes that fixed rate.

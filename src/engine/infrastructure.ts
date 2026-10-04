@@ -17,23 +17,42 @@ export const S2_FUNDS_SCALE = 2.4;
 /**
  * Stage 2's prices follow the lab that arrives (the trainfirst regression: a Stage 1 played without a
  * late card arrived with a third of the income and paid the same dollars). Every Stage 2 funds price,
- * a run's and a lot's included, is multiplied by the arrival's scale: the square root of Stage 1's
- * best revenue a second against the median exit's (a strong lab keeps part of its lead, a weak one is
- * not left a third of the income for the same prices), within 0.6–1.25. Measured once, at the click
- * (`flags.s2Scale`); before it, live, so the Stage 1 row can quote the Stage 2 price the click charges.
+ * a run's and a lot's included, is multiplied by the arrival's scale, set by the income the player
+ * brings into Stage 2: the arrival played on a copy of the state (1,000 owned GPUs, the market Stage 1
+ * built, the contracts' frozen rate; `arrivalIncomeS2` in engine/stages.ts) against the median exit's.
+ * A weaker lab pays in proportion; a stronger one more by the square root only, keeping part of its
+ * lead (Stage 3's rule for its runs); within 0.6–1.25. Frozen at the click (`flags.s2Scale`); in Stage
+ * 1, live (estimated at most once a second), so the row can quote the Stage 2 price the click charges.
+ * Stage 1's best revenue, the measure before, missed a first-timer's income by a quarter either way.
  */
-export const S2_REF_PEAK = 2800;
+export const S2_REF_INCOME = 3500;
+/** The exponent below the median: 1 would charge a weak lab in proportion. */
+export const S2_SCALE_BELOW = 0.75;
 
-export function arrivalScaleS2(peak: number): number {
-  const raw = Math.sqrt(Math.max(1, peak) / S2_REF_PEAK);
+export function arrivalScaleS2(income: number): number {
+  const ratio = Math.max(1, income) / S2_REF_INCOME;
+  const raw = ratio < 1 ? Math.pow(ratio, S2_SCALE_BELOW) : Math.sqrt(ratio);
   return Math.round(Math.min(1.25, Math.max(0.6, raw)) * 100) / 100;
+}
+
+/** The arrival estimate, registered by engine/stages.ts (which runs the arrival); cached a second a state. */
+let arrivalIncome: ((s: GameState) => number) | null = null;
+const arrivalCache = new WeakMap<GameState, { at: number; scale: number }>();
+
+export function setArrivalIncomeEstimator(f: (s: GameState) => number): void {
+  arrivalIncome = f;
 }
 
 export function s2Scale(s: GameState): number {
   const v = s.flags['s2Scale'];
   if (typeof v === 'number' && v > 0) return v;
-  if (s.stage < 2) return arrivalScaleS2(Math.max(s.stats.revPerSec, counter(s, 'peakRev')));
-  return 1;
+  if (s.stage >= 2 || !arrivalIncome) return 1;
+  const now = Math.floor(s.stats.timePlayed);
+  const hit = arrivalCache.get(s);
+  if (hit && hit.at === now) return hit.scale;
+  const scale = arrivalScaleS2(arrivalIncome(s));
+  arrivalCache.set(s, { at: now, scale });
+  return scale;
 }
 
 /** A Stage 2 funds price: scale-1 dollars → dollars on screen. */
