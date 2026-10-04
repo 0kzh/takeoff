@@ -9,7 +9,7 @@ import {
 } from '../engine/training.js';
 import {
   lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost,
-  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, buildWall, standingOrderOn } from '../engine/infrastructure.js';
+  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, buildWall, standingOrderOn, lotSizes } from '../engine/infrastructure.js';
 import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled, optionCost } from '../engine/events.js';
@@ -640,7 +640,7 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   {
     let guard = 0;
     while (guard++ < 4) {
-      const size = [25000, 5000, 1000].find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
+      const size = lotSizes(s).slice().reverse().find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
       if (!size || !a.buyGpuBatch(s, size)) break;
     }
   }
@@ -730,8 +730,8 @@ export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void
 
 /** What the harness's sweep also presses in Stage 2 when it is enabled: the bigger lots. */
 function sweepExtras(s: GameState, a: Actions): void {
-  if (s.revealed['lot5']) a.buyGpuBatch(s, 5000);
-  if (s.revealed['lot25']) a.buyGpuBatch(s, 25000);
+  if (s.revealed['lot5']) a.buyLotRow(s, 1);
+  if (s.revealed['lot25']) a.buyLotRow(s, 2);
 }
 
 function plantEnabled(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): boolean {

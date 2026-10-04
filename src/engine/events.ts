@@ -7,7 +7,7 @@ import { visibleProjects, costLabel } from './projects.js';
 import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate, rentQuota } from './economy.js';
 import {
   datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
-  LOT_SIZES, lotFits, lotCostOf, datacenterReason, plantReason,
+  lotSizes, lotFits, lotCostOf, datacenterReason, plantReason,
 } from './infrastructure.js';
 import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun, delayNote } from './training.js';
 import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
@@ -390,7 +390,7 @@ export function enabledPurchases(s: GameState): string[] {
     return out;
   }
   if (!s.revealed['infrastructure']) return out;
-  if (LOT_SIZES.some((n) => (n === 1000 || s.revealed[n === 5000 ? 'lot5' : 'lot25']) && lotFits(s, n) && s.buildFund >= lotCostOf(s, n))) out.push('gpuLot');
+  if (lotSizes(s).some((n, row) => (row === 0 || s.revealed[row === 1 ? 'lot5' : 'lot25']) && lotFits(s, n) && s.buildFund >= lotCostOf(s, n))) out.push('gpuLot');
   if (s.revealed['dcButton'] && !datacenterReason(s) && s.buildFund >= datacenterCost(s)) out.push('datacenter');
   if (s.revealed['gasButton'] && !plantReason(s, 'gas') && s.buildFund >= gasCost(s)) out.push('gas');
   if (s.revealed['solarButton'] && !plantReason(s, 'solar') && s.buildFund >= solarCost(s)) out.push('solar');

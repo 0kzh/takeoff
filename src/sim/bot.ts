@@ -11,8 +11,8 @@ import { visibleProjects, projectById } from '../engine/projects.js';
 import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
 } from '../engine/economy.js';
-import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull } from '../engine/infrastructure.js';
-import { trainCost, canStartTraining, gpusShort, trainSlotFree } from '../engine/training.js';
+import { gpuCapacity, lotSize, lotCost, datacenterCost, gasCost, solarCost, nuclearCost, solarQueueFull, lotSizes, lotFits, lotCostOf } from '../engine/infrastructure.js';
+import { trainCost, canStartTraining, gpusShort, trainSlotFree, trainingRun, canPressTrain } from '../engine/training.js';
 import { fmtInt, fmtMoney, fmtClock, dateLabel, fmtNum } from '../engine/format.js';
 import { presetByKey } from '../data/presets.js';
 import { MECHANIC_FLAGS } from '../data/stage2.js';
@@ -220,6 +220,10 @@ export interface Stage2Summary {
   handsTwoPct: number;
   /** Share of the time after minute 10 inside stretches of 30 s or more without a player action. */
   clickGapPct: number;
+  /** The wallet rule (arc G34, stage2-round2-fixes.md §1): a whole lot lit, Train pressable or armed, lot presses. */
+  lotLitPct: number;
+  trainReadyPct: number;
+  lotPresses: number;
   /** Longest stretch between two changes of the deployed model's capability (the stage end closes the last). */
   longestRelease: number;
   longestReleaseAt: number;
@@ -427,6 +431,9 @@ export function simulate(args: Args): SimResult {
   const actionTimes: number[] = [];
   let handsChecks = 0;
   let handsNone = 0;
+  let lotLit = 0;
+  let trainIdleChecks = 0;
+  let trainReady = 0;
   let handsTwo = 0;
   let lastCap = s.capability;
   let lastCapAt = s.stats.timePlayed;
@@ -514,6 +521,12 @@ export function simulate(args: Args): SimResult {
       const n = enabledPurchases(s).length;
       handsChecks++;
       if (n === 0) handsNone++;
+      if (lotSizes(s).some((k, row) => (row === 0 || s.revealed[row === 1 ? 'lot5' : 'lot25']) && lotFits(s, k) && s.buildFund >= lotCostOf(s, k))) lotLit++;
+      // Train on screen and idle (no run training, a free slot): pressable or armed (G34: ≥ 80 %).
+      if (s.revealed['training'] && trainSlotFree(s) && !trainingRun(s)) {
+        trainIdleChecks++;
+        if (canPressTrain(s) || s.training.armed) trainReady++;
+      }
       if (n >= 2) handsTwo++;
     }
     policyStep(s, tracked, mem);
@@ -912,6 +925,9 @@ export function simulate(args: Args): SimResult {
       handsNonePct: handsChecks ? Math.round((100 * handsNone) / handsChecks) : 0,
       handsTwoPct: handsChecks ? Math.round((100 * handsTwo) / handsChecks) : 0,
       clickGapPct: clickGapShare(actionTimes, startT + 600, stop),
+      lotLitPct: handsChecks ? Math.round((100 * lotLit) / handsChecks) : 0,
+      trainReadyPct: trainIdleChecks ? Math.round((100 * trainReady) / trainIdleChecks) : 100,
+      lotPresses: (s.stats.pressCounts['gpuLot'] ?? 0) - (pressesAtStart['gpuLot'] ?? 0),
       longestRelease: Math.round(Math.max(longestRelease, stop - lastCapAt)),
       longestReleaseAt: rel(longestRelease >= stop - lastCapAt ? longestReleaseAt : lastCapAt),
     };
@@ -1008,6 +1024,7 @@ function printStage2(sum: Stage2Summary): void {
   console.log(`G24 nothing enabled       ${sum.handsNonePct}% of 2-s checks after 3:00   (≤ 50%)${ok(sum.handsNonePct <= 50)}`);
   console.log(`G25 two or more things    ${sum.handsTwoPct}% of checks   (≥ 25%)${ok(sum.handsTwoPct >= 25)}`);
   console.log(`G26 hands idle ≥ 30 s     ${sum.clickGapPct}% of the time after 10:00   (≤ 35%)${ok(sum.clickGapPct <= 35)}`);
+  console.log(`G34 whole lot lit         ${sum.lotLitPct}% of checks; Train pressable or armed ${sum.trainReadyPct}% of its idle time; ${sum.lotPresses} lot presses   (≥ 35%; ≥ 80%; ≤ 250)${ok(sum.lotLitPct >= 35 && sum.trainReadyPct >= 80 && sum.lotPresses <= 250)}`);
   console.log(`G26 longest release gap   ${clock(sum.longestRelease)} from ${clock(sum.longestReleaseAt)}   (≤ 5:30)${ok(sum.longestRelease <= 330)}`);
   console.log(`   mechanics              ${sum.mechanics.join(' · ')}`);
   console.log(`A5 training runs          ${sum.runs}   (10–12)`);

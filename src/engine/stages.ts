@@ -6,7 +6,7 @@ import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contrac
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName, arrivalRunScale } from './training.js';
 import { calibrateMarket, autoTarget } from './market.js';
-import { SUBSTATION_MW, lotCostOf, arrivalScaleS2 } from './infrastructure.js';
+import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
@@ -545,8 +545,15 @@ export function updateStage2(s: GameState): void {
     s.flags['r0'] = Math.max(1, s.stats.revPerSec - s.contractIncome);
   }
   // The bigger GPU lots join the row as the fleet grows into them (critic C1: sizes side by side).
-  if (!s.revealed['lot5'] && (s.gpus >= 3000 || s.funds >= lotCostOf(s, 5000))) s.revealed['lot5'] = true;
-  if (!s.revealed['lot25'] && (s.gpus >= 15000 || s.funds >= lotCostOf(s, 25000))) s.revealed['lot25'] = true;
+  if (!s.revealed['lot5'] && (s.gpus >= 3000 || s.buildFund >= lotCostOf(s, 5000))) s.revealed['lot5'] = true;
+  if (!s.revealed['lot25'] && (s.gpus >= 15000 || s.buildFund >= lotCostOf(s, 25000))) s.revealed['lot25'] = true;
+  // The smallest lot steps up with the fleet (engine/infrastructure.ts lotSizes), and says so (G32).
+  const smallest = lotSizes(s)[0]!;
+  const was = counter(s, 'lotFloor') || LOT_SIZES[0];
+  if (smallest !== was) {
+    s.flags['lotFloor'] = smallest;
+    say(s, `Lots come in ${fmtInt(smallest)}s now: a thousand GPUs is a rounding error on ${fmtInt(s.gpus)}.`);
+  }
   const arrival = s.flags['arrivalPrice'];
   if (typeof arrival === 'number' && s.price < 0.6 * arrival) {
     if (typeof s.flags['priceLowSince'] !== 'number') s.flags['priceLowSince'] = now;

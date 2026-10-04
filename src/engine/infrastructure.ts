@@ -341,9 +341,28 @@ export function cycleBuildShare(s: GameState): boolean {
   return true;
 }
 
-/** The lot sizes of the stage (Stage 2: 1,000 / 5,000 / 25,000; Stage 3: 10,000 / 25,000 / 100,000). */
+/**
+ * Stage 2's lots climb with the fleet: the three smallest of the ladder that are at least 2 % of
+ * the GPUs owned (1,000 / 5,000 / 25,000 until the fleet passes 50,000, then 5,000 / 25,000 /
+ * 125,000). Whole lots only, so a thousand-GPU lot is not pressed four hundred times (round 2 §1:
+ * at most 250 lot presses a stage).
+ */
+export const LOT_LADDER_S2 = [1000, 5000, 25000, 125000] as const;
+export const LOT_FLEET_SHARE = 0.02;
+
+/** The lot sizes of the stage's three rows (Stage 2: the ladder's window; Stage 3: 10,000 / 25,000 / 100,000). */
 export function lotSizes(s: GameState): readonly number[] {
-  return s.stage >= 3 ? LOT_SIZES_S3 : LOT_SIZES;
+  if (s.stage >= 3) return LOT_SIZES_S3;
+  const min = LOT_FLEET_SHARE * s.gpus;
+  let i = LOT_LADDER_S2.findIndex((n) => n >= min);
+  if (i < 0 || i > LOT_LADDER_S2.length - 3) i = LOT_LADDER_S2.length - 3;
+  return LOT_LADDER_S2.slice(i, i + 3);
+}
+
+/** Buys the lot a row sells now (the buttons: row 0, 1, 2). */
+export function buyLotRow(s: GameState, row: number): boolean {
+  const n = lotSizes(s)[row];
+  return n ? buyGpuBatch(s, n) : false;
 }
 
 /** The wall in front of the lots: what keeps the smallest whole lot from fitting ('' when it fits). */
@@ -363,9 +382,10 @@ export function standingStall(s: GameState): '' | 'power' | 'room' {
   return buildWall(s);
 }
 
-/** What the main lot button sells: a whole 1,000 when it fits, else nothing (Stage 2). */
+/** What the main lot button sells: its whole lot when it fits, else nothing (Stage 2). */
 export function lotSize(s: GameState): number {
-  return lotFits(s, LOT_SIZES[0]) ? LOT_SIZES[0] : 0;
+  const n = lotSizes(s)[0]!;
+  return lotFits(s, n) ? n : 0;
 }
 
 export function gpuUnitPrice(s: GameState): number {
@@ -375,8 +395,8 @@ export function gpuUnitPrice(s: GameState): number {
 }
 
 /** The lot the main button names: always a whole lot. */
-export function shownLot(_s: GameState): number {
-  return LOT_SIZES[0];
+export function shownLot(s: GameState): number {
+  return lotSizes(s)[0]!;
 }
 
 export function lotCostOf(s: GameState, n: number): number {
@@ -396,7 +416,7 @@ export function lotReasonOf(s: GameState, n: number): '' | 'no room' | 'no power
 }
 
 export function lotReason(s: GameState): '' | 'no room' | 'no power' {
-  return lotReasonOf(s, LOT_SIZES[0]);
+  return lotReasonOf(s, lotSizes(s)[0]!);
 }
 
 /**
@@ -434,9 +454,10 @@ function addLot(s: GameState, lot: number, cost: number): void {
 }
 
 /** Buy a whole lot of `n` by hand, from the build fund (the Standing order never takes the buttons away). */
-export function buyGpuBatch(s: GameState, size: number = LOT_SIZES[0]): boolean {
-  if (s.stage >= 3) return buyLotS3(s, size);
-  if (s.stage < 2 || !s.revealed['infrastructure'] || !(LOT_SIZES as readonly number[]).includes(size)) return false;
+export function buyGpuBatch(s: GameState, size?: number): boolean {
+  if (s.stage >= 3) return buyLotS3(s, size ?? LOT_SIZES_S3[0]);
+  size ??= lotSizes(s)[0]!;
+  if (s.stage < 2 || !s.revealed['infrastructure'] || !lotSizes(s).includes(size)) return false;
   if (!lotFits(s, size)) return false;
   const cost = lotCostOf(s, size);
   if (s.buildFund < cost) return false;
@@ -481,7 +502,7 @@ export function runStandingOrder(s: GameState): void {
   }
   let guard = 0;
   while (guard++ < 3) {
-    const size = LOT_SIZES.slice().reverse().find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
+    const size = lotSizes(s).slice().reverse().find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
     if (!size) return;
     addLot(s, size, lotCostOf(s, size));
     s.flags['standingLots'] = ((s.flags['standingLots'] as number) || 0) + 1;

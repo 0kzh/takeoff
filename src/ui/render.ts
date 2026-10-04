@@ -8,7 +8,7 @@ import {
   aiResearchRate, revenueCostOfAlloc, researchRate, insightRate,
 } from '../engine/economy.js';
 import {
-  shownLot, lotReasonOf, lotCostOf, lotReturn, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
+  lotReasonOf, lotCostOf, lotReturn, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, freeSlots, solarSeconds,
   freePowerGpus, powerScale, poweredGpus, KW_PER_GPU, GAS_MW, SOLAR_MW, NUCLEAR_MW,
   buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits, fundsIncome,
@@ -60,9 +60,10 @@ export function mount(p: Perform): void {
   bind('btn-marketing', () => perform('buyMarketing'));
   bind('btn-gpu', () => perform('rentGpu'));
   bind('btn-datacenter', () => perform('buildDatacenter'));
-  bind('btn-gpuBatch', () => perform('buyGpuBatch', 1000));
-  bind('btn-gpuBatch5', () => perform('buyGpuBatch', 5000));
-  bind('btn-gpuBatch25', () => perform('buyGpuBatch', 25000));
+  // Each row buys the lot it shows now (Stage 2's sizes climb with the fleet; Stage 3 has its own).
+  bind('btn-gpuBatch', () => perform('buyLotRow', 0));
+  bind('btn-gpuBatch5', () => perform('buyLotRow', 1));
+  bind('btn-gpuBatch25', () => perform('buyLotRow', 2));
   bind('btn-turbines', () => perform('buyTurbines'));
   bind('btn-solar', () => perform('buySolar'));
   bind('btn-nuclear', () => perform('buyNuclear'));
@@ -303,10 +304,13 @@ function renderInfrastructure(s: GameState): void {
   // minutes from the fund's income is not drawn, and at most one grey lot row is (stage2-round2 item 7).
   let freeSaid = false;
   let greyShown = false;
-  for (const [n, suffix] of [[1000, ''], [5000, '5'], [25000, '25']] as const) {
+  const window = lotSizes(s);
+  for (const [row, suffix] of [[0, ''], [1, '5'], [2, '25']] as const) {
+    const n = window[row]!;
     const id = `btn-gpuBatch${suffix}`;
     const cost = lotCostOf(s, n);
-    setText(n === 1000 ? 'gpuBatchCost' : `gpuBatch${suffix}Cost`, fmtMoneyShort(cost));
+    setText(row === 0 ? 'gpuLotSize' : `gpuLot${suffix}Size`, fmtInt(n));
+    setText(row === 0 ? 'gpuBatchCost' : `gpuBatch${suffix}Cost`, fmtMoneyShort(cost));
     const wallWhy = lotReasonOf(s, n);
     const short = wallWhy ? '' : buildShortLine(s, cost);
     const reason = wallWhy === 'no power'
@@ -325,9 +329,8 @@ function renderInfrastructure(s: GameState): void {
     const near = !!wallWhy || buildEta(s, cost) <= 180;
     const drawn = lit || (near && !greyShown);
     if (!lit && drawn) greyShown = true;
-    setOff(n === 1000 ? 'lotRow' : `lot${suffix}Row`, !drawn);
+    setOff(row === 0 ? 'lotRow' : `lot${suffix}Row`, !drawn);
   }
-  setText('gpuLotSize', fmtInt(shownLot(s)));
   setTitle(
     'btn-gpuBatch',
     `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each, from the build fund. The return is the task revenue the lot adds at today's market; the cluster also trains on it.`,

@@ -6,7 +6,7 @@ import {
   toggleGrid, toggleAutoPrice, setResearchAlloc, hireFadeCheck, rentQuota, setMonitorShare, powerBlockNews,
 } from './economy.js';
 import {
-  buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue, cycleBuildShare,
+  buildDatacenter, buyGpuBatch, buyTurbines, buySolar, buyNuclear, toggleStanding, updatePowerQueue, cycleBuildShare, buyLotRow,
   runStandingOrder, infrastructureMessages,
 } from './infrastructure.js';
 import { updateAutoPrice, recordPrice, floodedCheck } from './market.js';
@@ -347,6 +347,7 @@ export const actions = {
   stepPayments,
   setBuildBudget,
   cycleBuildShare,
+  buyLotRow,
   buyProject,
   resolveChoice,
   takeDefault,
