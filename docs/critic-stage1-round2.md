@@ -545,6 +545,8 @@ What is measurably good in Takeoff, so that the next fix does not break it:
 
 ## 9. Re-running
 
+*(Note added after the round: the frozen copy `tools/critic-r2/` has been merged into `tools/critic/` — including `explore.mjs` and `decisions.mjs` — and removed. Substitute `tools/critic/` in the commands below.)*
+
 All commands from the repo root; outputs in `agent-tools/critic-out/`.
 
 ```sh
