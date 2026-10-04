@@ -589,7 +589,8 @@ export function runDelaySeconds(s: GameState, cost: Cost): number {
 export function delayNote(s: GameState, cost: Cost): string {
   const d = runDelaySeconds(s, cost);
   if (d < 10) return '';
-  const name = s.stage === 1 ? waitingGoalS1(s)?.name ?? nextRunName(s) : nextRunName(s);
+  // Stage 3 names the run once, on the Train row (one home per fact): a card says `next run 1:10 later`.
+  const name = s.stage === 1 ? waitingGoalS1(s)?.name ?? nextRunName(s) : s.stage >= 3 ? 'next run' : nextRunName(s);
   return ` · ${name} ${Number.isFinite(d) && d < 3600 ? fmtClock(d) : 'much'} later`;
 }
 
