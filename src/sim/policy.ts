@@ -5,7 +5,7 @@ import {
 } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, gpusShort, needsDatacenter,
-  evalRun, gpusAvailable, gpusNeeded, canPressTrain, runDelaySeconds,
+  evalRun, canPressTrain, runDelaySeconds,
 } from '../engine/training.js';
 import {
   lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost,
@@ -588,8 +588,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   redTeamAndRelease(s, a, mem);
   if (mem.ticks % 2 !== 0) return;
 
-  const cost = trainCost(s);
-  const runResearch = cost.research ?? 0;
   const rev = Math.max(1, s.stats.revPerSec);
   const buy = (p: ProjectDef) => {
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
@@ -647,14 +645,9 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     }
   }
 
-  // 4. The build share by what binds: 75 % while the run waits for GPUs, 25 % while it waits only
-  //    for money with GPUs to spare, 50 % otherwise (a variant pins it).
+  // 4. The build share by what binds: 75 % while the run waits for GPUs, 50 % otherwise (a variant pins it).
   const pinned = /^share-(\d+)$/.exec(mem.variant);
-  const fleetReady = gpusAvailable(s) >= 1.5 * gpusNeeded(s);
-  const want = pinned ? Number(pinned[1]) / 100
-    : gpusShort(s) ? 0.75
-      : fleetReady && s.research >= 0.8 * runResearch && s.funds < (cost.funds ?? 0) ? 0.25
-        : 0.5;
+  const want = pinned ? Number(pinned[1]) / 100 : gpusShort(s) ? 0.75 : 0.5;
   let turns = 0;
   while (Math.abs(s.buildShare - want) > 1e-9 && turns++ < 3) a.cycleBuildShare(s);
 

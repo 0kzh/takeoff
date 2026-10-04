@@ -105,7 +105,7 @@ export function shipmentLine(s: GameState): string {
   const q = s.shipments ?? [];
   if (q.length === 0) return s.flags['blockade'] === true ? `The Blockade — ${fmtClock(counter(s, 'blockadeLeft'))} until the strait reopens` : '';
   const head = q[0]!;
-  return `Shipment: ${fmtInt(head.gpus)} Nimbus G${head.gen} in ${fmtClock(Math.ceil(head.remaining))}${q.length > 1 ? ` · ${q.length - 1} waiting` : ''}`;
+  return `Shipment: ${fmtInt(head.gpus)} GPUs in ${fmtClock(Math.ceil(head.remaining))}${q.length > 1 ? ` · ${q.length - 1} waiting` : ''}`;
 }
 
 /**

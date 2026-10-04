@@ -95,7 +95,8 @@ export function folded(s: GameState, key: string): boolean {
   const now = s.stats.timePlayed;
   let at = firstSeen.get(key);
   if (at === undefined) {
-    at = now;
+    // A restored save has been read already: what is on screen in its first frames starts folded.
+    at = document.body.classList.contains('boot') ? now - FOLD_SECONDS : now;
     firstSeen.set(key, at);
   }
   return now - at >= FOLD_SECONDS;
@@ -319,8 +320,9 @@ export function renderAlignment(s: GameState): void {
   setText('interpretability', fmtInt(s.interpretability));
   const words = ['the weights are numbers', 'probes on the residual stream', 'probes flag single runs', 'alignment read from the weights', 'drift stops with monitors at 15%', 'neuralese is readable'];
   foldNote(s, 'interpWords', words[Math.min(5, s.interpretability)]!, 'interpLine');
+  setOff('interpDash', byId('interpWords').textContent === '');
   setText('autonomy', fmtInt(s.autonomy));
-  setText('autonomyNote', s.autonomy >= 60 ? '— 80: it would not need to ask' : '');
+  setText('autonomyNote', s.autonomy >= 70 ? '— 80: it would not need to ask' : '');
   const marks = typeof s.flags['grantMarks'] === 'string' ? (s.flags['grantMarks'] as string).split('|').map((x) => x.split(':').slice(1).join(':')) : [];
   setTitle('autonomyLine', marks.length ? `Handed over:\n${marks.join('\n')}${s.flags['neuralese'] === 'neuralese' ? '\nNeuralese' : ''}\nWARNING: risk of value drift increased.` : 'Nothing handed over yet.');
   setText('driftLost', fmtInt(Math.floor(s.stats.lostToDrift ?? 0)));
@@ -337,7 +339,8 @@ export function renderAlignment(s: GameState): void {
     rm.setAttribute('aria-label', label);
   }
   if (rm.classList.contains('warn') !== share >= ROGUE_WARN) rm.classList.toggle('warn', share >= ROGUE_WARN);
-  setText('roguePct', `${fmtNum(share * 100, 1)}%`);
+  // No number while there is nothing to count (the meter says so): the share prints once it is there.
+  setText('roguePct', share >= 0.0005 ? `${fmtNum(share * 100, 1)}% of the fleet` : 'none');
   setText('rogueNote', share >= ROGUE_WARN ? `— ${fmtInt(ROGUE_BREAKOUT * 100)}: one will try to leave` : share >= 0.01 ? `— ${fmtNum(ROGUE_WARN * 100, 1)}: warning` : '');
   setText('monitorGen', `Monitor: Sage-${monitorModel(s)}, two generations behind. Efficacy halved.`);
   setText('honeypotLine', s.flags['honeypot'] === 'clean' ? 'Honeypot: behaviour unchanged' : 'Honeypot: it behaves differently unwatched');

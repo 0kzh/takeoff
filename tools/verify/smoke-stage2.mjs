@@ -39,7 +39,10 @@ const MAX_MINUTES = 60;
  * end), so 60 / 70 and then 80. Controls stay at 30 (stage2.md §6.3).
  */
 const BUDGET = { numbers: 80, interactive: 30 };
-const numbersAllowed = (t) => (t <= 330 ? 60 : t <= 630 ? 70 : BUDGET.numbers);
+/** stage2-round2-fixes.md item 7: numbers on screen ≤ 80 at every five-minute mark (the build share and capacity rows added theirs). */
+const numbersAllowed = () => BUDGET.numbers;
+/** The wallet rule (arc G34): no row is held back with a `… first` or `keeps …'s price` reason. */
+const HOLD_WORDS = /\b(the run|the plant|the hall|the offer|the reactor) first\b|keeps [^.]*'s price/;
 
 // ---------- static server on a free port ----------
 
@@ -182,7 +185,7 @@ try {
     'rented GPUs go back',
     'power is bought in megawatts now.',
     'Tasks per second',
-    'Prices set themselves from here.',
+    'Half of income builds from here',
   ];
   let wholeAt = null;
   let heldUntil = null;
@@ -235,6 +238,7 @@ try {
   let bannedAt = null;
   const shortLines = new Set();
   const meterRows = { gpu: '', power: '' };
+  const wallet = { hold: [], share: false, fund: false, armed: '', delay: '', capacity: '', greyMarks: [] };
   for (let step = 0; step < (MAX_MINUTES * 60 * 1000) / STEP_MS; step++) {
     const snap = await page.evaluate((ms) => {
       window.__game.tick(ms);
@@ -248,6 +252,28 @@ try {
     if (snap.stage === 2 && snap.trainShort) shortLines.add(snap.trainShort);
     if (snap.stage === 2 && !meterRows.gpu && snap.gpuRow) meterRows.gpu = snap.gpuRow;
     if (snap.stage === 2 && !meterRows.power && snap.powerRow) meterRows.power = snap.powerRow;
+    if (snap.stage === 2) {
+      const w = await page.evaluate(() => {
+        const vis = (el) => !!el && el.checkVisibility();
+        const text = [...document.querySelectorAll('#columns .panel')].filter(vis).map((el) => el.innerText).join('\n');
+        const train = document.getElementById('btn-train');
+        return {
+          text,
+          share: vis(document.getElementById('buildShareRow')),
+          fund: vis(document.getElementById('row-buildFund')),
+          armed: train.classList.contains('armed') ? document.getElementById('trainReason').innerText : '',
+          delay: [...document.querySelectorAll('#projectList .projectButton')].filter(vis).map((b) => b.querySelector('.projectTitle').innerText).find((x) => / later$/.test(x)) ?? '',
+          capacity: document.getElementById('row-gpus').innerText.replace(/\s+/g, ' '),
+        };
+      });
+      const hold = w.text.match(HOLD_WORDS);
+      if (hold && wallet.hold.length < 3) wallet.hold.push(`${clock(ts)}: ${hold[0]}`);
+      wallet.share ||= w.share;
+      wallet.fund ||= w.fund;
+      if (!wallet.armed && w.armed) wallet.armed = w.armed;
+      if (!wallet.delay && w.delay) wallet.delay = w.delay;
+      if (!wallet.capacity && /[\d,]+ of [\d,]+/.test(w.capacity)) wallet.capacity = w.capacity;
+    }
 
     // The event panel, on the first timed modal: two lines per option, focus inside, the page
     // behind still clickable, Escape takes the default.
@@ -319,6 +345,13 @@ try {
 
     if (snap.stage === 2 && ts >= nextMark) {
       marks.push({ t: nextMark, numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length });
+      // Grey is for goals (round 2 item 7): fewer than half the controls on screen are grey.
+      const grey = await page.evaluate(() => {
+        const all = [...document.querySelectorAll('#columns button, #columns input')].filter((b) => b.checkVisibility());
+        return { grey: all.filter((b) => b.disabled).length, all: all.length, ids: all.filter((b) => b.disabled).map((b) => b.id || b.className).join(',') };
+      });
+      wallet.greyMarks.push(`${grey.grey}/${grey.all}`);
+      if (args.includes('--dump')) console.log(`      ${clock(nextMark)} grey: ${grey.ids}`);
       // `--dump`: the numeric tokens per block at each mark (for trimming the screen).
       if (args.includes('--dump')) console.log(`      ${clock(nextMark)} ${await page.evaluate(DUMP_TOKENS)}`);
       await shot(page, `10-mark-${String(nextMark / 60).padStart(2, '0')}min`);
@@ -357,7 +390,13 @@ try {
   check('reload mid-cooldown restores the timer', c && JSON.stringify(c.before) === JSON.stringify(c.after), c ? JSON.stringify(c) : 'no cooldown seen');
   console.log('      5-minute marks (numbers / controls / words / panels):');
   for (const m of marks) console.log(`        ${clock(m.t)}  ${m.numbers} / ${m.interactive} / ${m.words} / ${m.panels}`);
-  check(`on-screen numbers ≤ 60 / 70 / ${BUDGET.numbers} at 5:00 / 10:00 / later 5-minute marks`, marks.length > 0 && marks.every((m) => m.numbers <= numbersAllowed(m.t)), marks.map((m) => m.numbers).join(' '));
+  check(`on-screen numbers ≤ ${BUDGET.numbers} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.numbers <= numbersAllowed(m.t)), marks.map((m) => m.numbers).join(' '));
+  check('no hold strings on screen (arc G34)', wallet.hold.length === 0, wallet.hold.join(' | '));
+  check('the build share row and the build fund row are on screen', wallet.share && wallet.fund, JSON.stringify({ share: wallet.share, fund: wallet.fund }));
+  check('Train armed while short: `… starts when paid for`', /starts when paid for/.test(wallet.armed), wallet.armed);
+  check('a card prints the delay it causes the waiting run (`· Sage-N m:ss later`)', !!wallet.delay, wallet.delay);
+  check('the GPU row prints its amount and its capacity (`17,105 of 25,000`)', !!wallet.capacity, wallet.capacity);
+  check('fewer than half the controls are grey at every 5-minute mark after 5:00', wallet.greyMarks.slice(1).every((g) => { const [a, b] = g.split('/').map(Number); return 2 * a < b; }), wallet.greyMarks.join(' '));
   check(`on-screen controls ≤ ${BUDGET.interactive} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.interactive <= BUDGET.interactive), marks.map((m) => m.interactive).join(' '));
 
   // ===== 4. Stage 3 arrival: narration, no crash, dev overlay usable =====

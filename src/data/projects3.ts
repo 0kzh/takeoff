@@ -72,9 +72,12 @@ function voteOpen(s: GameState): boolean {
   return s.activeChoice?.id === 'c_vote' || s.choiceQueue.some((c) => c.id === 'c_vote');
 }
 
-/** The two motions' tag: `(needs a 25× model and the Committee in session)`, then `(ready)`. */
+/**
+ * The two motions' tag: `(needs the Committee's vote)` — the 25× it waits for is on the graph's line,
+ * its one home on screen — then `(ready)`.
+ */
 function motionTag(s: GameState): string {
-  return voteReady(s) ? '(ready)' : '(needs a 25× model and the Committee in session)';
+  return voteReady(s) ? '(ready)' : '(needs the Committee\'s vote)';
 }
 
 /** The exit goals open the vote for their motion (a modal the player's click opens: no spacing). */

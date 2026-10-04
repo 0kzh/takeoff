@@ -5,13 +5,13 @@ import {
   gpuCost, marketingCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock,
   powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec, marketState, priceAbsurd,
   humanShare, perCopyRate, rentQuota, MIN_PRICE, PRICE_STEP_FROM, powerSecondsLeft, priceCeiling,
-  aiResearchRate, revenueCostOfAlloc,
+  aiResearchRate, revenueCostOfAlloc, researchRate, insightRate,
 } from '../engine/economy.js';
 import {
   shownLot, lotReasonOf, lotCostOf, lotReturn, gasCost, solarCost, nuclearCost, nextDatacenter, plantReason,
   queueLine, standingOrderOn, gpuUnitPrice, datacenterBuilding, dcBuildSeconds, freeSlots, solarSeconds,
   freePowerGpus, powerScale, poweredGpus, KW_PER_GPU, GAS_MW, SOLAR_MW, NUCLEAR_MW,
-  buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits,
+  buildShortLine, buildEta, buildWall, standingStall, standingLine, lotSizes, lotFits, fundsIncome,
 } from '../engine/infrastructure.js';
 import { marketBreakdown, qualityMultS2 } from '../engine/market.js';
 import {
@@ -346,13 +346,19 @@ function renderInfrastructure(s: GameState): void {
   setText('dcNote', building || dcShort ? '' : `${fmtClock(dcBuildSeconds(s))} to build · ${fmtInt(freeSlots(s))} slots free${wall === 'room' ? ' · room is the wall' : ''}`);
   setDisabled('btn-datacenter', !!building || !!dcShort);
   setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}). Paid from the build fund.`);
-  setOff('dcRow', !(building || !dcShort || wall === 'room' || buildEta(s, dc.cost) <= 180));
+  // The build fund's rows share one grey place (round 2 item 7, `grey is for goals`): a lit row is always
+  // drawn, the wall's named fix always, and one grey row within three minutes of the share's income.
+  const dcLit = !building && !dcShort;
+  const dcDrawn = !!building || dcLit || wall === 'room' || (!greyShown && buildEta(s, dc.cost) <= 180);
+  if (!dcLit && !building && wall !== 'room' && dcDrawn) greyShown = true;
+  setOff('dcRow', !dcDrawn);
   byId('btn-datacenter').classList.toggle('urgent', wall === 'room' && standingStall(s) === 'room');
 
   const idleMw = Math.max(0, s.powerCapacityMW - powerDrawMW(s));
   // The idle power is printed once, on the first plant row that is lit (round 2 §1: building ahead
   // prints its idle capacity); the rows below it carry their own capacity only.
   let idleSaid = false;
+  // One grey plant row at most, as with the lots (round 2 item 7): the one a power wall names first.
   const plant = (id: string, rowId: string, costId: string, noteId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
@@ -367,7 +373,10 @@ function renderInfrastructure(s: GameState): void {
     setDisabled(id, !!why || !!short);
     // The plant a power wall names stays drawn; any other grey plant only within three minutes.
     const named = wall === 'power' && kind === (s.revealed['gasButton'] ? 'gas' : 'solar');
-    setOff(rowId, !(!why && !short) && !named && !(buildEta(s, cost) <= 180));
+    const lit = !why && !short;
+    const drawn = lit || named || (!greyShown && buildEta(s, cost) <= 180);
+    if (!lit && !named && drawn) greyShown = true;
+    setOff(rowId, !drawn);
     byId(id).classList.toggle('urgent', named && standingStall(s) === 'power');
   };
   plant('btn-turbines', 'gasRow', 'turbineCost', 'gasNote', 'gasReason', 'gas', gasCost(s));
@@ -389,7 +398,8 @@ function renderBuildShare(s: GameState): void {
   setText('buildFund', fmtMoneyShort(Math.floor(s.buildFund)));
   const parts: string[] = [];
   const sizes = lotSizes(s).filter((n) => lotFits(s, n) && lotCostOf(s, n) > s.buildFund);
-  if (sizes.length) {
+  // Stage 3 draws one grey lot row with its own clock: the share does not say it twice.
+  if (sizes.length && s.stage === 2) {
     const n = sizes[0]!;
     const eta = buildEta(s, lotCostOf(s, n));
     if (Number.isFinite(eta) && eta < 3600) parts.push(`next ${fmtInt(n)} lot in ${fmtClock(Math.max(1, eta))}`);
@@ -466,6 +476,21 @@ function renderResearch(s: GameState): void {
 
 const projectButtons = new Map<string, HTMLButtonElement>();
 
+/** Seconds until a card is paid for from what comes in (funds after the build share, research, insight). */
+function cardEta(s: GameState, c: { funds?: number; research?: number; insight?: number; trust?: number; data?: number }): number {
+  const eta = (need: number | undefined, have: number, rate: number) => {
+    const short = (need ?? 0) - have;
+    if (short <= 0) return 0;
+    return rate > 0 ? short / rate : Infinity;
+  };
+  if ((c.trust ?? 0) > s.trust) return Infinity;
+  return Math.max(
+    eta(c.funds, s.funds, fundsIncome(s)),
+    eta(c.research, s.research, researchRate(s)),
+    eta(c.insight, s.insight, insightRate(s)),
+  );
+}
+
 /** Buttons are kept and updated in place so a hover or a half-finished click survives a re-render. */
 function renderProjects(s: GameState): void {
   const list = byId('projectList');
@@ -495,6 +520,10 @@ function renderProjects(s: GameState): void {
     const delay = def.canAfford(s) ? delayNote(s, def.cost(s)) : '';
     const label = `${def.title} ${priceTag(s, def)}${needs}${delay}`;
     if (title.textContent !== label) title.textContent = label;
+    // Grey is for goals (stage2-round2-fixes.md item 7): in Stage 2 a card more than three minutes
+    // from its purses' income is not drawn; the stage goal and a wall's fix are excepted.
+    const far = s.stage === 2 && !def.pinned && !def.rescue && def.urgent?.(s) !== true && cardEta(s, def.cost(s)) > 180;
+    if (b.classList.contains('off') !== far) b.classList.toggle('off', far);
     // From Stage 2 a card's description is read in its first 45 s on screen, then lives in its hover.
     const fold = s.stage >= 2 && folded(s, `card:${def.id}`);
     if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
@@ -604,7 +633,7 @@ function renderRunning(s: GameState, run: TrainingRun): void {
   const all = gpus > 0 && gpusAvailable(s) <= 0;
   setText('runLine', waiting
     ? `${run.name} is trained; it waits for the release slot.`
-    : `Training on ${fmtInt(gpus)} GPUs — ${fmtClock(left)} left. ${all ? `All ${fmtInt(gpus)} GPUs are training.` : 'They serve no customers until it is done.'}`);
+    : `Training on ${fmtInt(gpus)} GPUs — ${fmtClock(left)} left.${s.stage >= 3 ? '' : ` ${all ? `All ${fmtInt(gpus)} GPUs are training.` : 'They serve no customers until it is done.'}`}`);
 }
 
 function renderEval(s: GameState, run: TrainingRun): void {

@@ -32,12 +32,15 @@ const SEED = Number(argOf('--seed', '1'));
 const STEP_MS = 3000;
 const MAX_MINUTES = 70;
 /**
- * The on-screen budget (stage3.md §6.3, arc G14): 30 controls. Numbers: the spec's 65 is not met by
- * this build (rates beside the sliders, printed returns on every repeatable and switch, band edges
- * and the cards' stakes, all asked for in G27–G30, put it at 95–125); the check holds the line at
- * 130 so the screen cannot grow further unnoticed, and the counts are printed for the report.
+ * The on-screen budget (stage3.md §6.3, arc G14; the coordinator's round-3 load limits): 30 controls,
+ * 85 numbers and 350 words at every five-minute mark. Explanations fold into hovers once read, band
+ * edges print only when near, each fact has one home (the build reached 76–85 numbers and 212–298
+ * words from the preset); the spec's 65 numbers is not met (rates beside the sliders and the
+ * printed returns of G27 stay on screen).
  */
-const BUDGET = { numbers: 130, interactive: 30 };
+const BUDGET = { numbers: 85, interactive: 30, words: 350 };
+/** The wallet rule (arc G34): no row is held back with a `… first` or `keeps …'s price` reason. */
+const HOLD_WORDS = /\b(the run|the plant|the hall|the offer|the reactor) first\b|keeps [^.]*'s price/;
 
 // ---------- static server on a free port ----------
 
@@ -206,13 +209,18 @@ try {
     };
   });
   check('B26: research ≥ arrival + 1,000,000 at ts 30 and shown without a ceiling', a30.research >= arrival.research + 1e6 && !/\//.test(a30.text), `${Math.round(arrival.research)} → ${Math.round(a30.research)} (“${a30.text}”)`);
-  check('arrival: Marketing, Hire, gas, solar and Release are gone; the three lots and Alignment are on screen', !a30.marketing && !a30.hire && !a30.gas && !a30.solar && !a30.release && a30.lots === 3 && a30.alignment, JSON.stringify(a30));
+  // The lots: every lit one, and at most one grey (stage2-round2-fixes.md item 7) — at the arrival's power wall, one.
+  check('arrival: Marketing, Hire, gas, solar and Release are gone; a lot row and Alignment are on screen', !a30.marketing && !a30.hire && !a30.gas && !a30.solar && !a30.release && a30.lots >= 1 && a30.alignment, JSON.stringify(a30));
   check('arrival: Deploy Sage-2 as monitor is on screen', a30.monitor);
 
   // ===== 2. The reasonable bot through the stage =====
   await page.evaluate(() => window.__game.setAutoplay(true, 'bot', true));
   const t0 = arrival.t;
   const marks = [];
+  const holdSeen = [];
+  let shareSeen = false;
+  let fundSeen = false;
+  let alignShareSeen = false;
   let nextMark = 300;
   const panelsSeen = new Set();
   const consoleSeen = new Set();
@@ -253,6 +261,17 @@ try {
 
     if (ts >= nextMark) {
       marks.push({ t: nextMark, numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length });
+      const extra = await page.evaluate(() => ({
+        text: [...document.querySelectorAll('#columns .panel')].filter((el) => el.checkVisibility()).map((el) => el.innerText).join('\n'),
+        share: !!document.getElementById('buildShareRow')?.checkVisibility() && /\d+%/.test(document.getElementById('btn-buildShare').innerText),
+        fund: !!document.getElementById('row-buildFund')?.checkVisibility(),
+        align: /Alignment work: \d+%/.test(document.getElementById('btn-alignWork').innerText),
+      }));
+      const hold = extra.text.match(HOLD_WORDS);
+      if (hold) holdSeen.push(`${clock(nextMark)}: ${hold[0]}`);
+      shareSeen ||= extra.share;
+      fundSeen ||= extra.fund;
+      alignShareSeen ||= extra.align;
       if (args.includes('--dump')) console.log(`      ${clock(nextMark)} ${await page.evaluate(DUMP_TOKENS)}`);
       await shot(page, `10-mark-${String(nextMark / 60).padStart(2, '0')}min`);
       nextMark += 300;
@@ -298,6 +317,9 @@ try {
   console.log('      5-minute marks (numbers / controls / words / panels):');
   for (const m of marks) console.log(`        ${clock(m.t)}  ${m.numbers} / ${m.interactive} / ${m.words} / ${m.panels}`);
   check(`on-screen numbers ≤ ${BUDGET.numbers} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.numbers <= BUDGET.numbers), marks.map((m) => m.numbers).join(' '));
+  check(`on-screen words ≤ ${BUDGET.words} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.words <= BUDGET.words), marks.map((m) => m.words).join(' '));
+  check('no hold strings on screen at any 5-minute mark (arc G34)', holdSeen.length === 0, holdSeen.slice(0, 3).join(' | '));
+  check('the build share and the build fund are on screen, Alignment work is a share', shareSeen && fundSeen && alignShareSeen, JSON.stringify({ shareSeen, fundSeen, alignShareSeen }));
   check(`on-screen controls ≤ ${BUDGET.interactive} at every 5-minute mark`, marks.length > 0 && marks.every((m) => m.interactive <= BUDGET.interactive), marks.map((m) => m.interactive).join(' '));
   await context.close();
 
@@ -401,9 +423,18 @@ try {
       title: document.getElementById('endingTitle').innerText,
       sentence: document.getElementById('endingSentence').innerText,
       counter: document.getElementById('endingCounter').classList.contains('classified'),
+      // The end screen is the page: nothing of the game is drawn, and the last choice is in the document.
+      gameHidden: !document.getElementById('columns').checkVisibility() && !document.getElementById('topDiv').checkVisibility(),
+      choicesInPage: (() => {
+        const last = document.querySelector('#endingChoices div:last-child');
+        if (!last) return false;
+        const r = last.getBoundingClientRect();
+        return r.bottom + window.scrollY <= document.documentElement.scrollHeight + 1;
+      })(),
     }));
     await shot(pj, '09-the-project', { fullPage: true });
     check('the Project: an order refused while its cause stands ends the run, end screen rendered', screen.ending === 'project' && screen.screen && screen.title === 'The Project' && screen.counter && /classified/.test(screen.sentence), JSON.stringify({ refused, ...screen, stage: end?.stage }));
+    check('the end screen covers the page: the game is not drawn, the Choices list scrolls with it', screen.gameHidden && screen.choicesInPage, JSON.stringify({ gameHidden: screen.gameHidden, choicesInPage: screen.choicesInPage }));
     await cj.close();
   }
 
