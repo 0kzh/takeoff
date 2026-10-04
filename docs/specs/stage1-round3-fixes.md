@@ -6,24 +6,30 @@ card, stakes on event buttons, the transition, the meters. **Not here:** the bug
 scale, events on an idle lab, the deposit, the wall-price inversion, the price ceiling, the hire-only advice,
 mispriced Trust cards). Times marked "paper" are estimates from the built traces; the sim decides.
 
+**Amended by `stage2-round2-fixes.md` §1 (the wallet rule, arc G34).** The `the run first` hold this file first
+proposed is withdrawn: nothing is held back for the player. Purchases that delay a waiting run print the delay,
+and Train can be armed. §1 below is the amended text.
+
 ## 1. A run costs money and needs GPUs (the biggest gap)
 
-**Decision.** Research leaves the run's price in Stage 1. A run is paid for in dollars, needs its GPUs, and the
-dollars are kept for it. Research buys cards and nothing else. This is the critic's second fix, plus a hold.
+**Decision.** Research leaves the run's price in Stage 1. A run is paid for in dollars and needs its GPUs.
+Research buys cards and nothing else. This is the critic's second fix, with the stakes of every other dollar
+purchase printed and a Train that can be armed.
 
-**Why not the queue.** Queueing a run and reserving research keeps a wait on the Train row that no button on
-screen shortens (`research — about 1:10`), adds a new idea (an ordered run) and a `delays Sage-1.4 by 0:58` figure
-to every card. The owner asked for a requirement stated plainly that blocks, and for less on screen. With
-research out, the row is a price and a GPU count, both moved by buttons the player already has, and money has
-something to buy in the second half. **Why a hold as well.** Any wallet a run shares can starve it: with a
-buy-what-is-lit player, Marketing and the dollar cards would do to the run's money what cards did to its research.
+**Why not a reserved queue.** Reserving research for a queued run keeps a wait on the Train row that no button
+on screen shortens (`research — about 1:10`) and puts a delay figure on every research card for the whole stage.
+The owner asked for a requirement stated plainly that blocks, and for less on screen. With research out, the row
+is a price and a GPU count, both moved by buttons the player already has, and money has something to buy in the
+second half. Arming (below) reserves nothing, and delay figures appear on dollar rows only while a run waits. **Why no hold.** Stage 2's built hold greys its lot rows for more than half
+the stage; here it would grey Marketing and Rent GPU between every pair of runs. Stage 1's dollar sinks climb in
+price, so they limit themselves: each stays lit and says what it costs the run.
 
 | | Rule |
 |---|---|
 | Price | `trainCost` in Stage 1 is dollars only: `$290 × c^11.5`, two significant figures. Capability runs: **$290 / $1,100 / $3,800 / $14,000 / $52,000** at 1.00 / 1.12 / 1.25 / 1.40 / 1.57× (built: $288 / $844 / $2,390 / $7,030 / $20,900 and 2,000–19,000 research) |
 | GPUs | Unchanged: 10 / 15 / 30 / 45 / 80, then the wall. `Distributed training` as built |
-| The run first | While the next run has its GPUs and no run is training or waiting for release, any other dollar purchase must leave the run's price in hand; a button that cannot reads `the run first` where its reason goes. Exempt: Buy Power and the Grid Contract, rescues, event options, First Datacenter. It is Stage 2's built lot hold (`lotHold`, `holdName`), one stage earlier |
-| At the wall | The same hold keeps First Datacenter's price: `First Datacenter first` |
+| Other dollar purchases | Stay lit. While the next run (or, at the wall, First Datacenter) waits for money, Marketing, Rent GPU and dollar cards print the delay they would cause when it is 10 s or more: `Sage-1.4 0:55 later` |
+| Arming | Train is disabled only by its GPUs. Pressed while money is short it is armed and starts by itself; pressed again it stands down. Nothing is reserved |
 | Research is for | The Projects list: what a copy can do, what the cloud will rent (the three lease cards), what the business earns (the API, pricing, contracts), what the lab no longer does by hand (Grid Contract, Dynamic pricing), and the pipeline itself |
 | The lab's size | Limits cards only. `atPlateau` and `needs 11,000 research; the lab holds 8,000` never apply to a Stage 1 run; `researchWanted` ignores the run; `Lease the floor upstairs` and `Rent desks` key on a card that costs more than the lab holds |
 | Stage 2 | Its price is unchanged (research, dollars, data, GPUs). Research is new to the Train row there, so one console line 30 s after the arrival narration (its five lines are full): `Runs this size need research as well as money: 34,000 for Sage-1.6.` The arrival's research gift stays. From 1.6× the Stage 1 row quotes the Stage 2 dollar price ($150,000 at 1.76×), so the figure does not move when the datacenter opens |
@@ -34,12 +40,13 @@ buy-what-is-lit player, Marketing and the dollar cards would do to the run's mon
 | State | Reads |
 |---|---|
 | Ready | `Train Sage-1.4` · `Cost: $14,000` · `Needs 45 GPUs for 1:06` |
-| Short of money | The same, greyed, with the built wait: `money — about 1:20`. Marketing, Rent GPU and dollar cards read `the run first` |
-| Short of GPUs, at the quota, the wall, training | As built. No hold while GPUs are what is missing |
+| Short of money | The same, lit, with the built wait: `money — about 1:20`. Pressed: `Sage-1.4 starts when paid for — about 1:20` |
+| Short of GPUs, at the quota, the wall, training | As built: the only states in which Train is disabled |
 
 No research line appears on it in Stage 1.
 
-**Runs, on paper** (the critic's first-timer, who spends whatever is lit while a run trains):
+**Runs, on paper** (a player who declines purchases that print a delay of 0:30 or more; one who buys everything
+lit reaches the fifth run about three to five minutes later):
 
 | Run | From | Needs | Costs | Starts about | Paid by |
 |---|---|---|---|---|---|
@@ -51,17 +58,19 @@ No research line appears on it in Stage 1.
 | The wall | 1.76× | 1,200 | — | 20:15 | — |
 | First Datacenter | | | the wall price | by 24:15 | at most four minutes |
 
-**The engineer changes** `trainCost`, `fundsFor`, `trainWait` and `runOtherwiseReady` for Stage 1; a Stage 1
-`runHold` consulted by Rent GPU, Marketing and dollar cards; the plateau helpers above; the Stage 2 line; the sim's
-Stage 1 policies (no research reserve; `Train blocked` reported by cause). Knob: the 11.5 (±0.5 moves the fifth
+**The engineer changes** `trainCost`, `fundsFor`, `trainWait` and `runOtherwiseReady` for Stage 1; the armed
+state of Train; the delay line on Rent GPU, Marketing and dollar cards; the plateau helpers above; the Stage 2
+line; the sim's Stage 1 policies (no research reserve; `Train blocked` reported by cause). Knob: the 11.5 (±0.5 moves the fifth
 run by about a minute); then the Series A's $20,000.
 
-**Acceptance** (`explore-s1r3.mjs`, seeds 1–5, first-timer; the sim for the built policies). Research blocks
-Train for 0 s (was 614–996). No stretch over 240 s with Train unpressable and nothing training before the wall
-(was 458–620). At least five runs, starts no more than 5:00 apart. The wall sentence on screen for at least 20 s
-before the purchase in every seed (was one seed of five, for 2 s). Wall to purchase ≤ 4:00. `train-priority` no
-more than 2:00 ahead of the control (was 3:44). `contracts: never` no faster than the control (was 1:18 faster).
-Stage 1 in 21–27 minutes for the first-timer and not under 19:30 for the bot.
+**Acceptance** (`explore-s1r3.mjs`, seeds 1–5; the sim for the built policies). Research blocks Train for 0 s
+(was 614–996). Train is disabled, with nothing training, for no more than 60 s a stage before the wall (was
+822–1,132). For `train-priority` and for a first-timer that declines printed delays of 0:30 or more: at least five
+runs, starts no more than 5:00 apart. For the first-timer that buys everything lit: five runs, starts no more than
+8:00 apart, and every purchase that delayed an armed run by 10 s or more had the delay on its row. The wall
+sentence on screen for at least 20 s before the purchase in every seed (was one seed of five, for 2 s). Wall to
+purchase ≤ 4:00. `contracts: never` no faster than the control (was 1:18 faster). Stage 1 in 21–27 minutes for
+the first-timer and not under 19:30 for the bot.
 
 ## 2. First Datacenter: a sense of approach, and money's second half
 
@@ -72,7 +81,7 @@ and a Marketing button that stays in reach. No rungs.
 | | Rule |
 |---|---|
 | Appears | Pinned and grey when the next run needs 45 GPUs or more: the third release on the Capability path (paper 12:45), or November 2025 (16:00). Was: Series A, the second release or October (10:44–12:02, grey for 56–62 % of the stage). Still at least eight minutes before it is bought |
-| Until the wall | Under the built title and sentence, two short lines: `Cloud GPUs the next model needs ｢￭￭￭￭￭￭････｣ 45` (cells: need ÷ what the cloud rents; the quota in the hover; full at the fifth run) and `Price: 71 minutes of income.` (price ÷ revenue a second; minutes from ten up, `m:ss` below). When the run after next will not fit: `The one after will not fit.` |
+| Until the wall | Under the built title and sentence, two short lines: `Cloud GPUs the next model needs ｢￭￭￭￭￭￭････｣ 45 of 80` (cells: need ÷ what the cloud rents; full at the fifth run) and `Price: 71 minutes of income.` (price ÷ revenue a second; minutes from ten up, `m:ss` below). When the run after next will not fit: `The one after will not fit.` |
 | Once needed | The second line becomes the money meter: `｢￭￭￭･･･････｣ $87,000 short — about 2:25` |
 | Marketing | Costs `$100 × 2^(levels bought)`. Levels given by rounds and events raise the level, not the price (it was $12,800–$204,800 and grey for 13–23 minutes) |
 
@@ -87,7 +96,7 @@ levels. **Acceptance:** the card is on screen for at most half the stage and at 
 (G11); the minutes-of-income figure is lower after every release; between the card appearing and the wall the
 first-timer makes a dollar purchase other than power in every three-minute window, runs included (was 3–6 in
 15–19 minutes);
-Marketing is never grey for more than 3:00 outside a hold.
+Marketing is never grey for more than 3:00.
 
 ## 3. Minutes 3–7 and the first training cycle, one beat at a time
 
@@ -180,5 +189,5 @@ unit of the newest mechanic lit or grey, so those seconds are covered. The harne
 | The card visible at least eight minutes early | The critic wanted it one run before the wall | It appears at the third release, nine to eleven minutes early on paper, and says how near the wall is instead of arriving late |
 | One mechanic a beat; the opening as it is | The critic wanted Expand Lab at 3:00, seven seconds from the Projects panel | Expand Lab at the next Trust award, about 4:00; nothing before 3:32 moves |
 | Meters are for capacity | The critic wanted a money meter on the card for the whole stage | The card's meter is the cloud's GPUs until the wall; money only once the price is final and four minutes away |
-| Nothing on screen the player cannot act on | The hold greys Marketing and Rent GPU between runs | Each says `the run first`, the Train row carries the wait, and research cards stay live throughout |
+| Nothing on screen the player cannot act on | A hold would grey Marketing and Rent GPU between runs | Withdrawn (`stage2-round2-fixes.md` §1): rows stay lit and print their delay; Train can be armed |
 | Stage 1 in 20–26 minutes, five rented runs | The critic's band was 22–30 | Five runs for every seed; 21–27 minutes for a first-timer, with the 11.5 as the knob |

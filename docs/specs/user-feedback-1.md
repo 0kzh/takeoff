@@ -209,7 +209,7 @@ and no gap over two minutes on paper. Acceptance stays G1 (≤ 180 s), measured 
 | Style | The article's own recommendation: `｢￭￭￭￭￭￭￭･･･｣` — U+FFED filled, U+FF65 empty, U+FF62 / U+FF63 caps. Halfwidth forms keep one width in a proportional font, which is what the game uses |
 | Width | 10 cells. A store that drains shows `ceil(10 × have / scale)` cells, so the last cell goes out only at zero; a capacity in use shows `round(10 × used / cap)`, and the tenth cell lights only at 99.5 % |
 | Fallback | At boot, measure both glyphs in a hidden span; if either is missing or their widths differ by more than a pixel, use `[■■■■■■■□□□]` in a monospace span. One function, `meter(fraction)`, DOM-free, used everywhere below |
-| Counting | A meter replaces the `/ cap` half of a pair, so every row it is on shows **one number fewer** than today. The cap's figure moves to the row's hover, and comes back in words only when the meter is full, with the fix |
+| Counting | A meter replaces the `/ cap` half of a pair, so every row it is on shows **one number fewer** than today. The cap's figure moves to the row's hover, and comes back in words only when the meter is full, with the fix. (Superseded by `stage2-round2-fixes.md` item 6: the row prints `amount of capacity` after the meter) |
 
 | Where | Was | Now |
 |---|---|---|
