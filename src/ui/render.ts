@@ -162,7 +162,7 @@ function renderPower(s: GameState): void {
   const left = powerSecondsLeft(s);
   const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
   setMeter('powerMeter', Math.min(1, s.power / block), `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
-  setText('powerNote', copiesIdle(s) ? 'no power — copies idle' : '');
+  setText('powerNote', copiesIdle(s) ? 'copies idle' : '');
   setText('powerBlock', fmtInt(powerBlock(s)));
   setText('powerCost', fmtMoney(powerBlockCost(s)));
   // The manual verb never needs power and is never disabled.
