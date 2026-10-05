@@ -33,6 +33,8 @@ export const RED_TEAM_SECONDS_AUTO = 4;
 export const SUPERHUMAN_CODER = 4;
 /** Joint statement: a public release at 4× or more waits this long for the outside evaluator. */
 export const OUTSIDE_EVAL_SECONDS = 30;
+/** Stages 1–2: a release rolls out for this long after the press, whatever the model (Stage 3's Approve is at once). */
+export const RELEASE_SECONDS = 5;
 
 /**
  * Stage 1's prologue (docs/specs/early-train.md): the first run trains Sage-1 itself on the first rented
@@ -787,6 +789,7 @@ export function deployFirstModel(s: GameState): boolean {
   const run = prologueRun(s);
   if (!run || run.phase !== 'redteam') return false;
   t.run = null;
+  t.releasing = null;
   t.redTeamRemaining = 0;
   t.releaseWait = 0;
   delete s.flags['prologue'];
@@ -813,6 +816,7 @@ export function finishTraining(s: GameState): boolean {
   if (!run) return false;
   if (run.phase === 'training') run.elapsed = run.duration;
   else if (run.phase === 'evaluating') run.evalElapsed = EVAL_SECONDS;
+  else if (s.training.releasing) s.training.releasing.remaining = 0;
   else return false;
   return true;
 }
@@ -826,6 +830,13 @@ export function updateTraining(s: GameState, dt: number): void {
   if (t.releaseWait > 0) {
     t.releaseWait = Math.max(0, t.releaseWait - dt);
     if (t.releaseWait <= 0 && t.run?.phase === 'redteam') say(s, `The outside evaluators sign off. ${t.run.name} can ship.`);
+  }
+  if (t.releasing) {
+    t.releasing.remaining -= dt;
+    if (t.releasing.remaining <= 0) {
+      if (t.run) finishRelease(s, t.run, t.releasing.isPublic);
+      else t.releasing = null;
+    }
   }
   const run = t.run;
   if (run?.phase === 'training') updateRunning(s, run, dt, true);
@@ -1094,7 +1105,7 @@ function issueWords(n: number): string {
 
 export function canRedTeam(s: GameState): boolean {
   const run = s.training.run;
-  return !!run && run.phase === 'redteam' && run.issues > 0 && s.training.redTeamRemaining <= 0;
+  return !!run && run.phase === 'redteam' && run.issues > 0 && s.training.redTeamRemaining <= 0 && !s.training.releasing;
 }
 
 export function redTeamSeconds(s: GameState): number {
@@ -1118,7 +1129,7 @@ const RELEASE_CHOICES = ['c_sage2', 'c_ship_issues'];
 
 export function canRelease(s: GameState): boolean {
   const run = s.training.run;
-  return !!run && run.phase === 'redteam' && !(s.activeChoice && RELEASE_CHOICES.includes(s.activeChoice.id));
+  return !!run && run.phase === 'redteam' && !s.training.releasing && !(s.activeChoice && RELEASE_CHOICES.includes(s.activeChoice.id));
 }
 
 /** The public Release button: also waits on the outside evaluators (the joint statement). */
@@ -1135,7 +1146,7 @@ export function release(s: GameState): boolean {
   if (s.stage >= 3) return approve(s);
   const run = s.training.run;
   if (!run || run.phase !== 'redteam' || !canReleasePublic(s)) return false;
-  if (run.prologue) return deployFirstModel(s);
+  if (run.prologue) return doRelease(s, run, true);
   if (run.issues > 0 && !s.flags['shipIssuesAsked']) {
     openChoice(s, 'c_ship_issues', { runId: run.id, issues: run.issues });
     return true;
@@ -1159,8 +1170,30 @@ export function releaseChecked(s: GameState, run: TrainingRun): boolean {
   return doRelease(s, run, true);
 }
 
+/**
+ * The release itself. Stages 1–2: the rollout takes `RELEASE_SECONDS` (the pressed button fills) and the
+ * model ships when it ends; the red team stops where it is. Stage 3's Approve deploys at once.
+ */
 export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): boolean {
   const t = s.training;
+  if (t.run !== run || t.releasing) return false;
+  if (s.stage >= 3) return finishRelease(s, run, isPublic);
+  t.releasing = { remaining: RELEASE_SECONDS, isPublic };
+  t.redTeamRemaining = 0;
+  return true;
+}
+
+/** The rollout in progress, if any: the run and how far along it is (0–1). */
+export function releaseProgress(s: GameState): { run: TrainingRun; p: number; left: number; isPublic: boolean } | null {
+  const t = s.training;
+  if (!t.releasing || !t.run) return null;
+  const left = Math.max(0, t.releasing.remaining);
+  return { run: t.run, p: 1 - left / RELEASE_SECONDS, left, isPublic: t.releasing.isPublic };
+}
+
+function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boolean {
+  const t = s.training;
+  t.releasing = null;
   if (t.run !== run) return false;
   if (run.prologue) return deployFirstModel(s);
   t.run = null;

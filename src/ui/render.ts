@@ -15,7 +15,7 @@ import {
 } from '../engine/infrastructure.js';
 import { marketBreakdown, qualityMultS2 } from '../engine/market.js';
 import {
-  trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, nextRunName,
+  trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, releaseProgress, nextRunName,
   trainGpuFigures, trainGpuFix, evaluatorLine, totalScore, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
   labReason,
@@ -640,7 +640,12 @@ function renderEval(s: GameState, run: TrainingRun): void {
     setTitle('btn-redteam', `Close one open issue every ${t.redTeamDuration} s.`);
     setDisabled('btn-release', !canReleasePublic(s));
     setDisabled('btn-releaseInternal', !canRelease(s));
-    setText('btn-release', run.prologue ? `Deploy ${run.name}` : run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
+    setText('releaseLabel', run.prologue ? `Deploy ${run.name}` : run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
+    // Release pressed: the button that was pressed fills over the rollout, and the model ships when it is full.
+    const rollout = releaseProgress(s);
+    const filling = rollout ? Math.max(0.01, rollout.p) : 0;
+    renderCooldown(byId('btn-release'), byId('releaseBar'), rollout?.isPublic ? filling : 0);
+    renderCooldown(byId('btn-releaseInternal'), byId('releaseInternalBar'), rollout && !rollout.isPublic ? filling : 0);
     const sh = superhumanTooltips(s);
     setTitle(
       'btn-release',

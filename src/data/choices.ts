@@ -182,7 +182,7 @@ export const CHOICES: ChoiceDef[] = [
           const run = runFor(s, ctx);
           if (run) doRelease(s, run, true);
         },
-        log: (s) => `${s.training.deployedName} is released to the public.`,
+        log: (s, ctx) => `${runFor(s, ctx)?.name ?? s.training.deployedName} is released to the public.`,
       },
       {
         label: 'keep it internal',
@@ -195,7 +195,7 @@ export const CHOICES: ChoiceDef[] = [
           const run = runFor(s, ctx);
           if (run) doRelease(s, run, false);
         },
-        log: (s) => `${s.training.modelName} is kept for research. Customers are not told.`,
+        log: (s, ctx) => `${runFor(s, ctx)?.name ?? s.training.modelName} is kept for research. Customers are not told.`,
       },
     ],
   },

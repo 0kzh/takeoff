@@ -268,8 +268,8 @@
         <div id="train-redteam">
           <span id="issuesLine">Open issues: <span id="issuesOpen">0</span><span class="hiddenIds"> of <span id="issuesFound">0</span></span><br></span>
           <button class="button2 cooldown" id="btn-redteam"><span class="cooldownBar" id="redteamBar"></span><span class="cooldownLabel" id="redteamLabel">Red-team</span></button>
-          <span data-hide="takeoff"><button class="button2" id="btn-release">Release</button></span>
-          <span data-reveal="releaseInternal"><button class="button2" id="btn-releaseInternal" title="Research uses it at once; customers keep the deployed model.">Keep internal</button></span>
+          <span data-hide="takeoff"><button class="button2 cooldown" id="btn-release"><span class="cooldownBar" id="releaseBar"></span><span class="cooldownLabel" id="releaseLabel">Release</span></button></span>
+          <span data-reveal="releaseInternal"><button class="button2 cooldown" id="btn-releaseInternal" title="Research uses it at once; customers keep the deployed model."><span class="cooldownBar" id="releaseInternalBar"></span><span class="cooldownLabel">Keep internal</span></button></span>
           <span data-reveal="takeoff"><button class="button2" id="btn-approve" title="Deploy the run everywhere: tasks, research and the market. Open issues ship with it.">Approve</button></span>
           <span data-reveal="sendBack"><button class="button2" id="btn-sendBack" title="Retrain the flagged run for 20 s; it keeps 70% of its gain.">Send back</button> <span id="probeFlags" class="note"></span></span>
           <span id="releaseNote" class="note"></span>

@@ -148,6 +148,8 @@ export interface TrainingState {
   cooldown: number;
   /** Seconds before a model at 4× or more may ship publicly (the joint statement's outside evaluation). */
   releaseWait: number;
+  /** The rollout after Release is pressed (Stages 1–2): seconds left, and whether customers get the model. */
+  releasing?: { remaining: number; isPublic: boolean } | null;
   /**
    * Train pressed while the run's price is short (arc G34 rule 4): the run starts by itself once it is
    * paid for. Pressing again stands it down. Arming reserves nothing.

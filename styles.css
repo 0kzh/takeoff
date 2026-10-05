@@ -212,6 +212,8 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   background: #888;
 }
 .cooldownLabel { position: relative; }
+/* Release and Keep internal fill as the rollout runs; they keep their own width. */
+#btn-release, #btn-releaseInternal { min-width: 0; }
 /* While it cools the button is the training bar: black border, white track, gray fill. */
 .cooldown.cooling, .cooldown.cooling:hover, .cooldown.cooling:active {
   background: #fff;
