@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openProbe, NotApplicable } from './lib/probe.mjs';
-import { trainStep, infraStep, standingStep, RELEASE_KEYS } from './games/takeoff-late.mjs';
+import { RELEASE_KEYS } from './games/takeoff.mjs';
 import { resolveGameDir } from './lib/runner.mjs';
 import { loadAdapter, parseArgs, resolvePrefix, mmss, fmtN } from './lib/util.mjs';
 
@@ -133,17 +133,11 @@ const TAKEOFF = [
   {
     name: 'release-open-issues',
     title: 'Release with open issues and watch for an incident',
-    stages: { 1: true, 2: true, 3: true, other: 'Stages 1–3 only: from Stage 4 the generations arrive and deploy by themselves; there is no Release or Approve' },
+    stages: { 1: true },
     async run(kit, out) {
       kit.mashKey = 'btn-task';
-      // No red-team/release logic. From Stage 2 the player still trains and builds (takeoff-late.mjs).
-      const pol = kit.policy({}, kit.stage >= 2 ? async (ctx) => {
-        await standingStep(ctx);
-        await trainStep(ctx);
-        await infraStep(ctx);
-        return ctx.controls;
-      } : false);
-      // Release (Stages 1–2) or Approve (Stage 3).
+      // No red-team/release logic.
+      const pol = kit.policy({}, false);
       const shipOf = (snap) => RELEASE_KEYS.map((k) => kit.find(snap, k)).find(Boolean);
       let hit = null;
       await kit.run(1500, async (t, s) => {

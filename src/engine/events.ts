@@ -1,18 +1,13 @@
-import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay, bump, heldForPlayer } from './state.js';
+import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay } from './state.js';
 import { DEVELOPMENTS, DevelopmentDef } from '../data/developments.js';
 import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
-import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate, rentQuota } from './economy.js';
-import {
-  datacenterCost, lotCost, lotSize, gasCost, solarCost, nuclearCost, solarQueueFull, standingOrderOn,
-  lotSizes, lotFits, lotCostOf, datacenterReason, plantReason,
-} from './infrastructure.js';
-import { canStartTraining, canRedTeam, canRelease, trainCost, trainingRun } from './training.js';
-import { rivalReleaseS2, recordRival, noteIncident, sl3Cost } from './world.js';
+import { gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate } from './economy.js';
+import { canStartTraining, canRedTeam, trainCost } from './training.js';
 import { dateLabel } from './format.js';
-import { stageDef, mechanic, mechanicClear } from './stages.js';
+import { mechanic, mechanicClear } from './stages.js';
 import { BEAT_GAP_SECONDS } from './reveal.js';
 import { rand, pick, chance } from './rng.js';
 
@@ -26,7 +21,7 @@ export function choiceById(id: string): ChoiceDef | undefined {
 
 export function updateDevelopments(s: GameState): void {
   for (const d of DEVELOPMENTS) {
-    if (s.developments[d.id] || d.stage !== s.stage || d.calendar) continue;
+    if (s.developments[d.id] || d.calendar) continue;
     if (d.requires && !d.requires(s)) continue;
     const byDate = d.month !== undefined && s.date >= d.month;
     const byProgress = d.trigger ? d.trigger(s) : false;
@@ -45,7 +40,7 @@ function isCalendarChoice(id: string): boolean {
 }
 
 function calendarSlotAt(s: GameState): number {
-  if (s.stage !== 1 || !DEVELOPMENTS.some((d) => d.calendar && d.stage === 1 && !s.developments[d.id])) return Infinity;
+  if (!DEVELOPMENTS.some((d) => d.calendar && !s.developments[d.id])) return Infinity;
   const first = s.flags['firstReleaseAt'];
   if (typeof first !== 'number') return Infinity;
   const answered = s.flags['eventAnsweredAt'];
@@ -53,11 +48,11 @@ function calendarSlotAt(s: GameState): number {
 }
 
 function updateCalendar(s: GameState): void {
-  if (s.stage !== 1 || s.stats.timePlayed < calendarSlotAt(s)) return;
+  if (s.stats.timePlayed < calendarSlotAt(s)) return;
   const run = s.training.run;
   if (run && run.phase !== 'training') return;
   if (!modalCanOpen(s) || !mechanicClear(s)) return;
-  const next = DEVELOPMENTS.find((d) => d.calendar && d.stage === 1 && !s.developments[d.id] && (!d.requires || d.requires(s)));
+  const next = DEVELOPMENTS.find((d) => d.calendar && !s.developments[d.id] && (!d.requires || d.requires(s)));
   if (!next) return;
   mechanic(s);
   s.flags['calendarOpened'] = true;
@@ -65,7 +60,7 @@ function updateCalendar(s: GameState): void {
 }
 
 function noteAnswered(s: GameState, choiceId: string): void {
-  if (s.stage === 1 && isCalendarChoice(choiceId)) s.flags['eventAnsweredAt'] = s.stats.timePlayed;
+  if (isCalendarChoice(choiceId)) s.flags['eventAnsweredAt'] = s.stats.timePlayed;
 }
 
 export function fireDevelopment(s: GameState, id: string): boolean {
@@ -82,23 +77,8 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   return true;
 }
 
-export function fireDevelopmentOnce(s: GameState, id: string): boolean {
-  if (s.developments[id]) return false;
-  return fireDevelopment(s, id);
-}
-
 export function secondsToNextCalendarModal(s: GameState): number {
-  if (s.stage === 1) return Math.max(0, calendarSlotAt(s) - s.stats.timePlayed);
-  let next = Infinity;
-  for (const d of DEVELOPMENTS) {
-    if (!d.choice || d.month === undefined || d.stage !== s.stage || s.developments[d.id]) continue;
-    next = Math.min(next, Math.max(0, d.month - s.date) * stageDef(s.stage).secondsPerMonth);
-  }
-  return next;
-}
-
-export function pendingDevelopments(s: GameState): DevelopmentDef[] {
-  return DEVELOPMENTS.filter((d) => !s.developments[d.id] && d.stage >= s.stage && d.stage <= s.stage + 1);
+  return Math.max(0, calendarSlotAt(s) - s.stats.timePlayed);
 }
 
 export function fireCrisis(s: GameState, id: string, source?: string): boolean {
@@ -109,12 +89,9 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
       id: c.id,
       remaining: c.duration,
       demandMult: c.demandMult,
-      ...(c.powerMult !== undefined ? { powerMult: c.powerMult } : {}),
-      ...(c.researchMult !== undefined ? { researchMult: c.researchMult } : {}),
     });
   }
   c.effect(s);
-  if (s.stage >= 3) bump(s, `crisis:${id}`);
   const line = typeof c.console === 'function' ? c.console(s, source) : c.console;
   if (line) say(s, line);
   const incident = INCIDENTS.includes(c);
@@ -123,19 +100,12 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
   if (log) logNews(s, source && incident ? `${log} It traces back to ${source}.` : log);
   if (incident) {
     s.stats.incidents += 1;
-    if (s.stage === 1) {
-      s.trust -= 1;
-      say(s, 'The board asks what happened. Trust −1.');
-    }
-    if (s.stage === 1 && (s.projects['p_contract']?.bought ?? 0) > 0) {
+    s.trust -= 1;
+    say(s, 'The board asks what happened. Trust −1.');
+    if ((s.projects['p_contract']?.bought ?? 0) > 0) {
       const until = typeof s.flags['contractsPausedUntil'] === 'number' ? (s.flags['contractsPausedUntil'] as number) : 0;
       s.flags['contractsPausedUntil'] = Math.max(until, s.stats.timePlayed) + CONTRACT_PAUSE_SECONDS;
       say(s, 'The bank pauses its pilot. Contract customers stop buying for 1:30.');
-    }
-    if (s.stage >= 2) {
-      s.alignmentApparent = Math.max(0, s.alignmentApparent - 2);
-      noteIncident(s);
-      bump(s, 'incidentsS2');
     }
   } else {
     s.stats.crises += 1;
@@ -144,7 +114,7 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
 }
 
 export function updateScheduled(s: GameState, dt: number): void {
-  if (s.scheduled.length === 0 || heldForPlayer(s)) return;
+  if (s.scheduled.length === 0) return;
   const due: { id: string; source?: string }[] = [];
   for (const e of s.scheduled) {
     e.delay -= dt;
@@ -155,26 +125,20 @@ export function updateScheduled(s: GameState, dt: number): void {
 }
 
 export function updateRival(s: GameState): void {
-  if (s.stage > 2) return;
-  if (s.stage === 1 && !s.revealed['rival']) return;
+  if (!s.revealed['rival']) return;
   s.nextRivalIn -= 1;
   if (s.nextRivalIn > 0) return;
-  if (s.stage === 2) {
-    rivalReleaseS2(s);
-    s.flags['rivalS2'] = true;
-    return;
-  }
   rivalRelease(s);
+}
+
+function recordRival(s: GameState, name: string): void {
+  s.rivalHistory.push({ name, capability: Math.round(s.rivalCapability * 1000) / 1000, date: s.date });
+  if (s.rivalHistory.length > 40) s.rivalHistory.splice(0, s.rivalHistory.length - 40);
 }
 
 export const RIVAL_BAND: [number, number] = [0.85, 1.15];
 
 export function rivalRelease(s: GameState): void {
-  if (s.stage >= 2) {
-    rivalReleaseS2(s);
-    s.flags['rivalS2'] = true;
-    return;
-  }
   s.revealed['rival'] = true;
   s.rivalVersion += 1;
   const ours = s.capability;
@@ -191,7 +155,7 @@ export function rivalRelease(s: GameState): void {
 }
 
 export const MODAL_SPACING = 150;
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_vote', 'c_treaty', 'c_halt', 'c_final'];
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2'];
 
 export interface OpenOptions {
   onlyIfFree?: boolean;
@@ -330,10 +294,6 @@ export function defaultIndex(s: GameState, def: ChoiceDef): number {
   return d ?? def.options.length - 1;
 }
 
-export function firstEnabled(s: GameState, def: ChoiceDef, order: number[]): number {
-  return order.find((i) => choiceOptionEnabled(s, def, i)) ?? order[order.length - 1]!;
-}
-
 export function optionLabel(s: GameState, opt: ChoiceOption): string {
   return typeof opt.label === 'function' ? opt.label(s) : opt.label;
 }
@@ -355,8 +315,8 @@ export function noveltyKeys(s: GameState): string[] {
   for (const [id, on] of Object.entries(s.revealed)) if (on) keys.push(`rev:${id}`);
   for (const [id, st] of Object.entries(s.projects)) if (st.shown || st.bought) keys.push(`shown:${id}`);
   for (const p of visibleProjects(s)) if (p.canAfford(s)) keys.push(`aff:${p.id}:${s.projects[p.id]?.bought ?? 0}`);
-  if (s.stage < 2 && s.revealed['compute'] && s.funds >= gpuCost(s)) keys.push(`aff:gpu:${s.gpus}`);
-  if (s.stage < 2 && s.revealed['marketing'] && s.funds >= marketingCost(s)) keys.push(`aff:marketing:${s.marketingBought ?? 0}`);
+  if (s.revealed['compute'] && s.funds >= gpuCost(s)) keys.push(`aff:gpu:${s.gpus}`);
+  if (s.revealed['marketing'] && s.funds >= marketingCost(s)) keys.push(`aff:marketing:${s.marketingBought ?? 0}`);
   if (s.revealed['research'] && s.revealed['hireResearcher'] && s.trust >= 1) {
     keys.push(`aff:trust:${s.researchers + s.labSpace}`);
   }
@@ -368,42 +328,8 @@ export function noveltyKeys(s: GameState): string[] {
   }
   const second = s.training.pending;
   if (second) keys.push(`phase:${second.id}:${second.elapsed >= second.duration ? 'trained' : 'training'}`);
-  if (s.stage >= 2 && s.revealed['infrastructure']) {
-    if (s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
-    if (!standingOrderOn(s) && lotSize(s) > 0 && s.buildFund >= lotCost(s)) keys.push(`aff:gpulot:${s.gpus}`);
-    if (s.revealed['gasButton'] && s.buildFund >= gasCost(s)) keys.push(`aff:gas:${s.gasPlants}`);
-    if (s.revealed['solarButton'] && !solarQueueFull(s) && s.buildFund >= solarCost(s)) keys.push(`aff:solar:${s.solarFarms + s.powerQueue.length}`);
-    if (s.revealed['nuclearButton'] && s.buildFund >= nuclearCost(s)) keys.push(`aff:nuclear:${s.reactors}`);
-    if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) keys.push('aff:sl3');
-    keys.push(`fleet:${s.gpus}:${s.powerCapacityMW}`);
-  }
   if (s.activeChoice) keys.push(`choice:${s.activeChoice.id}`);
   return keys;
-}
-
-export function enabledPurchases(s: GameState): string[] {
-  const out: string[] = [];
-  for (const p of visibleProjects(s)) if (p.canAfford(s)) out.push(p.id);
-  if (canStartTraining(s)) out.push('train');
-  const run = s.training.run;
-  if (run && run.phase === 'redteam' && canRedTeam(s)) out.push('redteam');
-  if (run && run.phase === 'redteam' && canRelease(s)) out.push('release');
-  if (s.revealed['research'] && s.revealed['hireResearcher'] && s.trust >= 1) out.push('hire');
-  if (s.revealed['expandLab'] && s.trust >= 1) out.push('expand');
-  if (s.stage < 2) {
-    if (s.revealed['compute'] && s.funds >= gpuCost(s) && s.gpus < rentQuota(s)) out.push('gpu');
-    if (s.revealed['marketing'] && s.funds >= marketingCost(s)) out.push('marketing');
-    if (s.revealed['buyPower'] && s.funds >= powerBlockCost(s)) out.push('power');
-    return out;
-  }
-  if (!s.revealed['infrastructure']) return out;
-  if (lotSizes(s).some((n, row) => (row === 0 || s.revealed[row === 1 ? 'lot5' : 'lot25']) && lotFits(s, n) && s.buildFund >= lotCostOf(s, n))) out.push('gpuLot');
-  if (s.revealed['dcButton'] && !datacenterReason(s) && s.buildFund >= datacenterCost(s)) out.push('datacenter');
-  if (s.revealed['gasButton'] && !plantReason(s, 'gas') && s.buildFund >= gasCost(s)) out.push('gas');
-  if (s.revealed['solarButton'] && !plantReason(s, 'solar') && s.buildFund >= solarCost(s)) out.push('solar');
-  if (s.revealed['nuclearButton'] && !plantReason(s, 'nuclear') && s.buildFund >= nuclearCost(s)) out.push('nuclear');
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) out.push('sl3');
-  return out;
 }
 
 export function isRescueKey(key: string): boolean {
@@ -415,11 +341,7 @@ function namedWait(s: GameState): boolean {
   return (
     phase === 'training' ||
     phase === 'evaluating' ||
-    (s.stage === 1 && phase === 'redteam') ||
-    !!trainingRun(s) ||
-    s.powerQueue.length > 0 ||
-    s.training.cooldown > 0 ||
-    s.training.releaseWait > 0
+    phase === 'redteam'
   );
 }
 
@@ -427,7 +349,6 @@ export const MAX_PRESS_PER_STAGE = 3;
 export const MAX_EMAILS_PER_STAGE = 3;
 
 export function idleGuard(s: GameState, dt: number): void {
-  if (s.stage >= 3) return;
   const keys = noveltyKeys(s);
   const prev = new Set(s.idle.affordable);
   const novel = keys.some((k) => !prev.has(k));
@@ -442,7 +363,6 @@ export function idleGuard(s: GameState, dt: number): void {
   if (s.idle.quiet < 60) return;
   s.idle.quiet = 0;
   if (diagnoseStall(s)) return;
-  if (s.stage === 2 && enabledPurchases(s).length > 0) return;
   const presses = (s.flags['pressReleases'] as number) || 0;
   const emails = (s.flags['emailsThisStage'] as number) || 0;
   const raw = customerEmailAmount(s);
@@ -460,7 +380,7 @@ export function idleGuard(s: GameState, dt: number): void {
 }
 
 function diagnoseStall(s: GameState): boolean {
-  if (!s.revealed['research'] || s.stage >= 3) return false;
+  if (!s.revealed['research']) return false;
   const now = s.stats.timePlayed;
   const ready = (k: string) => now - ((s.flags[k] as number) ?? -999) >= 180;
   const cap = researchCap(s);
@@ -482,12 +402,10 @@ function unaffordableFundsCosts(s: GameState): number[] {
   const add = (cost: number | undefined) => {
     if (cost && cost > s.funds) out.push(cost);
   };
-  if (s.stage < 2) {
-    if (s.revealed['buyPower']) add(powerBlockCost(s));
-    if (s.revealed['compute']) add(gpuCost(s));
-  }
-  if (s.stage < 2 && s.revealed['marketing']) add(marketingCost(s));
-  if (s.revealed['training'] && (s.stage < 2 ? !s.training.run : !trainingRun(s))) add(trainCost(s).funds);
+  if (s.revealed['buyPower']) add(powerBlockCost(s));
+  if (s.revealed['compute']) add(gpuCost(s));
+  if (s.revealed['marketing']) add(marketingCost(s));
+  if (s.revealed['training'] && !s.training.run) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);
   return out;
 }

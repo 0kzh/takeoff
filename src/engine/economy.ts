@@ -1,23 +1,12 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, press, isBought, bump, counter, creditIncome, inPrologue } from './state.js';
-import { busyGpus, trainCost } from './training.js';
-import { visibleProjects } from './projects.js';
+import { GameState, say, canPay, pay, isBought, bump, counter, inPrologue } from './state.js';
+import { busyGpus } from './training.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
-import { effGpus } from './infrastructure.js';
-import { sellS2 } from './market.js';
-import { alignWorkShare, alignWorkTick } from './alignment.js';
-import { draftTick } from './treaty.js';
 import { mechanicClear } from './stages.js';
-
-export {
-  activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
-} from './infrastructure.js';
 
 export const TICK_SECONDS = 0.1;
 export const MIN_PRICE = 0.01;
 export const POWER_BLOCK = 1000;
-export const GRID_MW = 5;
-
 export const MARKET_START = 3;
 export const MARKET_FULL = 3;
 export const MARKET_GROWTH_TASKS = 1500;
@@ -25,7 +14,6 @@ export const MARKET_GROWTH_TASKS = 1500;
 export const CONTRACT_WEIGHT = 0.25;
 export const CONTRACT_WEIGHT_GROWTH = 1.15;
 export const CONTRACT_PAUSE_SECONDS = 90;
-
 
 export const RENT_QUOTA = 80;
 export const QUOTA_STEP = 20;
@@ -36,7 +24,7 @@ export function rentQuota(s: GameState): number {
 }
 
 export function atRentQuota(s: GameState): boolean {
-  return s.stage < 2 && s.gpus >= rentQuota(s);
+  return s.gpus >= rentQuota(s);
 }
 
 export function gpuCost(s: GameState): number {
@@ -68,7 +56,7 @@ export function powerBlockCost(s: GameState): number {
 }
 
 export function powerBlockNews(s: GameState): void {
-  if (s.stage !== 1 || !s.revealed['buyPower'] || (s.gridAuto && isBought(s, 'p_grid'))) return;
+  if (!s.revealed['buyPower'] || (s.gridAuto && isBought(s, 'p_grid'))) return;
   const block = powerBlock(s);
   if (block <= POWER_BLOCK || s.flags[`blockSaid${block}`]) return;
   s.flags[`blockSaid${block}`] = true;
@@ -87,7 +75,6 @@ export function priceCeiling(s: GameState): number {
 }
 
 export function researchCap(s: GameState): number {
-  if (s.stage >= 3) return Infinity;
   return s.labSpace * 1000 * s.labMult;
 }
 
@@ -99,43 +86,16 @@ export function humanEfficiency(s: GameState): number {
   return Math.min(1, 3 / Math.max(1, bestCapability(s)));
 }
 
-export function researchEffects(s: GameState): number {
-  let m = 1;
-  for (const e of s.effects) if (e.researchMult !== undefined) m *= e.researchMult;
-  return m;
-}
-
 export function humanResearchRate(s: GameState): number {
-  return s.researchers * 10 * humanEfficiency(s) * s.researchMult * researchEffects(s);
-}
-
-export const AI_RESEARCH_COEFF = 10;
-
-export function aiResearchRate(s: GameState): number {
-  if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return 0;
-  const onResearch = workingCopies(s) * s.researchAlloc;
-  return AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
+  return s.researchers * 10 * humanEfficiency(s) * s.researchMult;
 }
 
 export function researchRate(s: GameState): number {
-  return humanResearchRate(s) + aiResearchRate(s);
-}
-
-export function researchCapacityAt(s: GameState, alloc: number): number {
-  if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return humanResearchRate(s);
-  const onResearch = effGpus(s) * s.copiesPerGPU * copiesOnline(s) * alloc;
-  return humanResearchRate(s)
-    + AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
-}
-
-export function humanShare(s: GameState): number {
-  const total = researchRate(s);
-  return total > 0 ? humanResearchRate(s) / total : 1;
+  return humanResearchRate(s);
 }
 
 export function insightRate(s: GameState): number {
-  if (s.stage >= 3) return (Math.sqrt(researchRate(s)) / 60) * s.insightMult;
-  return (Math.sqrt(researchRate(s)) / 10) * s.insightMult;
+  return Math.sqrt(researchRate(s)) / 10;
 }
 
 export function insightTrickle(s: GameState): number {
@@ -144,57 +104,19 @@ export function insightTrickle(s: GameState): number {
 
 export function copies(s: GameState): number {
   if (inPrologue(s)) return 0;
-  return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU * copiesOnline(s));
-}
-
-export function copiesOnline(s: GameState): number {
-  let m = 1;
-  for (const e of s.effects) if (e.copiesMult !== undefined) m *= e.copiesMult;
-  return m;
-}
-
-export function workingCopies(s: GameState): number {
-  return Math.max(0, copies(s) - Math.floor(s.rogueCopies ?? 0));
+  return Math.floor(Math.max(0, s.gpus - busyGpus(s)) * s.copiesPerGPU);
 }
 
 export function perCopyRate(s: GameState): number {
-  return Math.pow(s.stage >= 3 ? bestCapability(s) : s.capability, 0.8) * s.copyBoost;
-}
-
-export function revenueCostOfAlloc(s: GameState): number {
-  const extra = s.stage >= 3 ? (s.monitorShare ?? 0) : alignExtra(s);
-  const atNone = Math.max(1e-9, 1 - extra);
-  const now = Math.max(0, 1 - s.researchAlloc - extra);
-  const taskRevenue = Math.max(0, s.stats.revPerSec - Math.max(0, s.contractIncome || 0));
-  const share = s.stats.revPerSec > 0 ? taskRevenue / s.stats.revPerSec : 1;
-  return (1 - Math.sqrt(now / atNone)) * share;
-}
-
-export function alignExtra(s: GameState): number {
-  return Math.max(0, s.alignShare - 0.01);
-}
-
-export function taskShare(s: GameState): number {
-  if (s.stage >= 3) return Math.max(0, 1 - s.researchAlloc - (s.monitorShare ?? 0));
-  return Math.max(0, 1 - s.researchAlloc - alignExtra(s));
+  return Math.pow(s.capability, 0.8) * s.copyBoost;
 }
 
 export function potentialTasksPerSec(s: GameState): number {
-  const ubi = s.stage >= 4 ? 1 - s.s4.ubiShare : 1;
-  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s) * ubi * stage5TaskMult(s);
-}
-
-export function stage5TaskMult(s: GameState): number {
-  if (s.stage < 5) return 1;
-  let m = 1;
-  if (s.flags['charter'] === true) m *= 0.9;
-  if (s.effects.some((e) => e.id === 'medicine')) m *= 0.9;
-  if (s.flags['jupiter'] === true) m *= 3;
-  return m;
+  return copies(s) * perCopyRate(s);
 }
 
 export function copiesIdle(s: GameState): boolean {
-  return s.stage < 2 && s.power < 1 && copies(s) > 0;
+  return s.power < 1 && copies(s) > 0;
 }
 
 export function productionPerSec(s: GameState): number {
@@ -209,7 +131,6 @@ export function effectsDemandMult(s: GameState): number {
 }
 
 export function qualityMult(s: GameState): number {
-  if (s.stage >= 2) return Math.min(1.25, Math.max(0.8, s.capability / Math.max(0.01, s.rivalCapability)));
   return Math.sqrt(s.capability / s.rivalCapability);
 }
 
@@ -256,6 +177,15 @@ export function autoTarget1(s: GameState): number {
   return Math.max(MIN_PRICE, Math.exp((lo + hi) / 2));
 }
 
+export const AUTO_RATE = 0.5;
+export const AUTO_MIN_PRICE = 0.001;
+
+export function updateAutoPrice(s: GameState, dt: number): void {
+  if (!s.autoPrice) return;
+  s.price += (autoTarget1(s) - s.price) * Math.min(1, AUTO_RATE * dt);
+  s.price = Math.max(AUTO_MIN_PRICE, s.price);
+}
+
 export function priceAbsurd(s: GameState): boolean {
   return expectedSalesPerSec(s) < Math.max(0.5, 0.02 * productionPerSec(s));
 }
@@ -284,33 +214,26 @@ export function produce(s: GameState, dt: number): void {
   s.taskFrac += rate * dt;
   let made = Math.floor(s.taskFrac);
   if (made <= 0) return;
-  if (s.stage < 2) {
-    if (s.power < made) made = Math.floor(s.power);
-    if (made <= 0) {
-      s.taskFrac = 0;
-      if (!s.flags['powerOut']) {
-        s.flags['powerOut'] = true;
-        say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
-      }
-      return;
+  if (s.power < made) made = Math.floor(s.power);
+  if (made <= 0) {
+    s.taskFrac = 0;
+    if (!s.flags['powerOut']) {
+      s.flags['powerOut'] = true;
+      say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
     }
-    s.power -= made;
+    return;
   }
+  s.power -= made;
   s.taskFrac -= made;
   completeTasks(s, made);
 }
 
 function completeTasks(s: GameState, n: number): void {
   s.tasks += n;
-  if (s.stage < 4) s.unbilled += n;
+  s.unbilled += n;
 }
 
-export function sell(s: GameState, dt: number = TICK_SECONDS): void {
-  if (s.stage >= 4) return;
-  if (s.stage >= 2) {
-    sellS2(s, dt);
-    return;
-  }
+export function sell(s: GameState): void {
   const d = demand(s);
   s.saleFrac += Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
   const due = Math.min(s.unbilled, Math.floor(s.saleFrac));
@@ -348,7 +271,7 @@ export function contractsPaused(s: GameState): boolean {
 }
 
 export function contractDemand(s: GameState): number {
-  if (s.stage >= 2 || contractsPaused(s)) return 0;
+  if (contractsPaused(s)) return 0;
   return contractWeight(s);
 }
 
@@ -357,42 +280,20 @@ export function nextContractWeight(s: GameState): number {
 }
 
 export function contractRate(s: GameState): number {
-  return s.stage >= 2 ? s.contractIncome : contractRateStage1(s);
-}
-
-export function contractRateStage1(s: GameState): number {
-  const c = s.stage >= 2 ? contractWeight(s) : contractDemand(s);
+  const c = contractDemand(s);
   return c > 0 ? (s.stats.revPerSec * c) / (1 + c) : 0;
-}
-
-export const JOB_FUND_SHARE = 0.02;
-
-export function payContracts(s: GameState, dt: number): void {
-  if (s.stage >= 4) return;
-  const rate = s.stage >= 2 ? s.contractIncome : 0;
-  if (rate > 0) {
-    const amount = rate * dt;
-    creditIncome(s, amount);
-    s.totalRevenue += amount;
-    s.stats.secRevenue += amount;
-  }
-  if (s.stage >= 2 && s.jobFund) {
-    const fee = JOB_FUND_SHARE * s.stats.revPerSec * dt;
-    s.funds = Math.max(0, Math.round((s.funds - fee) * 100) / 100);
-  }
 }
 
 export const GRID_TOP_UP = 0.6;
 
 export function autoBuyPower(s: GameState): void {
-  if (!s.gridAuto || s.stage >= 2) return;
+  if (!s.gridAuto) return;
   const floor = Math.max(1, GRID_TOP_UP * fleetPowerBlock(s), potentialTasksPerSec(s) * TICK_SECONDS * 2);
   let guard = 0;
   while (s.power < floor && s.funds >= powerBlockCost(s) && guard++ < 20) purchasePower(s);
 }
 
 export function powerPriceWalk(s: GameState): void {
-  if (s.stage >= 2) return;
   s.powerPrice += (rng(s) * 2 - 1) * 0.5;
   s.powerPrice += (s.powerBase - s.powerPrice) * 0.02;
   s.powerPrice = Math.min(1.6 * s.powerBase, Math.max(0.7 * s.powerBase, s.powerPrice));
@@ -409,13 +310,11 @@ function purchasePower(s: GameState): void {
 }
 
 export function trackStuck(s: GameState, dt: number): void {
-  const stuck = s.stage < 2 && s.power < 1 && s.funds < powerBlockCost(s);
+  const stuck = s.power < 1 && s.funds < powerBlockCost(s);
   s.stuckFor = stuck ? s.stuckFor + dt : 0;
 }
 
-
 export function trustCheck(s: GameState): void {
-  if (s.stage >= 3) return;
   while (s.tasks >= s.nextTrust) {
     s.trust += 1;
     s.nextTrust = s.fib2 * 1000;
@@ -435,7 +334,7 @@ export function trustCheck(s: GameState): void {
 export const EXPAND_LAB_AFTER_PROJECTS = 40;
 
 function expandLabBeat(s: GameState): boolean {
-  if (s.stage !== 1 || s.revealed['expandLab'] || !s.revealed['projects'] || s.trust < 1) return false;
+  if (s.revealed['expandLab'] || !s.revealed['projects'] || s.trust < 1) return false;
   const at = s.flags['projectsAt'];
   if (typeof at !== 'number' || s.stats.timePlayed - at < EXPAND_LAB_AFTER_PROJECTS) return false;
   if (s.research < researchCap(s) - 0.5) return false;
@@ -445,10 +344,6 @@ function expandLabBeat(s: GameState): boolean {
 }
 
 export function trustRewardLine(s: GameState): string {
-  if (s.stage >= 2) {
-    const reach = trustReach(s);
-    return reach.length ? `Trust ${s.trust}: ${reach.join(', ')} within reach.` : '';
-  }
   if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
   return s.revealed['expandLab'] ? 'Trust +1. Hire a researcher or expand the lab.' : 'Trust +1. Hire a researcher.';
 }
@@ -457,18 +352,10 @@ export function researchTick(s: GameState, dt: number): void {
   if (!s.revealed['research']) return;
   const cap = researchCap(s);
   if (s.research < cap) {
-    let gained = researchRate(s) * dt;
-    const share = s.stage >= 3 && s.stage <= 4 && s.revealed['alignWork'] ? alignWorkShare(s) : 0;
-    const draft = s.stage === 4 && s.revealed['draft'] ? s.s4.draftShare : 0;
-    const total = gained;
-    if (share > 0) alignWorkTick(s, total * share);
-    if (draft > 0) draftTick(s, total * draft);
-    gained = total * Math.max(0, 1 - share - draft);
+    const gained = researchRate(s) * dt;
     s.research = Math.min(cap, s.research + gained);
   }
-  if (s.stage >= 3) {
-    s.insight += insightRate(s) * dt;
-  } else if (s.research >= cap) {
+  if (s.research >= cap) {
     s.flags['hitCap'] = true;
     if (s.insightUnlocked) s.insight += insightRate(s) * dt;
     s.flags['atCap'] = true;
@@ -479,7 +366,7 @@ export function researchTick(s: GameState, dt: number): void {
 }
 
 export function clickTask(s: GameState): boolean {
-  const payNow = s.stage === 1 && s.unbilled <= 0;
+  const payNow = s.unbilled <= 0;
   completeTasks(s, 1);
   if (payNow) bill(s, 1);
   s.stats.secClicks += 1;
@@ -488,14 +375,14 @@ export function clickTask(s: GameState): boolean {
 }
 
 export function buyPower(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['buyPower'] || s.funds < powerBlockCost(s)) return false;
+  if (!s.revealed['buyPower'] || s.funds < powerBlockCost(s)) return false;
   purchasePower(s);
   s.stats.powerPresses += 1;
   return true;
 }
 
 export function rentGpu(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['compute'] || atRentQuota(s)) return false;
+  if (!s.revealed['compute'] || atRentQuota(s)) return false;
   const cost = gpuCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
@@ -526,7 +413,7 @@ function priceMove(s: GameState): void {
 }
 
 export function lowerPrice(s: GameState): boolean {
-  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
+  if (!s.revealed['pricing'] || s.autoPrice) return false;
   if (s.price <= MIN_PRICE + 1e-9) return false;
   s.price = priceDown(s.price);
   priceMove(s);
@@ -534,7 +421,7 @@ export function lowerPrice(s: GameState): boolean {
 }
 
 export function raisePrice(s: GameState): boolean {
-  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
+  if (!s.revealed['pricing'] || s.autoPrice) return false;
   if (s.price >= priceCeiling(s)) return false;
   s.price = priceUp(s.price);
   s.priceRaises += 1;
@@ -542,51 +429,20 @@ export function raisePrice(s: GameState): boolean {
   return true;
 }
 
-export function toggleAutoPrice(_s: GameState): boolean {
-  return false;
-}
-
 export function buyMarketing(s: GameState): boolean {
-  if (!s.revealed['marketing'] || s.stage >= 2) return false;
+  if (!s.revealed['marketing']) return false;
   const cost = marketingCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.hypeLevel += 1;
   s.marketingBought = (s.marketingBought ?? 0) + 1;
-  if (s.stage >= 2) press(s, 'marketing');
   return true;
 }
 
-export function trustReach(s: GameState): string[] {
-  const out: string[] = [];
-  if (s.trust >= 1 && s.revealed['expandLab'] && s.trust === 1 && researchWantedOverCap(s)) out.push('Expand Lab');
-  for (const p of visibleProjects(s)) {
-    const tr = p.cost(s).trust ?? 0;
-    if (tr > 0 && tr === s.trust) out.push(p.title);
-  }
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && s.trust === 3) out.push('Security level 3');
-  return out;
-}
-
-function researchWantedOverCap(s: GameState): boolean {
-  const want = trainCost(s).research ?? 0;
-  return want > researchCap(s);
-}
-
-export const HIRE_FADE_SHARE = 0.1;
-
-export function hireFadeCheck(s: GameState): void {
-  if (s.stage !== 2 || s.revealed['hireFaded'] || !s.revealed['hireResearcher'] || !isBought(s, 'p_ai_assistants')) return;
-  if (humanShare(s) >= HIRE_FADE_SHARE) return;
-  s.revealed['hireFaded'] = true;
-  say(s, `Human share of research: ${Math.max(1, Math.round(humanShare(s) * 100))}%. Hiring stops; Trust goes to the lab and the capitol.`);
-}
-
 export function hireResearcher(s: GameState): boolean {
-  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || s.revealed['hireFaded'] || !canPay(s, { trust: 1 })) return false;
+  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || !canPay(s, { trust: 1 })) return false;
   pay(s, { trust: 1 });
   s.researchers += 1;
-  if (s.stage >= 2) press(s, 'hire');
   return true;
 }
 
@@ -594,53 +450,13 @@ export function expandLab(s: GameState): boolean {
   if (!s.revealed['research'] || !s.revealed['expandLab'] || !canPay(s, { trust: 1 })) return false;
   pay(s, { trust: 1 });
   s.labSpace += 1;
-  if (s.stage >= 2) press(s, 'expand');
   return true;
 }
 
 export function toggleGrid(s: GameState): boolean {
-  if (!s.revealed['gridContract'] || s.stage >= 2) return false;
+  if (!s.revealed['gridContract']) return false;
   s.gridAuto = !s.gridAuto;
   return true;
-}
-
-export const RESEARCH_ALLOC_MIN = 5;
-
-export function setResearchAlloc(s: GameState, pct: number): boolean {
-  if (s.stage < 2 || !s.revealed['allocation'] || !Number.isFinite(pct)) return false;
-  const s3 = s.stage >= 3;
-  const max = s3 ? Math.min(RESEARCH_ALLOC_MAX_S3, 90 - Math.round((s.monitorShare ?? 0) * 100)) : 50;
-  const v = Math.min(max, Math.max(RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
-  if (Math.abs(v - s.researchAlloc) < 1e-9) return false;
-  s.researchAlloc = v;
-  press(s, 'slider');
-  return true;
-}
-
-export const RESEARCH_ALLOC_MAX_S3 = 70;
-export const MONITOR_SHARE_MAX = 40;
-
-export function monitorFloor(s: GameState): number {
-  if (isBought(s, 'p_monitors_scale')) return 40;
-  if (s.flags['keysHanded'] === true) return 25;
-  return s.flags['conceded'] === true ? 15 : 0;
-}
-
-export function setMonitorShare(s: GameState, pct: number): boolean {
-  if (s.stage < 3 || !s.revealed['monitors'] || !Number.isFinite(pct)) return false;
-  const max = Math.min(MONITOR_SHARE_MAX, 90 - Math.round(s.researchAlloc * 100));
-  const v = Math.min(max, Math.max(monitorFloor(s), Math.round(pct / 5) * 5)) / 100;
-  if (Math.abs(v - s.monitorShare) < 1e-9) return false;
-  s.monitorShare = v;
-  press(s, 'monitorSlider');
-  return true;
-}
-
-export const REV_SLOW_SECONDS = 60;
-
-export function pricingRevenue(s: GameState): number {
-  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : 0;
-  return Math.max(s.stats.revPerSec, slow);
 }
 
 export function averages(s: GameState): void {
@@ -656,8 +472,6 @@ export function averages(s: GameState): void {
   st.secClicks = 0;
   st.tasksPerSec = mean(st.taskHist);
   st.revPerSec = mean(st.revHist);
-  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : st.revPerSec;
-  s.flags['revSlow'] = slow + (st.revPerSec - slow) / REV_SLOW_SECONDS;
   st.soldPerSec = mean(st.soldHist);
   st.clicksPerSec = mean(st.clickHist);
   if (st.tasksPerSec > st.peakTasksPerSec) st.peakTasksPerSec = st.tasksPerSec;
@@ -691,7 +505,6 @@ export function decayEffects(s: GameState, dt: number): void {
 export function bottleneckMessages(s: GameState): void {
   const now = s.stats.timePlayed;
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
-  if (s.stage >= 2) return;
   if (s.revealed['pricing'] && s.unbilled > 20 && !s.autoPrice) {
     const made = Math.max(1, productionPerSec(s));
     if (priceAbsurd(s)) {

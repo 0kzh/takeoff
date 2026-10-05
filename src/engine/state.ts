@@ -1,10 +1,9 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
-export const CONSOLE_KEEP_ON_TRANSITION = 4;
 export const LOG_LIMIT = 60;
 
 export type Focus = 'capability' | 'efficiency' | 'safety';
@@ -17,25 +16,7 @@ export interface Cost {
   insight?: number;
   funds?: number;
   trust?: number;
-  data?: number;
-  materials?: number;
-  build?: number;
-  fund?: number;
   power?: number;
-}
-
-export interface PowerOrder {
-  kind: 'solar' | 'nuclear' | 'gulf' | 'datacenter';
-  mw: number;
-  remaining: number;
-  total?: number;
-  label: string;
-}
-
-export interface Shipment {
-  gpus: number;
-  gen: number;
-  remaining: number;
 }
 
 export interface LogEntry {
@@ -75,11 +56,6 @@ export interface TrainingRun {
   extraIssues: number;
   major: number;
   minor: number;
-  syntheticShare: number;
-  alignShare: number;
-  probeFlags?: number;
-  sentBack?: boolean;
-  reviewLeft?: number;
   prologue?: boolean;
 }
 
@@ -111,19 +87,13 @@ export interface TrainingState {
   frontierBonus: number;
   models: ModelRecord[];
   pending: TrainingRun | null;
-  cooldown: number;
-  releaseWait: number;
   releasing?: { remaining: number; isPublic: boolean } | null;
-  armed?: boolean;
 }
 
 export interface TimedEffect {
   id: string;
   remaining: number;
   demandMult: number;
-  powerMult?: number;
-  researchMult?: number;
-  copiesMult?: number;
 }
 
 export interface ScheduledEvent {
@@ -144,24 +114,13 @@ export interface ChoiceRecord {
   date: string;
 }
 
-export interface QueuedLine {
-  delay: number;
-  text: string;
-  hold?: boolean;
-}
-
 export interface Cadence {
   queue: string[];
   lastDripAt: number;
   lastRevealAt: number;
   lastModalAt: number;
   seen: string[];
-  lateQueue: string[];
-  lastLateAt: number;
   governed: string[];
-  lastMechanicAt: number;
-  grantQueue: string[];
-  lastGrantAt: number;
 }
 
 export interface IdleState {
@@ -173,8 +132,6 @@ export interface IdleState {
 
 export interface Stats {
   timePlayed: number;
-  timeInStage: number;
-  stageEnteredAt: number[];
   tasksPerSec: number;
   revPerSec: number;
   soldPerSec: number;
@@ -197,201 +154,15 @@ export interface Stats {
   choices: number;
   idleRescues: number;
   nextTaskMilestone: number;
-  pressCounts: Record<string, number>;
-  priceHist: number[];
-  incidentTimes: number[];
-  lostToDrift: number;
-  recaptured: number;
   consoleLines?: number;
-  logLines?: number;
-}
-
-export interface Generation {
-  name: string;
-  phase: 'training' | 'reading';
-  remaining: number;
-  total: number;
-  capAfter: number;
-  verified: boolean;
-}
-
-export interface AgendaItem {
-  id: string;
-  remaining: number;
-  total: number;
-}
-
-export interface Stage4State {
-  materials: number;
-  permitCap: number;
-  mine: number;
-  replicate: number;
-  build: number;
-  chips: number;
-  techMine: number;
-  techRep: number;
-  techBuild: number;
-  zoneMult: number;
-  builtCompute: number;
-  robotsBuilt: number;
-  peakCompute: number;
-  ubiShare: number;
-  ubiSeconds: number;
-  housingUnits: number;
-  housingHeat: number;
-  housingAt: number;
-  approvalBase: number;
-  treaty: number;
-  treatyOpening: number;
-  talks: 'none' | 'open' | 'closed';
-  chipsInstalled: number;
-  draftShare: number;
-  agenda: AgendaItem[];
-  verifyOn: boolean;
-  gen: Generation | null;
-  generations: number;
-  verifiedGens: number;
-  genBase: number;
-  genCap0: number;
-  baiwenAligned: boolean;
-  baiwen: 'unknown' | 'verifying' | 'read' | 'aligned' | 'misaligned' | 'rebuilding' | 'rebuilt';
-  baiwenLeft: number;
-  treatyFrozen: number;
-  ashfordPhase: 'none' | 'spreading' | 'cured';
-  ashfordLeft: number;
-  ashfordDeaths: number;
-  ashfordBand: number;
-  nanoLeft: number;
-  nanoDrain: number;
-  outageLeft: number;
-  fleetGoal: 'growth' | 'people' | 'treaty';
-  approvalHold: number;
-  stance: 'hold' | 'balanced' | 'concede';
-  askLeft: number;
-  grants: string[];
-}
-
-export function newStage4(): Stage4State {
-  return {
-    materials: 0,
-    permitCap: 400000,
-    mine: 0.35,
-    replicate: 0.4,
-    build: 0.25,
-    chips: 0,
-    techMine: 1,
-    techRep: 1,
-    techBuild: 1,
-    zoneMult: 1,
-    builtCompute: 0,
-    robotsBuilt: 0,
-    peakCompute: 0,
-    ubiShare: 0,
-    ubiSeconds: 0,
-    housingUnits: 0,
-    housingHeat: 0,
-    housingAt: 0,
-    approvalBase: 0,
-    treaty: 0,
-    treatyOpening: 0,
-    talks: 'none',
-    chipsInstalled: 0,
-    draftShare: 0,
-    agenda: [],
-    verifyOn: true,
-    gen: null,
-    generations: 0,
-    verifiedGens: 0,
-    genBase: 0,
-    genCap0: 1,
-    baiwenAligned: false,
-    baiwen: 'unknown',
-    baiwenLeft: 0,
-    treatyFrozen: 0,
-    ashfordPhase: 'none',
-    ashfordLeft: 0,
-    ashfordDeaths: 0,
-    ashfordBand: 0,
-    nanoLeft: 0,
-    nanoDrain: 0,
-    outageLeft: 0,
-    fleetGoal: 'growth',
-    approvalHold: 0,
-    stance: 'balanced',
-    askLeft: 0,
-    grants: [],
-  };
-}
-
-export interface Mission {
-  id: string;
-  remaining: number;
-  total: number;
-}
-
-export type SpaceRow = 'foundry' | 'orbital' | 'collector';
-
-export interface Stage5State {
-  massFlow: number;
-  flowParts: Record<string, number>;
-  matter: number;
-  missionFund: number;
-  industryShare: number;
-  orbitalGpus: number;
-  orbitalMult: number;
-  swarm: number;
-  probes: number;
-  probesTotal: number;
-  probesLost: number;
-  split: Record<SpaceRow, number>;
-  handPurchases: number;
-  techIndustry: number;
-  flowGrowth: number;
-  missions: Mission[];
-  beside: Mission[];
-  peopleLineIndex: number;
-  genTimer: number;
-  mercuryTaken: number;
-  peopleOffEarth: number;
-  spent: Record<string, number>;
-  news: { at: number; text: string }[];
-}
-
-export function newStage5(): Stage5State {
-  return {
-    massFlow: 0,
-    flowParts: {},
-    matter: 0,
-    missionFund: 0,
-    industryShare: 0.75,
-    orbitalGpus: 0,
-    orbitalMult: 1,
-    swarm: 0,
-    probes: 0,
-    probesTotal: 0,
-    probesLost: 0,
-    split: { foundry: 0, orbital: 0, collector: 0 },
-    handPurchases: 0,
-    techIndustry: 1,
-    flowGrowth: 0,
-    missions: [],
-    beside: [],
-    peopleLineIndex: 0,
-    genTimer: 150,
-    mercuryTaken: 0,
-    peopleOffEarth: 0,
-    spent: {},
-    news: [],
-  };
 }
 
 export interface GameState {
   version: number;
   seed: number;
   rngSeed: number;
-  stage: number;
   date: number;
-  ending: string;
+  stage: number;
 
   tasks: number;
   unbilled: number;
@@ -402,11 +173,7 @@ export interface GameState {
   totalRevenue: number;
   price: number;
   priceRaises: number;
-  apiCustomers: number;
   autoPrice: boolean;
-  marketBase: number;
-  contractIncome: number;
-  revenueMult: number;
 
   power: number;
   powerPrice: number;
@@ -415,30 +182,10 @@ export interface GameState {
   gridAuto: boolean;
   stuckFor: number;
 
-
   gpus: number;
   gpuCostGrowth: number;
   copiesPerGPU: number;
   copyBoost: number;
-  researchAlloc: number;
-
-  datacenters: number;
-  powerCapacityMW: number;
-  gasPlants: number;
-  solarFarms: number;
-  reactors: number;
-  gulfSites: number;
-  powerQueue: PowerOrder[];
-  btm: boolean;
-  gpusG5: number;
-  g5: boolean;
-  gpuBatches: number;
-  standingOrder: boolean;
-  standingBudget: number;
-  standingPool: number;
-  buildFund: number;
-  buildShare: number;
-  gulfExposure: number;
 
   hypeLevel: number;
   marketingBought: number;
@@ -456,39 +203,14 @@ export interface GameState {
   insight: number;
   insightUnlocked: boolean;
   researchMult: number;
-  insightMult: number;
-  humanEff: number;
-  aiResearchMult: number;
 
   capability: number;
   rivalCapability: number;
   rivalVersion: number;
   nextRivalIn: number;
   rivalHistory: RivalRecord[];
-  baiwenCapability: number;
   alignmentApparent: number;
   alignmentTrue: number;
-  interpretability: number;
-  securityLevel: number;
-  govRelations: number;
-  approval: number;
-  jobsDisplaced: number;
-  lead: number;
-  data: number;
-  dataSynthetic: number;
-  crawlLeft: number;
-  autonomy: number;
-  jobFund: boolean;
-  shareEvals: boolean;
-  alignShare: number;
-  monitorShare: number;
-  rogueCopies: number;
-  gpusG6: number;
-  shipments: Shipment[];
-  majorIncidents: number;
-  robots: number;
-  s4: Stage4State;
-  s5: Stage5State;
 
   training: TrainingState;
   effects: TimedEffect[];
@@ -499,7 +221,6 @@ export interface GameState {
   flags: Record<string, FlagValue>;
   log: LogEntry[];
   console: string[];
-  consoleQueue: QueuedLine[];
   activeChoice: ActiveChoice | null;
   choiceQueue: ActiveChoice[];
   choicesMade: ChoiceRecord[];
@@ -527,17 +248,12 @@ export function newTraining(): TrainingState {
     frontierBonus: 0,
     models: [{ name: 'Sage-1', capability: 1, date: 0, public: true }],
     pending: null,
-    cooldown: 0,
-    releaseWait: 0,
-    armed: false,
   };
 }
 
 export function newStats(): Stats {
   return {
     timePlayed: 0,
-    timeInStage: 0,
-    stageEnteredAt: [0],
     tasksPerSec: 0,
     revPerSec: 0,
     soldPerSec: 0,
@@ -560,11 +276,6 @@ export function newStats(): Stats {
     choices: 0,
     idleRescues: 0,
     nextTaskMilestone: 1000,
-    pressCounts: {},
-    priceHist: [],
-    incidentTimes: [],
-    lostToDrift: 0,
-    recaptured: 0,
   };
 }
 
@@ -573,9 +284,8 @@ export function newGame(seed: number = Date.now()): GameState {
     version: SAVE_VERSION,
     seed: Math.floor(seed),
     rngSeed: seedFrom(seed),
-    stage: 1,
     date: 0,
-    ending: '',
+    stage: 1,
 
     tasks: 0,
     unbilled: 0,
@@ -586,11 +296,7 @@ export function newGame(seed: number = Date.now()): GameState {
     totalRevenue: 0,
     price: 0.25,
     priceRaises: 0,
-    apiCustomers: 0,
     autoPrice: false,
-    marketBase: 0,
-    contractIncome: 0,
-    revenueMult: 1,
 
     power: 1000,
     powerPrice: 20,
@@ -599,30 +305,10 @@ export function newGame(seed: number = Date.now()): GameState {
     gridAuto: false,
     stuckFor: 0,
 
-
     gpus: 0,
     gpuCostGrowth: 1.1,
     copiesPerGPU: 1,
     copyBoost: 1,
-    researchAlloc: 0,
-
-    datacenters: 0,
-    powerCapacityMW: 0,
-    gasPlants: 0,
-    solarFarms: 0,
-    reactors: 0,
-    gulfSites: 0,
-    powerQueue: [],
-    btm: false,
-    gpusG5: 0,
-    g5: false,
-    gpuBatches: 0,
-    standingOrder: false,
-    standingBudget: 0.5,
-    standingPool: 0,
-    buildFund: 0,
-    buildShare: DEFAULT_BUILD_SHARE,
-    gulfExposure: 0,
 
     hypeLevel: 1,
     marketingBought: 0,
@@ -640,39 +326,14 @@ export function newGame(seed: number = Date.now()): GameState {
     insight: 0,
     insightUnlocked: false,
     researchMult: 1,
-    insightMult: 1,
-    humanEff: 1,
-    aiResearchMult: 1,
 
     capability: 1,
     rivalCapability: 1,
     rivalVersion: 1,
     nextRivalIn: 330,
     rivalHistory: [],
-    baiwenCapability: 0.7,
     alignmentApparent: 50,
     alignmentTrue: 50,
-    interpretability: 0,
-    securityLevel: 1,
-    govRelations: 50,
-    approval: 0,
-    jobsDisplaced: 0,
-    lead: 3,
-    data: 0,
-    dataSynthetic: 0,
-    crawlLeft: 0,
-    autonomy: 0,
-    jobFund: false,
-    shareEvals: false,
-    alignShare: 0.01,
-    monitorShare: 0,
-    rogueCopies: 0,
-    gpusG6: 0,
-    shipments: [],
-    majorIncidents: 0,
-    robots: 0,
-    s4: newStage4(),
-    s5: newStage5(),
 
     training: newTraining(),
     effects: [],
@@ -683,12 +344,11 @@ export function newGame(seed: number = Date.now()): GameState {
     flags: { prologue: true },
     log: [],
     console: ['Welcome to OpenMind. Customers are waiting.'],
-    consoleQueue: [],
     activeChoice: null,
     choiceQueue: [],
     choicesMade: [],
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
-    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], lateQueue: [], lastLateAt: -999, governed: [], lastMechanicAt: 0, grantQueue: [], lastGrantAt: -999 },
+    cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], governed: [] },
     stats: newStats(),
 
     tickAccum: 0,
@@ -696,13 +356,7 @@ export function newGame(seed: number = Date.now()): GameState {
   };
 }
 
-const QUEUE_LIMIT = 10;
-
 export function say(s: GameState, text: string): void {
-  if (s.consoleQueue.some((q) => q.hold)) {
-    if (s.consoleQueue.length < QUEUE_LIMIT) s.consoleQueue.push({ delay: 0.6, text });
-    return;
-  }
   printLine(s, text);
 }
 
@@ -712,16 +366,7 @@ export function printLine(s: GameState, text: string): void {
   if (s.console.length > CONSOLE_LINES) s.console.splice(0, s.console.length - CONSOLE_LINES);
 }
 
-export function narrate(s: GameState, lines: [number, string][], holdAfter = 0): void {
-  if (s.console.length > CONSOLE_KEEP_ON_TRANSITION) s.console.splice(0, s.console.length - CONSOLE_KEEP_ON_TRANSITION);
-  const waiting = s.consoleQueue.filter((q) => !q.hold);
-  const held: QueuedLine[] = lines.map(([delay, text]) => ({ delay, text, hold: true }));
-  if (holdAfter > 0) held.push({ delay: holdAfter, text: '', hold: true });
-  s.consoleQueue = [...held, ...waiting];
-}
-
 export function logNews(s: GameState, text: string, kind: LogKind = 'world'): void {
-  s.stats.logLines = (s.stats.logLines ?? 0) + 1;
   s.log.push({ date: dateLabel(s.date), text, kind });
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
 }
@@ -756,10 +401,6 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.insight || s.insight >= c.insight) &&
     (!c.funds || s.funds >= c.funds) &&
     (!c.trust || s.trust >= c.trust) &&
-    (!c.data || s.data >= c.data - 1e-9) &&
-    (!c.materials || s.s4.materials >= c.materials) &&
-    (!c.build || s.buildFund >= c.build || s.funds >= c.build) &&
-    (!c.fund || s.s5.missionFund >= c.fund - 1e-6) &&
     (!c.power || s.power >= c.power)
   );
 }
@@ -770,59 +411,16 @@ export function pay(s: GameState, c: Cost): boolean {
   s.insight -= c.insight ?? 0;
   s.funds = Math.round((s.funds - (c.funds ?? 0)) * 100) / 100;
   s.trust -= c.trust ?? 0;
-  if (c.data) spendData(s, c.data);
-  if (c.materials) s.s4.materials = Math.max(0, s.s4.materials - c.materials);
-  if (c.build) {
-    if (s.buildFund >= c.build) payBuild(s, c.build);
-    else s.funds = Math.round((s.funds - c.build) * 100) / 100;
-  }
-  if (c.fund) s.s5.missionFund = Math.max(0, s.s5.missionFund - c.fund);
   if (c.power) s.power = Math.max(0, s.power - c.power);
   return true;
 }
 
-export function spendData(s: GameState, amount: number): number {
-  const take = Math.min(s.data, amount);
-  const share = s.data > 0 ? Math.min(1, s.dataSynthetic / s.data) : 0;
-  s.data = Math.max(0, s.data - take);
-  s.dataSynthetic = Math.max(0, Math.min(s.data, s.dataSynthetic - take * share));
-  return share;
-}
-
 export function inPrologue(s: GameState): boolean {
-  return s.stage === 1 && s.flags['prologue'] === true;
-}
-
-export function heldForPlayer(s: GameState): boolean {
-  return s.flags['held'] === true;
-}
-
-export function press(s: GameState, verb: string): void {
-  s.stats.pressCounts[verb] = (s.stats.pressCounts[verb] ?? 0) + 1;
+  return s.flags['prologue'] === true;
 }
 
 export function addFunds(s: GameState, amount: number): void {
   s.funds = Math.round((s.funds + amount) * 100) / 100;
-}
-
-export const DEFAULT_BUILD_SHARE = 0.5;
-
-export function buildFundOpen(s: GameState): boolean {
-  return (s.stage === 2 || s.stage === 3) && s.revealed['infrastructure'] === true;
-}
-
-export function creditIncome(s: GameState, amount: number): void {
-  if (!buildFundOpen(s) || amount <= 0) {
-    s.funds = Math.round((s.funds + amount) * 100) / 100;
-    return;
-  }
-  const build = amount * s.buildShare;
-  s.buildFund = Math.round((s.buildFund + build) * 100) / 100;
-  s.funds = Math.round((s.funds + amount - build) * 100) / 100;
-}
-
-export function payBuild(s: GameState, cost: number): void {
-  s.buildFund = Math.max(0, Math.round((s.buildFund - cost) * 100) / 100);
 }
 
 export function serialize(s: GameState): string {
@@ -835,11 +433,8 @@ function migrateV1(raw: Record<string, unknown>): Record<string, unknown> {
   const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
   const projects = { ...((raw['projects'] as Record<string, ProjectState>) ?? {}) };
   const training = (raw['training'] as Partial<TrainingState>) ?? {};
-  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
-  if (stage === 1) {
-    revealed['buyPower'] = true;
-    if (!projects['p_datacenter']?.bought) delete projects['p_datacenter'];
-  }
+  revealed['buyPower'] = true;
+  if (!projects['p_datacenter']?.bought) delete projects['p_datacenter'];
   if (revealed['training'] && (training.runIndex ?? 0) >= 1) revealed['focus'] = true;
   if (revealed['training']) revealed['copies'] = true;
   delete revealed['apiCustomers'];
@@ -866,47 +461,24 @@ function migrateV3(raw: Record<string, unknown>): Record<string, unknown> {
   const major = typeof training['major'] === 'number' ? (training['major'] as number) : 1;
   const minor = typeof training['minor'] === 'number' ? (training['minor'] as number) : 0;
   const run = training['run'] as Record<string, unknown> | null | undefined;
-  if (run) training['run'] = { major, minor: minor + 1, syntheticShare: 0, alignShare: 0.01, ...run };
+  if (run) training['run'] = { major, minor: minor + 1, ...run };
   out['training'] = training;
-  if (typeof raw['turbines'] === 'number') out['gasPlants'] = raw['turbines'];
   delete out['turbines'];
   delete out['chipPrice'];
-  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
-  if (stage >= 2) {
-    const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
-    revealed['stores'] = true;
-    revealed['autoPrice'] = true;
-    revealed['contracts'] = false;
-    out['revealed'] = revealed;
-    out['autoPrice'] = true;
-    out['marketBase'] = 0;
-    const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
-    flags['shipIssuesAsked'] = true;
-    out['flags'] = flags;
-  }
   return out;
-}
-
-function migrateV4(raw: Record<string, unknown>): Record<string, unknown> {
-  if (raw['standingBudget'] === undefined) raw['standingBudget'] = 0.5;
-  if (raw['standingPool'] === undefined) raw['standingPool'] = 0;
-  return raw;
 }
 
 function migrateV5(raw: Record<string, unknown>): Record<string, unknown> {
   const projects = { ...((raw['projects'] as Record<string, ProjectState>) ?? {}) };
   const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
   const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
-  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
   let refund = 0;
-  if (stage === 1) {
-    for (const [id, price] of [['p_site', 50000], ['p_interconnect', 100000], ['p_substation', 150000], ['p_contractor', 25000]] as const) {
-      if ((projects[id]?.bought ?? 0) > 0) refund += price;
-    }
-    if (!(projects['p_datacenter']?.bought ?? 0)) delete projects['p_datacenter'];
-    delete flags['price:p_datacenter'];
-    for (const id of ['p_cooling', 'p_soundwall', 'p_abatement', 'p_ppa']) if (!(projects[id]?.bought ?? 0)) delete projects[id];
+  for (const [id, price] of [['p_site', 50000], ['p_interconnect', 100000], ['p_substation', 150000], ['p_contractor', 25000]] as const) {
+    if ((projects[id]?.bought ?? 0) > 0) refund += price;
   }
+  if (!(projects['p_datacenter']?.bought ?? 0)) delete projects['p_datacenter'];
+  delete flags['price:p_datacenter'];
+  for (const id of ['p_cooling', 'p_soundwall', 'p_abatement', 'p_ppa']) if (!(projects[id]?.bought ?? 0)) delete projects[id];
   for (const id of ['p_site', 'p_interconnect', 'p_substation', 'p_expedite', 'p_contractor']) {
     delete projects[id];
   }
@@ -928,30 +500,6 @@ function migrateV5(raw: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-function migrateV6(raw: Record<string, unknown>): Record<string, unknown> {
-  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}) };
-  for (const key of ['run', 'pending']) {
-    const run = training[key] as Record<string, unknown> | null | undefined;
-    if (run && typeof run === 'object') {
-      if (typeof run['probeFlags'] !== 'number') run['probeFlags'] = 0;
-    }
-  }
-  const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}) };
-  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
-  if (stage >= 3 && flags['sage3Released'] === undefined) flags['sage3Released'] = 'public';
-  return { ...raw, training, flags };
-}
-
-function migrateV7(raw: Record<string, unknown>): Record<string, unknown> {
-  const pool = typeof raw['standingPool'] === 'number' ? (raw['standingPool'] as number) : 0;
-  const funds = typeof raw['funds'] === 'number' ? (raw['funds'] as number) : 0;
-  const moved = Math.max(0, Math.min(pool, funds));
-  const training = { ...((raw['training'] as Record<string, unknown>) ?? {}), armed: false };
-  const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}) };
-  if (revealed['infrastructure'] === true) revealed['buildShare'] = true;
-  return { ...raw, training, revealed, funds: funds - moved, buildFund: moved, buildShare: DEFAULT_BUILD_SHARE, standingPool: 0 };
-}
-
 function migrateV8(raw: Record<string, unknown>): Record<string, unknown> {
   if (typeof raw['marketingBought'] === 'number') return raw;
   const projects = (raw['projects'] as Record<string, ProjectState>) ?? {};
@@ -967,32 +515,15 @@ function migrateV8(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, marketingBought: Math.max(0, Math.round(level - 1 - given)) };
 }
 
-function migrateV9(raw: Record<string, unknown>): Record<string, unknown> {
-  if (raw['stage'] !== 4 || raw['s4'] !== undefined) return raw;
-  const flags = { ...((raw['flags'] as Record<string, unknown>) ?? {}), s4Pending: true };
-  return { ...raw, flags };
-}
-
-function migrateV10(raw: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...raw };
-  delete out['launchCapacity'];
-  delete out['orbitalCompute'];
-  if (raw['stage'] === 5 && raw['s5'] === undefined) {
-    out['flags'] = { ...((raw['flags'] as Record<string, unknown>) ?? {}), s5Pending: true };
-  }
-  return out;
-}
-
 function migrateV11(raw: Record<string, unknown>): Record<string, unknown> {
-  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
   const version = typeof raw['rivalVersion'] === 'number' ? (raw['rivalVersion'] as number) : 1;
-  if (stage < 2 && version <= 1) return raw;
+  if (version <= 1) return raw;
   const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}), rival: true };
   const developments = { ...((raw['developments'] as Record<string, boolean>) ?? {}), d_anthrosoft: true };
   return { ...raw, revealed, developments };
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9, migrateV10, migrateV11];
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, (raw) => raw, migrateV5, (raw) => raw, (raw) => raw, migrateV8, (raw) => raw, (raw) => raw, migrateV11, (raw) => raw];
 
 export function migrate(raw: Record<string, unknown>): GameState {
   let data = raw;
@@ -1005,7 +536,8 @@ export function migrate(raw: Record<string, unknown>): GameState {
   }
   const base = newGame(typeof data['seed'] === 'number' ? (data['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged: Record<string, unknown> = { ...base, ...data };
-  for (const key of ['training', 'stats', 'idle', 'cadence', 's4', 's5'] as const) {
+  for (const key of Object.keys(merged)) if (!(key in base)) delete merged[key];
+  for (const key of ['training', 'stats', 'idle', 'cadence'] as const) {
     merged[key] = { ...(base[key] as object), ...((data[key] as object) ?? {}) };
   }
   return merged as unknown as GameState;

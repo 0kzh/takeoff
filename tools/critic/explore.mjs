@@ -21,7 +21,6 @@ import path from 'node:path';
 import { runGame, resolveGameDir } from './lib/runner.mjs';
 import { openProbe } from './lib/probe.mjs';
 import { loadAdapter, parseArgs, resolvePrefix, mmss, fmtN } from './lib/util.mjs';
-import { FLEET_GRANT_CARD } from './games/takeoff-late.mjs';
 
 const money = (v) => (v == null ? '—' : `$${fmtN(v, 2)}`);
 const base = await loadAdapter('takeoff');
@@ -56,49 +55,7 @@ const READ_SCREEN = () => {
       rival: txt('rivalLine'),
       site: txt('panel-site'),
       trustNote: txt('trustCostNote'),
-      // Stage 2+ (absent from Stage 1 builds, so Stage 1 output is unchanged).
-      trainReason: txt('trainReason'),
-      releaseNote: txt('releaseNote'),
-      copiesOnResearch: txt('allocPct'),
-      humanShare: txt('humanShare'),
-      interconnectLine: txt('interconnectLine'),
-      // Stage 3 (absent or hidden before it).
-      trainStatus: txt('trainStatus'),
-      experiments: txt('experimentsNote'),
-      lobby: txt('lobbyNote'),
-      counterintel: txt('counterintelNote'),
-      reimage: txt('reimageNote'),
-      alignWork: txt('alignWorkNote'),
-      autonomy: txt('autonomyNote'),
-      rogue: txt('rogueNote'),
-      seats: txt('seatsNote'),
-      session: txt('sessionLine'),
-      order: txt('orderLine'),
-      memo: txt('memoLine'),
-      theft: txt('theftNote'),
-      shipment: txt('shipmentLine'),
-      buildout: txt('buildoutLine'),
-      standing: txt('standingNote'),
-      buildShare: txt('buildShareNote'),
       ending: txt('endingTitle'),
-      // Stage 4 (absent from earlier builds and stages).
-      generation: txt('genStatus'),
-      verify: txt('verifyNote'),
-      fleetStatus: txt('fleetStatus'),
-      fleetGoal: txt('fleetGoalNote'),
-      fleetIdle: txt('fleetIdle'),
-      housing: txt('housingNote'),
-      hearing: txt('hearingNote'),
-      agenda: txt('agendaLine'),
-      treatyWait: txt('treatyWait'),
-      treatyLead: txt('treatyLeadLine'),
-      ubi: txt('ubiNote'),
-      draft: txt('draftNote'),
-      approvalS4: txt('societyApprovalNote'),
-      ashford: txt('ashfordLine'),
-      nano: txt('nanoLine'),
-      shutdown: txt('shutdownLine'),
-      robotsCap: txt('robotsCap'),
     },
     modal: modalOpen
       ? {
@@ -174,19 +131,6 @@ const RUNS = {
     title: 'Presses every setting (toggle, AUTO, "Name: value" button) once when it first appears, and drags each slider to its minimum when it first appears and to its maximum 10 minutes later',
     adapter: variant({ special: togglesSpecial }),
   },
-  // --- Stage 4: the choices that end the stage early ---
-  'fleet-not-yet': {
-    title: 'Stage 4: answers the fleet\'s request for autonomy "not yet" every time and never buys "Grant the fleet autonomy"',
-    adapter: variant({ modalChoice: fleetAnswer(/^not yet/), veto: (c) => [...base.policy.veto(c), FLEET_GRANT_CARD] }),
-  },
-  'fleet-refuse': {
-    title: 'Stage 4: answers the fleet\'s request "refuse for good" when it is enabled ("not yet" otherwise) and never buys "Grant the fleet autonomy"',
-    adapter: variant({ modalChoice: fleetAnswer(/^refuse for good/, /^not yet/), veto: (c) => [...base.policy.veto(c), FLEET_GRANT_CARD] }),
-  },
-  halt: {
-    title: 'Stage 4: also buys "Sign a halt instead" when it is lit (its event answered with the first option, "sign the halt")',
-    adapter: variant({ veto: (c) => base.policy.veto(c).filter((k) => k !== 'proj-p_halt') }),
-  },
   'no-side-projects': {
     title: 'Buys only research projects and the four Abilene rungs — none of the funds-priced side offers',
     adapter: { ...base, policy: { ...base.policy, veto: (c) => c.buttons.filter((b) => b.kind === 'project' && /\$/.test(b.l) && !/Reserve the Abilene|Interconnect queue|Substation|Break ground/.test(b.l)).map((b) => b.k) } },
@@ -232,18 +176,6 @@ async function togglesSpecial(ctx) {
     }
   }
   return c;
-}
-
-/** modalChoice for the fleet's request ("The Fleet Asks"): the first enabled option matching `wanted` (in order); every other modal: first enabled option. */
-function fleetAnswer(...wanted) {
-  return (modal, enabled) => {
-    if (!/The Fleet Asks/i.test(modal.title || '')) return enabled[0];
-    for (const re of wanted) {
-      const hit = enabled.find((o) => re.test(o.l));
-      if (hit) return hit;
-    }
-    return enabled[0];
-  };
 }
 
 function focusSpecial(key) {

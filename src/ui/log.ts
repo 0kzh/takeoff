@@ -8,14 +8,13 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 export const LOG_SHOWN = 5;
-const logShown = (s: GameState): number => (s.stage >= 2 ? 4 : LOG_SHOWN);
 
 let lastKey = '';
 let lastLength = -1;
 
 export function renderLog(s: GameState): void {
   const last = s.log[s.log.length - 1];
-  const key = `${s.log.length}|${last?.date ?? ''}|${last?.text ?? ''}|${logShown(s)}`;
+  const key = `${s.log.length}|${last?.date ?? ''}|${last?.text ?? ''}|${LOG_SHOWN}`;
   if (key === lastKey) return;
   lastKey = key;
   const freshFrom = lastLength < 0 || lastLength > s.log.length ? s.log.length : lastLength;
@@ -24,7 +23,7 @@ export function renderLog(s: GameState): void {
   list.replaceChildren();
   const currentYear = dateLabel(s.date).slice(-4);
   let month = '';
-  const first = Math.max(0, s.log.length - logShown(s));
+  const first = Math.max(0, s.log.length - LOG_SHOWN);
   const oldMonths = new Set(s.log.slice(first, freshFrom).map((e) => e.date));
   for (let i = s.log.length - 1; i >= first; i--) {
     const entry = s.log[i]!;

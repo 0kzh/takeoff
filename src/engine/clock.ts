@@ -23,7 +23,7 @@ function onNewMonth(s: GameState): void {
 }
 
 export function awardLeaderboard(s: GameState): void {
-  if (!s.flags['leaderboardEligible'] || s.stage >= 3) return;
+  if (!s.flags['leaderboardEligible'] || s.stage > 1) return;
   const year = 2025 + Math.floor((Math.floor(s.date) + 6) / 12);
   if (s.flags['leaderboardYear'] === year) return;
   s.flags['leaderboardYear'] = year;

@@ -1,16 +1,15 @@
 import { GameState, newGame, replaceState, SAVE_VERSION } from '../engine/state.js';
 import { actions, tick } from '../engine/tick.js';
 import { researchCap } from '../engine/economy.js';
-import { GAS_MW } from '../engine/infrastructure.js';
-import { fireableEvents, pendingDevelopments } from '../engine/events.js';
-import { setSkin } from '../engine/space.js';
+import { fireableEvents } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
-import { PRESETS, presetFor, EXTRA_PRESETS, presetByKey } from '../data/presets.js';
+import { PRESETS, presetByKey } from '../data/presets.js';
+import { enterStage } from '../engine/stages.js';
+import { DEVELOPMENTS } from '../data/developments.js';
 import { byId, make } from './dom.js';
 import { confirmPress } from './confirm.js';
-import { resetGraph } from './graph.js';
 import { resetLogCache } from './log.js';
 import type { Saver } from './save.js';
 import type { PolicyName } from '../sim/policy.js';
@@ -30,28 +29,15 @@ const SPEEDS = [1, 5, 20];
 
 function load(host: DevHost, next: GameState): void {
   replaceState(host.state, next);
-  resetGraph();
   resetLogCache();
   host.saver.saveNow();
   host.render();
 }
 
-export function loadPreset(host: DevHost, key: number | string): GameState {
-  if (typeof key === 'string' && EXTRA_PRESETS[key]) {
-    const extra = presetByKey(key)!;
-    const param = new URLSearchParams(location.search).get('seed');
-    load(host, extra.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
-    return host.state;
-  }
-  const n = Number(key);
-  const preset = presetFor(n);
+export function loadPreset(host: DevHost, key: string): GameState {
+  const preset = presetByKey(String(key)) ?? PRESETS[0]!;
   const param = new URLSearchParams(location.search).get('seed');
   load(host, preset.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
-  if (!preset.ready || preset.stage !== n) {
-    const latest = [...PRESETS].reverse().find((p) => p.ready && p.stage < n);
-    host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage ${latest?.stage ?? 2} preset.` });
-  }
-  host.render();
   return host.state;
 }
 
@@ -71,11 +57,10 @@ function grant(host: DevHost, what: string): void {
       s.insight += 50;
       break;
     case 'compute':
-      s.gpus += s.stage < 2 ? 10 : 1000;
+      s.gpus += 10;
       break;
     case 'power':
-      if (s.stage < 2) s.power += 10000;
-      else s.powerCapacityMW += GAS_MW * 5;
+      s.power += 10000;
       break;
     case 'trust':
       s.trust += 5;
@@ -86,17 +71,15 @@ function grant(host: DevHost, what: string): void {
 }
 
 function hiddenReadout(s: GameState): string {
-  const next = pendingDevelopments(s)
+  const next = DEVELOPMENTS.filter((d) => !s.developments[d.id])
     .slice(0, 3)
     .map((d) => `${d.id}${d.month !== undefined ? ` @${dateLabel(d.month)}` : ''}`)
     .join(', ');
   return [
-    `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)} · lead ${fmtNum(s.lead, 2)} · SL${s.securityLevel}`,
-    `data ${fmtNum(s.data, 1)} T (synthetic ${fmtNum(s.dataSynthetic, 1)}) · crawl left ${fmtNum(s.crawlLeft, 1)} · autonomy ${s.autonomy}`,
-    `late queue ${s.cadence.lateQueue.join(', ') || '—'} · governed ${s.cadence.governed.length}`,
+    `governed ${s.cadence.governed.length}`,
     `alignment apparent ${fmtNum(s.alignmentApparent, 1)} · true ${fmtNum(s.alignmentTrue, 1)}`,
     `idle rescues ${s.stats.idleRescues} · quiet ${fmtNum(s.idle.quiet, 0)} s`,
-    `time in stage ${fmtDuration(s.stats.timeInStage)} · played ${fmtDuration(s.stats.timePlayed)}`,
+    `played ${fmtDuration(s.stats.timePlayed)}`,
     `rival ${fmtNum(s.rivalCapability, 2)}× next in ${fmtNum(s.nextRivalIn, 0)} s`,
     `next developments: ${next || 'none'}`,
   ].join('\n');
@@ -116,11 +99,9 @@ export function mountDev(host: DevHost): void {
   };
 
   const stageRow = row(
-    'Stage ',
-    ...PRESETS.map((p) => btn(`dev-stage-${p.stage}`, String(p.stage), () => loadPreset(host, p.stage))),
-    ' ',
-    ...Object.entries(EXTRA_PRESETS).map(([key, p]) => {
-      const b = btn(`dev-stage-${key}`, key, () => loadPreset(host, key));
+    'Start ',
+    ...PRESETS.map((p) => {
+      const b = btn(`dev-stage-${p.key}`, p.key, () => loadPreset(host, p.key));
       b.title = p.label;
       return b;
     }),
@@ -154,14 +135,9 @@ export function mountDev(host: DevHost): void {
   );
 
   const endRow = row(
-    btn('dev-skin', 'Flip skin', () => {
-      setSkin(host.state, host.state.flags['alignedAtHandover'] !== true);
-      host.saver.markDirty();
-      host.render();
-    }),
-    ' End ',
-    ...['concord', 'silence', 'pause', 'project'].map((id) => btn(`dev-end-${id}`, id, () => {
-      actions.forceEnding(host.state, id);
+    'Stage ',
+    ...[2, 3, 4, 5].map((n) => btn(`dev-enter-${n}`, String(n), () => {
+      enterStage(host.state, n);
       host.saver.saveNow();
       host.render();
     })),
@@ -234,7 +210,7 @@ export function mountDev(host: DevHost): void {
       fire: (id: string) => actions.fireEvent(host.state, id),
     },
     presets: PRESETS,
-    loadPreset: (n: number | string) => loadPreset(host, n),
+    loadPreset: (key: string) => loadPreset(host, key),
     setSpeed: host.setSpeed,
     setAutoplay: host.setAutoplay,
     save: () => host.saver.saveNow(),

@@ -1,6 +1,5 @@
 import { GameState, newGame, replaceState } from './engine/state.js';
 import { confirmPress } from './ui/confirm.js';
-import { resetGraph } from './ui/graph.js';
 import { resetLogCache } from './ui/log.js';
 import { actions, tick, step, TICK_MS } from './engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './sim/policy.js';
@@ -20,12 +19,12 @@ let policy: PolicyName = 'bot';
 let bot = newBotMemory(policy);
 
 function advance(dtMs: number): void {
-  if (!autoplay || state.ending) {
+  if (!autoplay) {
     tick(state, dtMs);
     return;
   }
   state.tickAccum += dtMs;
-  while (state.tickAccum >= TICK_MS && !state.ending) {
+  while (state.tickAccum >= TICK_MS) {
     state.tickAccum -= TICK_MS;
     policyStep(state, actions, bot);
     step(state);
@@ -45,7 +44,6 @@ const newGameButton = document.getElementById('btn-newGame');
 if (newGameButton) confirmPress(newGameButton, 'Start again in July 2025? Press again', () => {
   saver.clear();
   replaceState(state, newGame(Date.now()));
-  resetGraph();
   resetLogCache();
   bot = newBotMemory(policy);
   autoplay = false;
