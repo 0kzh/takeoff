@@ -388,16 +388,16 @@ div.storeRow[data-reveal].shown { display: flex; }
 #modalOverlay.shown { display: block; }
 #modal {
   position: absolute;
-  top: 120px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   width: 335px;
   background: #fff;
   border: 2px solid #000;
   padding: 16px 20px;
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
   pointer-events: auto;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 80px);
   overflow-y: auto;
 }
 #modal:focus { outline: none; }

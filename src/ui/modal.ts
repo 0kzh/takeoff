@@ -9,9 +9,10 @@ let returnFocus: HTMLElement | null = null;
 let escapeBound = false;
 
 /**
- * ADR event panel. The game keeps running underneath, and so does the page: the panel does not
- * catch clicks outside itself. It takes keyboard focus when it opens; Escape on a timed panel
- * takes its default (what the timer would do), and does nothing on an untimed one.
+ * ADR event panel, centred on the screen (styles.css `#modal`). The game keeps running underneath, and
+ * so does the page: the panel does not catch clicks outside itself. It takes keyboard focus when it
+ * opens; Escape on a timed panel takes its default (what the timer would do), and does nothing on an
+ * untimed one.
  * From Stage 2, each option prints its effect and cost under its label; a greyed one says what it needs.
  */
 export function renderModal(s: GameState, choose: (index: number) => void, dismiss: () => void): void {
@@ -55,10 +56,7 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
         return b;
       }),
     );
-    if (opening) {
-      placeModal();
-      takeFocus();
-    }
+    if (opening) takeFocus();
   }
   def.options.forEach((opt, i) => {
     const b = document.getElementById(`choice-${def.id}-${i}`) as HTMLButtonElement | null;
@@ -75,42 +73,6 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
   });
   const fallback = def.options[defaultIndex(s, def)];
   setText('modalTimer', def.timer && fallback ? `${Math.ceil(active.remaining)} s — then: ${optionLabel(s, fallback)}` : '');
-}
-
-/**
- * The panel opens beside the Stores, not over them (critic C10: its options are priced in the funds it
- * covered): its left edge on the middle column. One column (≤ 700 px) keeps the stylesheet's place.
- */
-function placeModal(): void {
-  const modal = byId('modal');
-  const mid = document.getElementById('middleColumn');
-  if (window.innerWidth <= 700 || !mid) {
-    modal.style.left = '';
-    modal.style.transform = '';
-    modal.style.top = '';
-    modal.style.maxHeight = '';
-    return;
-  }
-  const left = Math.max(8, Math.min(window.innerWidth - modal.offsetWidth - 8, Math.round(mid.getBoundingClientRect().left)));
-  modal.style.left = `${left}px`;
-  modal.style.transform = 'none';
-  // Docked below any slider under it (critic S3 round 1 §9 item 8: the panel sat on both sliders for the
-  // length of every timed event, the one about monitors on the monitors slider).
-  const right = left + modal.offsetWidth;
-  let top = 120;
-  for (const el of Array.from(document.querySelectorAll<HTMLInputElement>('#columns input[type="range"]'))) {
-    if (!el.checkVisibility()) continue;
-    const b = el.getBoundingClientRect();
-    if (b.right > left && b.left < right && b.bottom > 0) top = Math.max(top, Math.round(b.bottom + 16));
-  }
-  // No room below them on this screen: beside the column instead, at the usual height.
-  if (top + Math.min(modal.offsetHeight, 300) > window.innerHeight) {
-    const beside = Math.min(window.innerWidth - modal.offsetWidth - 8, Math.round(mid.getBoundingClientRect().right + 12));
-    modal.style.left = `${Math.max(8, beside)}px`;
-    top = 120;
-  }
-  modal.style.top = `${top}px`;
-  modal.style.maxHeight = `calc(100vh - ${top + 20}px)`;
 }
 
 function takeFocus(): void {
