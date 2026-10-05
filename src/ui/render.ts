@@ -536,20 +536,21 @@ function renderIdle(s: GameState): void {
   const cost = trainCost(s);
   setDisabled('btn-train', !canStartTraining(s));
   setTitle('btn-train', canStartTraining(s) ? 'Start the run.' : 'Not yet: it needs its price and its GPUs.');
-  // Cost: one line a price, each with a bar of what the lab holds against it; the GPUs are a price too.
+  // Cost: one line a price, named by its unit, with a bar of what the lab holds against it; the GPUs are a price too.
   const gpus = trainGpuFigures(s);
-  const of = (have: number, need: number, fmt: (n: number) => string, unit = ''): string => `${fmt(have)} / ${fmt(need)}${unit}`;
-  const rows: [string, (n: number, h: number) => string, number, number][] = [
-    ['funds', (n, h) => of(h, n, fmtMoneyShort), s.funds, cost.funds ?? 0],
-    ['research', (n, h) => of(h, n, fmtInt), s.research, cost.research ?? 0],
-    ['data', (n, h) => of(h, n, (v) => fmtNum(v, 1), ' T'), s.data, cost.data ?? 0],
-    ['power', (n, h) => of(h, n, fmtInt, ' kWh'), s.power, cost.power ?? 0],
-    ['gpus', (n, h) => of(h, n, fmtInt), gpus.have, gpus.need],
+  const rows: [string, (n: number) => string, number, number][] = [
+    ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
+    ['research', (n) => `${fmtInt(n)} research`, s.research, cost.research ?? 0],
+    ['data', (n) => `${fmtNum(n, 1)} T`, s.data, cost.data ?? 0],
+    ['power', (n) => `${fmtInt(n)} kWh`, s.power, cost.power ?? 0],
+    ['gpus', (n) => `${fmtInt(n)} GPUs`, gpus.have, gpus.need],
   ];
-  for (const [key, text, have, need] of rows) {
+  for (const [key, fmt, have, need] of rows) {
     showId(`costRow-${key}`, need > 0);
     if (need <= 0) continue;
-    setText(`costText-${key}`, text(need, have));
+    setText(`costText-${key}`, fmt(need));
+    // What the lab holds is on its own panel; the hover keeps the exact pair.
+    setTitle(`costRow-${key}`, `${fmt(have)} of ${fmt(need)}`);
     setWidth(byId(`costBar-${key}`), have / need);
   }
   // At a wall the bar cannot say what lifts it; one line does.
