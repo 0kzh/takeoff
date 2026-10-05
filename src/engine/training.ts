@@ -665,7 +665,7 @@ export function updateTraining(s: GameState, dt: number): void {
         r.issues -= 1;
         if (r.issues === 0) {
           if (s.stage === 1) logNews(s, pick(s, REDTEAM_LINES));
-          say(s, `Red team signs off. Ready to ${s.stage >= 3 ? 'approve' : 'release'}.`);
+          say(s, `All issues fixed. Ready to ${s.stage >= 3 ? 'approve' : 'release'}.`);
         } else if (s.stage === 2) say(s, `${pick(s, REDTEAM_LINES)} ${r.issues} open.`);
       }
     }
@@ -875,7 +875,7 @@ const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eig
 
 function issueWords(n: number): string {
   const count = n < WORDS.length ? WORDS[n]! : String(n);
-  return n === 0 ? 'No issues for the red team.' : `${count} issue${n === 1 ? '' : 's'} for the red team.`;
+  return n === 0 ? 'No issues found.' : `${count} issue${n === 1 ? '' : 's'} found.`;
 }
 
 export function canRedTeam(s: GameState): boolean {

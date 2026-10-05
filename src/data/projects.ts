@@ -383,11 +383,11 @@ export const PROJECTS: ProjectDef[] = [
     revealResearch: 100,
     title: 'Hire an evals team',
     cost: { research: 2500 },
-    description: 'Red-team passes take a third less time.',
+    description: 'Fixes take a third less time.',
     trigger: (s) => s.flags['redTeamed'] === true,
     buy: () => undefined,
     stages: [1, 2],
-    consoleMsg: 'Evals team hired. Red-teaming is faster.',
+    consoleMsg: 'Evals team hired. Fixes are faster.',
   }),
   project({
     id: 'p_api',
@@ -589,7 +589,7 @@ export const PROJECTS: ProjectDef[] = [
     revealResearch: 100,
     title: 'Alignment team',
     cost: { research: 6000 },
-    description: 'Four people who ask why. Fewer red-team issues.',
+    description: 'Four people who ask why. Fewer issues.',
     trigger: (s) => s.stats.incidents >= 1 || s.training.runIndex >= 3,
     buy: (s) => {
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 5);
@@ -928,12 +928,12 @@ function stage2Projects(): ProjectDef[] {
       id: 'p_auto_evals',
       title: 'Automated evals',
       cost: (s) => ({ research: 100000, funds: s2(s, 150000) }),
-      description: 'The model grades the model: red-teaming takes half the time and finds fewer issues.',
+      description: 'The model grades the model: fixes take half the time and runs have fewer issues.',
       trigger: (s) => s2Releases(s) >= 3 || counter(s, 'incidentsS2') >= 1,
       buy: (s) => {
         s.revealed['evalLine'] = true;
       },
-      consoleMsg: 'Evals run themselves now. Red-teaming takes half the time.',
+      consoleMsg: 'Evals run themselves now. Fixes take half the time.',
     }),
     s2project({
       id: 'p_sl2',

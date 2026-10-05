@@ -132,7 +132,7 @@ const MITIGATION: Record<string, string[]> = {
 
 const REMOVES: Record<string, string> = {
   p_auto_train: 'Train',
-  p_auto_redteam: 'Red-team',
+  p_auto_redteam: 'Fix issue',
   p_buildout: 'Build Datacenter, Reactor',
   p_auto_approve: 'Approve, Send back',
 };

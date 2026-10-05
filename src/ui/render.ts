@@ -18,7 +18,7 @@ import {
   trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, releaseProgress, nextRunName,
   trainGpuFigures, trainGpuFix, evaluatorLine, totalScore, trainingRun, evalRun,
   trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
-  labReason,
+  labReason, needsDatacenter,
 } from '../engine/training.js';
 import { datacenterStatus } from '../data/projects.js';
 import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
@@ -458,14 +458,16 @@ function focusNote(s: GameState, focus: Focus): string {
   const s2 = s.stage >= 2;
   if (focus === 'capability') return s2 ? 'The most capable next model.' : 'The most capable next model (about +12%).';
   if (focus === 'efficiency') return s2 ? 'More copies on every GPU; a smaller capability gain.' : 'Copies per GPU ×1.25; a smaller capability gain.';
-  return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer red-team issues, now and on every later run.';
+  return s2 ? 'Fewer issues on every later run; measured alignment up.' : 'Fewer issues, now and on every later run.';
 }
 
 function renderIdle(s: GameState): void {
   setText('nextRunName', nextRunName(s));
   const cost = trainCost(s);
   setDisabled('btn-train', !canStartTraining(s));
-  setTitle('btn-train', canStartTraining(s) ? 'Start the run.' : 'Not yet: it needs its price and its GPUs.');
+  const wall = needsDatacenter(s);
+  setTitle('btn-train', canStartTraining(s) ? 'Start the run.' : wall ? 'Not yet: it needs the First Datacenter.' : 'Not yet: it needs its price and its GPUs.');
+  showId('costRow-datacenter', wall);
   const gpus = trainGpuFigures(s);
   const rows: [string, (n: number) => string, number, number][] = [
     ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
@@ -475,14 +477,15 @@ function renderIdle(s: GameState): void {
     ['gpus', (n) => `${fmtInt(n)} GPUs`, gpus.have, gpus.need],
   ];
   for (const [key, fmt, have, need] of rows) {
-    showId(`costRow-${key}`, need > 0);
-    if (need <= 0) continue;
+    showId(`costRow-${key}`, need > 0 && !wall);
+    if (need <= 0 || wall) continue;
     setText(`costText-${key}`, fmt(need));
     setTitle(`costRow-${key}`, `${fmt(have)} of ${fmt(need)}`);
     setWidth(byId(`costBar-${key}`), have / need);
   }
-  setText('trainGpus', trainGpuFix(s));
-  showId('trainGpuLine', trainGpuFix(s) !== '');
+  const fix = wall ? '' : trainGpuFix(s);
+  setText('trainGpus', fix);
+  showId('trainGpuLine', fix !== '');
 }
 
 function renderRunning(s: GameState, run: TrainingRun): void {

@@ -134,17 +134,17 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       id: 'p_auto_redteam',
       grant: true,
       revealResearch: 90,
-      title: 'Sage red-teams Sage',
+      title: 'Sage fixes Sage',
       cost: { research: r(6e6) },
-      description: 'Issues close themselves. Red-team goes.',
+      description: 'Issues close themselves. Fix issue goes.',
       stages: [3],
       trigger: (s) => approvals(s) >= 1,
       buy: (s) => {
-        granted(s, 'Sage red-teams Sage', 5);
+        granted(s, 'Sage fixes Sage', 5);
         s.revealed['redteamDepth'] = true;
         s.flags['redteamDepth'] = 'quick';
       },
-      consoleMsg: 'Sage red-teams Sage. Issues close themselves. Red-team depth: quick or thorough.',
+      consoleMsg: 'Sage fixes Sage. Issues close themselves. Review: quick or thorough.',
     }),
     project({
       id: 'p_g6',

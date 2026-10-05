@@ -114,7 +114,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
 }
 
 const WORST_LABELS = [/take the bridge/, /cut the price/, /no comment/, /publish a rebuttal/, /let them go/, /submit Sage/, /let her try/, /release anyway/];
-const BEST_LABELS = [/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep red-teaming/];
+const BEST_LABELS = [/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep fixing/];
 
 function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   const active = s.activeChoice;
@@ -162,7 +162,7 @@ const CHOICE_POLICY: Record<string, Answer[]> = {
   c_rival: ['open-sourced'],
   c_journalist: ['system card', 'no comment'],
   c_customer_email: [0],
-  c_ship_issues: ['red-teamed'],
+  c_ship_issues: ['kept fixing'],
   c_poach: ['equity', 'matched', 'let go'],
   c_bridge: ['no bridge'],
   c_letter: ['signed'],
@@ -402,7 +402,7 @@ const CHOICE_POLICY_S2: Record<string, Answer[]> = {
   c_pact: [0],
   c_gamble: ['gamble', 'no gamble'],
   c_customer_email: [0],
-  c_ship_issues: ['red-teamed'],
+  c_ship_issues: ['kept fixing'],
 };
 
 const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
@@ -423,7 +423,7 @@ function publishersWait(s: GameState, mem: BotMemory): number {
 
 const CHOICES_BEST: Record<string, Answer[]> = {
   c_sage2: [0], c_hearing: [0], c_publishers: [0, 2], c_gulf: [1], c_evals_month: [0], c_defense: [1],
-  c_theft_warning: [0], c_pact: [0], c_gamble: ['no gamble'], c_customer_email: [0], c_ship_issues: ['red-teamed'],
+  c_theft_warning: [0], c_pact: [0], c_gamble: ['no gamble'], c_customer_email: [0], c_ship_issues: ['kept fixing'],
 };
 const CHOICES_WORST: Record<string, Answer[]> = {
   c_sage2: [1], c_hearing: [1], c_publishers: [1], c_gulf: [0, 2, 1], c_evals_month: [2], c_defense: [0],

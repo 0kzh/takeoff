@@ -158,7 +158,7 @@ const RUNS = {
   },
   'modal-best': {
     title: 'Picks the best-looking option of every modal (gain Trust, keep the researchers, no gamble); waits for a greyed option to become affordable',
-    adapter: variant({ modalChoice: byLabel([/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep red-teaming/], true) }),
+    adapter: variant({ modalChoice: byLabel([/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep fixing/], true) }),
   },
   'no-train': { title: 'Never trains a model', adapter: variant({ skip: [...base.policy.skip, 'btn-train'] }) },
   'click-only': { title: 'Never rents a GPU: the manual button only', adapter: variant({ automation: [], skip: [...base.policy.skip, 'btn-gpu'] }) },

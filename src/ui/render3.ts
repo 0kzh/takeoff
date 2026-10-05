@@ -156,7 +156,7 @@ export function renderTraining3(s: GameState): void {
     setText('btn-approve', run.issues > 0 && !isBought(s, 'p_auto_redteam') ? 'Approve (issues open)' : 'Approve');
     setText('probeFlags', isBought(s, 'p_interp2') ? `Probe flags: ${run.probeFlags ?? 0}` : 'Evals: passed');
     const review = run.reviewLeft ?? 0;
-    setText('releaseNote', review > 0 ? `Sage red-teams it — ${fmtClock(Math.ceil(review))}` : signOff ? 'Sage deploys it.' : '');
+    setText('releaseNote', review > 0 ? `Sage reviews it — ${fmtClock(Math.ceil(review))}` : signOff ? 'Sage deploys it.' : '');
     setTitle('btn-approve', run.issues > 0 ? `${run.issues} open issue${run.issues === 1 ? '' : 's'} ship with ${run.name}. Expect incidents.` : `Deploy ${run.name} everywhere.`);
   }
   if (s.revealed['experiments']) {

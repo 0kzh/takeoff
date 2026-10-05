@@ -231,7 +231,7 @@
           Focus:
           <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 10–14% more capable. Customers notice.">Capability</button>
           <button class="button2 focusButton" id="btn-focus-efficiency" data-focus="efficiency" title="Efficiency: +5% capability, and 25% more copies on every GPU.">Efficiency</button>
-          <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety" title="Safety: +5% capability, fewer red-team issues, better alignment.">Safety</button>
+          <button class="button2 focusButton" id="btn-focus-safety" data-focus="safety" title="Safety: +5% capability, fewer issues, better alignment.">Safety</button>
           <div id="focusNote" class="note"></div>
         </div>
 
@@ -257,7 +257,7 @@
 
         <div id="train-redteam">
           <span id="issuesLine">Open issues: <span id="issuesOpen">0</span><span class="hiddenIds"> of <span id="issuesFound">0</span></span><br></span>
-          <button class="button2 cooldown" id="btn-redteam"><span class="cooldownBar" id="redteamBar"></span><span class="cooldownLabel" id="redteamLabel">Red-team</span></button>
+          <button class="button2 cooldown" id="btn-redteam"><span class="cooldownBar" id="redteamBar"></span><span class="cooldownLabel" id="redteamLabel">Fix issue</span></button>
           <span data-hide="takeoff"><button class="button2 cooldown" id="btn-release"><span class="cooldownBar" id="releaseBar"></span><span class="cooldownLabel" id="releaseLabel">Release</span></button></span>
           <span data-reveal="releaseInternal"><button class="button2 cooldown" id="btn-releaseInternal" title="Research uses it at once; customers keep the deployed model."><span class="cooldownBar" id="releaseInternalBar"></span><span class="cooldownLabel">Keep internal</span></button></span>
           <span data-reveal="takeoff"><button class="button2" id="btn-approve" title="Deploy the run everywhere: tasks, research and the market. Open issues ship with it.">Approve</button></span>
@@ -274,6 +274,7 @@
             <div class="costRow" id="costRow-data"><div class="progress"><div class="progressFill" id="costBar-data"></div></div><span class="costText" id="costText-data"></span></div>
             <div class="costRow" id="costRow-power"><div class="progress"><div class="progressFill" id="costBar-power"></div></div><span class="costText" id="costText-power"></span></div>
             <div class="costRow" id="costRow-gpus"><div class="progress"><div class="progressFill" id="costBar-gpus"></div></div><span class="costText" id="costText-gpus"></span></div>
+            <div class="costRow" id="costRow-datacenter" title="0 of 1 Datacenter"><div class="progress"><div class="progressFill"></div></div><span class="costText">1 Datacenter</span></div>
           </div></span>
           <span id="trainGpuLine"><span id="trainGpus"></span><br></span>
         </div>
@@ -284,7 +285,7 @@
           <span id="runLine">Training on 10 GPUs — 0:45 left.</span><span class="hiddenIds"> <span id="runRemaining">60 s</span></span>
         </div>
         <div data-reveal="experiments" id="experimentsRow"><button class="button2" id="btn-experiments" title="What goes into the next run: +0.25 points on its gain a unit, at most +5. Resets each run.">Experiments</button> <button class="button2" id="btn-experiments5">×5</button> <span id="experimentsNote" class="note"></span></div>
-        <div data-reveal="redteamDepth" id="redteamDepthRow">Red-team depth: <button class="button2 toggle" id="btn-depth" title="Quick or thorough: click to switch.">quick</button> <span id="redteamDepthNote" class="note"></span></div>
+        <div data-reveal="redteamDepth" id="redteamDepthRow">Review: <button class="button2 toggle" id="btn-depth" title="Quick or thorough: click to switch.">quick</button> <span id="redteamDepthNote" class="note"></span></div>
         <div data-reveal="stepSize" id="stepSizeRow">Step size: <button class="button2 toggle" id="btn-step" title="Small, normal, large: click to step.">normal</button> <span id="stepSizeNote" class="note"></span></div>
         <div data-reveal="holdRuns" id="holdRow">Training: <button class="button2 toggle" id="btn-hold" title="Held, no run starts. Research keeps coming.">running</button> <span id="holdNote" class="note"></span></div>
       </div>

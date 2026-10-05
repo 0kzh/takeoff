@@ -9,7 +9,8 @@
  * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
- * first purchase; no yield wording; the Train row's line at the cloud's limit; numeric-token counts at
+ * first purchase; no yield wording; the Train row's line at the cloud's limit and `1 Datacenter`
+ * past it; numeric-token counts at
  * minutes 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
  * width at every fill; no horizontal overflow at 390 px. The Train row (a plain purchase since the
  * prologue, docs/specs/early-train.md): prices only under `Resources needed`, each named by its unit
@@ -124,6 +125,12 @@ const SNAPSHOT = () => {
     // one line under the prices names what lifts it.
     banned: /undertrained|Train now/i.test(text),
     trainShort: vis(document.getElementById('trainGpuLine')) ? document.getElementById('trainGpus').innerText.trim() : '',
+    // Past what the cloud will rent the prices give way to one price, `1 Datacenter`, its bar empty.
+    trainWall: vis(document.getElementById('costRow-datacenter')) ? {
+      text: document.getElementById('trainCosts').innerText.trim().split('\n').map((l) => l.trim()).filter(Boolean).join(' | '),
+      bars: [...document.querySelectorAll('#trainCosts .costRow .progress')].filter(vis).length,
+      fill: Math.max(0, ...[...document.querySelectorAll('#trainCosts .costRow .progressFill')].filter((el) => vis(el.parentElement)).map((el) => el.getBoundingClientRect().width)),
+    } : null,
     // The Train row's price bars, when shown, are bars: one width, each fill as tall as its track.
     trainMeter: (() => {
       const bars = [...document.querySelectorAll('#trainCosts .costRow .progress')].filter(vis);
@@ -369,6 +376,7 @@ try {
   let bannedAt = null;
   const shortLines = new Set();
   const trainMeters = [];
+  const trainWalls = [];
   const trainRows = new Set();
   // Round 3's observations (stage1-round3-fixes.md §1–§4 and the wallet rule).
   const r3 = { armed: null, shortSeen: null, head: null, delay: null, dcBefore: null, dcWall: null, powerRow: null, powerOf: null, quotaRow: null, focusFirst: null, focusRows: new Set(), events: new Map(), heldAt: null };
@@ -389,6 +397,7 @@ try {
     beats.push({ t: snap.t, newButtons, dNumbers: firstTime.length ? (snap.numbersOutside - snap.capHalves) - (prev.numbersOutside - prev.capHalves) : 0 });
     if (snap.banned && bannedAt === null) bannedAt = snap.t;
     if (snap.stage === 1 && snap.trainShort) shortLines.add(snap.trainShort);
+    if (snap.stage === 1 && snap.trainWall) trainWalls.push({ t: snap.t, short: snap.trainShort, ...snap.trainWall });
     if (snap.stage === 1 && snap.trainMeter) trainMeters.push(snap.trainMeter);
     if (snap.stage === 1) {
       if (snap.train) {
@@ -567,11 +576,15 @@ try {
   // The GPUs are a price with a bar (`10 GPUs`); the line under the prices is only for the cloud's limit,
   // which a bar cannot explain.
   const lines = [...shortLines];
-  const okLine = (l) => /^The cloud rents [\d,]+\.( .+ adds 20\.)?$/.test(l) ||
-    /^The cloud will rent [\d,]+\. Build the First Datacenter\.$/.test(l);
-  // A first-timer may never reach the cloud's limit: the test breaks ground before the wall.
-  check('a Train the cloud cannot rent enough GPUs for names the limit and what lifts it', (lines.length > 0 || POLICY !== 'bot') && lines.every(okLine),
+  const okLine = (l) => /^The cloud rents [\d,]+\.( .+ adds 20\.)?$/.test(l);
+  check('a Train past the cloud\'s quota names the limit and what lifts it', lines.every(okLine),
     lines.length ? lines.slice(0, 4).join(' | ') : 'never at the limit in this run');
+  // A first-timer may never reach the wall: the test breaks ground before it.
+  const badWall = trainWalls.find((w) => w.text !== 'Resources needed | 1 Datacenter' || w.bars !== 1 || w.fill > 0 || w.short);
+  check('a Train past what the cloud will ever rent reads `1 Datacenter` under `Resources needed`: one empty bar, no other line',
+    (trainWalls.length > 0 || POLICY !== 'bot') && !badWall,
+    badWall ? `${clock(badWall.t)} "${badWall.text}", ${badWall.bars} bars, fill ${badWall.fill} px${badWall.short ? `, "${badWall.short}"` : ''}`
+      : trainWalls.length ? `${clock(trainWalls[0].t)} "${trainWalls[0].text}"` : 'never at the wall in this run');
   const barsOk = (m) => m.widths.every((w) => w === m.widths[0]) && m.widths[0] > 0 && m.fillH >= 10 && m.fillH === m.trackH;
   const badBar = trainMeters.find((m) => !barsOk(m));
   check('the Train row\'s price bars are whole bars (one width, each fill as tall as its track)',
@@ -607,7 +620,7 @@ try {
     !!r3.powerRow && !r3.powerOf && !!r3.quotaRow && /^GPUs rented\s+[\d,]+ \/ [\d,]+$/.test(r3.quotaRow.line.trim()),
     `${r3.powerRow ? `${clock(r3.powerRow.t)} "${r3.powerRow.line}"` : 'power: none'}${r3.powerOf ? ` (but "${r3.powerOf.line}")` : ''} · ${r3.quotaRow ? `${clock(r3.quotaRow.t)} "${r3.quotaRow.line}"` : 'quota: none'}`);
   const ff = r3.focusFirst;
-  const focusNotes = ['The most capable next model (about +12%).', 'Copies per GPU ×1.25; a smaller capability gain.', 'Fewer red-team issues, now and on every later run.'];
+  const focusNotes = ['The most capable next model (about +12%).', 'Copies per GPU ×1.25; a smaller capability gain.', 'Fewer issues, now and on every later run.'];
   check('Focus is three plain buttons and one note line under them, and reads `Focus:` during a run',
     !!ff && /^Focus: Capability Efficiency Safety /.test(ff.row) && ff.labels.join(' ') === 'Capability Efficiency Safety' &&
       [...r3.focusRows].every((r) => r.startsWith('Capability Efficiency Safety | ') && focusNotes.includes(r.split(' | ')[1])),

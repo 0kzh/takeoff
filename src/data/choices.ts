@@ -110,7 +110,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'let her try',
         record: 'gamble',
-        tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss adds red-team issues.`,
+        tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss adds issues.`,
         line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else more issues · ${fmtNum(gambleCost(s), 0)} research`,
         cost: (s) => ({ research: gambleCost(s) }),
         enabled: (s, ctx) => runFor(s, ctx)?.phase === 'training',
@@ -128,7 +128,7 @@ export const CHOICES: ChoiceDef[] = [
             run.gamble = 'fail';
             run.extraIssues += randInt(s, 4, 6);
             s.hypeBoost = Math.max(1, s.hypeBoost - 0.2);
-            say(s, 'It did not work. The red team has more to do.');
+            say(s, 'It did not work. More issues to fix.');
           }
         },
       },
@@ -181,14 +181,14 @@ export const CHOICES: ChoiceDef[] = [
     text: (s, ctx) => {
       const n = Number(ctx['issues'] ?? 1);
       return [
-        `${runName(s, ctx)} has ${n} open issue${n === 1 ? '' : 's'} the red team has not closed.`,
+        `${runName(s, ctx)} has ${n} issue${n === 1 ? '' : 's'} still open.`,
         'They ship with it. Customers tend to find them within a few minutes.',
       ];
     },
     options: [
       {
-        label: 'keep red-teaming',
-        record: 'red-teamed',
+        label: 'keep fixing',
+        record: 'kept fixing',
         line: 'a clean release: +1 Trust',
         effect: (s) => {
           s.flags['shipIssuesAsked'] = true;

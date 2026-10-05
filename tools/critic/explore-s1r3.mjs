@@ -211,7 +211,7 @@ const RUNS = {
   },
   'modal-best': {
     title: 'Picks the best-looking option of every modal (Trust and permanent demand, keep the researchers, no gamble; the leaderboard: submit when ahead, decline when behind); waits for a greyed option to become affordable',
-    adapter: variant({ modalChoice: byLabel([/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, () => (screenNow.ahead ? /submit Sage/ : /decline/), /not now/, /keep red-teaming/], true) }),
+    adapter: variant({ modalChoice: byLabel([/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, () => (screenNow.ahead ? /submit Sage/ : /decline/), /not now/, /keep fixing/], true) }),
   },
   // --- one modal answered differently, every other one with its first option (what each framed choice weighs) ---
   'm-bridge-wait': { title: 'A Bridge Round → wait for a real round (every other modal: first option)', adapter: variant({ modalChoice: only(/Bridge/, /wait for a real round/) }) },
