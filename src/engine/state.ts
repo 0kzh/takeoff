@@ -29,6 +29,8 @@ export interface Cost {
   build?: number;
   /** Stage 5: tonnes from the mission fund (a mission's price, 20 s of the flow when it appears). */
   fund?: number;
+  /** Stage 1: kWh from the power store (the prologue run that trains Sage-1). */
+  power?: number;
 }
 
 /** A power plant waiting to come online (stage2.md §2.1). Solar farms wait in the interconnect queue one at a time. */
@@ -101,6 +103,8 @@ export interface TrainingRun {
   sentBack?: boolean;
   /** Stage 3: seconds of the thorough red-team review left before it can deploy. */
   reviewLeft?: number;
+  /** Stage 1's prologue run: Sage-1 itself, trained on the first GPUs and deployed, not released. */
+  prologue?: boolean;
 }
 
 export interface ModelRecord {
@@ -841,7 +845,8 @@ export function newGame(seed: number = Date.now()): GameState {
     // Buy Power is on screen, greyed out, from the first second: a goal before the first click.
     // Beat 0 (owner feedback 1, (a)): the console, the task count and one button.
     revealed: { console: true, task: true },
-    flags: {},
+    // The prologue (docs/specs/early-train.md): GPUs do nothing until Sage-1 is trained and deployed.
+    flags: { prologue: true },
     log: [],
     console: ['Welcome to OpenMind. Customers are waiting.'],
     consoleQueue: [],
@@ -929,7 +934,8 @@ export function canPay(s: GameState, c: Cost): boolean {
     (!c.data || s.data >= c.data - 1e-9) &&
     (!c.materials || s.s4.materials >= c.materials) &&
     (!c.build || s.buildFund >= c.build || s.funds >= c.build) &&
-    (!c.fund || s.s5.missionFund >= c.fund - 1e-6)
+    (!c.fund || s.s5.missionFund >= c.fund - 1e-6) &&
+    (!c.power || s.power >= c.power)
   );
 }
 
@@ -946,6 +952,7 @@ export function pay(s: GameState, c: Cost): boolean {
     else s.funds = Math.round((s.funds - c.build) * 100) / 100;
   }
   if (c.fund) s.s5.missionFund = Math.max(0, s.s5.missionFund - c.fund);
+  if (c.power) s.power = Math.max(0, s.power - c.power);
   return true;
 }
 
@@ -956,6 +963,14 @@ export function spendData(s: GameState, amount: number): number {
   s.data = Math.max(0, s.data - take);
   s.dataSynthetic = Math.max(0, Math.min(s.data, s.dataSynthetic - take * share));
   return share;
+}
+
+/**
+ * Stage 1 before Sage-1 is deployed (docs/specs/early-train.md): GPUs only train, nothing runs a copy.
+ * A save without the flag (every save from before the prologue) has Sage live.
+ */
+export function inPrologue(s: GameState): boolean {
+  return s.stage === 1 && s.flags['prologue'] === true;
 }
 
 /** The idle hold is on (engine/hold.ts): the Committee's count and the incident clocks wait. */

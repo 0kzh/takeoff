@@ -124,12 +124,13 @@ Visibility is state. `state.revealed` is a map of flag → boolean. Any element 
 toggles it. Flags are set by:
 
 * reveal rules in `engine/stages.ts`: Stage 1's opening beats, one thing each (`business` at the
-  first task, `compute` at $3, `fleet` at the first GPU, `power` at the third GPU or 20 s later,
-  `buyPower` at 800 kWh, `pricing` when unsold tasks pile up, `marketing` after the first price
-  move; beats 4–8 in that order and at least 30 s apart), then `research` at the first Trust
-  milestone, `projects` 40 s after `research` (with its first card and `Research buys projects.`),
+  first task, `compute` at $3, `fleet`, `power` and `training` together at the first GPU (the
+  prologue: Train Sage-1, then Deploy; `docs/specs/early-train.md`), `buyPower` at 800 kWh,
+  `pricing` 8 s after Sage-1 is deployed, `marketing` after the first price move; beats from the first
+  GPU on at least 30 s apart), then `research` at the first Trust milestone (never before
+  `training`), `projects` 40 s after `research` (with its first card and `Research buys projects.`),
   `expandLab` with the first Trust awarded 40 s after that with the lab full (never while Trust is 0),
-  `training` once the Training Pipeline is bought and not before 5:00, `focus` 30 s after the first
+  `focus` 30 s after the first
   release, `quota` at 60 rented but not during a run's first cycle (Focus, the first event and the
   quota line are 30 s apart at least), `log` (the Developments column and the date) from 3:30,
 * engine events (the first training run sets `copies`; from Stage 2 a release sets `focus`),
@@ -164,9 +165,8 @@ border), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the scr
 `revealFunds` / `revealResearch` (a price of at least that many seconds of revenue or research,
 fixed when the card first shows; research never above 85 % of the lab; in Stage 2, seconds of what
 fills funds, the revenue less the default build share). A triggered project joins
-the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 one a minute until the
-Training panel (only the first lab's four cards, in order: Better Prompting, Grid Contract, Blue-sky
-Research, Training Pipeline), then every 30 s, at most four on screen (after 140 s with nothing new
+the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 every 30 s (the first lab's
+cards, Better Prompting, Grid Contract and Blue-sky Research, come first by their triggers), at most four on screen (after 140 s with nothing new
 one more may come out); an empty panel gets its next card 10 s after its last one was bought, and is
 not drawn without a card; a card already paid for when it would come out waits up to 60 s for a
 purchase to take the balance below it; Stage 2 every 15 s, at most six on screen with everything counted but rescues (after
@@ -531,13 +531,14 @@ Starts its own static server on a free port and drives system Chrome headless (P
 `channel: 'chrome'`) with autoplay and `__game.tick`. It checks the opening (owner feedback 1): one
 control and one number at 0:00 and no power, funds or date; the meter one width at every fill; the
 first GPU at 1.5, 2 and 4 clicks a second (16, 12 and 6 s); a steady player's numbers and controls
-at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00 (≤ 1 / 4 / 6 / 11 / 17 / 22 and ≤ 1 / 2 / 3 / 5 / 7 /
-10, with a screenshot each; 0:30 is allowed 5, the power reading of beat 4 at 0:26); then, under
+at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00 (≤ 1 / 11 / 11 / 13 / 17 / 26 and ≤ 1 / 3 / 3 / 5 / 7 /
+10, with a screenshot each; the first GPU brings Power and the Train row together); then, under
 autoplay, the reveal order, beats 4–8 in order ≥ 30 s apart, no beat in the first five minutes
-adding more than 2 controls or 4 numbers (later: 3 and 8), a greyed goal on screen from the first
+adding more than 2 controls or 4 numbers (later: 3 and 8; the first-GPU beat and the Deploy beat are
+checked on their own), a greyed goal on screen from the first
 purchase (G3 as amended), no `undertrained` or `Train now` anywhere, the Train row naming its GPU
 shortfall and fix, numbers / controls / words at minutes 0/1/3/5/10/20/end and the minute-10 budget
-(≤ 48 numbers, ≤ 16 controls, ≤ 250 words; the build shows 38 / 16 / 204), the Train row (it costs
+(≤ 48 numbers, ≤ 18 controls, ≤ 250 words), the Train row (it costs
 money only and arms when short: `starts when paid for — about 0:44`), owner feedback 2's rows (no
 printed delay anywhere; First Datacenter a plain card before and at the wall; `Power [bar] 968 kWh`
 and `GPUs rented [bar] 61 / 80`; three plain Focus buttons with one note line and `Focus:` during a

@@ -9,6 +9,7 @@ import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
 import { PRESETS, presetFor, EXTRA_PRESETS, presetByKey } from '../data/presets.js';
 import { byId, make } from './dom.js';
+import { confirmPress } from './confirm.js';
 import { resetGraph } from './graph.js';
 import { resetLogCache } from './log.js';
 import type { Saver } from './save.js';
@@ -193,13 +194,16 @@ export function mountDev(host: DevHost): void {
       if (next) load(host, next);
       else text.value = 'Import failed: not a Takeoff save.';
     }),
-    btn('dev-reset', 'Reset', () => {
-      if (!confirm('Reset the game? This deletes the save.')) return;
-      host.saver.clear();
-      replaceState(host.state, newGame(Date.now()));
-      host.saver.saveNow();
-      host.render();
-    }),
+    (() => {
+      const b = btn('dev-reset', 'Reset', () => {});
+      confirmPress(b, 'Delete the save? Press again', () => {
+        host.saver.clear();
+        replaceState(host.state, newGame(Date.now()));
+        host.saver.saveNow();
+        host.render();
+      });
+      return b;
+    })(),
   );
 
   root.append(make('b', {}, 'dev'), stageRow, speedRow, grants, eventRow, endRow, saveRow, text, hidden);

@@ -1,4 +1,5 @@
 import { GameState, newGame, replaceState } from './engine/state.js';
+import { confirmPress } from './ui/confirm.js';
 import { resetGraph } from './ui/graph.js';
 import { resetLogCache } from './ui/log.js';
 import { actions, tick, step, TICK_MS } from './engine/tick.js';
@@ -45,8 +46,8 @@ const perform = ((name: keyof typeof actions, ...args: unknown[]) => {
 
 mount(perform);
 // The end screen's way back (stage5.md §7.2): a fresh game, the old save gone.
-document.getElementById('btn-newGame')?.addEventListener('click', () => {
-  if (!confirm('Start again in July 2025?')) return;
+const newGameButton = document.getElementById('btn-newGame');
+if (newGameButton) confirmPress(newGameButton, 'Start again in July 2025? Press again', () => {
   saver.clear();
   replaceState(state, newGame(Date.now()));
   resetGraph();

@@ -391,8 +391,8 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Prompt templates rewritten. Copies 25% faster.',
     stages: [1, 2],
   }),
-  // The first lab's cards, in this order, each 10 s after the one before it is bought (stage1-round3-
-  // fixes.md §3): Better Prompting, Grid Contract, Blue-sky Research, Training Pipeline.
+  // The first lab's cards, in this order (stage1-round3-fixes.md §3): Better Prompting, Grid Contract,
+  // Blue-sky Research. The Training panel comes with the first GPU (docs/specs/early-train.md).
   project({
     id: 'p_grid',
     title: 'Grid Contract',
@@ -425,26 +425,13 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Chain-of-thought',
     cost: { research: 2500 },
     description: 'Copies think before they answer. 50% faster.',
-    // After the pipeline: before the Training panel the first lab's four cards come alone (§3 (c)).
-    trigger: (s) => isBought(s, 'p_prompting') && isBought(s, 'p_training'),
+    // After the Training panel (docs/specs/early-train.md: it comes with the first GPU).
+    trigger: (s) => isBought(s, 'p_prompting') && s.revealed['training'] === true,
     buy: (s) => {
       s.copyBoost += 0.5;
     },
     consoleMsg: 'Copies think out loud now. 50% faster.',
     stages: [1, 2],
-  }),
-  project({
-    id: 'p_training',
-    title: 'Training Pipeline',
-    cost: { research: 2000 },
-    description: 'Train the next Sage.',
-    trigger: (s) => s.tasks >= 7000,
-    // The Training panel brings five numbers in one beat, which arc G5 allows only after the opening's
-    // five minutes (stage1-round3-fixes.md §3 has it at 5:30): bought sooner, it opens at 5:00
-    // (engine/stages.ts, the `training` rule, which also says the line).
-    buy: (s) => {
-      s.flags['trainingDue'] = true;
-    },
   }),
   project({
     id: 'p_seed',

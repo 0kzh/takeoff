@@ -20,7 +20,7 @@ export interface Preset {
  * and within 10 s of the median time (seed 5, which brings the least).
  */
 const STAGE1_BOUGHT = [
-  'p_prompting', 'p_grid', 'p_insight', 'p_training', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
+  'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
   'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
   'p_desks', 'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
   'p_abatement', 'p_reserved',
@@ -61,6 +61,8 @@ const STAGE1_CHOICES: ChoiceRecord[] = [
  */
 function stage1End(seed: number): GameState {
   const s = newGame(seed);
+  // Sage-1 has long been live (docs/specs/early-train.md): no prologue.
+  delete s.flags['prologue'];
   Object.assign(s, {
     date: 5.1329,
     tasks: 255404,
@@ -138,7 +140,6 @@ function stage1End(seed: number): GameState {
     wallSaidAt: 263,
     wallLineKey: "Training Pipeline|1000|More room comes with Trust.",
     wallLineCount: 1,
-    trainingDue: true,
     trainingAt: 300.1,
     armedRuns: 5,
     maxBenchmark: 7.1,
@@ -225,7 +226,7 @@ function stage2(seed: number): GameState {
  * Stage 2 preset take 36:28 / 36:46 / 39:09 / 37:43 / 35:52 (seeds 1–5). Stage 1's cards included.
  */
 const STAGE2_BOUGHT = [
-  'p_prompting', 'p_grid', 'p_insight', 'p_training', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
+  'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
   'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
   'p_desks', 'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
   'p_abatement', 'p_reserved', 'p_datacenter', 'p_demo', 'p_workshop', 'p_moe', 'p_web_crawl', 'p_synth',
@@ -389,7 +390,6 @@ function stage2End(seed: number): GameState {
     wallSaidAt: 263,
     wallLineKey: "Training Pipeline|1000|More room comes with Trust.",
     wallLineCount: 1,
-    trainingDue: true,
     trainingAt: 300.1,
     armedRuns: 15,
     maxBenchmark: 9.6,

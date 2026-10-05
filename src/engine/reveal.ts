@@ -111,9 +111,10 @@ export const FIRST_RUN_WAIT_S2 = 240;
 
 /**
  * Stage 1's first lab (stage1-round3-fixes.md §3 (c)): before the Training panel only these come out,
- * in this order, each 10 s after the one before it is bought; the rest follow the pipeline.
+ * in this order. The Training panel now comes with the first GPU (docs/specs/early-train.md), before
+ * the Projects panel exists, so in practice this only keeps them out of the on-sight hold.
  */
-export const OPENING_CARDS = ['p_prompting', 'p_grid', 'p_insight', 'p_training'];
+export const OPENING_CARDS = ['p_prompting', 'p_grid', 'p_insight'];
 /** Once shown, the Projects panel is never empty longer than this while a card's trigger has fired (§3 (a)). */
 export const EMPTY_PANEL_SECONDS = 10;
 /** A card already paid for when it would come out waits this long at most for a purchase to take the balance below it (§4). */

@@ -17,6 +17,7 @@ export function costLabel(c: Cost, short = false): string {
   if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
   // The purse is named on the row (critic S3 round 1 §9 item 5).
   if (c.build) parts.push(`${fmtMoneyShort(c.build)} from the build fund or funds`);
+  if (c.power) parts.push(`${fmtInt(c.power)} kWh`);
   return parts.length ? parts.join(', ') : 'free';
 }
 

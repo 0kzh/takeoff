@@ -1,4 +1,4 @@
-import { GameState, isBought, canPay } from '../engine/state.js';
+import { GameState, isBought, canPay, inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
@@ -317,6 +317,12 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
 
   // The first automation is bought the moment it is affordable, reserve or not.
   if (s.gpus === 0 && s.revealed['compute'] && s.funds >= gpuCost(s)) a.rentGpu(s);
+  // The prologue (docs/specs/early-train.md): every player presses Train Sage-1 once it can be pressed
+  // (it arms while short of $12), and rents the second GPU it needs; Deploy is the Release below.
+  if (inPrologue(s) && s.revealed['training']) {
+    if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
+    else if (gpusShort(s) && !s.training.run && s.funds >= gpuCost(s)) a.rentGpu(s);
+  }
 
   // The consumable: buy power when it is about to run out (or has), unless the grid does it.
   if (s.stage < 2 && s.revealed['buyPower'] && !s.gridAuto && s.power < Math.max(50, copyRate * 5)) a.buyPower(s);

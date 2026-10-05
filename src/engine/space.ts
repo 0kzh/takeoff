@@ -325,15 +325,9 @@ export function setSplitShare(s: GameState, row: SpaceRow, pct: number): boolean
 /** `Industry share: 50 / 75 / 90 %`: a press steps it; a waiting mission's clock moves, and the line says so. */
 export function cycleIndustryShare(s: GameState): boolean {
   if (s.stage !== 5 || !s.revealed['industryShare'] || rowsTaken(s)) return false;
-  const next = nextMission(s);
-  const before = next ? missionEta(s, next) : 0;
   const i = INDUSTRY_SHARES.findIndex((x) => Math.abs(x - s.s5.industryShare) < 1e-9);
   s.s5.industryShare = INDUSTRY_SHARES[(i + 1) % INDUSTRY_SHARES.length]!;
   press(s, 'industryShare');
-  if (next) {
-    const after = missionEta(s, next);
-    if (Math.abs(after - before) >= 10) say(s, `Industry share ${Math.round(s.s5.industryShare * 100)}%: ${next.title} in ${fmtClock(after)} (was ${fmtClock(before)}).`);
-  }
   return true;
 }
 
@@ -430,8 +424,7 @@ export function missionEta(s: GameState, def: ProjectDef): number {
 export function missionNeeds(s: GameState, def: ProjectDef): string {
   const short = Math.max(0, (def.cost(s).fund ?? 0) - s.s5.missionFund);
   if (short <= 0) return '';
-  const eta = missionEta(s, def);
-  return `needs ${fmtShortNum(Math.ceil(short))} t more${Number.isFinite(eta) && eta < 36000 ? ` · ${fmtClock(Math.ceil(eta))}` : ''}`;
+  return `needs ${fmtShortNum(Math.ceil(short))} t more`;
 }
 
 /** `Mission: Lunar solar array — 1:12 · next: Asteroid mining · Autofactory — 0:40` (§2.2). */
@@ -446,8 +439,7 @@ export function missionStatus(s: GameState): string {
   // Nothing building: the next mission the fund will cover, or nothing to say (the line hides).
   const next = nextMission(s);
   if (!next) return '';
-  const eta = missionEta(s, next);
-  return `Mission: ${next.title}, when the fund covers it${Number.isFinite(eta) && eta < 36000 ? ` — ${fmtClock(Math.ceil(eta))}` : ''}`;
+  return `Mission: ${next.title}, when the fund covers it`;
 }
 
 // ---------- probes (§2.3) ----------
@@ -845,8 +837,7 @@ export function shareLine(s: GameState): string {
   if (!waiting.length) return `no mission is waiting: all of the flow`;
   const next = nextMission(s);
   if (!next) return `${every} · the fund covers the board`;
-  const eta = missionEta(s, next);
-  return `${every} · ${next.title} in ${Number.isFinite(eta) && eta < 36000 ? fmtClock(Math.ceil(eta)) : 'a long while'}`;
+  return `${every} · next: ${next.title}`;
 }
 
 /** `Swarm: 0.0034% · powering orbit ×7.8`, and the next goal. */

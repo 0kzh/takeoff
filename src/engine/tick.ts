@@ -15,7 +15,7 @@ import {
 } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, releaseInternal, finishTraining, trainCost, atPlateau, trainSlotFree, runFixNames, needsDatacenter, nextRunName, gpusNeeded,
-  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, fireArmedRun, cardWall,
+  approve, sendBack, toggleHold, setStepSize, setRedteamDepth, runExperiments, cardWall,
 } from './training.js';
 import { stage3Tick, stage3Slow, setBuildBudget } from './stage3.js';
 import { stage4Tick, stage4Slow, toggleVerify, setVerify } from './stage4.js';
@@ -114,7 +114,6 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
-  fireArmedRun(s);
   stage3Tick(s, dt);
   stage4Tick(s, dt);
   stage5Tick(s, dt);

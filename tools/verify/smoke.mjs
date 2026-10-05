@@ -285,6 +285,11 @@ try {
             if (powerShown && s.power < block / 3 && can('btn-buyPower')) el('btn-buyPower').click();
             const spare = !powerShown || s.power > block / 2 || s.funds - money('gpuCost') >= money('powerCost');
             if (spare && can('btn-gpu')) el('btn-gpu').click();
+            // The prologue (docs/specs/early-train.md): Train Sage-1 when it can be pressed, Deploy when trained.
+            if (s.flags['prologue'] === true) {
+              if (can('btn-train') && !el('btn-train').classList.contains('armed')) el('btn-train').click();
+              if (can('btn-release')) el('btn-release').click();
+            }
             if (k === 9) {
               // Once a second: the price, read from the line on screen.
               const line = el('billingLine').checkVisibility() ? el('billingLine').innerText : '';
@@ -317,12 +322,14 @@ try {
     }
     await context.close();
   }
-  const targets = { 0: [1, 1], 30: [4, 2], 60: [6, 3], 120: [11, 5], 180: [17, 7], 300: [22, 10] };
-  // At 0:30 the steady player has rented a third GPU, so the power reading (beat 4, at 0:26 in the
-  // spec's own beat table) is on screen too: one number over the table's 4.
-  const slack = { 30: 1 };
+  // The prologue (docs/specs/early-train.md): the first GPU brings the Power panel and the Train row
+  // together (`Power 1,000 kWh`, `Train Sage-1  Cost: $12, 250 kWh`, `Needs 2 GPUs. 1 rented. Rent 1
+  // more.`), so from 0:30 the screen carries those seven numbers and one control more than the old
+  // opening's table (4 / 2 at 0:30); Sage-1.1 trains before 5:00, so 5:00 is a run further along.
+  const targets = { 0: [1, 1], 30: [11, 3], 60: [11, 3], 120: [13, 5], 180: [17, 7], 300: [26, 10] };
+  const slack = {};
   const openingRow = Object.entries(opening).map(([m, c]) => `${clock(Number(m))} ${c.numbers}/${c.controls}`).join(' · ');
-  check('opening: numbers ≤ 1 / 4 / 6 / 11 / 17 / 22 and controls ≤ 1 / 2 / 3 / 5 / 7 / 10 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
+  check('opening: numbers ≤ 1 / 11 / 11 / 13 / 17 / 26 and controls ≤ 1 / 3 / 3 / 5 / 7 / 10 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
     Object.entries(targets).every(([m, [n, c]]) => opening[m] && opening[m].numbers <= n + (slack[m] ?? 0) && opening[m].controls <= c), openingRow);
 
   // ===== 2. A full Stage 1 under autoplay =====
@@ -498,10 +505,11 @@ try {
 
   // ----- reveal order and staggering -----
   const at = (id) => (first.has(id) ? first.get(id) : Infinity);
-  const order = ['panel-business', 'panel-compute', 'panel-power', 'panel-research', 'panel-projects', 'panel-training', 'focusRow', 'panel-infrastructure'];
+  // The prologue (docs/specs/early-train.md): Power and Training arrive together with the first GPU.
+  const order = ['panel-business', 'panel-compute', 'panel-power', 'panel-training', 'panel-research', 'panel-projects', 'focusRow', 'panel-infrastructure'];
   const times = order.map(at);
-  const inOrder = times.every((t, i) => t !== Infinity && (i === 0 || t >= times[i - 1]));
-  check('reveal order: Business → Compute → Power → Research → Projects → Training → Focus → Infrastructure', inOrder, order.map((id, i) => `${id.replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
+  const inOrder = times.every((t, i) => t !== Infinity && (i === 0 || t >= times[i - 1])) && at('panel-power') === at('panel-training') && at('panel-research') > at('panel-training');
+  check('reveal order: Business → Compute → Power and Training together → Research → Projects → Focus → Infrastructure', inOrder, order.map((id, i) => `${id.replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
   check('Research arrives with Trust and Hire Researcher only (Expand Lab later)', at('btn-expandLab') > at('panel-research') && at('btn-hireResearcher') === at('panel-research'), `research ${clock(at('panel-research'))}, expand ${clock(at('btn-expandLab'))}`);
   check('Projects arrive 30–60 s after Research', at('panel-projects') - at('panel-research') >= 30 && at('panel-projects') - at('panel-research') <= 62, `${Math.round(at('panel-projects') - at('panel-research'))} s`);
   check('Focus row hidden during the first training run', at('focusRow') > at('train-running'), `first run ${clock(at('train-running'))}, focus ${clock(at('focusRow'))}`);
@@ -511,7 +519,16 @@ try {
     goalShare >= 0.99, `${(goalShare * 100).toFixed(1)} % of ${goal.ticks} snapshots from ${firstPurchase === null ? '—' : clock(firstPurchase)}${goal.misses.length ? `; none at ${goal.misses.join(', ')}` : ''}`);
   // G5 as amended: the first five minutes add at most 4 numbers and 2 controls a beat; later, 8 and 3.
   // Research prints its capacity beside the amount (owner, 2026-10-04); the pair counts as one number.
-  const early = beats.filter((b) => b.t <= 300);
+  // The first-GPU beat (Power and the Train row together, docs/specs/early-train.md) is checked on its own.
+  const gpuBeat = beats.find((b) => b.t === at('panel-training'));
+  check('the first-GPU beat adds the Power panel and the Train row: one control', !!gpuBeat && gpuBeat.newButtons.length <= 1 && gpuBeat.dNumbers <= 9,
+    gpuBeat ? `${clock(gpuBeat.t)}: ${gpuBeat.newButtons.join(', ')}, +${gpuBeat.dNumbers} numbers` : 'not seen');
+  // Deploying Sage-1 turns the Train row into the full panel (`Current model: Sage-1`, `Ahead of
+  // Anthrosoft`, `Train Sage-1.1  Cost: $290`, its GPU line): checked on its own as well.
+  const deployBeat = beats.find((b) => b.t === at('modelName'));
+  check('the deploy beat redraws the Training panel and adds no control', !!deployBeat && deployBeat.newButtons.length === 0 && deployBeat.dNumbers <= 6,
+    deployBeat ? `${clock(deployBeat.t)}: +${deployBeat.dNumbers} numbers` : 'not seen');
+  const early = beats.filter((b) => b.t <= 300 && b !== gpuBeat && b !== deployBeat);
   const late = beats.filter((b) => b.t > 300);
   const worst = (list, key) => list.reduce((w, b) => ((key === 'n' ? b.newButtons.length : b.dNumbers) > (key === 'n' ? w.newButtons.length : w.dNumbers) ? b : w), list[0]);
   const eb = worst(early, 'n');
@@ -545,7 +562,7 @@ try {
     rows.slice(0, 3).join(' || '));
   const a = r3.armed;
   check('Train short of money is lit and arms: `starts when paid for — about m:ss`',
-    !!a && a.enabled && /^starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+$/.test(a.cost),
+    !!a && a.enabled && /^starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+(, [\d,]+ kWh)?$/.test(a.cost),
     a ? `${clock(a.t)} ${a.label}: ${a.cost} · ${a.reason}` : 'never armed');
   // Owner feedback 2: the core screen reads as it did at a2117b5.
   check('no purchase prints a delay beside it (no `· Sage-1.x 0:41 later` anywhere)', !r3.delay,
@@ -604,9 +621,10 @@ try {
   // Critic round 2 §6.1 set minute 10 at ≤ 38 numbers, ≤ 15 controls, ≤ 230 words (the build before
   // round 3 measured 35 / 15 / 231). Round 3 adds what the spec puts on that screen: all three Focus
   // trades (5 numbers), the power and quota capacities (2), the printed delays while a run waits (2 a
-  // row), the armed Train row's model name (1): 48 / 16 / 250.
+  // row), the armed Train row's model name (1): 48 / 16 / 250. With Sage-1 trained in the opening
+  // (docs/specs/early-train.md) minute 10 is a run further along: the Focus row and a fifth card, 18.
   const m10 = counts['10'];
-  check('minute 10: ≤ 48 numbers, ≤ 16 controls, ≤ 250 words', !!m10 && m10.numbers <= 48 && m10.interactive <= 16 && m10.words <= 250,
+  check('minute 10: ≤ 48 numbers, ≤ 18 controls, ≤ 250 words', !!m10 && m10.numbers <= 48 && m10.interactive <= 18 && m10.words <= 250,
     m10 ? `${m10.numbers} numbers, ${m10.interactive} controls, ${m10.words} words` : 'no minute-10 snapshot');
   const paperclips = { 0: 10, 1: 12, 3: 15, 5: 30, 10: 26, 20: 29, end: 49 };
   // Round 3's additions above, and First Datacenter's two status lines from the third release (five

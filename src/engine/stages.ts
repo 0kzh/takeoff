@@ -1,4 +1,4 @@
-import { GameState, say, narrate, logNews, isBought, counter, projectState, DEFAULT_BUILD_SHARE } from './state.js';
+import { GameState, say, narrate, logNews, isBought, counter, projectState, DEFAULT_BUILD_SHARE, inPrologue } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort, fmtNum } from './format.js';
 import { scheduleStage3, securityArrivalLine } from './events3.js';
 import { arriveStage4 } from './stage4.js';
@@ -499,10 +499,8 @@ const sinceFlag = (s: GameState, key: string): number => {
  * Projects about 40 s later with the first project — one idea at a time. Stage 2's buttons and
  * panels are rows of its content table (data/stage2.ts, engine/reveal.ts).
  */
-/** Stage 1's opening beats 5–8 come at least this long after the beat before (owner feedback 1, (a)). */
+/** Stage 1's opening beats 3–8 come at least this long after the beat before (owner feedback 1, (a)). */
 export const BEAT_SPACING = 30;
-/** The Training panel opens no earlier than this (the end of the opening's five minutes, arc G5). */
-export const TRAINING_PANEL_FROM = 300;
 
 /** The opening's last beat, for the spacing; beats 4–8 stamp it. */
 function beat(s: GameState): void {
@@ -546,46 +544,41 @@ const REVEAL_RULES: RevealRule[] = [
     id: 'compute',
     stages: [1],
     when: (s) => s.funds >= 3 || s.tasks >= 20,
-    then: (s) => say(s, 'GPUs can be rented. Each one runs a copy of Sage.'),
+    then: (s) => say(s, 'GPUs can be rented. They train Sage, and later run it.'),
   },
-  // Beat 3: a copy completes tasks without a click.
+  // Beat 3 (docs/specs/early-train.md): the first GPU brings the GPU count, the Power panel and the
+  // Training panel together, one beat with one line (said by `training`, the last of the three).
   {
     id: 'fleet',
     stages: [1],
     when: (s) => s.gpus >= 1,
     then: (s) => {
       s.flags['firstGpuAt'] = s.stats.timePlayed;
-      say(s, 'GPU rented. A copy of Sage completes a task every second.');
     },
   },
-  // Beat 4: copies burn power (the meter drains).
   {
     id: 'power',
     stages: [1],
-    when: (s) => s.revealed['fleet'] === true && (s.gpus >= 3 || sinceFlag(s, 'firstGpuAt') >= 20),
-    then: (s) => {
-      beat(s);
-      say(s, 'Each task a copy completes burns 1 kWh. The meter drains.');
-    },
+    when: (s) => s.revealed['fleet'] === true,
   },
-  // Beat 5: power has to be kept on.
+  // Beat 4: power has to be kept on (the prologue run takes the store to 750 kWh; then the copies).
   {
     id: 'buyPower',
     stages: [1],
     when: (s) => s.revealed['power'] === true && (s.power <= 800 || STUCK(s)) && spaced(s),
     then: (s) => {
       beat(s);
-      say(s, 'Power is draining. Copies stop when it runs out.');
+      say(s, 'Power is draining. Everything stops when it runs out.');
     },
   },
-  // Beat 6: supply can outrun demand; the price decides how much sells.
+  // Beat 5: Sage-1 is live and its tasks sell; the price decides how much sells and what each earns.
   {
     id: 'pricing',
     stages: [1],
-    when: (s) => s.revealed['buyPower'] === true && s.unbilled >= 20 && s.unbilled > ((s.flags['unbilledSeen'] as number) ?? 0) && spaced(s),
+    when: (s) => !inPrologue(s) && sinceFlag(s, 'sageLiveAt') >= 8 && spaced(s),
     then: (s) => {
       beat(s);
-      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Unbilled tasks are piling up.`);
+      say(s, `Customers buy what Sage makes at ${fmtMoneyShort(s.price)}. More tasks sell at a lower price and each earns less.`);
     },
   },
   // Beat 7: more customers at every price (and revenue per second with it).
@@ -631,7 +624,8 @@ const REVEAL_RULES: RevealRule[] = [
     stages: [1, 2],
     // In Stage 1 after Marketing once the price lesson has begun (beats in order), never waiting on a
     // backlog that has not formed.
-    when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1 && spaced(s) && (s.stage > 1 || !s.revealed['pricing'] || s.revealed['marketing'] === true),
+    // Never before the Training panel (docs/specs/early-train.md).
+    when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1 && spaced(s) && (s.stage > 1 || ((!s.revealed['pricing'] || s.revealed['marketing'] === true) && s.revealed['training'] === true)),
     then: (s) => {
       if (s.stage === 1) beat(s);
       show(s, ['hireResearcher']);
@@ -647,19 +641,20 @@ const REVEAL_RULES: RevealRule[] = [
     id: 'expandLab',
     stages: [1],
     when: (s) => s.revealed['projects'] === true && sinceFlag(s, 'projectsAt') >= 40 && s.trust >= 1
-      && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s) && cardWallSeconds(s) >= 30,
+      && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s) && cardWallSeconds(s) >= 30 && mechanicClear(s),
     then: (s) => say(s, `The lab is full at ${fmtInt(researchCap(s))}. Expand Lab makes room for more research.`),
   },
-  // Beat 12: the Training panel, once the pipeline is bought and not before the opening's five
-  // minutes are over (arc G5: the panel is five numbers in one beat; stage1-round3-fixes.md §3: 5:30).
+  // Beat 3's last part: the Training panel with the first GPU (docs/specs/early-train.md), its one line
+  // for the whole beat (the GPU count and the Power panel arrive in the same tick).
   {
     id: 'training',
     stages: [1],
-    when: (s) => s.flags['trainingDue'] === true && s.stats.timePlayed >= TRAINING_PANEL_FROM,
+    when: (s) => s.revealed['fleet'] === true && s.gpus >= 1,
     then: (s) => {
-      // A beat of its own: the next card waits 10 s (engine/reveal.ts).
+      beat(s);
+      // The next card waits 10 s (engine/reveal.ts).
       s.flags['trainingAt'] = s.stats.timePlayed;
-      say(s, 'Training infrastructure online.');
+      say(s, 'GPU rented. Sage can be trained on it: training takes money, GPUs and power.');
     },
   },
   // Beat 9: the Projects panel, with its first card (engine/reveal.ts draws it in the same tick).

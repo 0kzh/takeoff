@@ -796,6 +796,11 @@ export function simulate(args: Args): SimResult {
     for (const r of [s.training.run, s.training.pending]) {
       if (!r || prevRunIds.has(r.id)) continue;
       prevRunIds.add(r.id);
+      // The prologue's Sage-1 is not a training run of the stage (Sage-1.1 is the first).
+      if (r.prologue) {
+        mark('prologueStart', t);
+        continue;
+      }
       if (s.stage === 1) {
         runs++;
         runGpus1.push(r.gpus);
@@ -815,6 +820,7 @@ export function simulate(args: Args): SimResult {
       else out(t, `MODAL ${choice}`);
     }
     if (s.gpus >= 1) mark('firstGpu', t);
+    if (typeof s.flags['sageLiveAt'] === 'number') mark('sageLive', t);
     if (s.stats.powerPresses > prevPowerPresses) {
       for (let k = prevPowerPresses; k < s.stats.powerPresses; k++) pressTimes.push(t);
       prevPowerPresses = s.stats.powerPresses;
@@ -828,7 +834,7 @@ export function simulate(args: Args): SimResult {
         const extra = r.phase === 'training' ? ` (${r.focus}, ${r.duration}s, ${r.gpus} GPUs)`
           : r.phase === 'redteam' ? ` (cap ${r.capAfter.toFixed(2)}, score ${r.scores.reduce((x, y) => x + y, 0)}/40, issues ${r.issuesFound})` : '';
         out(t, `TRAIN ${r.name} → ${r.phase}${extra}`);
-        if (r.phase === 'training') mark('firstTrainingStart', t);
+        if (r.phase === 'training' && !r.prologue) mark('firstTrainingStart', t);
       }
       if (s.stats.releases > releasesSeen) {
         const m = s.training.models[s.training.models.length - 1]!;
@@ -1319,7 +1325,7 @@ function main(): void {
     console.log(`Research panel           ${fmt('reveal:research')}`);
     console.log(`Projects panel           ${fmt('reveal:projects')}`);
     console.log(`Grid Contract bought     ${fmt('buy:p_grid')}   (target ≤ 6:00)`);
-    console.log(`Training Pipeline bought ${fmt('buy:p_training')}`);
+    console.log(`Sage-1 train / deploy   ${fmt('prologueStart')} / ${fmt('sageLive')}`);
     console.log(`first training start     ${fmt('firstTrainingStart')}`);
     console.log(`first release            ${fmt('firstRelease')}`);
     console.log(`Series A bought          ${fmt('buy:p_series_a')}`);

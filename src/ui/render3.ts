@@ -4,8 +4,8 @@ import {
   copies, researchRate, humanShare, RESEARCH_ALLOC_MAX_S3, MONITOR_SHARE_MAX, monitorFloor, potentialTasksPerSec,
 } from '../engine/economy.js';
 import {
-  trainStatus, nextRunName, trainCost, researchUnit, delaySeconds, nextGainPct, EXPERIMENTS_MAX, canApprove, delayNote,
-  canSendBack, autoApproveOn, redteamDepth, gpusNeeded, gpusAvailable, canRedTeam, THOROUGH_SECONDS, researchStopped, fmtWait,
+  trainStatus, nextRunName, trainCost, researchUnit, nextGainPct, EXPERIMENTS_MAX, canApprove,
+  canSendBack, autoApproveOn, redteamDepth, gpusNeeded, gpusAvailable, canRedTeam, THOROUGH_SECONDS, researchStopped,
 } from '../engine/training.js';
 import {
   LOT_SIZES_S3, lotCostOf, orderReasonS3, lotReturn, freeSlots, freePowerGpus, nextDatacenter, datacenterBuilding,
@@ -134,7 +134,7 @@ export function renderResearch3(s: GameState): void {
   // A wait over an hour, or research stopped, is said in words (critic S3 round 1 §9.9).
   const need = (trainCost(s).research ?? 0) - s.research;
   const stopped = researchStopped(s);
-  const eta = need > 0 && !isBought(s, 'p_auto_train') ? (stopped ? ` · ${stopped}` : ` · next run in ${fmtWait(need / Math.max(1, rate))}`) : '';
+  const eta = need > 0 && !isBought(s, 'p_auto_train') && stopped ? ` · ${stopped}` : '';
   setText('allocRate', ` · ${fmtShort(rate)} research/s${eta}`);
   if (s.revealed['monitors']) {
     const pct = Math.round((s.monitorShare ?? 0) * 100);
@@ -158,8 +158,6 @@ export function renderTraining3(s: GameState): void {
   const auto = isBought(s, 'p_auto_train');
   if (auto) {
     setText('trainStatus', statusLine(s));
-    // The status line carries the wait; the manual row's reason would say it twice.
-    setText('trainReason', '');
   }
   // Anthrosoft has one home in Stage 3: Geopolitics.
   setOff('rivalLine', true);
@@ -200,12 +198,9 @@ export function renderTraining3(s: GameState): void {
     setOff('btn-experiments5', true);
     const name = s.training.pending?.name ?? (s.training.run?.phase === 'training' ? s.training.run.name : nextRunName(s));
     const gain = nextGainPct(s, 0.25) - nextGainPct(s);
-    // The delay a unit costs the waiting run prints from 10 s, as on every card (arc G34 rule 3); the
-    // gain to two decimals (the hover's +0.25), and the unit's price on the row.
-    const delay = delaySeconds(s, unit);
-    const later = researchStopped(s) ? '' : delay >= 10 ? ` · ${fmtWait(delay)} later` : '';
+    // The gain to two decimals (the hover's +0.25), and the unit's price on the row.
     setText('experimentsNote', room
-      ? `+${fmtNum(gain, 2)} points · ${fmtShort(unit)} research${later}`
+      ? `+${fmtNum(gain, 2)} points · ${fmtShort(unit)} research`
       : `${name} takes no more`);
   }
   if (s.revealed['redteamDepth']) {
@@ -411,8 +406,7 @@ function grantLabel(s: GameState, def: ProjectDef, b: HTMLButtonElement): void {
   const title = b.firstElementChild as HTMLElement;
   const gated = def.prereq && !def.prereq(s) && def.needs ? ` (${def.needs(s)})` : '';
   // A research grant prints what it costs the waiting run (the wallet-rule addendum).
-  const delay = def.canAfford(s) ? delayNote(s, def.cost(s)) : '';
-  const label = `${def.title} ${priceTag(s, def)}${gated}${delay}`;
+  const label = `${def.title} ${priceTag(s, def)}${gated}`;
   if (title.textContent !== label) title.textContent = label;
   const disabled = !def.canAfford(s);
   if (b.disabled !== disabled) b.disabled = disabled;

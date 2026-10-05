@@ -439,7 +439,7 @@ export function noveltyKeys(s: GameState): string[] {
   if (s.revealed['research'] && s.revealed['hireResearcher'] && s.trust >= 1) {
     keys.push(`aff:trust:${s.researchers + s.labSpace}`);
   }
-  if (canStartTraining(s)) keys.push(`aff:train:${s.training.runIndex}`);
+  if (canStartTraining(s)) keys.push(`aff:train:${s.flags['prologue'] === true ? 'prologue' : s.training.runIndex}`);
   const run = s.training.run;
   if (run) {
     keys.push(`phase:${run.id}:${run.phase}`);

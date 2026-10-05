@@ -1,11 +1,11 @@
-import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press } from './state.js';
+import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press, inPrologue } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { effGpus, S2_FUNDS_SCALE, poweredGpus, s2Scale, G5_COMPUTE, G6_COMPUTE } from './infrastructure.js';
 import { researchCap, researchRate, rentQuota, atRentQuota } from './economy.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
-import { fmtNum, fmtInt, fmtClock, fmtMoneyShort } from './format.js';
+import { fmtNum, fmtInt, fmtClock } from './format.js';
 import { visibleProjects } from './projects.js';
 import { crawlRate, synthRate, flywheelRate, moveGov, ADVISORY_BELOW, TRUSTED_FROM } from './world.js';
 
@@ -33,6 +33,17 @@ export const RED_TEAM_SECONDS_AUTO = 4;
 export const SUPERHUMAN_CODER = 4;
 /** Joint statement: a public release at 4× or more waits this long for the outside evaluator. */
 export const OUTSIDE_EVAL_SECONDS = 30;
+
+/**
+ * Stage 1's prologue (docs/specs/early-train.md): the first run trains Sage-1 itself on the first rented
+ * GPUs, for a little money and power; deployed, each GPU starts running a copy of it.
+ */
+export const PROLOGUE_FUNDS = 12;
+export const PROLOGUE_GPUS = 2;
+/** kWh the prologue run draws from the power store. */
+export const PROLOGUE_POWER = 250;
+export const PROLOGUE_SECONDS = 15;
+export const PROLOGUE_NAME = 'Sage-1';
 
 export function majorFor(capability: number): number {
   let major = 1;
@@ -295,6 +306,7 @@ export function verifySeconds(s: GameState): number {
 export function trainCost(s: GameState): Cost {
   // Stage 4: a generation is research and nothing else; it starts itself once research suffices.
   if (s.stage >= 4) return { research: generationCost(s) };
+  if (inPrologue(s)) return { funds: PROLOGUE_FUNDS, power: PROLOGUE_POWER };
   const c = startCapability(s);
   // Stage 1: money and GPUs; research buys cards only. From the knee a run is priced as Stage 2 prices
   // it (a fifth run that lands past 1.6× still rents; the wall run is quoted at what the click charges).
@@ -309,6 +321,7 @@ export function trainCost(s: GameState): Cost {
 /** GPUs the next run needs: the capability curve above, a third fewer with Distributed training (Stages 1–2). */
 export function gpusNeeded(s: GameState): number {
   if (s.stage >= 4) return 0;
+  if (inPrologue(s)) return PROLOGUE_GPUS;
   if (s.stage === 3) return gpusForS3(startCapability(s));
   const n = s.stage === 1 ? gpusForS1(startCapability(s)) : gpusFor(startCapability(s));
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
@@ -342,6 +355,7 @@ export function gpusShort(s: GameState): boolean {
  * and the reasonable bot ended at 31–36 minutes whatever the price.
  */
 export function trainingDuration(s: GameState): number {
+  if (inPrologue(s)) return PROLOGUE_SECONDS;
   const n = Math.max(1, gpusNeeded(s));
   if (s.stage < 2) return Math.min(80, Math.max(45, 45 + 10 * Math.log2(n / 10)));
   // Stage 3: `30 + 6 × log2(N / 300,000)`, 30–60 s, for every run, automatic or not (stage3.md §2.5).
@@ -403,6 +417,7 @@ export function needsDatacenter(s: GameState): boolean {
 /** `Sage-2.4`: the next version after the latest model, counting one waiting in the release slot. */
 export function nextRunName(s: GameState): string {
   if (s.stage >= 4) return nextGenName(s);
+  if (inPrologue(s)) return PROLOGUE_NAME;
   const v = nextVersion(s);
   return `Sage-${v.major}.${v.minor}`;
 }
@@ -421,38 +436,6 @@ export function trainBlocker(s: GameState): string {
   if ((cost.research ?? 0) > researchCap(s)) return `lab holds ${fmtNum(researchCap(s), 0)}`;
   if (cost.data && s.data + 1e-9 < cost.data) return `needs ${fmtNum(cost.data, 1)} T data`;
   return '';
-}
-
-/**
- * Why a run is not starting, and roughly for how long (arc G6: every wait is named): the evaluation
- * month, the pipeline, the lab's size, or the one shortfall that will take longest to fill —
- * `money — about 0:45` in Stage 1 (its cost line is right above), `short $1.2M — about 0:45` or
- * `short 5.6 T data — about 2:10` from Stage 2. Armed, the same clock reads `starts when paid for`.
- */
-export function trainWait(s: GameState): string {
-  const t = s.training;
-  if (!s.revealed['training']) return '';
-  if (t.cooldown > 0) return `evaluation month — ${fmtClock(t.cooldown)}`;
-  if (!trainSlotFree(s)) return 'waiting for the pipeline';
-  const cost = trainCost(s);
-  const cap = researchCap(s);
-  if ((cost.research ?? 0) > cap) return `needs ${fmtNum(cost.research ?? 0, 0)} research; the lab holds ${fmtNum(cap, 0)}`;
-  // A run short of GPUs says so on its own line (trainGpuLine); this line names the longest wait.
-  const r = runIncome(s);
-  const amounts = s.stage >= 2;
-  const waits: [number, string][] = [];
-  const add = (short: number, rate: number, label: string, word: string) => {
-    if (short <= 1e-9) return;
-    waits.push([etaOf(short, rate), amounts ? `short ${label}` : word]);
-  };
-  add((cost.funds ?? 0) - s.funds, r.funds, fmtMoneyShort(Math.ceil((cost.funds ?? 0) - s.funds)), 'money');
-  add((cost.research ?? 0) - s.research, r.research, `${fmtNum((cost.research ?? 0) - s.research, 0)} research`, 'research');
-  if (cost.data) add(cost.data - s.data, r.data, `${fmtNum(cost.data - s.data, 1)} T data`, 'data');
-  if (!waits.length) return '';
-  waits.sort((x, y) => y[0] - x[0]);
-  const [eta, what] = waits[0]!;
-  const clock = Number.isFinite(eta) && eta >= 1 && eta < 3600 ? ` — about ${fmtClock(eta)}` : '';
-  return `${s.training.armed ? 'starts when paid for' : what}${clock}`;
 }
 
 /**
@@ -481,6 +464,37 @@ export function trainGpuLine(s: GameState): string {
   const needN = twoSig(need / k);
   if (dark > 0 && have / k + dark >= need / k) return `Needs ${fmtInt(needN)} powered GPUs. ${fmtInt(dark)} are dark: add power.`;
   return `Needs ${fmtInt(needN)} GPUs. ${fmtInt(Math.floor(have / k))} free.`;
+}
+
+/** The GPUs the Train row's bar counts, in the chips the player owns: what the run needs and what is free. */
+export function trainGpuFigures(s: GameState): { need: number; have: number } {
+  const need = gpusNeeded(s);
+  if (need <= 0) return { need: 0, have: 0 };
+  const have = gpusAvailable(s);
+  if (s.stage < 2) return { need, have };
+  const k = computePerGpu(s);
+  return { need: twoSig(need / k), have: Math.floor(have / k) };
+}
+
+/**
+ * What fixes a GPU shortfall when the bar alone does not say: the cloud's limit and the card or build
+ * that lifts it, or GPUs that stand dark for want of power. '' when more rented GPUs is the answer.
+ */
+export function trainGpuFix(s: GameState): string {
+  const need = gpusNeeded(s);
+  if (need <= 0 || gpusAvailable(s) >= need) return '';
+  if (s.stage < 2) {
+    if (needsDatacenter(s)) return `The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`;
+    if (atRentQuota(s) || need > rentQuota(s)) {
+      const card = visibleProjects(s).find((p) => QUOTA_CARD_IDS.includes(p.id));
+      return `The cloud rents ${fmtInt(rentQuota(s))}.${card ? ` ${card.title} adds 20.` : ''}`;
+    }
+    return '';
+  }
+  if (s.stage >= 3) return trainGpuLine(s);
+  const dark = Math.max(0, s.gpus - poweredGpus(s));
+  const k = computePerGpu(s);
+  return dark > 0 && gpusAvailable(s) / k + dark >= need / k ? `${fmtInt(dark)} GPUs are dark: add power.` : '';
 }
 
 /** The fleet's work per chip: 1 for G4s, 1.5 for G5s, 2.5 for G6s, averaged over what is owned. */
@@ -554,36 +568,12 @@ export function setFocus(s: GameState, focus: Focus): boolean {
   return true;
 }
 
-/**
- * The Train button (arc G34 rule 4): with the price in hand the run starts; with something short it
- * is armed and starts by itself once paid for; pressed again while armed, it stands down.
- */
+/** The Train button: with its requirements met and the price in hand the run starts; otherwise nothing happens. */
 export function startTraining(s: GameState): boolean {
-  const t = s.training;
-  if (canStartTraining(s)) {
-    // Stage 3 counts Train presses by hand (B10: Continual learning should come before the second).
-    if (s.stage >= 3 && !isBought(s, 'p_auto_train')) press(s, 'train');
-    t.armed = false;
-    return startRun(s, trainCost(s));
-  }
-  if (!canPressTrain(s)) return false;
-  t.armed = !t.armed;
-  if (s.stage >= 3) press(s, 'train');
-  if (t.armed) bump(s, 'armedRuns');
-  return true;
-}
-
-/** Every tick: an armed run starts the moment it is paid for (requirements met). */
-export function fireArmedRun(s: GameState): void {
-  const t = s.training;
-  if (!t.armed) return;
-  if (s.stage >= 3 && isBought(s, 'p_auto_train')) {
-    t.armed = false;
-    return;
-  }
-  if (!canStartTraining(s)) return;
-  t.armed = false;
-  startRun(s, trainCost(s));
+  if (!canStartTraining(s)) return false;
+  // Stage 3 counts Train presses by hand (B10: Continual learning should come before the second).
+  if (s.stage >= 3 && !isBought(s, 'p_auto_train')) press(s, 'train');
+  return startRun(s, trainCost(s));
 }
 
 /** Income a second into each purse a run is paid from (Stage 2–3 funds: what the build share leaves). */
@@ -609,6 +599,7 @@ function runPaidIn(s: GameState, spent: Cost = {}): number {
     etaOf((cost.funds ?? 0) - (s.funds - (spent.funds ?? 0)), r.funds),
     etaOf((cost.research ?? 0) - (s.research - (spent.research ?? 0)), r.research),
     etaOf((cost.data ?? 0) - (s.data - (spent.data ?? 0)), r.data),
+    etaOf((cost.power ?? 0) - (s.power - (spent.power ?? 0)), 0),
   );
 }
 
@@ -679,6 +670,7 @@ export function delayNote(s: GameState, cost: Cost): string {
 }
 
 function startRun(s: GameState, cost: Cost): boolean {
+  if (inPrologue(s)) return startPrologueRun(s, cost);
   const t = s.training;
   const gpus = gpusNeeded(s);
   const serving = Math.max(0, gpusAvailable(s) - gpus);
@@ -734,6 +726,72 @@ function startRun(s: GameState, cost: Cost): boolean {
   // says so and the console keeps the run's one line for when it is ready.
   if (!(s.stage >= 3 && isBought(s, 'p_auto_train'))) say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.`);
   if (s.stage === 2) startedInStage2(s, run);
+  return true;
+}
+
+/**
+ * The prologue run: Sage-1 itself, on the first GPUs. No event, no gamble, no version bump; it is not
+ * counted as a training run (Sage-1.1 is still the first), and its id is 0 so later runs keep theirs.
+ */
+function startPrologueRun(s: GameState, cost: Cost): boolean {
+  const t = s.training;
+  if (t.run || t.pending) return false;
+  const gpus = gpusNeeded(s);
+  pay(s, cost);
+  t.run = {
+    id: 0,
+    name: PROLOGUE_NAME,
+    focus: t.focus,
+    phase: 'training',
+    elapsed: 0,
+    duration: Math.round(trainingDuration(s)),
+    gpus,
+    evalElapsed: 0,
+    flavorShown: 0,
+    eventAt: -1,
+    eventId: '',
+    gambleAt: -1,
+    gamble: 'none',
+    capBefore: s.capability,
+    capAfter: 0,
+    gainBonus: 0,
+    capMult: 1,
+    benchBonus: [0, 0, 0, 0, 0, 0],
+    benchmarks: [],
+    scores: [],
+    issues: 0,
+    issuesFound: 0,
+    extraIssues: 0,
+    major: 1,
+    minor: 0,
+    syntheticShare: 0,
+    alignShare: s.alignShare,
+    prologue: true,
+  };
+  say(s, `Training ${PROLOGUE_NAME} on ${fmtInt(gpus)} GPUs.`);
+  return true;
+}
+
+/** The waiting run is the prologue's Sage-1 (trained, not yet deployed). */
+export function prologueRun(s: GameState): TrainingRun | null {
+  const r = s.training.run;
+  return r && r.prologue === true ? r : null;
+}
+
+/**
+ * Deploy Sage-1 (the prologue's Release): the copies start. Not a release: no Trust, no hype, no model
+ * record (Sage-1 is already in the list), no first-release clock (that belongs to Sage-1.1).
+ */
+export function deployFirstModel(s: GameState): boolean {
+  const t = s.training;
+  const run = prologueRun(s);
+  if (!run || run.phase !== 'redteam') return false;
+  t.run = null;
+  t.redTeamRemaining = 0;
+  t.releaseWait = 0;
+  delete s.flags['prologue'];
+  s.flags['sageLiveAt'] = s.stats.timePlayed;
+  say(s, `${PROLOGUE_NAME} is live. Each GPU runs a copy; each copy completes a task a second.`);
   return true;
 }
 
@@ -817,6 +875,17 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, slotFree: boo
         s.flags[key] = true;
         say(s, `${run.name} is trained. It waits until ${s.training.run?.name ?? 'the last model'} ships.`);
       }
+      return;
+    }
+    // The prologue run skips evaluation and the red team: Sage-1 is trained, ready to deploy.
+    if (run.prologue) {
+      run.phase = 'redteam';
+      run.issues = 0;
+      run.issuesFound = 0;
+      run.capAfter = run.capBefore;
+      run.benchmarks = [];
+      run.scores = [];
+      say(s, `${run.name} is trained.`);
       return;
     }
     run.phase = 'evaluating';
@@ -1066,6 +1135,7 @@ export function release(s: GameState): boolean {
   if (s.stage >= 3) return approve(s);
   const run = s.training.run;
   if (!run || run.phase !== 'redteam' || !canReleasePublic(s)) return false;
+  if (run.prologue) return deployFirstModel(s);
   if (run.issues > 0 && !s.flags['shipIssuesAsked']) {
     openChoice(s, 'c_ship_issues', { runId: run.id, issues: run.issues });
     return true;
@@ -1076,7 +1146,7 @@ export function release(s: GameState): boolean {
 /** Keep internal (Stage 2, after the Sage-2 choice): research gets the model, customers do not. */
 export function releaseInternal(s: GameState): boolean {
   const run = s.training.run;
-  if (s.stage !== 2 || !s.revealed['releaseInternal'] || !run || !canRelease(s)) return false;
+  if (s.stage !== 2 || !s.revealed['releaseInternal'] || !run || run.prologue || !canRelease(s)) return false;
   return doRelease(s, run, false);
 }
 
@@ -1092,6 +1162,7 @@ export function releaseChecked(s: GameState, run: TrainingRun): boolean {
 export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): boolean {
   const t = s.training;
   if (t.run !== run) return false;
+  if (run.prologue) return deployFirstModel(s);
   t.run = null;
   t.redTeamRemaining = 0;
   t.releaseWait = 0;
@@ -1486,8 +1557,7 @@ export function trainStatus(s: GameState): string {
     // A wait divided by a rate near zero is not a clock: say what has stopped research instead.
     const why = researchStopped(s);
     if (why) return `${nextRunName(s)} waits: ${why}`;
-    const eta = need / Math.max(1, researchRate(s));
-    return `${nextRunName(s)} starts when research allows — ${fmtWait(eta)}`;
+    return `${nextRunName(s)} starts when research allows`;
   }
   return `${nextRunName(s)} starts now.`;
 }

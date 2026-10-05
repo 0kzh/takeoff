@@ -118,7 +118,7 @@
       <div id="panel-compute" class="panel" data-panel="compute" data-reveal="compute">
         <b>Compute</b>
         <hr>
-        <button class="button2" id="btn-gpu" title="Rent a GPU. It runs a copy of Sage that completes tasks on its own, using power.">Rent GPU</button>
+        <button class="button2" id="btn-gpu" title="Rent a GPU. GPUs train Sage and, once it is trained, each runs a copy that completes tasks on its own, using power.">Rent GPU</button>
         Cost: <span id="gpuCost">$ 6.00</span> <span id="gpuNote" class="warn"></span><br>
         <span data-reveal="fleet">GPUs rented<span data-hide="quota">:</span> <span data-reveal="quota"><span class="meter" id="quotaMeter" role="img"></span> </span><span id="gpus">0</span><span data-reveal="quota"> / <span id="gpuQuota">80</span></span><br></span>
         <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
@@ -233,8 +233,10 @@
       <div id="panel-training" class="panel" data-panel="training" data-reveal="training">
         <b>Training</b>
         <hr>
+        <div id="modelLines">
         Current model: <span id="modelName">Sage-1</span><span id="capabilityPart"> · <span id="capability">1.00</span>×</span><br>
         <span id="rivalLine" title="Anthrosoft's latest Cadence model"><span id="rivalStanding">Level with Anthrosoft</span><span class="hiddenIds"> (<span id="rivalCap">1.00</span>×)</span></span><br>
+        </div>
         <div id="focusRow" data-reveal="focus">
           Focus:
           <button class="button2 focusButton" id="btn-focus-capability" data-focus="capability" title="Capability: the next model is 10–14% more capable. Customers notice.">Capability</button>
@@ -276,9 +278,14 @@
         <div id="train-idle">
           <span data-reveal="autoTrain"><span id="trainStatus">Sage-3.2 starts when research allows</span><br></span>
           <span data-hide="autoTrain"><button class="button2" id="btn-train" title="Train the next model. The GPUs it needs train it; the rest keep serving.">Train <span id="nextRunName">Sage-1.1</span></button>
-          Cost: <span id="trainCost">2,000 research, $290</span><span id="trainData"></span><br></span>
-          <span id="trainGpuLine"><span class="meter" id="trainGpuMeter" role="img"></span> <span id="trainGpus">Needs 10 GPUs for 0:45</span></span><br>
-          <span id="trainReason" class="reason"></span>
+          <div id="trainCosts">Cost
+            <div class="costRow" id="costRow-funds"><span class="costName">Money</span><div class="progress"><div class="progressFill" id="costBar-funds"></div></div><span class="costText" id="costText-funds"></span></div>
+            <div class="costRow" id="costRow-research"><span class="costName">Research</span><div class="progress"><div class="progressFill" id="costBar-research"></div></div><span class="costText" id="costText-research"></span></div>
+            <div class="costRow" id="costRow-data"><span class="costName">Data</span><div class="progress"><div class="progressFill" id="costBar-data"></div></div><span class="costText" id="costText-data"></span></div>
+            <div class="costRow" id="costRow-power"><span class="costName">Power</span><div class="progress"><div class="progressFill" id="costBar-power"></div></div><span class="costText" id="costText-power"></span></div>
+            <div class="costRow" id="costRow-gpus"><span class="costName">GPUs</span><div class="progress"><div class="progressFill" id="costBar-gpus"></div></div><span class="costText" id="costText-gpus"></span></div>
+          </div></span>
+          <span id="trainGpuLine"><span id="trainGpus"></span><br></span>
         </div>
 
         <div id="train-running">

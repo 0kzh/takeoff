@@ -1,5 +1,5 @@
 import type { GameState, Focus, TrainingRun } from '../engine/state.js';
-import { isBought } from '../engine/state.js';
+import { isBought, inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW, gpuCapacity, powerBlock,
@@ -15,15 +15,15 @@ import {
 } from '../engine/infrastructure.js';
 import { marketBreakdown, qualityMultS2 } from '../engine/market.js';
 import {
-  trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, nextRunName, gpusNeeded, gpusAvailable,
-  trainGpuLine, evaluatorLine, totalScore, trainWait, trainingRun, evalRun,
-  trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS, canPressTrain,
-  needsDatacenter, labReason,
+  trainCost, canStartTraining, focusChange, canRedTeam, canRelease, canReleasePublic, nextRunName,
+  trainGpuFigures, trainGpuFix, evaluatorLine, totalScore, trainingRun, evalRun,
+  trainSlotFree, superhumanTooltips, EVAL_SECONDS, BENCHMARKS, EVALUATORS,
+  labReason,
 } from '../engine/training.js';
 import { datacenterStatus } from '../data/projects.js';
 import { govMood, govBandNote, approvalBandNote, alignBandNote, approvalTerms, sl3Cost, runRate, SECURITY_NOTES, fmtJobs } from '../engine/world.js';
 import { chipsOnOrder } from '../engine/stores.js';
-import { visibleProjects, priceTag, costLabel } from '../engine/projects.js';
+import { visibleProjects, priceTag } from '../engine/projects.js';
 import { endScreen } from '../engine/endings.js';
 import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setShown, showId, setDisabled, setWidth, setTitle, make } from './dom.js';
@@ -474,6 +474,8 @@ function datacenterTip(s: GameState): string {
 function renderTraining(s: GameState): void {
   if (!s.revealed['training']) return;
   const t = s.training;
+  // The prologue (docs/specs/early-train.md): before Sage-1 is deployed the panel is the Train row only.
+  setOff('modelLines', inPrologue(s));
   setText('modelName', t.deployedName === t.modelName ? t.modelName : `${t.deployedName} (internal: ${t.modelName})`);
   setText('capability', fmtNum(s.capability, 2));
   // The multiplier appears once it has moved (1.00× before the first release says nothing yet).
@@ -509,7 +511,7 @@ function renderTraining(s: GameState): void {
   const idle = !running && (!t.run || trainSlotFree(s));
   showId('train-idle', idle);
   showId('train-running', !!running);
-  showId('train-eval', !!slotRun);
+  showId('train-eval', !!slotRun && !slotRun.prologue);
   showId('train-redteam', slotRun?.phase === 'redteam');
 
   if (idle) renderIdle(s);
@@ -532,24 +534,27 @@ function focusNote(s: GameState, focus: Focus): string {
 function renderIdle(s: GameState): void {
   setText('nextRunName', nextRunName(s));
   const cost = trainCost(s);
-  setText('trainCost', costLabel({ research: cost.research, funds: cost.funds }));
-  setText('trainData', cost.data ? `, ${fmtNum(cost.data, 1)} T data` : '');
-  // A price never disables Train (arc G34): with its requirements met it is pressed, and waits armed.
-  const armed = s.training.armed === true;
-  setDisabled('btn-train', !canPressTrain(s));
-  if (byId('btn-train').classList.contains('armed') !== armed) byId('btn-train').classList.toggle('armed', armed);
-  setTitle('btn-train', armed ? 'Armed: it starts by itself when paid for. Press again to stand down.' : canStartTraining(s) ? 'Start the run.' : 'Short of its price: press to arm it; it starts by itself when paid for.');
-  // The GPUs the run needs (owner feedback 1, B1): `Needs 35 GPUs for 1:03`, or, short, what fixes it,
-  // with a meter of the GPUs it has against the GPUs it needs.
-  const need = gpusNeeded(s);
-  const have = gpusAvailable(s);
-  const short = need > 0 && have < need;
-  setText('trainGpus', trainGpuLine(s));
-  showId('trainGpuLine', need > 0);
-  showId('trainGpuMeter', short);
-  if (short) setMeter('trainGpuMeter', have / need, `${fmtInt(have)} of the ${fmtInt(need)} GPUs ${nextRunName(s)} needs`);
-  // At the wall the GPU line names the only fix (First Datacenter); the run's money is beside the point.
-  setText('trainReason', canStartTraining(s) || needsDatacenter(s) ? '' : trainWait(s));
+  setDisabled('btn-train', !canStartTraining(s));
+  setTitle('btn-train', canStartTraining(s) ? 'Start the run.' : 'Not yet: it needs its price and its GPUs.');
+  // Cost: one line a price, each with a bar of what the lab holds against it; the GPUs are a price too.
+  const gpus = trainGpuFigures(s);
+  const of = (have: number, need: number, fmt: (n: number) => string, unit = ''): string => `${fmt(have)} / ${fmt(need)}${unit}`;
+  const rows: [string, (n: number, h: number) => string, number, number][] = [
+    ['funds', (n, h) => of(h, n, fmtMoneyShort), s.funds, cost.funds ?? 0],
+    ['research', (n, h) => of(h, n, fmtInt), s.research, cost.research ?? 0],
+    ['data', (n, h) => of(h, n, (v) => fmtNum(v, 1), ' T'), s.data, cost.data ?? 0],
+    ['power', (n, h) => of(h, n, fmtInt, ' kWh'), s.power, cost.power ?? 0],
+    ['gpus', (n, h) => of(h, n, fmtInt), gpus.have, gpus.need],
+  ];
+  for (const [key, text, have, need] of rows) {
+    showId(`costRow-${key}`, need > 0);
+    if (need <= 0) continue;
+    setText(`costText-${key}`, text(need, have));
+    setWidth(byId(`costBar-${key}`), have / need);
+  }
+  // At a wall the bar cannot say what lifts it; one line does.
+  setText('trainGpus', trainGpuFix(s));
+  showId('trainGpuLine', trainGpuFix(s) !== '');
 }
 
 function renderRunning(s: GameState, run: TrainingRun): void {
@@ -630,6 +635,11 @@ function renderEval(s: GameState, run: TrainingRun): void {
   }
 
   if (run.phase === 'redteam') {
+    // The prologue's Sage-1 skips the red team: Deploy is its only control (Stage 3 sets its own).
+    if (s.stage < 3) {
+      setOff('issuesLine', !!run.prologue);
+      setOff('btn-redteam', !!run.prologue);
+    }
     setText('issuesFound', fmtInt(run.issuesFound));
     setText('issuesOpen', fmtInt(run.issues));
     setDisabled('btn-redteam', !canRedTeam(s));
@@ -638,11 +648,12 @@ function renderEval(s: GameState, run: TrainingRun): void {
     setTitle('btn-redteam', `Close one open issue every ${t.redTeamDuration} s.`);
     setDisabled('btn-release', !canReleasePublic(s));
     setDisabled('btn-releaseInternal', !canRelease(s));
-    setText('btn-release', run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
+    setText('btn-release', run.prologue ? `Deploy ${run.name}` : run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
     const sh = superhumanTooltips(s);
     setTitle(
       'btn-release',
-      sh ? sh.release
+      run.prologue ? `Deploy ${run.name}: each GPU runs a copy that completes tasks on its own, using power.`
+      : sh ? sh.release
         : run.issues > 0
           ? `${run.issues} open issue${run.issues === 1 ? '' : 's'} will ship with ${run.name}. Expect incidents.`
           : `Release ${run.name} to customers. Demand and hype go up; +1 Trust.`,

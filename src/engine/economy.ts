@@ -1,5 +1,5 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, press, isBought, bump, counter, creditIncome } from './state.js';
+import { GameState, say, canPay, pay, press, isBought, bump, counter, creditIncome, inPrologue } from './state.js';
 import { busyGpus, trainCost } from './training.js';
 import { visibleProjects } from './projects.js';
 import { fmtMoneyShort, fmtInt } from './format.js';
@@ -7,6 +7,7 @@ import { effGpus } from './infrastructure.js';
 import { sellS2 } from './market.js';
 import { alignWorkShare, alignWorkTick } from './alignment.js';
 import { draftTick } from './treaty.js';
+import { mechanicClear } from './stages.js';
 
 export {
   activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
@@ -200,6 +201,8 @@ export function insightTrickle(s: GameState): number {
 
 /** Copies running: compute × copies per GPU, less what a training run diverts. */
 export function copies(s: GameState): number {
+  // The prologue: the GPUs train Sage-1 and run nothing until it is deployed (docs/specs/early-train.md).
+  if (inPrologue(s)) return 0;
   // GPUs a run holds while it trains serve no tasks; the rest keep serving (owner feedback U1).
   return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU * copiesOnline(s));
 }
@@ -584,6 +587,9 @@ function expandLabBeat(s: GameState): boolean {
   const at = s.flags['projectsAt'];
   if (typeof at !== 'number' || s.stats.timePlayed - at < EXPAND_LAB_AFTER_PROJECTS) return false;
   if (s.research < researchCap(s) - 0.5) return false;
+  // Not in the beat of the first training cycle's Focus row or another first-time mechanic (with Sage-1
+  // trained in the opening, the first release can land beside this award: docs/specs/early-train.md).
+  if (!mechanicClear(s)) return false;
   s.revealed['expandLab'] = true;
   return true;
 }
