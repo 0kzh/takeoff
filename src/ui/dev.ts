@@ -1,6 +1,6 @@
 import { GameState, newGame, replaceState, SAVE_VERSION } from '../engine/state.js';
 import { actions, tick } from '../engine/tick.js';
-import { researchCap, TURBINE_MW } from '../engine/economy.js';
+import { researchCap } from '../engine/economy.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
@@ -62,8 +62,7 @@ function grant(host: DevHost, what: string): void {
       s.gpus += s.stage < 2 ? 10 : 1000;
       break;
     case 'power':
-      if (s.stage < 2) s.power += 10000;
-      else s.powerCapacityMW += TURBINE_MW;
+      s.power += 10 * s.gridCapacity;
       break;
     case 'trust':
       s.trust += 5;

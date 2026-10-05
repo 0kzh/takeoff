@@ -46,7 +46,7 @@ const READ_SCREEN = () => {
       billing: txt('billingLine'),
       marketState: txt('marketState'),
       hype: txt('hypeLine'),
-      gridStatus: txt('gridStatus'),
+      powerBill: txt('powerBill'),
       copiesNote: txt('copiesNote'),
       insightNote: txt('insightNote'),
       trainCompute: txt('trainComputeLine'),
@@ -450,37 +450,6 @@ const PROBES = {
       out.push(`- game clock while the modal is open: tasks ${fmtN(m0.tasks)} → ${fmtN(m1.tasks)} in 20 s (${m1.tasks > m0.tasks ? 'the game keeps running' : 'paused'}); modal ${scr2.modal ? `still open ${scr2.modal.timer ? `[${scr2.modal.timer}]` : ''}` : 'gone'}.`, ...kit.linesBetween(t0, kit.t).map((l) => `  - ${l}`));
     },
   },
-  'grid-off-broke': {
-    title: 'Minute 12: turn the Grid Contract off, spend the funds, never buy power',
-    async run(kit, out) {
-      kit.mashKey = 'btn-task';
-      const pol = kit.policy();
-      await kit.run(720, withPolicy(kit, pol));
-      const s0 = await kit.snap();
-      if (!kit.find(s0, 'btn-grid')) return void out.push('No Grid Contract toggle at 12:00.');
-      await kit.click('btn-grid', 1, 'grid-off');
-      const g = await text(kit, '#btn-grid');
-      const gs = await text(kit, '#gridStatus');
-      out.push(`At ${mmss(kit.t)}: Grid toggle now reads "${g}" — "${gs}"; power ${fmtN(s0.m.power)} kWh, ${s0.m.gpus} GPUs, funds ${money(s0.m.funds)}.`);
-      const noPower = kit.policy({ consumable: null, skip: ['btn-buyPower'] });
-      let zero = null;
-      await kit.run(900, async (t, s) => {
-        if ((s.m.power ?? 1) < 1) {
-          zero = s;
-          return 'stop';
-        }
-        await noPower.pass(t);
-        return undefined;
-      });
-      if (!zero) return void out.push('Power never reached 0 within 15 minutes with the grid off.');
-      await kit.shot('grid-off-broke');
-      const scr = await screen(kit);
-      out.push(`Power hit 0 at ${mmss(zero.t)}: funds ${money(zero.m.funds)}, tasks/s ${fmtN(zero.m.rate, 1)}; power note "${scr.notes.powerNote}", copies note "${scr.notes.copiesNote}", billing "${scr.notes.billing}".`, '', 'On screen:', ...kit.screen(zero, { lines: 5 }).map((l) => `- ${l}`));
-      const t0 = kit.t;
-      const end = await kit.run(120);
-      out.push('', 'Next 120 s, nothing clicked:', ...kit.linesBetween(t0, kit.t).map((l) => `- ${l}`), `Then: funds ${money(end.m.funds)}, tasks/s ${fmtN(end.m.rate, 1)}, power ${fmtN(end.m.power)}.`);
-    },
-  },
   tour: {
     title: 'Screens at the moments a newcomer meets something new, and the full text of every project card',
     async run(kit, out) {
@@ -645,7 +614,7 @@ const PROBES = {
       const { page } = kit.session;
       const where = () =>
         page.evaluate(() => {
-          const ids = ['consoleDiv', 'tasksHeader', 'gameDate', 'btn-task', 'panel-power', 'panel-business', 'panel-compute', 'panel-research', 'panel-projects', 'panel-training', 'panel-site', 'panel-log', 'btn-gpu', 'btn-train', 'btn-release', 'btn-lowerPrice'];
+          const ids = ['consoleDiv', 'tasksHeader', 'gameDate', 'btn-task', 'powerRows', 'panel-business', 'panel-infrastructure', 'panel-research', 'panel-projects', 'panel-training', 'panel-site', 'panel-log', 'btn-gpu', 'btn-train', 'btn-release', 'btn-lowerPrice'];
           const o = {};
           for (const id of ids) {
             const el = document.getElementById(id);

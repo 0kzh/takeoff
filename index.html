@@ -37,18 +37,6 @@
         <button class="button2" id="btn-task" title="Complete one task by hand. Never needs power.">Complete Task</button>
       </div>
 
-      <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
-        Power <span class="meter" id="powerMeter" role="img"></span> <span id="power">1,000</span> kWh <span id="powerNote" class="warn"></span><br>
-        <span data-reveal="buyPower"><span id="buyPowerRow">
-          <button class="button2" id="btn-buyPower">Buy Power<span class="hiddenIds"> (<span id="powerBlock">1,000</span> kWh)</span></button>
-          Cost: <span id="powerCost">$ 20.00</span><br>
-        </span></span>
-        <span data-reveal="gridContract">
-          Grid Contract: <button class="button2" id="btn-grid" title="Buy power automatically when it runs low.">ON</button>
-          <span id="gridStatus">buys power when it runs low</span>
-        </span>
-      </div>
-
       <div id="panel-business" class="panel" data-panel="business" data-reveal="business">
         <b>Business</b>
         <hr>
@@ -75,33 +63,43 @@
         </div>
       </div>
 
-      <div id="panel-compute" class="panel" data-panel="compute" data-reveal="compute">
-        <b>Compute</b>
+      <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="compute">
+        <b id="infraTitle">Compute</b>
         <hr>
-        <button class="button2" id="btn-gpu" title="Rent a GPU. GPUs train Sage and, once it is trained, each runs a copy that completes tasks on its own, using power.">Rent GPU</button>
-        Cost: <span id="gpuCost">$ 6.00</span> <span id="gpuNote" class="warn"></span><br>
-        <span data-reveal="fleet">GPUs rented<span data-hide="quota">:</span> <span data-reveal="quota"><span class="meter" id="quotaMeter" role="img"></span> </span><span id="gpus">0</span><span data-reveal="quota"> / <span id="gpuQuota">80</span></span><br></span>
-        <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
-      </div>
-
-      <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="infrastructure">
-        <b>Infrastructure</b>
-        <hr>
-        Datacenters: <span id="datacenters">0</span><br>
-        <button class="button2" id="btn-datacenter">Build Datacenter</button>
-        Cost: <span id="datacenterCost">$ 250,000</span><br>
-        <br>
-        GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>
-        <button class="button2" id="btn-gpuBatch">Buy GPUs (1,000)</button>
-        Cost: <span id="gpuBatchCost">$ 40,000</span><br>
-        <br>
-        Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>
-        <button class="button2" id="btn-turbines">Gas turbines (+100 MW)</button>
-        Cost: <span id="turbineCost">$ 300,000</span><br>
-        <br>
-        Powered GPUs: <span id="activeGpus">0</span><br>
-        Copies running: <span id="infraCopies">0</span><br>
-        Tasks per sec: <span id="infraTasksPerSec">0</span>
+        <span data-hide="infrastructure" id="rentRows">
+          <button class="button2" id="btn-gpu" title="Rent a GPU. GPUs train Sage and, once it is trained, each runs a copy that completes tasks on its own, using power.">Rent GPU</button>
+          Cost: <span id="gpuCost">$ 6.00</span> <span id="gpuNote" class="warn"></span><br>
+          <span data-reveal="fleet">GPUs rented<span data-hide="quota">:</span> <span data-reveal="quota"><span class="meter" id="quotaMeter" role="img"></span> </span><span id="gpus">0</span><span data-reveal="quota"> / <span id="gpuQuota">80</span></span><br></span>
+          <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
+        </span>
+        <span data-reveal="infrastructure" id="ownedRows">
+          GPUs <span class="meter" id="roomMeter" role="img"></span> <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>
+          <button class="button2" id="btn-gpuBatch">Buy GPUs (1,000)</button>
+          Cost: <span id="gpuBatchCost">$ 40,000</span> <span class="note">uses <span id="gpuBatchDraw">1</span> MW</span><br>
+          <button class="button2" id="btn-datacenter">Build Datacenter</button>
+          Cost: <span id="datacenterCost">$ 250,000</span><br>
+        </span>
+        <span data-reveal="power" id="powerRows">
+          <br>
+          <span data-hide="gridContract">
+            <span id="powerLine">Power <span class="meter" id="powerMeter" role="img"></span> <span id="power">1,000</span> kWh <span id="powerNote" class="warn"></span></span><br>
+            <span data-reveal="buyPower"><span id="buyPowerRow">
+              <button class="button2" id="btn-buyPower">Buy Power<span class="hiddenIds"> (<span id="powerBlock">1,000</span> kWh)</span></button>
+              Cost: <span id="powerCost">$ 20.00</span><br>
+            </span></span>
+          </span>
+          <span id="gridRows">
+            <span data-hide="gridContract"><br></span>
+            Grid<span data-hide="infrastructure">:</span> <span data-reveal="infrastructure"><span class="meter" id="gridMeter" role="img"></span> <span id="gridLoad">1</span> / </span><span id="gridCapacity">1</span> MW<br>
+            <span id="gridNoteRow"><span id="gridNote" class="warn"></span><br></span>
+            <button class="button2" id="btn-expandGrid">Expand Grid (<span id="gridNext">10</span> MW)</button>
+            Cost: <span id="gridCost">$ 200</span><br>
+          </span>
+          <span data-reveal="gridContract">
+            <span id="billGap"><br></span>
+            Power bill: <span id="powerBill">$ 0.00</span> per sec<br>
+          </span>
+        </span>
       </div>
 
       <div id="panel-government" class="panel" data-panel="government" data-reveal="government">

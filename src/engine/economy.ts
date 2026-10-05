@@ -1,19 +1,24 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, isBought, bump, counter, addFunds, inPrologue } from './state.js';
+import { GameState, say, canPay, pay, bump, counter, addFunds, inPrologue } from './state.js';
 import { busyGpus } from './training.js';
-import { fmtMoneyShort, fmtInt } from './format.js';
+import { fmtMoneyShort, fmtInt, fmtMw } from './format.js';
 import { mechanicClear } from './stages.js';
 
 export const TICK_SECONDS = 0.1;
 export const MIN_PRICE = 0.01;
 export const POWER_BLOCK = 1000;
-export const KW_PER_GPU = 1;
+export const GRID_KW_PER_GPU = 1;
+export const GRID_STEP = 10;
+export const GRID_FIRST_TIER = 10000;
+export const GRID_FIRST_COST = 200;
+export const GRID_COST_PER_KW = 3;
+export const POWER_INFLATION = 1.001;
+export const GRID_OFFER_GPUS = 20;
+export const GRID_OFFER_SECONDS = 15;
 export const DATACENTER_GPUS = 10000;
 export const ARRIVAL_GPUS = 1000;
 export const GPU_BATCH = 1000;
 export const CHIP_PRICE = 40;
-export const TURBINE_MW = 100;
-export const GRID_MW = 5;
 
 export const MARKET_START = 3;
 export const MARKET_FULL = 3;
@@ -51,14 +56,25 @@ export function gpuBatchCost(s: GameState): number {
   return Math.round(GPU_BATCH * CHIP_PRICE * Math.pow(1.04, s.gpuBatches));
 }
 
-export function turbineCost(s: GameState): number {
-  return Math.round(300000 * Math.pow(1.6, s.turbines));
+export function nextGridCapacity(s: GameState): number {
+  return s.gridCapacity * GRID_STEP;
+}
+
+export function gridUpgradeCost(s: GameState): number {
+  const next = nextGridCapacity(s);
+  return next <= GRID_FIRST_TIER ? GRID_FIRST_COST : GRID_COST_PER_KW * next;
+}
+
+export function gridOutgrown(s: GameState): boolean {
+  return s.gpus >= GRID_OFFER_GPUS && powerDrawPerSec(s) * GRID_OFFER_SECONDS >= s.gridCapacity;
+}
+
+export function canExpandGrid(s: GameState): boolean {
+  return s.revealed['gridCapacity'] === true && (s.stage >= 2 || !s.gridAuto);
 }
 
 export function fleetPowerBlock(s: GameState): number {
-  if (s.gpus >= 200) return 100000;
-  if (s.gpus >= 20) return 10000;
-  return POWER_BLOCK;
+  return s.gridCapacity;
 }
 
 export function powerBlock(s: GameState): number {
@@ -75,16 +91,16 @@ export function powerBlockCost(s: GameState): number {
   return blockPrice(s, powerBlock(s));
 }
 
-export function powerBlockNews(s: GameState): void {
-  if (s.stage !== 1 || !s.revealed['buyPower'] || (s.gridAuto && isBought(s, 'p_grid'))) return;
-  const block = powerBlock(s);
-  if (block <= POWER_BLOCK || s.flags[`blockSaid${block}`]) return;
-  s.flags[`blockSaid${block}`] = true;
-  say(s, `Power can now be bought ${fmtInt(block)} kWh at a time.`);
+export function powerDrawPerSec(s: GameState): number {
+  return s.stage < 2 ? potentialTasksPerSec(s) : activeGpus(s) * GRID_KW_PER_GPU;
+}
+
+export function powerBillPerSec(s: GameState): number {
+  return (powerDrawPerSec(s) * s.powerPrice) / 1000;
 }
 
 export function powerSecondsLeft(s: GameState): number {
-  const draw = copiesIdle(s) ? 0 : potentialTasksPerSec(s);
+  const draw = copiesIdle(s) ? 0 : powerDrawPerSec(s);
   return draw > 0 ? s.power / draw : Infinity;
 }
 
@@ -119,12 +135,7 @@ export function gpuCapacity(s: GameState): number {
 }
 
 export function activeGpus(s: GameState): number {
-  if (s.stage < 2) return s.gpus;
-  return Math.min(s.gpus, Math.floor((s.powerCapacityMW * 1000) / KW_PER_GPU));
-}
-
-export function powerDrawMW(s: GameState): number {
-  return (activeGpus(s) * KW_PER_GPU) / 1000;
+  return Math.min(s.gpus, Math.floor(s.gridCapacity / GRID_KW_PER_GPU));
 }
 
 export function copies(s: GameState): number {
@@ -141,7 +152,8 @@ export function potentialTasksPerSec(s: GameState): number {
 }
 
 export function copiesIdle(s: GameState): boolean {
-  return s.stage < 2 && s.power < 1 && copies(s) > 0;
+  if (copies(s) <= 0 || s.gridAuto) return false;
+  return s.stage < 2 ? s.power < 1 : s.power < powerDrawPerSec(s) * TICK_SECONDS;
 }
 
 export function productionPerSec(s: GameState): number {
@@ -227,23 +239,40 @@ export function marketState(s: GameState): MarketState {
 export function produce(s: GameState, dt: number): void {
   const rate = potentialTasksPerSec(s);
   if (rate <= 0) return;
+  if (s.stage >= 2) {
+    const draw = powerDrawPerSec(s) * dt;
+    if (s.gridAuto) billPower(s, draw);
+    else if (s.power < draw) return powerOut(s);
+    else s.power -= draw;
+  }
   s.taskFrac += rate * dt;
   let made = Math.floor(s.taskFrac);
   if (made <= 0) return;
   if (s.stage < 2) {
-    if (s.power < made) made = Math.floor(s.power);
-    if (made <= 0) {
-      s.taskFrac = 0;
-      if (!s.flags['powerOut']) {
-        s.flags['powerOut'] = true;
-        say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
-      }
-      return;
+    if (s.gridAuto) billPower(s, made);
+    else {
+      if (s.power < made) made = Math.floor(s.power);
+      if (made <= 0) return powerOut(s);
+      s.power -= made;
     }
-    s.power -= made;
   }
   s.taskFrac -= made;
   completeTasks(s, made);
+}
+
+function billPower(s: GameState, kwh: number): void {
+  const stored = Math.min(s.power, kwh);
+  s.power -= stored;
+  const billed = kwh - stored;
+  s.funds = Math.max(0, s.funds - (billed * s.powerPrice) / 1000);
+  if (s.stage < 2) s.powerBase *= Math.pow(POWER_INFLATION, billed / GRID_FIRST_TIER);
+}
+
+function powerOut(s: GameState): void {
+  s.taskFrac = 0;
+  if (s.flags['powerOut']) return;
+  s.flags['powerOut'] = true;
+  say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
 }
 
 function completeTasks(s: GameState, n: number): void {
@@ -311,17 +340,7 @@ export function contractRate(s: GameState): number {
   return c > 0 ? (s.stats.revPerSec * c) / (1 + c) : 0;
 }
 
-export const GRID_TOP_UP = 0.6;
-
-export function autoBuyPower(s: GameState): void {
-  if (!s.gridAuto || s.stage >= 2) return;
-  const floor = Math.max(1, GRID_TOP_UP * fleetPowerBlock(s), potentialTasksPerSec(s) * TICK_SECONDS * 2);
-  let guard = 0;
-  while (s.power < floor && s.funds >= powerBlockCost(s) && guard++ < 20) purchasePower(s);
-}
-
 export function powerPriceWalk(s: GameState): void {
-  if (s.stage >= 2) return;
   s.powerPrice += (rng(s) * 2 - 1) * 0.5;
   s.powerPrice += (s.powerBase - s.powerPrice) * 0.02;
   s.powerPrice = Math.min(1.6 * s.powerBase, Math.max(0.7 * s.powerBase, s.powerPrice));
@@ -333,12 +352,12 @@ function purchasePower(s: GameState): void {
   s.funds = Math.round((s.funds - powerBlockCost(s)) * 100) / 100;
   s.power += block;
   s.powerBought += 1;
-  s.powerBase *= 1.001;
+  if (s.stage < 2) s.powerBase *= POWER_INFLATION;
   s.flags['powerOut'] = false;
 }
 
 export function trackStuck(s: GameState, dt: number): void {
-  const stuck = s.stage < 2 && s.power < 1 && s.funds < powerBlockCost(s);
+  const stuck = s.stage < 2 && !s.gridAuto && s.power < 1 && s.funds < powerBlockCost(s);
   s.stuckFor = stuck ? s.stuckFor + dt : 0;
 }
 
@@ -399,7 +418,7 @@ export function clickTask(s: GameState): boolean {
 }
 
 export function buyPower(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['buyPower'] || s.funds < powerBlockCost(s)) return false;
+  if (!s.revealed['buyPower'] || s.gridAuto || s.funds < powerBlockCost(s)) return false;
   purchasePower(s);
   s.stats.powerPresses += 1;
   return true;
@@ -477,12 +496,6 @@ export function expandLab(s: GameState): boolean {
   return true;
 }
 
-export function toggleGrid(s: GameState): boolean {
-  if (!s.revealed['gridContract'] || s.stage >= 2) return false;
-  s.gridAuto = !s.gridAuto;
-  return true;
-}
-
 export function buildDatacenter(s: GameState): boolean {
   if (!s.revealed['infrastructure']) return false;
   const cost = datacenterCost(s);
@@ -504,14 +517,13 @@ export function buyGpuBatch(s: GameState): boolean {
   return true;
 }
 
-export function buyTurbines(s: GameState): boolean {
-  if (!s.revealed['infrastructure']) return false;
-  const cost = turbineCost(s);
+export function expandGrid(s: GameState): boolean {
+  if (!canExpandGrid(s)) return false;
+  const cost = gridUpgradeCost(s);
   if (s.funds < cost) return false;
   addFunds(s, -cost);
-  s.turbines += 1;
-  s.powerCapacityMW += TURBINE_MW;
-  say(s, `Gas turbines online. +${TURBINE_MW} MW.`);
+  s.gridCapacity = nextGridCapacity(s);
+  say(s, `Grid connection expanded. Capacity ${fmtMw(s.gridCapacity)} MW.`);
   return true;
 }
 
@@ -579,13 +591,13 @@ export function bottleneckMessages(s: GameState): void {
       say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Lower the price${s.revealed['marketing'] ? ' or buy Marketing' : ''}.`);
     }
   }
-  if (s.stage < 2 && s.gpus > 0 && s.power < 1 && s.funds < powerBlockCost(s) && ready('brokeAt')) {
+  if (s.stage < 2 && !s.gridAuto && s.gpus > 0 && s.power < 1 && s.funds < powerBlockCost(s) && ready('brokeAt')) {
     s.flags['brokeAt'] = now;
     say(s, 'No power, and no money for more. The cloud provider may extend credit.');
   }
-  if (s.stage >= 2 && s.gpus > activeGpus(s) && ready('mwAt')) {
-    s.flags['mwAt'] = now;
-    say(s, `Power-limited — ${Math.round((100 * activeGpus(s)) / s.gpus)}% of GPUs active.`);
+  if (s.gpus > activeGpus(s) && ready('gridAt')) {
+    s.flags['gridAt'] = now;
+    say(s, `The grid powers ${Math.round((100 * activeGpus(s)) / s.gpus)}% of the GPUs. Expand Grid powers the rest.`);
   }
 }
 

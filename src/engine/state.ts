@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 export const LOG_LIMIT = 60;
@@ -184,6 +184,7 @@ export interface GameState {
   powerBase: number;
   powerBought: number;
   gridAuto: boolean;
+  gridCapacity: number;
   stuckFor: number;
 
   gpus: number;
@@ -192,8 +193,6 @@ export interface GameState {
   copyBoost: number;
 
   datacenters: number;
-  powerCapacityMW: number;
-  turbines: number;
   gpuBatches: number;
 
   hypeLevel: number;
@@ -323,6 +322,7 @@ export function newGame(seed: number = Date.now()): GameState {
     powerBase: 20,
     powerBought: 0,
     gridAuto: false,
+    gridCapacity: 1000,
     stuckFor: 0,
 
     gpus: 0,
@@ -331,8 +331,6 @@ export function newGame(seed: number = Date.now()): GameState {
     copyBoost: 1,
 
     datacenters: 0,
-    powerCapacityMW: 0,
-    turbines: 0,
     gpuBatches: 0,
 
     hypeLevel: 1,
@@ -467,6 +465,8 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   for (const key of ['training', 'stats', 'idle', 'cadence'] as const) merged[key] = keep(base[key] as object, raw[key]);
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
   if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags']) delete run[key];
+  if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;
+  if ((merged['revealed'] as Record<string, boolean>)['gridContract']) merged['gridAuto'] = true;
   merged['version'] = SAVE_VERSION;
   return merged as unknown as GameState;
 }

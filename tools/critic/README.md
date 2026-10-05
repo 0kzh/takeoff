@@ -145,7 +145,7 @@ stage of a run).
   situations writing `<tag>-<name>.md` and screenshots: `reload-mid-modal`, `reload-mid-countdown`,
   `reload-mid-transition`, `reload-mid-redteam`, `idle-10min-new`, `idle-mid`,
   `price-200x-at-start`, `price-floor`, `modal-click-through` (real mouse and keyboard),
-  `modal-hover`, `grid-off-broke`, `wall-flag`, `contracts-vs-price`, `tour` (screens at each first
+  `modal-hover`, `wall-flag`, `contracts-vs-price`, `tour` (screens at each first
   meeting, full text of every project card, clipped cards), `mobile-shots`. **Paperclips**
   reference runs: `pc-no-price`, `pc-proc-only`, `pc-mobile`. `--stage N` starts every run or probe
   at Stage N (Takeoff preset, Paperclips fixture; labels get `-sN`); the probes were written for

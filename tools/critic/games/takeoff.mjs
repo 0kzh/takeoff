@@ -15,7 +15,7 @@ export default {
     sliders: 'input[type=range]',
     // Dev overlay and the save toast are not part of the game screen.
     exclude: ['#dev', '#toast'],
-    ambient: ['btn-task', 'btn-lowerPrice', 'btn-raisePrice', 'btn-focus-capability', 'btn-focus-efficiency', 'btn-focus-safety', 'btn-grid'],
+    ambient: ['btn-task', 'btn-lowerPrice', 'btn-raisePrice', 'btn-focus-capability', 'btn-focus-efficiency', 'btn-focus-safety'],
     console: { selector: '#readout5, #readout4, #readout3, #readout2, #readout1' },
     log: { selector: '#logList .logEntry', newestFirst: true, max: 10 },
     modal: { root: '#modalOverlay', title: '#modalTitle', options: '#modalButtons button' },
@@ -53,7 +53,7 @@ export default {
       rate: s.stats.tasksPerSec,
       price: s.price,
       automation: s.gpus,
-      stock: s.revealed && s.revealed.buyPower && s.stage < 2 ? s.power : null,
+      stock: s.revealed && s.revealed.buyPower ? s.power : null,
       stockPrice: s.powerPrice,
       stockUnit: unitMatch ? parseFloat(unitMatch[1].replace(/,/g, '')) : 1000,
       tasks: s.tasks,
@@ -67,7 +67,8 @@ export default {
       revPerSec: s.stats.revPerSec,
       soldPerSec: s.stats.soldPerSec,
       gpus: s.gpus,
-      power: s.power,
+      // null once the Grid Contract bills power as it is used: there is no tank to run dry.
+      power: s.gridAuto ? null : s.power,
       powerBought: s.powerBought,
       gridAuto: s.gridAuto ? 1 : 0,
       hypeLevel: s.hypeLevel,
@@ -82,11 +83,10 @@ export default {
       projectsBought,
       capability: s.capability,
       date: s.date,
-      // Stage 2: room and power as the Infrastructure panel prints them ("GPUs: X / Y", "Power: A / B MW").
+      // Stage 2: room and grid capacity as the Infrastructure panel prints them ("GPUs X / Y", "Grid X / N MW").
       gpusShown: shown('infraGpus'),
       gpuCapacity: shown('gpuCapacity'),
-      powerDrawMW: shown('powerMW'),
-      powerCapMW: shown('powerCapMW'),
+      gridCapacity: shown('gridCapacity'),
       autoPrice: s.autoPrice ? 1 : 0,
       // The Train row's GPU line, the end screen.
       trainGpus: seen('trainGpus'),

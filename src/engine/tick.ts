@@ -1,9 +1,9 @@
 import { GameState, say, counter } from './state.js';
 import {
-  TICK_SECONDS, autoBuyPower, produce, updateAutoPrice, sell, researchTick, trustCheck, decayHype, decayEffects,
+  TICK_SECONDS, produce, updateAutoPrice, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  toggleGrid, buildDatacenter, buyGpuBatch, buyTurbines, rentQuota, powerBlockNews,
+  buildDatacenter, buyGpuBatch, expandGrid, rentQuota,
 } from './economy.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
@@ -43,7 +43,6 @@ export function step(s: GameState): void {
 
   produce(s, dt);
 
-  autoBuyPower(s);
   trackStuck(s, dt);
   if (slow) powerPriceWalk(s);
 
@@ -97,7 +96,6 @@ function slowStats(s: GameState): void {
   researchWall(s);
   wallStage1(s);
   trustPace(s);
-  powerBlockNews(s);
 }
 
 function trackCardWall(s: GameState): void {
@@ -189,10 +187,9 @@ export const actions = {
   buyMarketing,
   hireResearcher,
   expandLab,
-  toggleGrid,
   buildDatacenter,
   buyGpuBatch,
-  buyTurbines,
+  expandGrid,
   startTraining,
   setFocus,
   redTeam,

@@ -26,8 +26,8 @@ div[data-reveal].shown, .panel.shown { display: block; }
 .hiddenIds { display: none; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
-#buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart { display: none; }
-#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown { display: inline; }
+#buyPowerRow, #gridRows, #gridNoteRow, #billGap, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart { display: none; }
+#buyPowerRow.shown, #gridRows.shown, #gridNoteRow.shown, #billGap.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown { display: inline; }
 #trainCosts { margin-top: 4px; }
 .costRow { display: none; align-items: center; gap: 8px; }
 .costRow.shown { display: flex; }
@@ -47,7 +47,7 @@ body.boot * { animation: none !important; }
   animation: revealIn 0.8s ease-out;
 }
 #modalOverlay.shown { animation-duration: 0.3s; }
-#consoleDiv.shown, #panel-task.shown, #panel-power.shown { animation: none; }
+#consoleDiv.shown, #panel-task.shown, #powerRows.shown { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   [data-reveal].shown,
   .projectButton,
@@ -362,12 +362,10 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   .column { display: contents; }
   #columns > .column > .panel { width: 100%; box-sizing: border-box; }
   #panel-task { order: 1; }
-  #panel-power { order: 3; }
+  #panel-infrastructure { order: 3; }
   #panel-training { order: 4; }
   #panel-projects { order: 5; }
   #panel-business { order: 6; }
-  #panel-compute { order: 7; }
-  #panel-infrastructure { order: 8; }
   #panel-research { order: 9; }
   #panel-security { order: 12; }
   #panel-government { order: 13; }

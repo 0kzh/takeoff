@@ -248,13 +248,15 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_grid',
     title: 'Grid Contract',
     cost: { research: 2000 },
-    description: 'Power is bought when it runs low.',
+    description: 'Power is billed as it is used. No more buying it by hand.',
     trigger: (s) => s.powerBought >= GRID_CONTRACT_PRESSES,
     buy: (s) => {
       s.gridAuto = true;
       s.revealed['gridContract'] = true;
+      s.flags['powerOut'] = false;
     },
-    consoleMsg: 'Grid contract signed. Power is bought when it runs low.',
+    stages: [1, 2],
+    consoleMsg: 'Grid contract signed. Power is billed as it is used.',
   }),
   project({
     id: 'p_insight',

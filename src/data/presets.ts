@@ -54,6 +54,7 @@ function stage1End(seed: number): GameState {
     powerBase: 14.586,
     powerBought: 41,
     gridAuto: true,
+    gridCapacity: 10000,
     gpus: 132,
     gpuCostGrowth: 1.06,
     copyBoost: 2.5,
@@ -173,7 +174,7 @@ function stage1End(seed: number): GameState {
   for (const d of DEVELOPMENTS) if (d.stage === 1) s.developments[d.id] = true;
   for (const id of [
     'console', 'task', 'business', 'compute', 'fleet', 'power', 'buyPower', 'pricing', 'marketing',
-    'revPerSec', 'research', 'hireResearcher', 'projects', 'gridContract', 'log', 'insight', 'expandLab',
+    'revPerSec', 'research', 'hireResearcher', 'projects', 'gridContract', 'gridCapacity', 'log', 'insight', 'expandLab',
     'training', 'focus', 'rival', 'quota', 'contracts', 'autoPrice',
   ]) {
     s.revealed[id] = true;

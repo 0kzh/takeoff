@@ -1,10 +1,10 @@
 import type { GameState, Focus, TrainingRun } from '../engine/state.js';
-import { isBought, inPrologue } from '../engine/state.js';
+import { inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
-  gpuCost, marketingCost, datacenterCost, gpuBatchCost, turbineCost, researchCap, demandPercent, copies, activeGpus, powerDrawMW,
-  gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec, marketState,
-  priceAbsurd, rentQuota, MIN_PRICE, PRICE_STEP_FROM, GPU_BATCH, powerSecondsLeft, priceCeiling,
+  gpuCost, marketingCost, datacenterCost, gpuBatchCost, gridUpgradeCost, nextGridCapacity, canExpandGrid, researchCap, demandPercent,
+  copies, activeGpus, gpuCapacity, powerBlock, powerBlockCost, copiesIdle, contractRate, atRentQuota, billingPerSec, productionPerSec,
+  marketState, priceAbsurd, rentQuota, MIN_PRICE, PRICE_STEP_FROM, GPU_BATCH, DATACENTER_GPUS, GRID_KW_PER_GPU, powerSecondsLeft, powerBillPerSec, priceCeiling,
 } from '../engine/economy.js';
 import {
   trainCost, canStartTraining, canRedTeam, canRelease, releaseProgress, nextRunName,
@@ -14,7 +14,7 @@ import {
 import { datacenterStatus } from '../data/projects.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import { endingById, endStats } from '../engine/endings.js';
-import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
+import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtMw, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setShown, showId, setOff, setDisabled, setWidth, setTitle, make } from './dom.js';
 import { renderMeter, renderCooldown } from './meter.js';
 import { renderConsole } from './console.js';
@@ -35,14 +35,13 @@ export function mount(p: Perform): void {
   const bind = (id: string, fn: () => void) => byId(id).addEventListener('click', fn);
   bind('btn-task', () => perform('clickTask'));
   bind('btn-buyPower', () => perform('buyPower'));
-  bind('btn-grid', () => perform('toggleGrid'));
   bind('btn-lowerPrice', () => perform('lowerPrice'));
   bind('btn-raisePrice', () => perform('raisePrice'));
   bind('btn-marketing', () => perform('buyMarketing'));
   bind('btn-gpu', () => perform('rentGpu'));
   bind('btn-datacenter', () => perform('buildDatacenter'));
   bind('btn-gpuBatch', () => perform('buyGpuBatch'));
-  bind('btn-turbines', () => perform('buyTurbines'));
+  bind('btn-expandGrid', () => perform('expandGrid'));
   bind('btn-hireResearcher', () => perform('hireResearcher'));
   bind('btn-expandLab', () => perform('expandLab'));
   bind('btn-train', () => perform('startTraining'));
@@ -63,10 +62,9 @@ export function render(s: GameState): void {
   renderLog(s);
   setText('tasks', fmtInt(s.tasks));
   setText('gameDate', dateLabel(s.date));
-  renderPower(s);
   renderBusiness(s);
-  renderCompute(s);
   renderInfrastructure(s);
+  renderPower(s);
   renderResearch(s);
   renderProjects(s);
   renderTraining(s);
@@ -90,24 +88,49 @@ function setMeter(id: string, fraction: number, label: string, warn = false): vo
 }
 
 function renderPower(s: GameState): void {
-  if (s.stage >= 2) return;
   setText('power', fmtInt(s.power));
-  const block = powerBlock(s);
+  const cap = s.gridCapacity;
   const left = powerSecondsLeft(s);
-  const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
-  setMeter('powerMeter', Math.min(1, s.power / block), `${fmtInt(s.power)} kWh · a ${fmtInt(block)} kWh block${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, low);
+  setMeter('powerMeter', Math.min(1, s.power / cap), `${fmtInt(s.power)} kWh · a full bar is ${fmtInt(cap)} kWh${Number.isFinite(left) ? ` · ${fmtClock(left)} at this draw` : ''}`, left < 20);
   setText('powerNote', copiesIdle(s) ? 'copies idle' : '');
   setText('powerBlock', fmtInt(powerBlock(s)));
-  setText('powerCost', fmtMoney(powerBlockCost(s)));
+  setText('powerCost', s.revealed['infrastructure'] ? fmtMoneyShort(powerBlockCost(s)) : fmtMoney(powerBlockCost(s)));
   setDisabled('btn-task', false);
   setDisabled('btn-buyPower', s.funds < powerBlockCost(s));
   showId('buyPowerRow', true);
-  setTitle(
-    'btn-buyPower',
-    `Buy ${fmtInt(powerBlock(s))} kWh. Each task a copy completes uses 1 kWh; clicks use none.${s.gridAuto ? ' The Grid Contract tops up on its own.' : ''}`,
+  const draw = s.stage < 2 ? 'Each task a copy completes uses 1 kWh; clicks use none.' : `Each powered GPU draws ${fmtInt(GRID_KW_PER_GPU)} kWh a second.`;
+  setTitle('btn-buyPower', `Buy ${fmtInt(powerBlock(s))} kWh. ${draw}`);
+  setText('powerBill', fmtMoney(powerBillPerSec(s)));
+  setTitle('powerBill', `${draw} Billed at ${fmtMoneyShort(s.powerPrice)} per 1,000 kWh.`);
+  renderGrid(s);
+}
+
+function renderGrid(s: GameState): void {
+  const owned = s.revealed['infrastructure'] === true;
+  const shown = canExpandGrid(s);
+  showId('gridRows', shown);
+  showId('billGap', shown);
+  if (!shown) return;
+  const cap = s.gridCapacity;
+  const need = s.gpus * GRID_KW_PER_GPU;
+  const short = owned && need > cap;
+  setText('gridCapacity', fmtMw(cap));
+  setText('gridLoad', fmtMw(Math.min(need, cap)));
+  setMeter(
+    'gridMeter',
+    need / cap,
+    short ? `${fmtInt(activeGpus(s))} of ${fmtInt(s.gpus)} GPUs powered: the grid is full. Expand Grid powers the rest.` : `Each GPU draws ${fmtInt(GRID_KW_PER_GPU)} kW · ${fmtInt(s.gpus)} GPUs draw ${fmtMw(need)} of the grid's ${fmtMw(cap)} MW`,
+    short,
   );
-  setText('btn-grid', s.gridAuto ? 'ON' : 'OFF');
-  setText('gridStatus', s.gridAuto ? 'buys as needed' : 'idle');
+  setText('gridNote', short ? `${fmtInt(s.gpus)} GPUs need ${fmtMw(need)} MW. ${fmtInt(s.gpus - activeGpus(s))} sit dark.` : '');
+  showId('gridNoteRow', short);
+  const next = nextGridCapacity(s);
+  setText('gridNext', fmtMw(next));
+  setText('gridCost', fmtMoneyShort(gridUpgradeCost(s)));
+  setDisabled('btn-expandGrid', s.funds < gridUpgradeCost(s));
+  const blocks = s.gridAuto ? '' : ` Power is bought ${fmtInt(next)} kWh at a time.`;
+  const room = owned ? ` Enough for ${fmtInt(next / GRID_KW_PER_GPU)} GPUs.` : '';
+  setTitle('btn-expandGrid', `Raise the grid connection to ${fmtMw(next)} MW.${room}${blocks}`);
 }
 
 function renderBusiness(s: GameState): void {
@@ -152,8 +175,14 @@ function renderBusiness(s: GameState): void {
   showId('hypeLevelLine', s.hypeLevel > 1);
 }
 
-function renderCompute(s: GameState): void {
-  if (s.stage >= 2) return;
+function renderInfrastructure(s: GameState): void {
+  const owned = s.revealed['infrastructure'] === true;
+  setText('infraTitle', owned ? 'Infrastructure' : 'Compute');
+  if (owned) renderOwned(s);
+  else renderRented(s);
+}
+
+function renderRented(s: GameState): void {
   setText('gpuCost', fmtMoney(gpuCost(s)));
   const quota = atRentQuota(s);
   setDisabled('btn-gpu', s.funds < gpuCost(s) || quota);
@@ -168,22 +197,19 @@ function renderCompute(s: GameState): void {
   showId('copiesRow', copies(s) !== s.gpus);
 }
 
-function renderInfrastructure(s: GameState): void {
-  if (!s.revealed['infrastructure']) return;
-  setText('datacenters', fmtInt(s.datacenters));
+function renderOwned(s: GameState): void {
+  const room = gpuCapacity(s);
+  const full = s.gpus + GPU_BATCH > room;
+  setText('infraGpus', fmtInt(s.gpus));
+  setText('gpuCapacity', fmtInt(room));
+  setMeter('roomMeter', s.gpus / room, `${fmtInt(s.gpus)} GPUs in ${fmtInt(s.datacenters)} datacenter${s.datacenters === 1 ? '' : 's'} with room for ${fmtInt(room)} · ${fmtInt(copies(s))} copies running`);
+  setText('gpuBatchCost', fmtMoneyShort(gpuBatchCost(s)));
+  setDisabled('btn-gpuBatch', s.funds < gpuBatchCost(s) || full);
+  setText('gpuBatchDraw', fmtMw(GPU_BATCH * GRID_KW_PER_GPU));
+  setTitle('btn-gpuBatch', full ? 'The datacenters are full. Build another first.' : `Rack ${fmtInt(GPU_BATCH)} more GPUs. Each draws ${fmtInt(GRID_KW_PER_GPU)} kW from the grid.`);
   setText('datacenterCost', fmtMoneyShort(datacenterCost(s)));
   setDisabled('btn-datacenter', s.funds < datacenterCost(s));
-  setText('infraGpus', fmtInt(s.gpus));
-  setText('gpuCapacity', fmtInt(gpuCapacity(s)));
-  setText('gpuBatchCost', fmtMoneyShort(gpuBatchCost(s)));
-  setDisabled('btn-gpuBatch', s.funds < gpuBatchCost(s) || s.gpus + GPU_BATCH > gpuCapacity(s));
-  setText('powerMW', fmtNum(powerDrawMW(s), 1));
-  setText('powerCapMW', fmtInt(s.powerCapacityMW));
-  setText('turbineCost', fmtMoneyShort(turbineCost(s)));
-  setDisabled('btn-turbines', s.funds < turbineCost(s));
-  setText('activeGpus', fmtInt(activeGpus(s)));
-  setText('infraCopies', fmtInt(copies(s)));
-  setText('infraTasksPerSec', fmtInt(s.stats.tasksPerSec));
+  setTitle('btn-datacenter', `Datacenter ${fmtInt(s.datacenters + 1)}: room for ${fmtInt(DATACENTER_GPUS)} more GPUs.`);
 }
 
 function fmtTrust(trust: number): string {

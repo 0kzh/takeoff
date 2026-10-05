@@ -94,7 +94,7 @@ const READ = () => {
       hype: txt('hypeLine'),
       gpuNote: txt('gpuNote'),
       powerNote: txt('powerNote'),
-      gridStatus: txt('gridStatus'),
+      powerBill: txt('powerBill'),
       copiesRow: txt('copiesRow'),
       insightNote: txt('insightNote'),
       trustNote: txt('trustCostNote'),
@@ -1109,7 +1109,7 @@ const PROBES = {
         if (s.m.trainingPhase === 'evaluating') await first('evaluating', t, `Training panel: "${await tp()}"`);
         if (s.m.trainingPhase === 'redteam') await first('redteam', t, `Training panel: "${await tp()}"`);
         if (s.buttons.some((b) => b.k === 'btn-focus-capability')) await first('focus', t, `Training panel: "${await tp()}"`);
-        if (scr.rent.meter) await first('quota-meter', t, `Compute panel: "${await page.evaluate(() => document.getElementById('panel-compute').innerText.replace(/\s*\n\s*/g, ' / '))}"`);
+        if (scr.rent.meter) await first('quota-meter', t, `Compute panel: "${await page.evaluate(() => document.getElementById('panel-infrastructure').innerText.replace(/\s*\n\s*/g, ' / '))}"`);
         if (scr.dc) await first('datacenter-card', t, `card "${scr.dc.l}"`);
         if (scr.train.gpus && /Rent\s+[0-9,]+\s+more|rented\./.test(scr.train.gpus)) await first('gate', t, `Train row: "${scr.train.gpus}" / "${scr.train.reason}"`);
         if (scr.dc && scr.dc.e) {
@@ -1591,7 +1591,7 @@ const PROBES = {
         const k = g.replace(/[0-9][0-9,]*/g, '#');
         if (g && !seen.has(k)) seen.set(k, { t, g, r: scr.train.reason, rent: scr.rent, dc: scr.dc, con: await consoleNow(kit) });
         if (!quotaHit && scr.rent.btn && !scr.rent.btn.e && s.m.gpus >= Number(scr.rent.quota || 1e9)) {
-          quotaHit = { t, rent: scr.rent, compute: await page.evaluate(() => document.getElementById('panel-compute').innerText.replace(/\s*\n\s*/g, ' / ')), con: await consoleNow(kit) };
+          quotaHit = { t, rent: scr.rent, compute: await page.evaluate(() => document.getElementById('panel-infrastructure').innerText.replace(/\s*\n\s*/g, ' / ')), con: await consoleNow(kit) };
           await settle(kit);
           await page.screenshot({ path: `${kit.prefix}-quota.png`, fullPage: true });
         }

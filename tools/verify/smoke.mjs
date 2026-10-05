@@ -17,7 +17,7 @@
  * with a whole bar; grey while short of its price, never armed; no research price in Stage 1. Round 3
  * (stage1-round3-fixes.md): each event's default listed first; no `… first` hold anywhere. Owner
  * feedback 2 (the core screen reads as it did at a2117b5): no delay printed beside a purchase; First
- * Datacenter a plain card before and at the wall; `Power [bar] 968 kWh` and `GPUs rented [bar] 61 / 80`;
+ * Datacenter a plain card before and at the wall; `Power [bar] 968 kWh` (before the Grid Contract) and `GPUs rented [bar] 61 / 80`;
  * three plain Focus buttons and one note line.
  * Screenshots go to agent-tools/shots/stage1/. Exits non-zero when any check fails.
  */
@@ -169,7 +169,7 @@ const SNAPSHOT = () => {
       if (!card || !vis(card)) return null;
       return { text: card.innerText.trim(), meters: card.querySelectorAll('.meter').length, wall: s.flags['wallAt'] !== undefined };
     })(),
-    powerLine: vis(document.getElementById('panel-power')) ? document.getElementById('panel-power').innerText.split('\n')[0] : '',
+    powerLine: vis(document.getElementById('powerLine')) ? document.getElementById('powerLine').innerText.split('\n')[0] : '',
     quotaLine: vis(document.getElementById('quotaMeter')) ? document.getElementById('quotaMeter').parentElement.parentElement.innerText.split('\n')[0] : '',
     focus: vis(document.getElementById('focusRow'))
       ? {
@@ -235,7 +235,7 @@ try {
         if (got !== want) off.push(`${bar.id || bar.parentElement.id}: ${got}`);
         if (fill.probe) fill.remove();
       }
-      // A copy of the power meter in a visible spot (the Power panel is hidden at 0:00), filled 0–100 %.
+      // A copy of the power meter in a visible spot (the power rows are hidden at 0:00), filled 0–100 %.
       const probe = document.getElementById('powerMeter').cloneNode(true);
       probe.id = 'meterProbe';
       probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden';
@@ -486,9 +486,9 @@ try {
         const s = window.__game.state;
         const vis = (id) => document.getElementById(id).checkVisibility();
         return {
-          stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'),
+          stage: s.stage, t: s.stats.timePlayed, infra: vis('ownedRows'), compute: vis('btn-gpu'),
           panel: document.getElementById('panel-infrastructure').innerText.replace(/\s+/g, ' ').trim(),
-          buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter(vis),
+          buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-expandGrid'].filter(vis),
         };
       });
       transitionAt = arrival.t;
@@ -518,10 +518,11 @@ try {
   // ----- reveal order and staggering -----
   const at = (id) => (first.has(id) ? first.get(id) : Infinity);
   // The prologue (docs/specs/early-train.md): Power and Training arrive together with the first GPU.
-  const order = ['panel-business', 'panel-compute', 'panel-power', 'panel-training', 'panel-research', 'panel-projects', 'focusRow', 'panel-infrastructure'];
+  // Compute, Power and Infrastructure are one panel: the power rows join it, then the owned rows at Stage 2.
+  const order = ['panel-business', 'panel-infrastructure', 'powerRows', 'panel-training', 'panel-research', 'panel-projects', 'focusRow', 'ownedRows'];
   const times = order.map(at);
-  const inOrder = times.every((t, i) => t !== Infinity && (i === 0 || t >= times[i - 1])) && at('panel-power') === at('panel-training') && at('panel-research') > at('panel-training');
-  check('reveal order: Business → Compute → Power and Training together → Research → Projects → Focus → Infrastructure', inOrder, order.map((id, i) => `${id.replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
+  const inOrder = times.every((t, i) => t !== Infinity && (i === 0 || t >= times[i - 1])) && at('powerRows') === at('panel-training') && at('panel-research') > at('panel-training');
+  check('reveal order: Business → Compute → Power and Training together → Research → Projects → Focus → Infrastructure', inOrder, order.map((id, i) => `${id.replace('panel-infrastructure', 'compute').replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
   check('Research arrives with Trust and Hire Researcher only (Expand Lab later)', at('btn-expandLab') > at('panel-research') && at('btn-hireResearcher') === at('panel-research'), `research ${clock(at('panel-research'))}, expand ${clock(at('btn-expandLab'))}`);
   check('Projects arrive 30–60 s after Research', at('panel-projects') - at('panel-research') >= 30 && at('panel-projects') - at('panel-research') <= 62, `${Math.round(at('panel-projects') - at('panel-research'))} s`);
   check('Focus row hidden during the first training run', at('focusRow') > at('train-running'), `first run ${clock(at('train-running'))}, focus ${clock(at('focusRow'))}`);
@@ -560,12 +561,12 @@ try {
   // snapshots). Power comes first; the price, Marketing and Research follow in that order. Buy Power
   // waits for the store to fall to 800 kWh and the price for the deploy (engine/stages.ts), so either
   // may come first: the prologue run draws 100 kWh, and the price usually wins.
-  const beatIds = ['panel-power', 'btn-buyPower', 'btn-lowerPrice', 'btn-marketing', 'panel-research'];
+  const beatIds = ['powerRows', 'btn-buyPower', 'btn-lowerPrice', 'btn-marketing', 'panel-research'];
   const beatTimes = beatIds.map(at);
   const sortedBeats = [...beatTimes].sort((x, y) => x - y);
-  const chain = ['panel-power', 'btn-lowerPrice', 'btn-marketing', 'panel-research'].map(at);
+  const chain = ['powerRows', 'btn-lowerPrice', 'btn-marketing', 'panel-research'].map(at);
   const spaced = beatTimes.every((x) => x !== Infinity) && sortedBeats.every((x, i) => i === 0 || x - sortedBeats[i - 1] >= 28) &&
-    chain.every((x, i) => i === 0 || x > chain[i - 1]) && at('btn-buyPower') > at('panel-power');
+    chain.every((x, i) => i === 0 || x > chain[i - 1]) && at('btn-buyPower') > at('powerRows');
   check('opening beats arrive ≥ 30 s apart: power first, then the price → Marketing → Research, with Buy Power among them', spaced, beatIds.map((id, i) => `${id.replace(/^(panel|btn)-/, '')} ${beatTimes[i] === Infinity ? '—' : clock(beatTimes[i])}`).join(', '));
   check('no "undertrained" and no "Train now" anywhere on screen', bannedAt === null, bannedAt === null ? '' : `seen at ${clock(bannedAt)}`);
   // The GPUs are a price with a bar (`10 GPUs`); the line under the prices is only for the cloud's limit,
@@ -674,21 +675,21 @@ try {
     const kept = narration.consoleBefore.filter((l) => f0.includes(l)).length;
     check('transition keeps earlier console lines (no wipe)', f0.length >= 4 && kept >= 3, `${kept} earlier lines kept; first frame ${f0.length} lines`);
     check('"First Datacenter online outside Abilene." is on screen', narration.frames.some((f) => f.some((l) => l.startsWith('First Datacenter online outside Abilene.'))));
-    check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
+    check('Stage 2 arrival: the Compute panel becomes Infrastructure, its rental rows gone', arrival.infra && !arrival.compute);
     // The Stage 2 skeleton: one working panel (fc7bc56's seed) and nothing else new.
-    check('Stage 2 arrival: the seed panel reads Datacenters 1, GPUs 1,000 / 10,000, Power 1.0 / 5 MW, with its three buttons',
-      /^Infrastructure Datacenters: 1 Build Datacenter Cost: \$[\d,]+ GPUs: 1,000 \/ 10,000 Buy GPUs \(1,000\) Cost: \$[\d,]+ Power: 1\.0 \/ 5 MW Gas turbines \(\+100 MW\) Cost: \$[\d,]+ Powered GPUs: 1,000 Copies running: [\d,]+ Tasks per sec: [\d,]+$/.test(arrival.panel) && arrival.buttons.length === 3,
+    check('Stage 2 arrival: the seed panel reads GPUs 1,000 / 10,000, the grid in MW, then the power bill (the tank and Buy Power before the Grid Contract), with its three buttons',
+      /^Infrastructure GPUs 1,000 \/ 10,000 Buy GPUs \(1,000\) Cost: \$[\d,]+ uses 1 MW Build Datacenter Cost: \$[\d,]+ (Power [\d,]+ kWh (copies idle )?Buy Power Cost: \$[\d,.]+ )?Grid 1 \/ 10 MW Expand Grid \(100 MW\) Cost: \$[\d,]+( Power bill: \$ [\d,.]+ per sec)?$/.test(arrival.panel) && arrival.buttons.length === 3,
       arrival.panel);
     const seed = await page.evaluate(() => {
       const s = window.__game.state;
       s.funds = 1e7;
       window.__game.render();
-      const before = { gpus: s.gpus, mw: s.powerCapacityMW, datacenters: s.datacenters };
-      for (const id of ['btn-gpuBatch', 'btn-turbines', 'btn-datacenter']) document.getElementById(id).click();
-      return { before, after: { gpus: s.gpus, mw: s.powerCapacityMW, datacenters: s.datacenters } };
+      const before = { gpus: s.gpus, grid: s.gridCapacity, datacenters: s.datacenters };
+      for (const id of ['btn-gpuBatch', 'btn-expandGrid', 'btn-datacenter']) document.getElementById(id).click();
+      return { before, after: { gpus: s.gpus, grid: s.gridCapacity, datacenters: s.datacenters } };
     });
-    check('Stage 2 seed: Buy GPUs, Gas turbines and Build Datacenter each work once funded',
-      seed.after.gpus === seed.before.gpus + 1000 && seed.after.mw === seed.before.mw + 100 && seed.after.datacenters === seed.before.datacenters + 1,
+    check('Stage 2 seed: Buy GPUs, Expand Grid and Build Datacenter each work once funded',
+      seed.after.gpus === seed.before.gpus + 1000 && seed.after.grid === seed.before.grid * 10 && seed.after.datacenters === seed.before.datacenters + 1,
       `${JSON.stringify(seed.before)} → ${JSON.stringify(seed.after)}`);
     console.log(`      console during the narration: ${JSON.stringify(narration.frames[13])}`);
   } else {
@@ -729,8 +730,8 @@ try {
       const s = window.__game.state;
       const vis = (id) => document.getElementById(id).checkVisibility();
       return {
-        stage: s.stage, gpus: s.gpus, datacenters: s.datacenters, infra: vis('panel-infrastructure'), compute: vis('panel-compute'),
-        buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter(vis).length,
+        stage: s.stage, gpus: s.gpus, datacenters: s.datacenters, infra: vis('ownedRows'), compute: vis('btn-gpu'),
+        buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-expandGrid'].filter(vis).length,
       };
     });
     await shot(p3, '12-stage2-preset');

@@ -1,7 +1,7 @@
 import { GameState, say, logNews, counter, inPrologue } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
-import { GRID_MW, ARRIVAL_GPUS, researchCap, rentQuota } from './economy.js';
+import { ARRIVAL_GPUS, GRID_FIRST_TIER, gridOutgrown, researchCap, rentQuota } from './economy.js';
 import { cardWallSeconds } from './training.js';
 import { researchWanted } from './tick.js';
 
@@ -46,12 +46,10 @@ export const STAGES: StageDef[] = [
     secondsPerMonth: 210,
     enter: (s) => {
       say(s, 'First Datacenter online outside Abilene.');
-      hide(s, ['power', 'buyPower', 'compute', 'gridContract']);
-      show(s, ['infrastructure']);
-      s.gridAuto = false;
+      show(s, ['infrastructure', 'power', 'buyPower', 'gridCapacity']);
       s.datacenters = Math.max(1, s.datacenters);
+      s.gridCapacity = Math.max(GRID_FIRST_TIER, s.gridCapacity);
       s.gpus = ARRIVAL_GPUS;
-      s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);
       logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
     },
     exit: (s) => (s.capability >= 4 && counter(s, 'releasesThisStage') > 0 && s.stats.timeInStage >= STAGE2_MIN_SECONDS ? 3 : 0),
@@ -190,6 +188,15 @@ const REVEAL_RULES: RevealRule[] = [
     then: (s) => {
       beat(s);
       say(s, 'Power is draining. Everything stops when it runs out.');
+    },
+  },
+  {
+    id: 'gridCapacity',
+    stages: [1],
+    when: (s) => s.revealed['buyPower'] === true && !s.gridAuto && gridOutgrown(s) && spaced(s),
+    then: (s) => {
+      beat(s);
+      say(s, 'The fleet has outgrown the grid connection. Expand Grid buys power in bigger blocks.');
     },
   },
   {

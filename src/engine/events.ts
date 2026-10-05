@@ -6,7 +6,7 @@ import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
 import {
   gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate,
-  datacenterCost, gpuBatchCost, turbineCost, gpuCapacity, GPU_BATCH,
+  datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gpuCapacity, GPU_BATCH,
 } from './economy.js';
 import { canStartTraining, canRedTeam, trainCost } from './training.js';
 import { dateLabel } from './format.js';
@@ -303,8 +303,8 @@ export function noveltyKeys(s: GameState): string[] {
   if (s.revealed['infrastructure']) {
     if (s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
     if (s.funds >= gpuBatchCost(s) && s.gpus + GPU_BATCH <= gpuCapacity(s)) keys.push(`aff:gpubatch:${s.gpuBatches}`);
-    if (s.funds >= turbineCost(s)) keys.push(`aff:turbine:${s.turbines}`);
   }
+  if (canExpandGrid(s) && s.funds >= gridUpgradeCost(s)) keys.push(`aff:grid:${s.gridCapacity}`);
   if (s.activeChoice) keys.push(`choice:${s.activeChoice.id}`);
   return keys;
 }
@@ -370,10 +370,9 @@ function unaffordableFundsCosts(s: GameState): number[] {
   const add = (cost: number | undefined) => {
     if (cost && cost > s.funds) out.push(cost);
   };
-  if (s.stage < 2) {
-    if (s.revealed['buyPower']) add(powerBlockCost(s));
-    if (s.revealed['compute']) add(gpuCost(s));
-  }
+  if (s.revealed['buyPower'] && !s.gridAuto) add(powerBlockCost(s));
+  if (canExpandGrid(s)) add(gridUpgradeCost(s));
+  if (s.stage < 2 && s.revealed['compute']) add(gpuCost(s));
   if (s.revealed['marketing']) add(marketingCost(s));
   if (s.revealed['training'] && !s.training.run) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);

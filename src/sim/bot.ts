@@ -10,7 +10,7 @@ import {
 import {
   trainCost, canStartTraining, gpusShort, trainSlotFree, canPressTrain, needsDatacenter, gpusNeeded, runDelaySeconds,
 } from '../engine/training.js';
-import { fmtInt, fmtMoney, fmtClock, dateLabel } from '../engine/format.js';
+import { fmtInt, fmtMoney, fmtMw, fmtClock, dateLabel } from '../engine/format.js';
 
 declare const process: { argv: string[]; exitCode?: number };
 
@@ -592,7 +592,7 @@ function minuteLine(s: GameState, minute: number): string {
     .join(', ');
   const run = s.training.run;
   const training = run ? ` | ${run.name} ${run.phase}` : '';
-  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | MW ${fmtInt(s.powerCapacityMW)}` : '';
+  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | grid ${fmtMw(s.gridCapacity)} MW` : '';
   return (
     `m${minute} | S${s.stage} ${dateLabel(s.date)} | tasks ${fmtInt(s.tasks)} | ${fmtMoney(s.funds)} | rev/s ${fmtInt(s.stats.revPerSec)}` +
     ` | price ${s.price < 0.1 ? s.price.toFixed(4) : s.price.toFixed(2)} | gpus ${fmtInt(s.gpus)} | copies ${fmtInt(copies(s))} | tps ${fmtInt(s.stats.tasksPerSec)}` +

@@ -47,6 +47,11 @@ export function fmtNum(n: number, decimals = 1): string {
   return frac ? `${sign}${body}.${frac}` : `${sign}${body}`;
 }
 
+export function fmtMw(kw: number): string {
+  const mw = kw / 1000;
+  return fmtNum(mw, Number.isInteger(mw) ? 0 : 1);
+}
+
 export function fmtMoney(n: number): string {
   if (!Number.isFinite(n)) return '$ 0.00';
   const a = Math.abs(n);

@@ -2,7 +2,7 @@ import { GameState, inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
-  activeGpus, gpuCapacity, datacenterCost, gpuBatchCost, turbineCost, GPU_BATCH,
+  activeGpus, gpuCapacity, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec, GPU_BATCH,
 } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
@@ -201,7 +201,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     else if (gpusShort(s) && !s.training.run && s.funds >= gpuCost(s)) a.rentGpu(s);
   }
 
-  if (s.stage < 2 && s.revealed['buyPower'] && !s.gridAuto && s.power < Math.max(50, copyRate * 5)) a.buyPower(s);
+  if (s.revealed['buyPower'] && !s.gridAuto && s.power < Math.max(50, (s.stage < 2 ? copyRate : powerDrawPerSec(s)) * 5)) a.buyPower(s);
 
   if (careful) {
     if (mem.variant !== 'price-never') nudgePrice(s, a, mem);
@@ -220,7 +220,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     a.startTraining(s);
   }
   const greedy = mem.policy === 'greedy';
-  const reserve = greedy ? heldGoalPrice(s, mem) : Math.max(s.stage < 2 ? powerBlockCost(s) : 0, heldGoalPrice(s, mem));
+  const reserve = greedy ? heldGoalPrice(s, mem) : Math.max(s.gridAuto ? 0 : powerBlockCost(s), heldGoalPrice(s, mem));
   const keepsReserve = (funds: number | undefined) => !funds || s.funds - funds >= reserve;
   const goal = s.stage < 2 ? waitingGoalS1(s)?.name ?? '' : '';
   if (goal !== mem.delayGoal) {
@@ -282,12 +282,13 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   if (!firstTimer && !bigTicket && s.revealed['marketing'] && s.funds - marketingCost(s) >= reserve && !delayed(marketingCost(s))) {
     paying(marketingCost(s), () => a.buyMarketing(s));
   }
+  if (s.stage < 2 && canExpandGrid(s) && gridOutgrown(s) && s.funds - gridUpgradeCost(s) >= reserve) a.expandGrid(s);
   if (s.stage >= 2 && s.revealed['infrastructure']) infrastructure(s, a);
 }
 
 function infrastructure(s: GameState, a: Actions): void {
   const powered = activeGpus(s) >= s.gpus;
-  if (!powered && s.funds >= turbineCost(s)) a.buyTurbines(s);
+  if (!powered && canExpandGrid(s) && s.funds >= gridUpgradeCost(s)) a.expandGrid(s);
   if (s.gpus + GPU_BATCH > gpuCapacity(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
   if (powered && s.funds >= gpuBatchCost(s) * 1.2) a.buyGpuBatch(s);
 }
