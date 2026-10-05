@@ -110,8 +110,17 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 
 /* ---------- columns ---------- */
 
+/*
+ * Left to right in the order they fill: the lab's own rows, Training (from the first GPU), Research and
+ * Projects (about 3:00), then Developments (3:30). No column stands empty between two with panels, and
+ * none moves when a later one arrives. Stage 4 makes Stores the centre column, so there the centre
+ * column keeps the page's order.
+ */
 #columns { display: flex; align-items: flex-start; gap: 12px; }
 .column { flex: none; }
+#middleColumn { order: 1; }
+#logColumn { order: 2; }
+body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 0; }
 #logColumn { width: 200px; }
 #leftColumn { width: 275px; }
 #middleColumn { width: 275px; }
