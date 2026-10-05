@@ -5,7 +5,6 @@
 //          --game-dir DIR [--seed N] [--minutes MIN] [--stage N] [--tag T]
 //   --stage N  start every run/probe at Stage N (Takeoff: __game.loadPreset(N); Paperclips: its
 //              stage fixture); probes written for Stage 1 report what they cannot find instead.
-//   --preset NAME  Takeoff: start from a named start (__game.loadPreset(NAME), e.g. 3c); labels get -pNAME.
 //   --tag T    output label prefix (default "x": x-<name>[-sN][-seedN]; round 2 used "r2x").
 //
 // Two kinds of scenario:
@@ -21,7 +20,6 @@ import path from 'node:path';
 import { runGame, resolveGameDir } from './lib/runner.mjs';
 import { openProbe } from './lib/probe.mjs';
 import { loadAdapter, parseArgs, resolvePrefix, mmss, fmtN } from './lib/util.mjs';
-import { FLEET_GRANT_CARD } from './games/takeoff-late.mjs';
 
 const money = (v) => (v == null ? '—' : `$${fmtN(v, 2)}`);
 const base = await loadAdapter('takeoff');
@@ -30,7 +28,7 @@ const MOBILE = { width: 390, height: 844 };
 /** Output label: <tag>-<name>[-sN][-seedN]. */
 const labelFor = (name, flags) => {
   const stage = Number(flags.stage ?? 1);
-  return `${flags.tag ?? 'x'}-${name}${flags.preset ? `-p${flags.preset}` : stage > 1 ? `-s${stage}` : ''}${flags.seed && Number(flags.seed) !== 1 ? `-seed${flags.seed}` : ''}`;
+  return `${flags.tag ?? 'x'}-${name}${stage > 1 ? `-s${stage}` : ''}${flags.seed && Number(flags.seed) !== 1 ? `-seed${flags.seed}` : ''}`;
 };
 
 /** Everything the player can read that the 2-s snapshot does not keep. */
@@ -56,49 +54,7 @@ const READ_SCREEN = () => {
       rival: txt('rivalLine'),
       site: txt('panel-site'),
       trustNote: txt('trustCostNote'),
-      // Stage 2+ (absent from Stage 1 builds, so Stage 1 output is unchanged).
-      trainReason: txt('trainReason'),
-      releaseNote: txt('releaseNote'),
-      copiesOnResearch: txt('allocPct'),
-      humanShare: txt('humanShare'),
-      interconnectLine: txt('interconnectLine'),
-      // Stage 3 (absent or hidden before it).
-      trainStatus: txt('trainStatus'),
-      experiments: txt('experimentsNote'),
-      lobby: txt('lobbyNote'),
-      counterintel: txt('counterintelNote'),
-      reimage: txt('reimageNote'),
-      alignWork: txt('alignWorkNote'),
-      autonomy: txt('autonomyNote'),
-      rogue: txt('rogueNote'),
-      seats: txt('seatsNote'),
-      session: txt('sessionLine'),
-      order: txt('orderLine'),
-      memo: txt('memoLine'),
-      theft: txt('theftNote'),
-      shipment: txt('shipmentLine'),
-      buildout: txt('buildoutLine'),
-      standing: txt('standingNote'),
-      buildShare: txt('buildShareNote'),
       ending: txt('endingTitle'),
-      // Stage 4 (absent from earlier builds and stages).
-      generation: txt('genStatus'),
-      verify: txt('verifyNote'),
-      fleetStatus: txt('fleetStatus'),
-      fleetGoal: txt('fleetGoalNote'),
-      fleetIdle: txt('fleetIdle'),
-      housing: txt('housingNote'),
-      hearing: txt('hearingNote'),
-      agenda: txt('agendaLine'),
-      treatyWait: txt('treatyWait'),
-      treatyLead: txt('treatyLeadLine'),
-      ubi: txt('ubiNote'),
-      draft: txt('draftNote'),
-      approvalS4: txt('societyApprovalNote'),
-      ashford: txt('ashfordLine'),
-      nano: txt('nanoLine'),
-      shutdown: txt('shutdownLine'),
-      robotsCap: txt('robotsCap'),
     },
     modal: modalOpen
       ? {
@@ -174,19 +130,6 @@ const RUNS = {
     title: 'Presses every setting (toggle, AUTO, "Name: value" button) once when it first appears, and drags each slider to its minimum when it first appears and to its maximum 10 minutes later',
     adapter: variant({ special: togglesSpecial }),
   },
-  // --- Stage 4: the choices that end the stage early ---
-  'fleet-not-yet': {
-    title: 'Stage 4: answers the fleet\'s request for autonomy "not yet" every time and never buys "Grant the fleet autonomy"',
-    adapter: variant({ modalChoice: fleetAnswer(/^not yet/), veto: (c) => [...base.policy.veto(c), FLEET_GRANT_CARD] }),
-  },
-  'fleet-refuse': {
-    title: 'Stage 4: answers the fleet\'s request "refuse for good" when it is enabled ("not yet" otherwise) and never buys "Grant the fleet autonomy"',
-    adapter: variant({ modalChoice: fleetAnswer(/^refuse for good/, /^not yet/), veto: (c) => [...base.policy.veto(c), FLEET_GRANT_CARD] }),
-  },
-  halt: {
-    title: 'Stage 4: also buys "Sign a halt instead" when it is lit (its event answered with the first option, "sign the halt")',
-    adapter: variant({ veto: (c) => base.policy.veto(c).filter((k) => k !== 'proj-p_halt') }),
-  },
   'no-side-projects': {
     title: 'Buys only research projects and the four Abilene rungs — none of the funds-priced side offers',
     adapter: { ...base, policy: { ...base.policy, veto: (c) => c.buttons.filter((b) => b.kind === 'project' && /\$/.test(b.l) && !/Reserve the Abilene|Interconnect queue|Substation|Break ground/.test(b.l)).map((b) => b.k) } },
@@ -234,18 +177,6 @@ async function togglesSpecial(ctx) {
   return c;
 }
 
-/** modalChoice for the fleet's request ("The Fleet Asks"): the first enabled option matching `wanted` (in order); every other modal: first enabled option. */
-function fleetAnswer(...wanted) {
-  return (modal, enabled) => {
-    if (!/The Fleet Asks/i.test(modal.title || '')) return enabled[0];
-    for (const re of wanted) {
-      const hit = enabled.find((o) => re.test(o.l));
-      if (hit) return hit;
-    }
-    return enabled[0];
-  };
-}
-
 function focusSpecial(key) {
   return async function special(ctx) {
     let c = await base.policy.special(ctx);
@@ -276,7 +207,6 @@ async function runScenario(name, flags) {
     accelMinutes: Number(flags.minutes ?? 60),
     seed: Number(flags.seed ?? 1),
     stage: Number(flags.stage ?? 1),
-    preset: flags.preset,
     viewport: sc.viewport,
     quiet: true,
     async onSnapshot({ t, raw, session }) {
@@ -301,7 +231,7 @@ async function runScenario(name, flags) {
     },
   });
   for (const e of rec.events) if (e.type === 'console' || e.type === 'log') lines.push(`${mmss(e.t)} [${e.type}${e.novel ? '' : ', repeat'}] ${e.text}`);
-  const md = [`# Explore run: ${name} — ${sc.title}`, '', `Stage ${meta.stageStart} start${meta.preset ? ` (preset ${meta.preset})` : ''}, seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.`, ''];
+  const md = [`# Explore run: ${name} — ${sc.title}`, '', `Stage ${meta.stageStart} start, seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.`, ''];
   md.push('## Per minute', '', '| t | stage | funds | rev/s | tasks/s | sold/s | price | unbilled | GPUs | power | research | trust | researchers | lab | trainings | releases | incidents | rescues | numbers | page height | billing line |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const m of minutes) md.push(`| ${mmss(m.t)} | ${m.stage} | ${money(m.funds)} | ${money(m.revPerSec)} | ${fmtN(m.rate, 1)} | ${fmtN(m.soldPerSec, 1)} | ${money(m.price)} | ${fmtN(m.backlog)} | ${m.gpus} | ${fmtN(m.power)} | ${fmtN(m.research)} | ${m.trust} | ${m.researchers} | ${m.labSpace} | ${m.trainings} | ${m.releases} | ${m.incidents} | ${m.idleRescues} | ${m.numbers} | ${m.pageHeight} | ${m.billing ?? ''} |`);
   md.push('', '## Modals (first sight of each)', '');
@@ -760,7 +690,7 @@ async function runProbe(name, flags) {
   const out = [];
   let kit;
   try {
-    kit = await openProbe(base, { gameDir, seed: Number(flags.seed ?? 1), prefix, viewport: pr.viewport, stage, preset: flags.preset });
+    kit = await openProbe(base, { gameDir, seed: Number(flags.seed ?? 1), prefix, viewport: pr.viewport, stage });
     kit.gameDir = gameDir;
     await pr.run(kit, out);
     console.log(`${name}: ok`);

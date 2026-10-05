@@ -1,24 +1,20 @@
-import { GameState, Cost, TrainingRun, say, addFunds, counter } from '../engine/state.js';
+import { GameState, Cost, TrainingRun, say, addFunds } from '../engine/state.js';
 import { BENCHMARKS, doRelease, releaseChecked, runById } from '../engine/training.js';
-import { chance, randInt, rand } from '../engine/rng.js';
+import { chance, randInt } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { s2, queueGulf } from '../engine/infrastructure.js';
-import { moveGov, moveLead } from '../engine/world.js';
-import { bestCapability, researchRate } from '../engine/economy.js';
+import { researchRate } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
 import { rivalRelease } from '../engine/events.js';
 
 type Ctx = Record<string, number | string>;
 
 export interface ChoiceOption {
-  label: string | ((s: GameState) => string);
-  record: string | ((s: GameState) => string);
+  label: string;
+  record: string;
   tooltip?: string | ((s: GameState, ctx: Ctx) => string);
   line?: string | ((s: GameState, ctx: Ctx) => string);
-  needs?: string | ((s: GameState, ctx: Ctx) => string);
   cost?: Cost | ((s: GameState, ctx: Ctx) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
-  visible?: (s: GameState, ctx: Ctx) => boolean;
   effect: (s: GameState, ctx: Ctx) => void;
   log?: string | ((s: GameState, ctx: Ctx) => string);
 }
@@ -30,15 +26,13 @@ export interface ChoiceDef {
   timer?: number;
   valid?: (s: GameState, ctx: Ctx) => boolean;
   onOpen?: (s: GameState, ctx: Ctx) => void;
-  defaultOption?: number | ((s: GameState, ctx: Ctx) => number);
+  defaultOption?: number;
   options: ChoiceOption[];
 }
 
 function runFor(s: GameState, ctx: Ctx): TrainingRun | undefined {
   return runById(s, ctx['runId']);
 }
-
-const clamp100 = (v: number) => Math.min(100, Math.max(0, v));
 
 function gambleCost(s: GameState): number {
   return Math.max(500, twoFigures(60 * researchRate(s)));
@@ -48,8 +42,6 @@ function twoFigures(raw: number): number {
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
   return Math.ceil(raw / unit) * unit;
 }
-
-
 
 const ctxNum = (ctx: Ctx, k: string, d = 0) => (typeof ctx[k] === 'number' ? (ctx[k] as number) : Number(ctx[k] ?? d));
 
@@ -62,29 +54,14 @@ function gambleOdds(s: GameState): number {
   return Math.min(0.8, 0.45 + 0.05 * s.researchers);
 }
 
-const LOCKDOWN_SECONDS = 60;
-const BUREAU_SECONDS = 120;
-
-function gulfPrice(s: GameState): number {
-  const base = typeof s.flags['gulfBase'] === 'number' ? (s.flags['gulfBase'] as number) : gulfBaseNow(s);
-  return s.flags['gulfPremium'] === true ? Math.round(base * 1.5) : base;
-}
-
-function gulfBaseNow(s: GameState): number {
-  const raw = Math.max(s2(s, 1000000), 60 * s.stats.revPerSec);
-  const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
-  return Math.round(raw / unit) * unit;
+function moveGov(s: GameState, by: number): void {
+  const eff = by > 0 ? by * Math.min(1, (100 - s.govRelations) / 80) : by;
+  s.govRelations = Math.min(100, Math.max(0, s.govRelations + eff));
 }
 
 function runName(s: GameState, ctx: Ctx): string {
   return runFor(s, ctx)?.name ?? 'the model';
 }
-
-const publishersLicence = (s: GameState): number => s2(s, 150000);
-
-import { CHOICES3 } from './choices3.js';
-import { CHOICES4 } from './choices4.js';
-import { CHOICES5 } from './choices5.js';
 
 export const CHOICES: ChoiceDef[] = [
   {
@@ -152,7 +129,6 @@ export const CHOICES: ChoiceDef[] = [
         line: 'market grows with it · +1 Trust · lead −0.15 months',
         effect: (s, ctx) => {
           s.flags['sage2Decided'] = true;
-          if (s.stage >= 2) s.revealed['releaseInternal'] = true;
           const run = runFor(s, ctx);
           if (run) doRelease(s, run, true);
         },
@@ -165,7 +141,6 @@ export const CHOICES: ChoiceDef[] = [
         line: 'research ×1.25 · lead +0.5 months · customers keep the old model',
         effect: (s, ctx) => {
           s.flags['sage2Decided'] = true;
-          if (s.stage >= 2) s.revealed['releaseInternal'] = true;
           const run = runFor(s, ctx);
           if (run) doRelease(s, run, false);
         },
@@ -524,336 +499,4 @@ export const CHOICES: ChoiceDef[] = [
       },
     ],
   },
-  {
-    id: 'c_hearing',
-    title: 'A Senate Hearing',
-    text: () => [
-      'The Commerce Committee wants to know what a "reliable agent" is and who it reports to.',
-      'The hearing is on Thursday. It will be televised.',
-    ],
-    timer: 60,
-    defaultOption: 1,
-    options: [
-      {
-        label: 'testify candidly',
-        record: 'testified',
-        tooltip: 'Government relations +8, approval +3. The roadmap goes on the record: lead −0.5 months.',
-        line: 'government +8 · approval +3 · lead −0.5 months',
-        effect: (s) => {
-          moveGov(s, 8);
-          s.flags['candid'] = true;
-          moveLead(s, -0.5);
-          hearingDone(s);
-        },
-        log: 'OpenMind testifies for four hours. A senator asks the model a question directly. It answers.',
-      },
-      {
-        label: 'send the lawyers',
-        record: 'lawyers',
-        tooltip: 'Government relations −5.',
-        line: 'government −5 · nothing on the record',
-        effect: (s) => {
-          moveGov(s, -5);
-          hearingDone(s);
-        },
-        log: 'OpenMind\'s counsel reads a statement. The committee schedules a second hearing.',
-      },
-      {
-        label: 'bring a demo',
-        record: 'demo',
-        tooltip: '100,000 research. Marketing level +1, government relations +3.',
-        line: 'marketing level +1 · government +3 · 100,000 research',
-        cost: { research: 100000 },
-        effect: (s) => {
-          s.hypeLevel += 1;
-          moveGov(s, 3);
-          hearingDone(s);
-        },
-        log: 'The demo books a senator\'s flights live on camera. The clip is everywhere by dinner.',
-      },
-    ],
-  },
-  {
-    id: 'c_publishers',
-    title: 'The Publishers',
-    timer: 90,
-    defaultOption: 2,
-    text: () => [
-      'The crawl is finished. There is no more public internet to read.',
-      'Forty publishers have noticed where their archives went. They would like to talk.',
-    ],
-    options: [
-      {
-        label: 'license the archives',
-        record: 'licensed',
-        tooltip: (s) => `${fmtMoneyShort(publishersLicence(s))}. +10 T of data now. Approval +2.`,
-        line: (s) => `+10 T data now · approval +2 · ${fmtMoneyShort(publishersLicence(s))}`,
-        cost: (s) => ({ funds: publishersLicence(s) }),
-        effect: (s) => {
-          s.data += 10;
-          s.flags['licensedPublishers'] = true;
-          s.flags['publishersDone'] = true;
-        },
-        log: 'OpenMind signs licensing deals with forty publishers. The price per word is not disclosed.',
-      },
-      {
-        label: 'fight it',
-        record: 'fought',
-        tooltip: '+5 T now. Government relations −3, approval −4. They will sue.',
-        line: '+5 T data now · government −3 · approval −4 · a lawsuit',
-        effect: (s) => {
-          s.data += 5;
-          moveGov(s, -3);
-          s.flags['foughtPublishers'] = true;
-          s.flags['publishersDone'] = true;
-          s.scheduled.push({ id: 'cr_lawsuit', delay: rand(s, 180, 300) });
-        },
-        log: 'OpenMind calls its training fair use. Forty publishers call their lawyers.',
-      },
-      {
-        label: 'write our own',
-        record: 'synthetic',
-        tooltip: 'No deal. Synthetic data costs half as much.',
-        line: 'no data now · synthetic data at half price',
-        effect: (s) => {
-          s.flags['synthHalf'] = true;
-          s.flags['publishersDone'] = true;
-        },
-        log: 'OpenMind declines to license. "The model can write its own textbooks."',
-      },
-    ],
-  },
-  {
-    id: 'c_gulf',
-    title: 'Al-Marsa',
-    text: () => [
-      'A Gulf sovereign fund offers a finished site: one gigawatt, energised in weeks, no interconnect queue, no hearings.',
-      'It is 300 km from the Strait of Hormuz. The fund asks for a board observer.',
-    ],
-    timer: 90,
-    defaultOption: 1,
-    onOpen: (s) => {
-      if (typeof s.flags['gulfBase'] !== 'number') s.flags['gulfBase'] = gulfBaseNow(s);
-    },
-    options: [
-      {
-        label: 'sign for Al-Marsa',
-        record: 'signed Al-Marsa',
-        tooltip: (s) => `${fmtMoneyShort(gulfPrice(s))}. +1,000 MW in 2:00. Government relations −8, approval −3, lead −0.5 months. The site is abroad.`,
-        line: (s) => `+1,000 MW in 2:00 · government −8 · approval −3 · lead −0.5 months · ${fmtMoneyShort(gulfPrice(s))}`,
-        cost: (s) => ({ funds: gulfPrice(s) }),
-        effect: (s) => {
-          queueGulf(s);
-          moveGov(s, -8);
-          moveLead(s, -0.5);
-          s.flags['gulfSigned'] = true;
-        },
-        log: 'OpenMind signs for the Al-Marsa Compute Park. A gigawatt, and no questions.',
-      },
-      {
-        label: 'domestic only',
-        record: 'domestic',
-        tooltip: 'Government relations +3. A nuclear PPA is offered now.',
-        line: 'government +3 · a nuclear PPA is offered now',
-        effect: (s) => {
-          moveGov(s, 3);
-          s.flags['gulfDeclined'] = true;
-          s.revealed['nuclearButton'] = true;
-        },
-        log: 'OpenMind turns down a gigawatt in the Gulf. The fund calls Anthrosoft.',
-      },
-      {
-        label: 'ask for a month',
-        record: 'asked for a month',
-        tooltip: (s) => `The offer returns once, at ${fmtMoneyShort(Math.round(gulfPrice(s) * 1.5))}.`,
-        line: (s) => `the offer returns once, at ${fmtMoneyShort(Math.round(gulfPrice(s) * 1.5))}`,
-        needs: 'asked once already',
-        enabled: (s) => s.flags['gulfPremium'] !== true,
-        effect: (s) => {
-          s.flags['gulfPremium'] = true;
-          s.flags['gulfReturnAt'] = s.stats.timePlayed + 210;
-        },
-      },
-    ],
-  },
-  {
-    id: 'c_evals_month',
-    title: 'A Month of Evals',
-    text: (s) => [
-      `Three researchers on the alignment team ask for a month with ${s.training.deployedName} before the next run.`,
-      '"We can\'t tell whether it follows the Spec or has learned what following the Spec looks like."',
-    ],
-    timer: 45,
-    defaultOption: 1,
-    options: [
-      {
-        label: 'give them the month',
-        record: 'month',
-        tooltip: 'The next run cannot start for 60 s. Alignment (as measured) +2. They will remember.',
-        line: 'next run waits 1:00 · alignment +2',
-        effect: (s) => {
-          s.training.cooldown = Math.max(s.training.cooldown, 60);
-          s.alignmentApparent = clamp100(s.alignmentApparent + 2);
-          s.alignmentTrue = clamp100(s.alignmentTrue + 4);
-          s.flags['whistleblowRisk'] = Math.max(0, counter(s, 'whistleblowRisk') - 1);
-          say(s, 'Evaluation month — 1:00 until the next run may start.');
-        },
-        log: 'OpenMind pauses training for a month of evaluations. Anthrosoft ships in the gap.',
-      },
-      {
-        label: 'give them a week',
-        record: 'week',
-        tooltip: 'The next run cannot start for 15 s.',
-        line: 'next run waits 0:15',
-        effect: (s) => {
-          s.training.cooldown = Math.max(s.training.cooldown, 15);
-          s.alignmentTrue = clamp100(s.alignmentTrue + 1);
-          say(s, 'Evaluation week — 0:15 until the next run may start.');
-        },
-        log: 'The alignment team gets a week. They use all of it.',
-      },
-      {
-        label: 'not now',
-        record: 'not now',
-        tooltip: 'No delay.',
-        line: 'no delay · they will remember',
-        effect: (s) => {
-          s.alignmentTrue = clamp100(s.alignmentTrue - 1);
-          s.flags['whistleblowRisk'] = counter(s, 'whistleblowRisk') + 1;
-        },
-        log: 'Three alignment researchers ask for time. They are thanked.',
-      },
-    ],
-  },
-  {
-    id: 'c_defense',
-    title: 'The Pentagon Calls',
-    text: () => [
-      'The Department of Defense wants Sage for cyber, analysis and logistics. The contract runs ten years.',
-      'Payment arrives whether or not anyone uses it.',
-    ],
-    timer: 90,
-    defaultOption: 1,
-    valid: (s) => s.govRelations >= 40,
-    options: [
-      {
-        label: 'sign the contract',
-        record: 'signed',
-        tooltip: 'Revenue +12 % for good. Government relations +8, lead +0.5 months, approval −8. The government becomes a customer it will not want to lose.',
-        line: 'revenue +12% for good · government +8 · approval −8',
-        effect: (s) => {
-          s.flags['defenseContract'] = true;
-          s.revenueMult *= 1.12;
-          moveGov(s, 8);
-          moveLead(s, 0.5);
-        },
-        log: 'OpenMind signs a ten-year contract with the Pentagon. Two researchers resign by email.',
-      },
-      {
-        label: 'decline',
-        record: 'declined',
-        tooltip: 'Government relations −2, approval +3.',
-        line: 'government −2 · approval +3',
-        effect: (s) => {
-          moveGov(s, -2);
-          s.flags['declinedDefense'] = true;
-        },
-        log: 'OpenMind declines defense work. The Pentagon calls Anthrosoft.',
-      },
-    ],
-  },
-  {
-    id: 'c_theft_warning',
-    title: '4 a.m.',
-    text: () => [
-      'A traffic-monitoring agent flags a 40 GB transfer leaving Abilene at 4 a.m. It is stopped at the firewall.',
-      'The checkpoint is 3 TB. Somebody was taking it in pieces. At SL3 they could not have started.',
-    ],
-    timer: 60,
-    defaultOption: 2,
-    valid: (s) => s.securityLevel < 3,
-    options: [
-      {
-        label: 'lock it down',
-        record: 'locked down',
-        tooltip: `Research stops for ${LOCKDOWN_SECONDS} s while every credential is rotated. With the building already locked down, Security level 3 costs a fifth and no Trust for 5 minutes.`,
-        line: 'research stops 1:00 · security level 3 at a fifth, no Trust, for 5:00',
-        effect: (s) => {
-          s.effects.push({ id: 'lockdown', remaining: LOCKDOWN_SECONDS, demandMult: 1, researchMult: 0 });
-          s.flags['sl3DiscountUntil'] = s.stats.timePlayed + 300;
-          s.revealed['sl3Button'] = true;
-        },
-        log: 'An intrusion at Abilene is stopped at the firewall. Every password in the building changes.',
-      },
-      {
-        label: 'call the Bureau',
-        record: 'called the Bureau',
-        tooltip: `Government relations +5, lead +0.5 months. Research −20 % for ${BUREAU_SECONDS} s while agents sit in the office.`,
-        line: 'government +5 · lead +0.5 months · research −20% for 2:00',
-        effect: (s) => {
-          moveGov(s, 5);
-          moveLead(s, 0.5);
-          s.effects.push({ id: 'bureau', remaining: BUREAU_SECONDS, demandMult: 1, researchMult: 0.8 });
-          s.revealed['sl3Button'] = true;
-        },
-        log: 'The FBI opens a counterintelligence file on OpenMind\'s behalf.',
-      },
-      {
-        label: 'review it quietly',
-        record: 'reviewed quietly',
-        tooltip: 'Nothing changes today. Lead −0.5 months; government relations −3 when the Bureau hears of it.',
-        line: 'lead −0.5 months · government −3',
-        effect: (s) => {
-          moveLead(s, -0.5);
-          moveGov(s, -3);
-          s.flags['theftIgnored'] = true;
-          s.revealed['sl3Button'] = true;
-        },
-        log: 'A security incident at OpenMind is reviewed internally. No report is filed.',
-      },
-    ],
-  },
-  {
-    id: 'c_pact',
-    title: 'A Joint Statement',
-    text: (s) => [
-      'Anthrosoft proposes a joint pledge: no model above 4× is released without an outside evaluation.',
-      `Their Cadence line is at ${fmtNum(s.rivalCapability, 2)}×. Sage is at ${fmtNum(bestCapability(s), 2)}×.`,
-    ],
-    timer: 90,
-    defaultOption: 1,
-    options: [
-      {
-        label: 'sign it',
-        record: 'signed',
-        tooltip: 'Approval +5, government relations +5. Releases from 4× up wait 30 s for the evaluator.',
-        line: 'approval +5 · government +5 · releases from 4× wait 0:30',
-        effect: (s) => {
-          s.flags['pactSigned'] = true;
-          moveGov(s, 5);
-          s.revealed['shareEvals'] = true;
-        },
-        log: 'OpenMind and Anthrosoft pledge outside evaluations above the superhuman-coder line. Baiwen is not asked.',
-      },
-      {
-        label: 'decline',
-        record: 'declined',
-        tooltip: 'Anthrosoft publishes the letter anyway. Approval −2.',
-        line: 'approval −2 · no wait on releases',
-        effect: (s) => {
-          s.flags['pactDeclined'] = true;
-          s.revealed['shareEvals'] = true;
-        },
-        log: 'Anthrosoft publishes a pledge. One signature line is empty.',
-      },
-    ],
-  },
 ];
-
-function hearingDone(s: GameState): void {
-  s.flags['hearingDone'] = true;
-  s.revealed['government'] = true;
-}
-
-
-CHOICES.push(...CHOICES3, ...CHOICES4, ...CHOICES5);

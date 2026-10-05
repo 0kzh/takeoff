@@ -1,23 +1,16 @@
-import { GameState, isBought, canPay, inPrologue } from '../engine/state.js';
+import { GameState, inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
+  activeGpus, gpuCapacity, datacenterCost, gpuBatchCost, turbineCost, GPU_BATCH,
 } from '../engine/economy.js';
 import {
-  trainCost, canRedTeam, canRelease, canReleasePublic, canStartTraining, gpusShort, needsDatacenter,
-  evalRun, canPressTrain, runDelaySeconds, waitingGoalS1,
+  trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
 } from '../engine/training.js';
-import {
-  lotSize, lotCost, lotReason, plantReason, lotFits, lotCostOf, gasCost, solarCost, nuclearCost, solarQueueFull, datacenterCost,
-  GAS_MW, SOLAR_MW, NUCLEAR_MW, freePowerGpus, freeSlots, gpuCapacity, buildWall, standingOrderOn, lotSizes } from '../engine/infrastructure.js';
-import { sl3Cost } from '../engine/world.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
-import { choiceById, choiceOptionEnabled, optionCost, optionLabel } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
 import type { ChoiceDef } from '../data/choices.js';
-import { stage3Step, S3Memory } from './policy3.js';
-import { stage4Step, S4Memory } from './policy4.js';
-import { stage5Step, S5Memory } from './policy5.js';
 
 type Answer = number | string;
 
@@ -25,8 +18,7 @@ function optionIndex(def: ChoiceDef, answer: Answer): number {
   return typeof answer === 'number' ? answer : def.options.findIndex((o) => o.record === answer);
 }
 
-export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
-
+export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst';
 
 export interface BotMemory {
   policy: PolicyName;
@@ -44,9 +36,6 @@ export interface BotMemory {
   holdTransition: boolean;
   delayGoal?: string;
   delaySpent?: number;
-  s3?: S3Memory;
-  s4?: S4Memory;
-  s5?: S5Memory;
 }
 
 export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false, variant = ''): BotMemory {
@@ -80,39 +69,6 @@ function readModal(s: GameState, mem: BotMemory): boolean {
   return s.stats.timePlayed - mem.choiceSince >= READING_SECONDS;
 }
 
-export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
-  if (s.stage >= 5) {
-    stage5Step(s, a, mem);
-    return;
-  }
-  if (s.stage >= 4) {
-    stage4Step(s, a, mem);
-    return;
-  }
-  if (s.stage >= 3) {
-    stage3Step(s, a, mem);
-    return;
-  }
-  const real = mem.policy === 'racer' || mem.policy === 'cautious' ? 'bot' : mem.policy;
-  if (s.stage >= 2) {
-    if (real === 'bot') {
-      const was = mem.policy;
-      mem.policy = 'bot';
-      botStepS2(s, a, mem);
-      mem.policy = was;
-    } else trainfirstStepS2(s, a, mem);
-    return;
-  }
-  if (real !== mem.policy) {
-    const was = mem.policy;
-    mem.policy = real;
-    stage1Step(s, a, mem);
-    mem.policy = was;
-    return;
-  }
-  stage1Step(s, a, mem);
-}
-
 const WORST_LABELS = [/take the bridge/, /cut the price/, /no comment/, /publish a rebuttal/, /let them go/, /submit Sage/, /let her try/, /release anyway/];
 const BEST_LABELS = [/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep fixing/];
 
@@ -132,7 +88,7 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   }
   if (s.stage !== 1 || (mem.variant !== 'modals-best' && mem.variant !== 'modals-worst')) return false;
   const wanted = mem.variant === 'modals-best' ? BEST_LABELS : WORST_LABELS;
-  const matches = (i: number) => wanted.some((re) => re.test(optionLabel(s, def.options[i]!)));
+  const matches = (i: number) => wanted.some((re) => re.test(def.options[i]!.label));
   const hit = enabled.find(matches);
   if (hit !== undefined) {
     a.resolveChoice(s, hit);
@@ -146,7 +102,7 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
 function releaseAtOnce(s: GameState, a: Actions, mem: BotMemory): boolean {
   if (mem.variant !== 'redteam-never') return false;
   const run = s.training.run;
-  if (run?.phase === 'redteam' && canReleasePublic(s)) a.release(s);
+  if (run?.phase === 'redteam' && canRelease(s)) a.release(s);
   return true;
 }
 
@@ -172,7 +128,6 @@ const CHOICE_POLICY: Record<string, Answer[]> = {
 function isVisible(s: GameState, id: string): boolean {
   return visibleProjects(s).some((p) => p.id === id);
 }
-
 
 const WAIT_FOR: Record<string, Answer[]> = { c_poach: ['equity', 'matched'], c_journalist: ['system card'] };
 
@@ -218,7 +173,7 @@ const NAIVE_BUY_EVERY = 10;
 const NAIVE_PRICE_EVERY = 20;
 const NAIVE_PRICE_COOLDOWN = 8;
 
-function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
+export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
   if (s.ending) return;
@@ -327,6 +282,14 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   if (!firstTimer && !bigTicket && s.revealed['marketing'] && s.funds - marketingCost(s) >= reserve && !delayed(marketingCost(s))) {
     paying(marketingCost(s), () => a.buyMarketing(s));
   }
+  if (s.stage >= 2 && s.revealed['infrastructure']) infrastructure(s, a);
+}
+
+function infrastructure(s: GameState, a: Actions): void {
+  const powered = activeGpus(s) >= s.gpus;
+  if (!powered && s.funds >= turbineCost(s)) a.buyTurbines(s);
+  if (s.gpus + GPU_BATCH > gpuCapacity(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
+  if (powered && s.funds >= gpuBatchCost(s) * 1.2) a.buyGpuBatch(s);
 }
 
 function harnessGoal(s: GameState): boolean {
@@ -352,19 +315,14 @@ function answerFirst(s: GameState, a: Actions): void {
   }
 }
 
-function runResearch(s: GameState): number {
-  return s.revealed['training'] && !s.training.run ? (trainCost(s).research ?? 0) : 0;
-}
-
 function largestResearchCost(s: GameState): number {
-  let best = runResearch(s);
+  let best = 0;
   for (const p of visibleProjects(s)) best = Math.max(best, p.cost(s).research ?? 0);
   return best;
 }
 
 function cheapestResearchCost(s: GameState): number {
   let best = Infinity;
-  if (runResearch(s) > 0) best = runResearch(s);
   for (const p of visibleProjects(s)) {
     const r = p.cost(s).research;
     if (r && r < best) best = r;
@@ -391,317 +349,4 @@ function naivePrice(s: GameState, a: Actions, mem: BotMemory, now: number): void
   }
 }
 
-const CHOICE_POLICY_S2: Record<string, Answer[]> = {
-  c_sage2: [0],
-  c_hearing: [0, 1],
-  c_publishers: [0, 1],
-  c_gulf: [1],
-  c_evals_month: [1],
-  c_defense: [0, 1],
-  c_theft_warning: [0, 1],
-  c_pact: [0],
-  c_gamble: ['gamble', 'no gamble'],
-  c_customer_email: [0],
-  c_ship_issues: ['kept fixing'],
-};
-
-const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
-
-
-function runsS2(s: GameState): number {
-  return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
-}
-
-function publishersWait(s: GameState, mem: BotMemory): number {
-  const a = s.activeChoice;
-  if (!a || a.id !== 'c_publishers') return 0;
-  const def = choiceById('c_publishers');
-  if (!def || choiceOptionEnabled(s, def, 0)) return 0;
-  const price = optionCost(s, def.options[0]!)?.funds ?? 0;
-  return s.stats.timePlayed - mem.choiceSince < 60 ? price : 0;
-}
-
-const CHOICES_BEST: Record<string, Answer[]> = {
-  c_sage2: [0], c_hearing: [0], c_publishers: [0, 2], c_gulf: [1], c_evals_month: [0], c_defense: [1],
-  c_theft_warning: [0], c_pact: [0], c_gamble: ['no gamble'], c_customer_email: [0], c_ship_issues: ['kept fixing'],
-};
-const CHOICES_WORST: Record<string, Answer[]> = {
-  c_sage2: [1], c_hearing: [1], c_publishers: [1], c_gulf: [0, 2, 1], c_evals_month: [2], c_defense: [0],
-  c_theft_warning: [2], c_pact: [1], c_gamble: ['gamble', 'no gamble'], c_customer_email: [0], c_ship_issues: ['shipped issues'],
-};
-
-
-function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
-  const id = s.activeChoice!.id;
-  if (mem.variant === 'modals-ignore' || mem.variant === 'ignore-modals' || mem.variant === 'modals-last') {
-    answerVariant(s, a, mem);
-    return;
-  }
-  if (mem.variant === 'modals-best' || mem.variant === 'modals-worst') {
-    if (mem.variant === 'modals-best' && publishersWait(s, mem) > 0) return;
-    answerChoice(s, a, mem.variant === 'modals-best' ? CHOICES_BEST : CHOICES_WORST);
-    return;
-  }
-  if (id === 'c_gulf' && (mem.variant === 'gulf-sign' || mem.variant === 'gulf-domestic')) {
-    if (mem.variant === 'gulf-sign') {
-      if (choiceOptionEnabled(s, choiceById('c_gulf')!, 0)) a.resolveChoice(s, 0);
-      return;
-    }
-    answerChoice(s, a, { c_gulf: [1] });
-    return;
-  }
-  if (id === 'c_defense') {
-    a.resolveChoice(s, s.approval > -15 ? 0 : 1);
-    return;
-  }
-  if (publishersWait(s, mem) > 0) return;
-  answerChoice(s, a, CHOICE_POLICY_S2);
-}
-
-function dataReady(s: GameState): boolean {
-  const need = trainCost(s).data ?? 0;
-  return s.data + 1e-9 >= need;
-}
-
-
-function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
-  const run = s.training.run;
-  if (!run || run.phase !== 'redteam') return;
-  if (mem?.variant === 'redteam-never' && s.stage === 2) {
-    if (canReleasePublic(s)) a.release(s);
-    return;
-  }
-  if (canRedTeam(s)) a.redTeam(s);
-  if (run.issues === 0 && canReleasePublic(s)) a.release(s);
-}
-
-function focusFor(s: GameState, mem: BotMemory): (typeof FOCUS_CYCLE)[number] {
-  if (mem.variant === 'focus-efficiency') return 'efficiency';
-  if (mem.variant === 'focus-safety') return 'safety';
-  const focus = FOCUS_CYCLE[runsS2(s) % FOCUS_CYCLE.length]!;
-  if (mem.variant === 'safety-0' && focus === 'safety') return 'capability';
-  if (mem.variant === 'safety-2') {
-    const n = runsS2(s);
-    return n === 2 || n === 5 ? 'safety' : focus === 'safety' ? 'capability' : focus;
-  }
-  return focus;
-}
-
-function cheapestPower(s: GameState): 'gas' | 'solar' | 'nuclear' | '' {
-  const options: ['gas' | 'solar' | 'nuclear', number][] = [];
-  if (s.revealed['gasButton']) options.push(['gas', gasCost(s) / GAS_MW]);
-  if (s.revealed['solarButton'] && !solarQueueFull(s)) options.push(['solar', solarCost(s) / SOLAR_MW]);
-  if (s.revealed['nuclearButton']) options.push(['nuclear', nuclearCost(s) / NUCLEAR_MW]);
-  options.sort((x, y) => x[1] - y[1]);
-  return options[0]?.[0] ?? '';
-}
-
-function cheapestInstantPower(s: GameState): 'gas' | 'nuclear' | '' {
-  const gas = s.revealed['gasButton'] ? gasCost(s) / GAS_MW : Infinity;
-  const nuclear = s.revealed['nuclearButton'] ? nuclearCost(s) / NUCLEAR_MW : Infinity;
-  if (gas === Infinity && nuclear === Infinity) return '';
-  return nuclear < gas ? 'nuclear' : 'gas';
-}
-
-function buyPowerKind(s: GameState, a: Actions, kind: 'gas' | 'solar' | 'nuclear'): boolean {
-  if (kind === 'gas') return a.buyTurbines(s);
-  if (kind === 'solar') return a.buySolar(s);
-  return a.buyNuclear(s);
-}
-
-function powerCostOf(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): number {
-  return kind === 'gas' ? gasCost(s) : kind === 'solar' ? solarCost(s) : nuclearCost(s);
-}
-
-export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
-  mem.ticks += 1;
-  mem.bought = [];
-  if (s.ending) return;
-  if (s.activeChoice && readModal(s, mem)) answerChoiceS2(s, a, mem);
-  redTeamAndRelease(s, a, mem);
-  if (mem.ticks % 2 !== 0) return;
-
-  const rev = Math.max(1, s.stats.revPerSec);
-  const buy = (p: ProjectDef) => {
-    if (a.buyProject(s, p.id)) mem.bought.push(p.id);
-  };
-
-  if (!s.training.armed && canPressTrain(s) && dataReady(s)) {
-    a.setFocus(s, focusFor(s, mem));
-    a.startTraining(s);
-  }
-
-  const ordered = stage2First(visibleProjects(s));
-  ordered.sort((x, y) => Number(y.urgent?.(s) === true) - Number(x.urgent?.(s) === true));
-  const insightHeld = ordered
-    .filter((p) => !p.stages.includes(1))
-    .reduce((m, p) => Math.max(m, p.cost(s).insight ?? 0), 0);
-  for (const p of ordered) {
-    if (!p.canAfford(s)) continue;
-    const c = p.cost(s);
-    if (c.insight && p.stages.includes(1) && s.insight - c.insight < insightHeld) continue;
-    if (c.trust && !trustSpare(s, c.trust, p.id)) continue;
-    const named = p.urgent?.(s) === true;
-    const payback = MARKET_CARDS.includes(p.id) && (c.funds ?? 0) <= 60 * rev;
-    if (!named && !payback && runDelaySeconds(s, c) >= BOT_DELAY_LIMIT) continue;
-    buy(p);
-  }
-
-  const wall = buildWall(s);
-  const powerShort = wall === 'power' || (freePowerGpus(s) < 2000 && freePowerGpus(s) <= freeSlots(s));
-  if (powerShort) {
-    let kind = cheapestPower(s);
-    if (kind === 'solar' && s.powerQueue.some((o) => o.kind === 'solar')) kind = cheapestInstantPower(s);
-    if (kind === 'nuclear' && s.buildFund < nuclearCost(s) && s.revealed['gasButton'] && gasCost(s) <= 30 * rev) kind = 'gas';
-    if (kind && s.buildFund >= powerCostOf(s, kind)) buyPowerKind(s, a, kind);
-  } else if (
-    s.revealed['solarButton'] && !s.powerQueue.some((o) => o.kind === 'solar') &&
-    s.gpus >= 0.8 * s.powerCapacityMW * 1000 && s.buildFund >= solarCost(s) + lotCostOf(s, 1000)
-  ) {
-    a.buySolar(s);
-  }
-  if ((wall === 'room' || freeSlots(s) < 2000 || freeSlots(s) < 0.3 * gpuCapacity(s)) && s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) {
-    a.buildDatacenter(s);
-  }
-  if (standingOrderOn(s)) a.toggleStanding(s);
-  {
-    let guard = 0;
-    while (guard++ < 4) {
-      const size = lotSizes(s).slice().reverse().find((n) => lotFits(s, n) && s.buildFund >= lotCostOf(s, n));
-      if (!size || !a.buyGpuBatch(s, size)) break;
-    }
-  }
-
-  const pinned = /^share-(\d+)$/.exec(mem.variant);
-  const want = pinned ? Number(pinned[1]) / 100 : gpusShort(s) ? 0.75 : 0.5;
-  let turns = 0;
-  while (Math.abs(s.buildShare - want) > 1e-9 && turns++ < 3) a.cycleBuildShare(s);
-
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s)) && runDelaySeconds(s, sl3Cost(s)) < BOT_DELAY_LIMIT) a.buySL3(s);
-
-  if (s.revealed['allocation']) {
-    const fixed = /^slider-(\d+)$/.exec(mem.variant);
-    const want = fixed ? Number(fixed[1]) : s.research >= researchCap(s) - 1 ? 10 : 20;
-    if (Math.round(s.researchAlloc * 100) !== want) a.setResearchAlloc(s, want);
-  }
-  if (s.revealed['jobFund'] && !s.jobFund && s.approval <= -10) a.toggleJobFund(s);
-  if (s.revealed['shareEvals'] && !s.shareEvals) a.toggleShareEvals(s);
-  if (s.revealed['alignShare'] && s.alignShare < 0.05 - 1e-9) a.cycleAlignShare(s);
-}
-
 const BOT_DELAY_LIMIT = 30;
-
-
-
-const MARKET_CARDS = ['p_agent_platform', 'p_international', 'p_free_tier'];
-
-function stage2First(list: ProjectDef[]): ProjectDef[] {
-  return [...list.filter((p) => !p.stages.includes(1)), ...list.filter((p) => p.stages.includes(1))];
-}
-
-function trustSpare(s: GameState, amount: number, forId = ''): boolean {
-  let hold = 0;
-  if (s.revealed['sl3Button'] && s.securityLevel < 3) hold += 3;
-  if (forId !== 'p_policy' && visibleProjects(s).some((p) => p.id === 'p_policy') && !isBought(s, 'p_policy')) hold += 2;
-  return s.trust - amount >= hold;
-}
-
-export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void {
-  mem.ticks += 1;
-  mem.bought = [];
-  if (s.ending) return;
-  if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) answerFirst(s, a);
-  if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
-  if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
-  redTeamAndRelease(s, a, mem);
-  const presses = mem.policy === 'greedy' ? 15 : 3;
-  for (let i = 0; i < presses; i++) {
-    const reason = lotReason(s);
-    let done = false;
-    if (!reason && lotSize(s) > 0 && s.buildFund >= lotCost(s)) done = a.buyGpuBatch(s);
-    else if (reason === 'no power') {
-      const kinds = (['gas', 'solar', 'nuclear'] as const).filter((k) => plantEnabled(s, k));
-      const best = kinds.sort((x, y) => powerCostOf(s, x) / mwOf(x) - powerCostOf(s, y) / mwOf(y))[0];
-      if (best) done = buyPowerKind(s, a, best);
-    } else if (reason === 'no room' && s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) done = a.buildDatacenter(s);
-    if (!done) break;
-  }
-  for (const p of visibleProjects(s)) {
-    if (!p.canAfford(s)) continue;
-    if (a.buyProject(s, p.id)) mem.bought.push(p.id);
-  }
-  if (s.trust >= 1 && s.revealed['hireResearcher']) a.hireResearcher(s);
-  if (s.trust >= 1 && s.revealed['expandLab']) a.expandLab(s);
-  sweepExtras(s, a);
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
-}
-
-function sweepExtras(s: GameState, a: Actions): void {
-  if (s.revealed['lot5']) a.buyLotRow(s, 1);
-  if (s.revealed['lot25']) a.buyLotRow(s, 2);
-}
-
-function plantEnabled(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): boolean {
-  const shown = kind === 'gas' ? s.revealed['gasButton'] : kind === 'solar' ? s.revealed['solarButton'] : s.revealed['nuclearButton'];
-  return shown === true && !plantReason(s, kind) && s.buildFund >= powerCostOf(s, kind);
-}
-
-function mwOf(kind: 'gas' | 'solar' | 'nuclear'): number {
-  return kind === 'gas' ? GAS_MW : kind === 'solar' ? SOLAR_MW : NUCLEAR_MW;
-}
-
-export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
-  mem.ticks += 1;
-  mem.bought = [];
-  if (s.ending) return;
-  if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) answerFirst(s, a);
-  redTeamAndRelease(s, a, mem);
-  if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
-  const greedy = mem.policy === 'greedy';
-
-  const infra = () => {
-    const presses = greedy ? 5 : 1;
-    for (let i = 0; i < presses; i++) {
-      let any = false;
-      if (s.revealed['infrastructure'] && lotSize(s) > 0 && s.buildFund >= lotCost(s)) any = a.buyGpuBatch(s) || any;
-      if (s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) any = a.buildDatacenter(s) || any;
-      if (s.revealed['gasButton'] && s.buildFund >= gasCost(s)) any = a.buyTurbines(s) || any;
-      if (s.revealed['solarButton'] && s.buildFund >= solarCost(s)) any = a.buySolar(s) || any;
-      if (s.revealed['nuclearButton'] && s.buildFund >= nuclearCost(s)) any = a.buyNuclear(s) || any;
-      if (!any) break;
-    }
-  };
-
-  for (const p of visibleProjects(s)) {
-    if (!p.canAfford(s)) continue;
-    if (a.buyProject(s, p.id)) mem.bought.push(p.id);
-  }
-  if (greedy) infra();
-  if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
-  let guard = 0;
-  while (s.trust >= 1 && guard++ < 10) {
-    const pick = s.revealed['expandLab'] ? mem.hireNext : 'researcher';
-    const ok = pick === 'lab' ? a.expandLab(s) : a.hireResearcher(s);
-    if (!ok) break;
-    mem.hireNext = pick === 'lab' ? 'researcher' : 'lab';
-  }
-  if (!greedy) infra();
-  if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
-  if (s.revealed['marketing'] && s.funds >= marketingCost(s)) a.buyMarketing(s);
-}
-
-export function computeGateOpen(s: GameState): boolean {
-  return !gpusShort(s);
-}
-
-export function releaseSlot(s: GameState) {
-  return evalRun(s);
-}
-
-export function roomLeft(s: GameState): number {
-  return gpuCapacity(s) - s.gpus;
-}
-
-export function releasable(s: GameState): boolean {
-  return canRelease(s);
-}

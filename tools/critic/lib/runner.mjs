@@ -31,9 +31,8 @@ export function loadFixture(adapter, { stage, fixture }) {
 }
 
 /**
- * opts: { game, prefix, gameDir, realtime, accelMinutes, autoplay, stage, seed, fixture, preset,
+ * opts: { game, prefix, gameDir, realtime, accelMinutes, autoplay, stage, seed, fixture,
  *         postStage, quiet, onSnapshot(ctx), onStageEnd({ t, session }), adapter, viewport }
- * preset: a named start passed to the adapter's boot (Takeoff: __game.loadPreset(NAME), e.g. '3c').
  * Returns { prefix, meta, rec }.
  */
 export async function runGame(opts) {
@@ -52,7 +51,7 @@ export async function runGame(opts) {
   if (path.resolve(gameDir) === REPO_ROOT) log('warning: measuring the repo root (it may be mid-rebuild)');
 
   const wallStart = performance.now();
-  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture, preset: opts.preset, viewport: opts.viewport });
+  const session = await openSession({ adapter, gameDir, seed, stage: stageReq, fixture, viewport: opts.viewport });
   const startStage = session.bootInfo.stage ?? stageReq;
   const rec = new Recorder();
   const policy = opts.autoplay ? null : new Policy(adapter, session, rec, { startStage });
@@ -195,7 +194,6 @@ export async function runGame(opts) {
     stageStart: startStage,
     stageRequested: stageReq,
     fixture: fixture ? fixture.name : null,
-    preset: opts.preset ?? null,
     realtime,
     accelMinutes: Number(opts.accelMinutes ?? 0),
     autoplay: !!opts.autoplay,

@@ -24,6 +24,11 @@ export function showId(id: string, on: boolean): void {
   setShown(byId(id), on);
 }
 
+export function setOff(id: string, off: boolean): void {
+  const el = byId(id);
+  if (el.classList.contains('off') !== off) el.classList.toggle('off', off);
+}
+
 export function setTitle(id: string, title: string): void {
   const el = byId(id);
   if (el.title !== title) el.title = title;

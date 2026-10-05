@@ -151,7 +151,7 @@ const SNAPSHOT = () => {
       const b = document.getElementById('btn-train');
       if (!vis(b)) return null;
       // One line a price, named by its unit (`$75`, `100 kWh`, `10 GPUs`); what the lab holds is in the hover.
-      const prices = ['funds', 'research', 'data', 'power', 'gpus']
+      const prices = ['funds', 'power', 'gpus']
         .filter((k) => vis(document.getElementById(`costRow-${k}`)))
         .map((k) => ({ key: k, text: document.getElementById(`costText-${k}`).innerText.trim(), fill: document.getElementById(`costBar-${k}`).getBoundingClientRect().width / document.getElementById(`costBar-${k}`).parentElement.clientWidth }));
       const funds = prices.find((p) => p.key === 'funds');
@@ -227,7 +227,7 @@ try {
       const want = look(run.parentElement, run);
       const fillOf = (bar, cls) => bar.querySelector(`.${cls}`) ?? bar.appendChild(Object.assign(document.createElement('span'), { className: cls, probe: true }));
       const off = [];
-      // The Train row's price bars took the place of its GPU meter: five of them, one a price.
+      // The Train row's price bars took the place of its GPU meter: four of them, one a price.
       const all = [...document.querySelectorAll('.benchBar, .meter, .costRow .progress')];
       for (const bar of all) {
         const fill = fillOf(bar, bar.classList.contains('meter') ? 'meterFill' : bar.classList.contains('progress') ? 'progressFill' : 'benchFill');
@@ -249,7 +249,7 @@ try {
       probe.remove();
       return { want, count: all.length, off, widths };
     });
-    check('every meter, eval bar and price bar is the training bar (border, track, height, fill)', bars.count >= 21 && bars.off.length === 0,
+    check('every meter, eval bar and price bar is the training bar (border, track, height, fill)', bars.count >= 13 && bars.off.length === 0,
       bars.off.length ? bars.off.join(' | ') : `${bars.count} bars: ${bars.want}`);
     const spread = Math.max(...bars.widths) - Math.min(...bars.widths);
     check('the meter is one width at every fill (0–100 %)', spread <= 1 && bars.widths[0] > 0, `${bars.widths.map((w) => w.toFixed(1)).join(' / ')} px`);
@@ -485,16 +485,11 @@ try {
       arrival = await page.evaluate(() => {
         const s = window.__game.state;
         const vis = (id) => document.getElementById(id).checkVisibility();
-        const infraEnabled = ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter((id) => vis(id) && !document.getElementById(id).disabled);
-        // The wallet rule (arc G34): a lot is lit, or grey beside the build fund's row in Stores (the
-        // row itself says nothing when it is only short of money: owner feedback 2).
-        const lotReason = document.getElementById('gpuReason').innerText;
-        const lotGrey = vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund');
-        const cap = s.labSpace * 1000 * s.labMult;
-        const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
-        const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
-        const need = Math.round(raw / unit) * unit;
-        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, lotReason, lotGrey, buildFund: Math.round(s.buildFund), trust: s.trust, cap, need };
+        return {
+          stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'),
+          panel: document.getElementById('panel-infrastructure').innerText.replace(/\s+/g, ' ').trim(),
+          buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter(vis),
+        };
       });
       transitionAt = arrival.t;
       for (const id of await page.evaluate(() => [...document.querySelectorAll('[id]')].filter((el) => !el.closest('#dev') && el.checkVisibility()).map((el) => el.id))) {
@@ -679,22 +674,22 @@ try {
     const kept = narration.consoleBefore.filter((l) => f0.includes(l)).length;
     check('transition keeps earlier console lines (no wipe)', f0.length >= 4 && kept >= 3, `${kept} earlier lines kept; first frame ${f0.length} lines`);
     check('"First Datacenter online outside Abilene." is on screen', narration.frames.some((f) => f.some((l) => l.startsWith('First Datacenter online outside Abilene.'))));
-    const all = narration.frames.flat();
-    const lost = all.find((l) => /rented GPUs go back/.test(l));
-    const replaced = all.find((l) => /[Pp]ower is bought in megawatts now/.test(l));
-    const means = all.find((l) => /Tasks per second ×/.test(l));
-    const firstIdx = (re) => narration.frames.findIndex((f) => f.some((l) => re.test(l)));
-    const i1 = firstIdx(/rented GPUs go back/);
-    const i2 = firstIdx(/[Pp]ower is bought in megawatts now/);
-    const i3 = firstIdx(/Tasks per second ×/);
-    check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
     check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
-    // The build fund starts empty (the rented fleet's worth came off First Datacenter's price): a first
-    // lot is lit, or it is grey beside the build fund's row in Stores.
-    check('Stage 2 arrival: an Infrastructure button is affordable, or the lot is grey beside the build fund in Stores',
-      arrival.infraEnabled.length >= 1 || (arrival.lotGrey && arrival.lotReason === ''),
-      arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}; lot row grey, reason "${arrival.lotReason}"`);
-    check('Stage 2 arrival: Trust ≥ 2 and research cap ≥ next run', arrival.trust >= 2 && arrival.cap >= arrival.need, `Trust ${arrival.trust}, cap ${arrival.cap} vs ${arrival.need}`);
+    // The Stage 2 skeleton: one working panel (fc7bc56's seed) and nothing else new.
+    check('Stage 2 arrival: the seed panel reads Datacenters 1, GPUs 1,000 / 10,000, Power 1.0 / 5 MW, with its three buttons',
+      /^Infrastructure Datacenters: 1 Build Datacenter Cost: \$[\d,]+ GPUs: 1,000 \/ 10,000 Buy GPUs \(1,000\) Cost: \$[\d,]+ Power: 1\.0 \/ 5 MW Gas turbines \(\+100 MW\) Cost: \$[\d,]+ Powered GPUs: 1,000 Copies running: [\d,]+ Tasks per sec: [\d,]+$/.test(arrival.panel) && arrival.buttons.length === 3,
+      arrival.panel);
+    const seed = await page.evaluate(() => {
+      const s = window.__game.state;
+      s.funds = 1e7;
+      window.__game.render();
+      const before = { gpus: s.gpus, mw: s.powerCapacityMW, datacenters: s.datacenters };
+      for (const id of ['btn-gpuBatch', 'btn-turbines', 'btn-datacenter']) document.getElementById(id).click();
+      return { before, after: { gpus: s.gpus, mw: s.powerCapacityMW, datacenters: s.datacenters } };
+    });
+    check('Stage 2 seed: Buy GPUs, Gas turbines and Build Datacenter each work once funded',
+      seed.after.gpus === seed.before.gpus + 1000 && seed.after.mw === seed.before.mw + 100 && seed.after.datacenters === seed.before.datacenters + 1,
+      `${JSON.stringify(seed.before)} → ${JSON.stringify(seed.after)}`);
     console.log(`      console during the narration: ${JSON.stringify(narration.frames[13])}`);
   } else {
     check('transition narration observed', false, 'no transition');
@@ -733,19 +728,13 @@ try {
       window.__game.tick(8000);
       const s = window.__game.state;
       const vis = (id) => document.getElementById(id).checkVisibility();
-      const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
-      const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
       return {
-        stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
-        need: Math.round(raw / unit) * unit, infra: vis('panel-infrastructure'),
-        compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
-        lotGrey: vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund'),
+        stage: s.stage, gpus: s.gpus, datacenters: s.datacenters, infra: vis('panel-infrastructure'), compute: vis('panel-compute'),
+        buttons: ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter(vis).length,
       };
     });
     await shot(p3, '12-stage2-preset');
-    // As at the arrival above: a lot lit, or grey beside the build fund's row in Stores (arc G34).
-    const presetLot = pre.batch || pre.lotGrey;
-    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && presetLot, JSON.stringify(pre));
+    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.datacenters === 1 && pre.buttons === 3, JSON.stringify(pre));
     await c3.close();
   }
 

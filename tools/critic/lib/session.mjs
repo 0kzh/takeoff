@@ -176,6 +176,6 @@ export async function openSession(opts) {
     },
   };
   await session.goto();
-  session.bootInfo = (await adapter.boot(session, { seed, stage: Number(opts.stage ?? 1), fixture: opts.fixture, preset: opts.preset })) ?? {};
+  session.bootInfo = (await adapter.boot(session, { seed, stage: Number(opts.stage ?? 1), fixture: opts.fixture })) ?? {};
   return session;
 }

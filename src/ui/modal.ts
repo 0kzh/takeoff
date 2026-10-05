@@ -1,5 +1,5 @@
 import type { GameState } from '../engine/state.js';
-import { choiceById, choiceOptionEnabled, choiceOptionVisible, optionCost, optionTooltip, optionLine, optionNeeds, optionLabel, defaultIndex } from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, optionCost, optionTooltip, optionLine, optionNeeds, defaultIndex } from '../engine/events.js';
 import { costLabel } from '../engine/projects.js';
 import { byId, make, setShown, setText } from './dom.js';
 
@@ -38,9 +38,9 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
         const tip = [optionTooltip(s, opt), cost && !optionTooltip(s, opt).startsWith('$') ? `Costs ${costLabel(cost)}.` : ''].filter(Boolean).join(' ');
         const b = make('button', { class: lines ? 'modalButton twoLine' : 'modalButton', id: `choice-${def.id}-${i}`, 'data-option': String(i) });
         if (lines) {
-          b.append(make('span', { class: 'optLabel' }, optionLabel(s, opt)), make('span', { class: 'optLine' }, optionLine(s, opt)));
+          b.append(make('span', { class: 'optLabel' }, opt.label), make('span', { class: 'optLine' }, optionLine(s, opt)));
         } else {
-          b.textContent = optionLabel(s, opt);
+          b.textContent = opt.label;
         }
         if (tip) b.title = tip;
         b.addEventListener('click', () => choose(i));
@@ -52,8 +52,6 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
   def.options.forEach((opt, i) => {
     const b = document.getElementById(`choice-${def.id}-${i}`) as HTMLButtonElement | null;
     if (!b) return;
-    const hidden = !choiceOptionVisible(s, def, i);
-    if (b.classList.contains('off') !== hidden) b.classList.toggle('off', hidden);
     const disabled = !choiceOptionEnabled(s, def, i);
     if (b.disabled !== disabled) b.disabled = disabled;
     if (lines) {
@@ -62,8 +60,8 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
       if (line && line.textContent !== want) line.textContent = want;
     }
   });
-  const fallback = def.options[defaultIndex(s, def)];
-  setText('modalTimer', def.timer && fallback ? `${Math.ceil(active.remaining)} s — then: ${optionLabel(s, fallback)}` : '');
+  const fallback = def.options[defaultIndex(def)];
+  setText('modalTimer', def.timer && fallback ? `${Math.ceil(active.remaining)} s — then: ${fallback.label}` : '');
 }
 
 function takeFocus(): void {

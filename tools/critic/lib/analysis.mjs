@@ -133,7 +133,7 @@ function loadAt(s) {
   return { t: s.t, numbers: s.numbers, interactive, panels: s.panels.length, words: s.words ?? null, total: s.numbers + interactive + s.panels.length };
 }
 
-// ---- hands (the Stage 2 critics' measures; tools/critic/explore-s2r2.mjs handsOf, same definitions) ----
+// ---- hands (the Stage 2 critics' measures) ----
 /** Bulk sizes of one item count once (Takeoff's three lot rows; Paperclips' ×10/×100/×1000 buttons). */
 export function handsKey(b) {
   if (/^btn-gpuBatch/.test(b.k)) return 'GPU lot';

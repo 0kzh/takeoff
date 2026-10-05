@@ -101,7 +101,6 @@ const READ = () => {
       nextTrust: txt('nextTrust'),
       focusNote: txt('focusNote'),
       rival: txt('rivalLine'),
-      releaseNote: txt('releaseNote'),
       contractRate: txt('contractRate'),
       revPerSec: txt('revPerSec'),
       unbilled: txt('unbilledLine'),
@@ -125,7 +124,6 @@ const READ = () => {
     st: s
       ? {
           contracts: bought('p_contract'),
-          contractIncome: s.contractIncome,
           dynPricing: s.autoPrice ? 1 : 0,
           capability: s.capability,
           rival: s.rivalCapability,
@@ -530,7 +528,6 @@ async function runVariant(name, flags, seed) {
     rescues: m.idleRescues,
     projects: m.projectsBought,
     contracts: m.contracts,
-    contractIncome: m.contractIncome,
     powerPresses: rec.actions.filter((a) => inStage(a) && a.key === 'btn-buyPower').length,
     priceMoves: rec.actions.filter((a) => inStage(a) && /^price-/.test(a.why)).length,
     gpuRents: count(/^Rent GPU/),
