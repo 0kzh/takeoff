@@ -31,12 +31,11 @@ div[data-reveal].shown, .panel.shown { display: block; }
 #hypeLine.shown { display: inline; }
 #buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart, #gasMW, #solarMW, #nuclearMW { display: none; }
 #buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown, #gasMW.shown, #solarMW.shown, #nuclearMW.shown { display: inline; }
-/* A bar keeps its box when it is shown (as an inline it collapsed to an empty frame). */
 #trainCosts { margin-top: 4px; }
-/* The prices sit under their heading, smaller; each is named by its unit. */
-.costRow { display: none; align-items: center; gap: 8px; font-size: 13px; }
+/* A bar keeps its box when it is shown (as an inline it collapsed to an empty frame). */
+.costRow { display: none; align-items: center; gap: 8px; }
 .costRow.shown { display: flex; }
-.costRow .progress { width: 140px; flex: none; margin: 2px 0; height: 10px; }
+.costRow .progress { width: 140px; flex: none; margin: 2px 0; }
 .costText { white-space: nowrap; }
 /* The first render after a load restores the screen; only later reveals fade in. */
 body.boot * { animation: none !important; }
