@@ -226,12 +226,17 @@ export function datacenterPrice(s: GameState): number {
   return threeSig(base * (isBought(s, 'p_abatement') ? 5 / 6 : 1));
 }
 
-/** What the rented fleet's deposit returns at the transition: $400 a GPU, at least a first 100-GPU lot. */
+/** What the rented fleet is worth against the datacenter: $400 a GPU, at least $12,000. */
 export function rentDeposit(s: GameState): number {
   return Math.max(DEPOSIT_MIN, DEPOSIT_PER_GPU * s.gpus);
 }
 export const DEPOSIT_PER_GPU = 400;
 export const DEPOSIT_MIN = 12000;
+
+/** What First Datacenter asks for, the one figure on its card: its price less the rented fleet's worth. */
+export function datacenterDue(s: GameState): number {
+  return Math.max(0, datacenterPrice(s) - rentDeposit(s));
+}
 
 /** Slow tick, Stage 1: the best revenue so far (the datacenter's price), and when the wall came. */
 export function datacenterAtWall(s: GameState): void {
@@ -275,7 +280,7 @@ export interface DatacenterStatus {
 const STEP_S1 = { capability: 0.12, efficiency: 0.05, safety: 0.05 };
 
 export function datacenterStatus(s: GameState): DatacenterStatus {
-  const price = datacenterPrice(s);
+  const price = datacenterDue(s);
   const rev = Math.max(0, s.stats.revPerSec);
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
   const after = startCapability(s) * (1 + STEP_S1[s.training.focus]);
@@ -611,9 +616,8 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_datacenter',
     title: 'First Datacenter',
-    cost: (s) => ({ funds: datacenterPrice(s) }),
-    // The price and what comes back for the rented fleet, both on the card (critic round 3 §6.4).
-    priceTag: (s) => `(${fmtMoneyShort(datacenterPrice(s))}; the rented GPUs return ${fmtMoneyShort(rentDeposit(s))})`,
+    // One figure on the card: the price with the rented fleet's worth already taken off.
+    cost: (s) => ({ funds: datacenterDue(s) }),
     description: '1,000 GPUs of our own at Abilene. Stop renting.',
     // Greyed once the next model needs 45 GPUs or more, or at the third release (three Capability runs
     // land at 1.33–1.48×, 35–60 GPUs), or from mid-October for a lab that trains slowly: about minute

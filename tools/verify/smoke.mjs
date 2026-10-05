@@ -572,7 +572,7 @@ try {
   // Owner feedback 2: the core screen reads as it did at a2117b5.
   check('no purchase prints a delay beside it (no `· Sage-1.x 0:41 later` anywhere)', !r3.delay,
     r3.delay ? `${clock(r3.delay.t)} ${r3.delay.text}` : '');
-  const plainCard = (d) => /^First Datacenter \(\$[\d,]+(; the rented GPUs return \$[\d,]+)?\)\s+1,000 GPUs of our own at Abilene\. Stop renting\.$/.test(d.text) && d.meters === 0;
+  const plainCard = (d) => /^First Datacenter \(\$[\d,]+\)\s+1,000 GPUs of our own at Abilene\. Stop renting\.$/.test(d.text) && d.meters === 0;
   const dcb = r3.dcBefore;
   check('First Datacenter is a plain card before the wall: its title and price, its sentence, nothing else',
     !!dcb && plainCard(dcb), dcb ? `${clock(dcb.t)} ${dcb.text.replace(/\s+/g, ' ')}` : 'card never seen before the wall');
@@ -653,9 +653,8 @@ try {
     const i3 = firstIdx(/Tasks per second ×/);
     check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
     check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
-    // Under the wallet rule the deposit starts the build fund; a first lot is lit, or it is grey beside
-    // the build fund's row in Stores (the build before round 3 already arrived with $48,000–$56,000
-    // against a $120,000 lot: a Stage 2 matter, reported, not changed here).
+    // The build fund starts empty (the rented fleet's worth came off First Datacenter's price): a first
+    // lot is lit, or it is grey beside the build fund's row in Stores.
     check('Stage 2 arrival: an Infrastructure button is affordable, or the lot is grey beside the build fund in Stores',
       arrival.infraEnabled.length >= 1 || (arrival.lotGrey && arrival.lotReason === ''),
       arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}; lot row grey, reason "${arrival.lotReason}"`);

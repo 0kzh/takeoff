@@ -56,7 +56,7 @@ const STAGE1_CHOICES: ChoiceRecord[] = [
  * (`npm run sim`, bot policy; seed 2 at 20:31), rebuilt after the wallet rule and Stage 1's round 3 (a run costs money
  * and GPUs, five rented runs, the wall at 1.68×). Every field the run had changed from a new game, its
  * flags included, so the preset is that run's real state. `enterStage(2)` then plays the real arrival:
- * the rented GPUs go back for a deposit into the build fund, 1,000 owned GPUs, lab room, the contracts'
+ * the rented GPUs go back, 1,000 owned GPUs, lab room, the contracts'
  * share of sales frozen as their rate, the arrival scale from the income it brings.
  */
 function stage1End(seed: number): GameState {

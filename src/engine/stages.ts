@@ -57,7 +57,7 @@ function retireProjects(s: GameState, next: number, quiet: string[]): string[] {
 
 /**
  * Stage 1 → 2 (stage2.md §1.1–1.2; the narration contract is arc.md §7). The rented fleet goes
- * back for a deposit that pays for the first lot; 1,000 owned GPUs run from the first second on
+ * back, its worth already off the card's price; 1,000 owned GPUs run from the first second on
  * 5 MW; the market is calibrated once and priced on AUTO; signed contracts keep paying a fixed
  * rate. Pre-flight leaves no wall behind: Trust +2, and room in the lab for the next run.
  */
@@ -137,11 +137,10 @@ function enterScale(s: GameState): void {
   const researchGift = Math.max(0, Math.round(0.75 * firstRun - s.research));
   s.research += researchGift;
 
-  // The deposit is what the card said: $400 a rented GPU (critic round 3 §6.4). It starts the build
-  // fund (arc G34): lots, plants and halls have a purse of their own from the first second.
+  // The rented fleet's worth came off the card's price, so nothing is paid out here; the build fund
+  // (arc G34) fills from its share of income.
   const rented = s.gpus;
   const deposit = rentDeposit(s);
-  s.buildFund = Math.round((s.buildFund + deposit) * 100) / 100;
   s.buildShare = DEFAULT_BUILD_SHARE;
   // Hire and Expand Lab leave (stage2-round2-fixes.md item 5): the copies do the research and cards
   // size the lab; Trust buys only what names it.
@@ -160,7 +159,7 @@ function enterScale(s: GameState): void {
   // Five lines, the console's height; they stay whole for 10 s before routine lines follow.
   const lines: [number, string][] = [
     [0.1, 'First Datacenter online outside Abilene.'],
-    [2, `The ${fmtInt(rented)} rented GPUs go back. The deposit, ${fmtMoneyShort(deposit)}, starts the build fund.`],
+    [2, `The ${fmtInt(rented)} rented GPUs go back. Their ${fmtMoneyShort(deposit)} came off the price.`],
     [2, `1,000 Nimbus G4s on ${SUBSTATION_MW} MW. Each MW powers 1,000 GPUs; power is bought in megawatts now.`],
     [2, `Tasks per second ×${jump}: the copies run on hardware OpenMind owns.`],
     [2, 'Half of income builds from here; the rest pays for runs and cards. Prices set themselves.'],
