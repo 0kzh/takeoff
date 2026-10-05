@@ -166,7 +166,7 @@ border), `priceTag`, `canAfford`, `expires` (the offer lapses and leaves the scr
 fixed when the card first shows; research never above 85 % of the lab; in Stage 2, seconds of what
 fills funds, the revenue less the default build share). A triggered project joins
 the reveal queue (`engine/reveal.ts`) and appears in table order: Stage 1 every 30 s (the first lab's
-cards, Better Prompting, Grid Contract and Blue-sky Research, come first by their triggers), at most four on screen (after 140 s with nothing new
+cards, Better Prompting and Blue-sky Research, come first by their triggers; the Grid Contract comes at the tenth Buy Power press), at most four on screen (after 140 s with nothing new
 one more may come out); an empty panel gets its next card 10 s after its last one was bought, and is
 not drawn without a card; a card already paid for when it would come out waits up to 60 s for a
 purchase to take the balance below it; Stage 2 every 15 s, at most six on screen with everything counted but rescues (after

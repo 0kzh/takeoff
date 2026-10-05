@@ -8,6 +8,7 @@ import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
 import { noveltyKeys, isRescueKey, PLAYER_MODALS, enabledPurchases, choiceById, optionCost } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
+import { GRID_CONTRACT_PRESSES } from '../data/projects.js';
 import {
   researchCap, copies, copiesIdle, researchRate, humanShare, bestCapability, marketingCost, contractRate,
   powerBlockCost, gpuCost, rentQuota, atRentQuota,
@@ -1324,7 +1325,7 @@ function main(): void {
     console.log(`first GPU                ${fmt('firstGpu')}   (target ≤ 0:20)`);
     console.log(`Research panel           ${fmt('reveal:research')}`);
     console.log(`Projects panel           ${fmt('reveal:projects')}`);
-    console.log(`Grid Contract bought     ${fmt('buy:p_grid')}   (target ≤ 6:00)`);
+    console.log(`Grid Contract bought     ${fmt('buy:p_grid')}   (target bot 9:00–13:00; after ${GRID_CONTRACT_PRESSES} Buy Power presses)`);
     console.log(`Sage-1 train / deploy   ${fmt('prologueStart')} / ${fmt('sageLive')}`);
     console.log(`first training start     ${fmt('firstTrainingStart')}`);
     console.log(`first release            ${fmt('firstRelease')}`);
@@ -1336,7 +1337,7 @@ function main(): void {
     console.log(`LONGEST REVEAL GAP       ${sum.longestRevealGap} s (${span(sum.longestRevealGapAt)})   (target ≤ 180 s)`);
     console.log(`reveal gaps > 120 s      ${sum.revealGapsOver120.length ? sum.revealGapsOver120.map(span).join(', ') : 'none'}`);
     console.log(`LONGEST NOVELTY GAP      ${sum.longestNoveltyGap} s (${span(sum.longestNoveltyGapAt)})`);
-    console.log(`Buy Power presses        ${sum.powerPresses} (worst 5-min window ${sum.worstPressWindow})   (target ≤ 60, ≤ 10)`);
+    console.log(`Buy Power presses        ${sum.powerPresses} (worst 5-min window ${sum.worstPressWindow})   (target ${GRID_CONTRACT_PRESSES}–60, ≤ 15)`);
     console.log(`idle rescues             ${sum.idleRescues} (at 0 tasks: ${sum.rescuesAtZeroTasks})   (target ≤ 2, none at 0)`);
     console.log(`soft-locks               ${sum.softLocks.length ? sum.softLocks.map(span).join(', ') : 'none'}`);
     console.log(`training runs            ${sum.runs}; GPUs needed ${sum.runGpus.join(' / ')}`);

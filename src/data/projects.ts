@@ -298,6 +298,9 @@ export function datacenterStatus(s: GameState): DatacenterStatus {
  */
 export const SERIES_A = 5000;
 
+/** Buy Power presses that bring the Grid Contract card. */
+export const GRID_CONTRACT_PRESSES = 10;
+
 /** What turning the bridge round down adds to the Series A. */
 export function seriesABonus(s: GameState): number {
   return typeof s.flags['seriesABonus'] === 'number' ? (s.flags['seriesABonus'] as number) : 0;
@@ -391,15 +394,17 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Prompt templates rewritten. Copies 25% faster.',
     stages: [1, 2],
   }),
-  // The first lab's cards, in this order (stage1-round3-fixes.md §3): Better Prompting, Grid Contract,
-  // Blue-sky Research. The Training panel comes with the first GPU (docs/specs/early-train.md).
+  // The first lab's cards (stage1-round3-fixes.md §3): Better Prompting, then Blue-sky Research. The
+  // Training panel comes with the first GPU (docs/specs/early-train.md).
   project({
     id: 'p_grid',
     title: 'Grid Contract',
-    // Inside the first lab's reach (critic round 3 §10.1: at 2,000 it left power a chore to 6:30).
-    cost: { research: 1000 },
+    // Earned by keeping the power on by hand (UP's WireBuyer, after 15 spools): owner feedback, at the
+    // first Buy Power it came after two presses and power was never managed. Ten presses is about
+    // 11:00 for a careful player, sooner for one buying small blocks often.
+    cost: { research: 2000 },
     description: 'Power is bought when it runs low.',
-    trigger: (s) => s.powerBought >= 1 || s.gpus >= 12,
+    trigger: (s) => s.powerBought >= GRID_CONTRACT_PRESSES,
     buy: (s) => {
       s.gridAuto = true;
       s.revealed['gridContract'] = true;
@@ -411,8 +416,8 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Blue-sky Research',
     cost: { research: 1000 },
     description: 'Insight accrues while research is full.',
-    // After the Grid Contract in the first lab's order (stage1-round3-fixes.md §3), or a full lab.
-    trigger: (s) => isBought(s, 'p_grid') || s.research >= Math.min(researchCap(s), 1000) || s.labSpace >= 2,
+    // At a full first lab (stage1-round3-fixes.md §3), or once it has been expanded.
+    trigger: (s) => s.research >= Math.min(researchCap(s), 1000) || s.labSpace >= 2,
     buy: (s) => {
       s.insightUnlocked = true;
     },
@@ -530,7 +535,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Dynamic pricing',
     cost: { research: 5000 },
     description: 'Finance prices to clear what the copies make. Pricing goes AUTO.',
-    // Like the Grid Contract after the first Buy Power: offered to a lab that has priced by hand,
+    // Like the Grid Contract after ten Buy Powers: offered to a lab that has priced by hand,
     // once there is a market worth automating; to anyone, late (critic round 2 §6.4).
     trigger: (s) => (counter(s, 'priceMoves') >= AUTO_PRICING_MOVES && s.tasks >= AUTO_PRICING_TASKS) || s.tasks >= AUTO_PRICING_LATE,
     buy: (s) => {
