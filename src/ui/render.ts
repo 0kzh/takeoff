@@ -184,13 +184,8 @@ function renderBusiness(s: GameState): void {
   setText('contractRate', fmtMoney(contractRate(s)));
   setText('unbilled', fmtInt(s.unbilled));
   setText('price', fmtMoney(s.price));
-  const unbilledLine = byId('unbilledLine');
   if (s.autoPrice) {
     // Priced automatically (Dynamic pricing in Stage 1; always from Stage 2): one read-only line.
-    const made = Math.max(1, productionPerSec(s));
-    // Unbilled tasks only matter when the backlog is over 30 s of production.
-    const showUnbilled = s.unbilled > 30 * made;
-    if (unbilledLine.classList.contains('off') === showUnbilled) unbilledLine.classList.toggle('off', !showUnbilled);
     setText('billRate', fmtInt(s.stats.soldPerSec));
     setText('billPrice', s.stage >= 2 ? fmtTaskPrice(s.price) : fmtMoney(s.price));
     if (s.stage >= 2) setTitle('billPrice', marketBreakdown(s).map(([k, v]) => `${k} ×${fmtNum(v, v < 10 ? 2 : 1)}`).join(' · '));
@@ -200,10 +195,6 @@ function renderBusiness(s: GameState): void {
     const billed = billingPerSec(s);
     const made = productionPerSec(s);
     const state = marketState(s);
-    // Unbilled tasks: hidden while there are none (owner feedback 1, beat 6), and while every task sells
-    // (what is left is under three seconds of work, and the line beside it says so).
-    const showUnbilled = s.unbilled >= 1 && state !== 'selling out';
-    if (unbilledLine.classList.contains('off') === showUnbilled) unbilledLine.classList.toggle('off', !showUnbilled);
     setText('soldPerSec', fmtRate(billed));
     setText('tasksPerSec', fmtRate(made));
     // "Billing all 106/s produced" when nothing is left over: one number instead of two equal ones.
