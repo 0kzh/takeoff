@@ -19,18 +19,12 @@ import { stage3Step, S3Memory } from './policy3.js';
 import { stage4Step, S4Memory } from './policy4.js';
 import { stage5Step, S5Memory } from './policy5.js';
 
-/** A modal answer by its index, or by its option's `record` (robust to the order options are listed in). */
 type Answer = number | string;
 
 function optionIndex(def: ChoiceDef, answer: Answer): number {
   return typeof answer === 'number' ? answer : def.options.findIndex((o) => o.record === answer);
 }
 
-/**
- * `trainfirst` mirrors the critic harness's first-timer (tools/critic/games/takeoff*.mjs): it trains
- * whenever Train is enabled, holds the GPU/marketing drip while a big funds goal is on screen, buys
- * every other affordable thing, and in Stage 2 buys infrastructure by the lot row's reason.
- */
 export type PolicyName = 'bot' | 'naive' | 'greedy' | 'trainfirst' | 'racer' | 'cautious';
 
 
@@ -39,35 +33,19 @@ export interface BotMemory {
   ticks: number;
   lastPriceTick: number;
   hireNext: 'researcher' | 'lab';
-  /** Ids the bot bought this tick, for the sim's event lines. */
   bought: string[];
-  /** Naive policy: fractional clicks, price-check bookkeeping. */
   clickAcc: number;
   lastPriceMove: number;
   lowChecks: number;
   prevBacklog: number;
-  /** The open modal and when it opened: players read before they click. */
   choiceKey: string;
   choiceSince: number;
-  /**
-   * Decision variants (critic round 2 §5). Both stages: `modals-best`, `modals-worst`, `modals-last`,
-   * `modals-ignore`, `redteam-never`. Stage 1: `price-never`, `focus-efficiency`, `focus-safety`.
-   * Stage 2: `slider-N`, `safety-0|2`, `gulf-sign`, `gulf-domestic`. Empty: the plain policy.
-   */
   variant: string;
-  /** Leave the stage-ending purchase (Break ground) to the player (the browser smoke test clicks it). */
   holdTransition: boolean;
-  /**
-   * Stage 1, the bot: what its money waits for (`Sage-1.4`, `First Datacenter`) and the delay its own
-   * purchases have printed for that wait so far; it declines once they would add up to 0:30.
-   */
   delayGoal?: string;
   delaySpent?: number;
-  /** Stage 3 bookkeeping (sim/policy3.ts). */
   s3?: S3Memory;
-  /** Stage 4 bookkeeping (sim/policy4.ts). */
   s4?: S4Memory;
-  /** Stage 5 bookkeeping (sim/policy5.ts). */
   s5?: S5Memory;
 }
 
@@ -79,27 +57,18 @@ export function newBotMemory(policy: PolicyName = 'bot', holdTransition = false,
   };
 }
 
-/** The purchase that ends Stage 1. */
 const TRANSITION = 'p_datacenter';
 
-/**
- * With `holdTransition`, First Datacenter's price is kept in hand when the policy would be saving for
- * it (the bot from the wall, the naive and the first-timer from the card), and once the money is
- * there: the same moment the policy would buy it, left for the player to click.
- */
 function heldGoalPrice(s: GameState, mem: BotMemory): number {
   if (!mem.holdTransition || !isVisible(s, TRANSITION)) return 0;
   const price = projectById(TRANSITION)!.cost(s).funds ?? 0;
   const saving = mem.policy === 'bot' ? needsDatacenter(s) : mem.policy !== 'greedy';
-  // The bot holds the price from the wall only (it buys there); the others once they can pay it.
   if (mem.policy === 'bot') return saving ? price : 0;
   return saving || s.funds >= price ? price : 0;
 }
 
-/** Seconds a policy reads a modal before answering it (a 2-s snapshot sees every modal). */
 export const READING_SECONDS = 2.5;
 
-/** True once the open modal has been on screen for the reading time. */
 function readModal(s: GameState, mem: BotMemory): boolean {
   const a = s.activeChoice;
   if (!a) return false;
@@ -111,7 +80,6 @@ function readModal(s: GameState, mem: BotMemory): boolean {
   return s.stats.timePlayed - mem.choiceSince >= READING_SECONDS;
 }
 
-/** One decision pass per 100 ms tick for the chosen policy. */
 export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.stage >= 5) {
     stage5Step(s, a, mem);
@@ -125,11 +93,8 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     stage3Step(s, a, mem);
     return;
   }
-  // `racer` and `cautious` are Stage 3 temperaments: before it they play the reasonable bot.
   const real = mem.policy === 'racer' || mem.policy === 'cautious' ? 'bot' : mem.policy;
   if (s.stage >= 2) {
-    // The first-timers follow the critic harness's Stage 2 rules (infrastructure by the lot row's
-    // reason; every other enabled purchase); greedy presses the lots five times a pass.
     if (real === 'bot') {
       const was = mem.policy;
       mem.policy = 'bot';
@@ -148,17 +113,9 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   stage1Step(s, a, mem);
 }
 
-// ---------- Stage 1 decision variants (the critic's explorer, tools/critic/explore.mjs) ----------
-
-/** The critic's "worst-looking" answers: lose Trust, lose researchers, cut the price, gamble, ship. */
 const WORST_LABELS = [/take the bridge/, /cut the price/, /no comment/, /publish a rebuttal/, /let them go/, /submit Sage/, /let her try/, /release anyway/];
-/** The critic's "best-looking" answers; a greyed one is waited for (the timer decides). */
 const BEST_LABELS = [/wait for a real round/, /open-source/, /publish the system card/, /sign it/, /match the offer|offer equity/, /decline/, /not now/, /keep red-teaming/];
 
-/**
- * A variant's answer to the open modal: true when the variant decided (answered, or chose to wait).
- * Stage 2's best/worst tables are answerChoiceS2's; this is Stage 1's (and both stages' last/ignore).
- */
 function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   const active = s.activeChoice;
   const def = active ? choiceById(active.id) : undefined;
@@ -174,8 +131,6 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
     return true;
   }
   if (s.stage !== 1 || (mem.variant !== 'modals-best' && mem.variant !== 'modals-worst')) return false;
-  // As the explorer's byLabel: the first enabled option whose label matches; the best-looking player
-  // waits while a matching option is greyed (the timer decides); otherwise the first enabled one.
   const wanted = mem.variant === 'modals-best' ? BEST_LABELS : WORST_LABELS;
   const matches = (i: number) => wanted.some((re) => re.test(optionLabel(s, def.options[i]!)));
   const hit = enabled.find(matches);
@@ -188,7 +143,6 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   return true;
 }
 
-/** Variant `redteam-never`: release the moment Release works, open issues or not. */
 function releaseAtOnce(s: GameState, a: Actions, mem: BotMemory): boolean {
   if (mem.variant !== 'redteam-never') return false;
   const run = s.training.run;
@@ -196,14 +150,12 @@ function releaseAtOnce(s: GameState, a: Actions, mem: BotMemory): boolean {
   return true;
 }
 
-/** Variants `focus-efficiency` / `focus-safety`: every run trains with that Focus. */
 function variantFocus(s: GameState, a: Actions, mem: BotMemory): boolean {
   if (mem.variant === 'focus-efficiency') return a.setFocus(s, 'efficiency') || true;
   if (mem.variant === 'focus-safety') return a.setFocus(s, 'safety') || true;
   return false;
 }
 
-/** Fixed answers to every modal (bot policy): the careful answer, paid for when it can be. */
 const CHOICE_POLICY: Record<string, Answer[]> = {
   c_gamble: ['no gamble'],
   c_sage2: [0],
@@ -222,10 +174,6 @@ function isVisible(s: GameState, id: string): boolean {
 }
 
 
-/**
- * Stage 1 modals whose careful answer costs research, money or Trust: hold the modal open for up
- * to 45 s while that resource comes in (Trust is held back for it meanwhile, see spendTrust).
- */
 const WAIT_FOR: Record<string, Answer[]> = { c_poach: ['equity', 'matched'], c_journalist: ['system card'] };
 
 function waitForCarefulAnswer(s: GameState, mem: BotMemory): boolean {
@@ -250,10 +198,6 @@ function answerChoice(s: GameState, a: Actions, table: Record<string, Answer[]>)
   }
 }
 
-/**
- * Demand between 60% and 120% while supply is small. Once the copies make more than 120%
- * demand can bill, the bot prices to clear production instead (as UP players do).
- */
 function nudgePrice(s: GameState, a: Actions, mem: BotMemory): void {
   if (!s.revealed['business'] || mem.ticks - mem.lastPriceTick < 10) return;
   mem.lastPriceTick = mem.ticks;
@@ -270,29 +214,10 @@ function nudgePrice(s: GameState, a: Actions, mem: BotMemory): void {
   else if (sales > supply * 1.25 + backlog / 10 && backlog < supply * 3) a.raisePrice(s);
 }
 
-// ---------- Stage 1: the first-timer, the greedy player, the bot ----------
-
-/** Seconds between the naive player's purchase passes and price checks (the critic's 2-s snapshots). */
 const NAIVE_BUY_EVERY = 10;
 const NAIVE_PRICE_EVERY = 20;
 const NAIVE_PRICE_COOLDOWN = 8;
 
-/**
- * Stage 1, all three policies on one purchase loop (in this economy the first-timer's greed is the
- * efficient way to spend; what separates the players is judgement).
- *
- * `naive` plays like the critic's scripted first-timer (critic report §1 "Policy"):
- *   - mashes Complete Task at 4 clicks/s until the copies out-produce the hand (≥ 8 tasks/s);
- *   - buys any affordable upgrade, project or automation while keeping one power block in reserve;
- *   - prices only by watching the backlog: lower when it exceeds 30 s of production and is growing,
- *     raise after 4 consecutive checks of near-zero backlog, 8 s cool-down;
- *   - answers every modal with its first enabled option; never touches the Focus buttons;
- *   - red-teams to zero open issues, then releases;
- *   - once a big-ticket goal (an Abilene rung) is on screen, stops the GPU and marketing drip and saves.
- * `greedy` is the same player without restraint: it rents a GPU whenever one is affordable and never
- * saves. `bot`, the reasonable player, buys the same way but prices to clear production every second
- * and answers each modal with the careful option, holding it open up to 45 s while its price comes in.
- */
 function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
@@ -315,16 +240,12 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
     }
   }
 
-  // The first automation is bought the moment it is affordable, reserve or not.
   if (s.gpus === 0 && s.revealed['compute'] && s.funds >= gpuCost(s)) a.rentGpu(s);
-  // The prologue (docs/specs/early-train.md): every player presses Train Sage-1 once it can be pressed
-  // (it arms while short of $4), and rents any GPU it is short of; Deploy is the Release below.
   if (inPrologue(s) && s.revealed['training']) {
     if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
     else if (gpusShort(s) && !s.training.run && s.funds >= gpuCost(s)) a.rentGpu(s);
   }
 
-  // The consumable: buy power when it is about to run out (or has), unless the grid does it.
   if (s.stage < 2 && s.revealed['buyPower'] && !s.gridAuto && s.power < Math.max(50, copyRate * 5)) a.buyPower(s);
 
   if (careful) {
@@ -338,27 +259,20 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   }
 
   if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
-  // The harness's first-timer: Train whenever it is lit, before anything else is bought; short of its
-  // price the press arms it (arc G34 rule 4) and the first-timer buys on.
   const trainFirst = mem.policy === 'trainfirst';
   if (trainFirst && canPressTrain(s) && !s.training.armed) {
     variantFocus(s, a, mem);
     a.startTraining(s);
   }
-  // The greedy variant never saves: no reserve, and GPUs first whenever one is affordable.
   const greedy = mem.policy === 'greedy';
   const reserve = greedy ? heldGoalPrice(s, mem) : Math.max(s.stage < 2 ? powerBlockCost(s) : 0, heldGoalPrice(s, mem));
   const keepsReserve = (funds: number | undefined) => !funds || s.funds - funds >= reserve;
-  // The reasonable bot reads the delay a dollar purchase prints for the waiting run (at the wall, First
-  // Datacenter) and declines once its purchases would have put it 0:30 or more later (stage1-round3-
-  // fixes.md §1: the first-timer who declines printed delays of 0:30); the first-timers buy what is lit.
   const goal = s.stage < 2 ? waitingGoalS1(s)?.name ?? '' : '';
   if (goal !== mem.delayGoal) {
     mem.delayGoal = goal;
     mem.delaySpent = 0;
   }
   const delayed = (funds: number) => careful && (mem.delaySpent ?? 0) + runDelaySeconds(s, { funds }) >= BOT_DELAY_LIMIT;
-  /** Buys and books the delay the purchase printed against the wait. */
   const paying = (funds: number, buy: () => boolean): boolean => {
     const d = careful ? runDelaySeconds(s, { funds }) : 0;
     const ok = buy();
@@ -368,25 +282,19 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   if (greedy && s.stage < 2 && s.revealed['compute']) {
     let guard = 0;
     while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {
-      /* rent whenever one is affordable */
     }
   }
 
-  // Projects, top to bottom as they appear on screen.
   for (const p of visibleProjects(s)) {
     if (!p.canAfford(s)) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
     if (p.id === TRANSITION && mem.holdTransition) continue;
-    // The reasonable player breaks ground when the next run needs more GPUs than any cloud rents
-    // (the price is 200 s of the best income for everyone, so it can be affordable sooner).
     if (p.id === TRANSITION && careful && !needsDatacenter(s)) continue;
     const funds = p.id === TRANSITION || p.rescue || p.urgent?.(s) ? 0 : p.cost(s).funds ?? 0;
     if (funds > 0 && delayed(funds)) continue;
     if (careful && patient(s, p)) continue;
     if (paying(funds, () => a.buyProject(s, p.id))) mem.bought.push(p.id);
   }
-  // Training. The bot presses Train once the run's GPUs are there and lets it wait armed for its price;
-  // the first-timers start a run they can pay for, an upgrade like any other.
   if (careful && s.stage < 2) {
     if (canPressTrain(s) && !s.training.armed) {
       variantFocus(s, a, mem);
@@ -396,8 +304,6 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
     variantFocus(s, a, mem);
     a.startTraining(s);
   }
-  // Trust: lab space when the research on screen does not fit in the lab (the cheapest price, or
-  // anything while research sits full), else researchers. The bot keeps one for an open Better Offer.
   if (s.revealed['research'] && !(careful && s.activeChoice?.id === 'c_poach')) {
     let guard = 0;
     while (s.trust >= 1 && guard++ < 10) {
@@ -407,21 +313,14 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
       if (!ok) break;
     }
   }
-  // The harness's goal rule: any project on screen priced at $10,000 and a minute of revenue or more
-  // (and First Datacenter, its static goal). The naive player saves once First Datacenter shows; the
-  // bot reads the delays instead (a GPU the next run needs prints none). A run short of GPUs that Rent
-  // GPU can fix is fixed (Train names the fix: owner feedback U1).
   const bigTicket = trainFirst ? harnessGoal(s) || isVisible(s, TRANSITION) : greedy || careful ? false : isVisible(s, TRANSITION);
   const rentable = s.stage < 2 && s.revealed['compute'];
   const needed = () => gpusShort(s) && !needsDatacenter(s);
-  // The first-timers sweep as the harness does: each affordable control once a pass, the least
-  // clicked first, so Marketing before the next GPU (greedy rents first, up to five a pass).
   const firstTimer = !careful && !greedy;
   if (firstTimer && !bigTicket && s.revealed['marketing'] && s.funds - marketingCost(s) >= reserve) a.buyMarketing(s);
   if (rentable && (!bigTicket || needed())) {
     let guard = 0;
     while (s.funds - gpuCost(s) >= reserve && guard++ < (firstTimer ? 1 : 5) && (!bigTicket || gpusShort(s))) {
-      // A GPU the next run still needs is part of the run (its row prints no delay).
       if (needed() ? !a.rentGpu(s) : delayed(gpuCost(s)) || !paying(gpuCost(s), () => a.rentGpu(s))) break;
     }
   }
@@ -430,17 +329,11 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   }
 }
 
-/** The critic harness's `goalRule`: a visible project priced in funds at ≥ max($10,000, 60 s of revenue). */
 function harnessGoal(s: GameState): boolean {
   const floor = Math.max(10000, 60 * s.stats.revPerSec);
   return visibleProjects(s).some((p) => (p.cost(s).funds ?? 0) >= floor);
 }
 
-/**
- * The bot's patience: a side offer waits until there is twice its price in the bank. A Stage 1 run
- * costs no research, so research cards never wait for one (stage1-round3-fixes.md §1); dollar cards
- * wait on the delay they print (stage1Step).
- */
 function patient(s: GameState, p: ProjectDef): boolean {
   if (p.pinned || p.rescue) return false;
   const c = p.cost(s);
@@ -459,7 +352,6 @@ function answerFirst(s: GameState, a: Actions): void {
   }
 }
 
-/** The next run's research, while it is waiting (none in Stage 1: research buys cards only). */
 function runResearch(s: GameState): number {
   return s.revealed['training'] && !s.training.run ? (trainCost(s).research ?? 0) : 0;
 }
@@ -499,9 +391,6 @@ function naivePrice(s: GameState, a: Actions, mem: BotMemory, now: number): void
   }
 }
 
-// ---------- Stage 2 (stage2.md §9.1–§9.2) ----------
-
-/** The reasonable bot's answers in Stage 2: the first enabled option in each list. */
 const CHOICE_POLICY_S2: Record<string, Answer[]> = {
   c_sage2: [0],
   c_hearing: [0, 1],
@@ -516,7 +405,6 @@ const CHOICE_POLICY_S2: Record<string, Answer[]> = {
   c_ship_issues: ['red-teamed'],
 };
 
-/** Capability, Efficiency, Capability, Efficiency, Safety (§9.1 step 4). */
 const FOCUS_CYCLE = ['capability', 'efficiency', 'capability', 'efficiency', 'safety'] as const;
 
 
@@ -524,7 +412,6 @@ function runsS2(s: GameState): number {
   return typeof s.flags['runsS2'] === 'number' ? (s.flags['runsS2'] as number) : 0;
 }
 
-/** The publishers' licence, while the bot holds the offer open for the money (≤ 60 s of its 90). */
 function publishersWait(s: GameState, mem: BotMemory): number {
   const a = s.activeChoice;
   if (!a || a.id !== 'c_publishers') return 0;
@@ -534,12 +421,6 @@ function publishersWait(s: GameState, mem: BotMemory): number {
   return s.stats.timePlayed - mem.choiceSince < 60 ? price : 0;
 }
 
-/**
- * Decision variants. `best`: the answer that looks most careful (candid, licensed, domestic, the
- * month, no Pentagon, lockdown, the pledge, public, no gamble). `worst`: the one that looks most
- * reckless (lawyers, fight, Al-Marsa, not now, the Pentagon, quietly, no pledge, internal, gamble).
- * An option that cannot be paid for falls through to the next.
- */
 const CHOICES_BEST: Record<string, Answer[]> = {
   c_sage2: [0], c_hearing: [0], c_publishers: [0, 2], c_gulf: [1], c_evals_month: [0], c_defense: [1],
   c_theft_warning: [0], c_pact: [0], c_gamble: ['no gamble'], c_customer_email: [0], c_ship_issues: ['red-teamed'],
@@ -552,7 +433,6 @@ const CHOICES_WORST: Record<string, Answer[]> = {
 
 function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
   const id = s.activeChoice!.id;
-  // Ignore / last: the same handling as Stage 1 (ignored events run out their timers to the default).
   if (mem.variant === 'modals-ignore' || mem.variant === 'ignore-modals' || mem.variant === 'modals-last') {
     answerVariant(s, a, mem);
     return;
@@ -563,7 +443,6 @@ function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
     return;
   }
   if (id === 'c_gulf' && (mem.variant === 'gulf-sign' || mem.variant === 'gulf-domestic')) {
-    // Signing waits for the money while the timer runs (the timer's default is domestic).
     if (mem.variant === 'gulf-sign') {
       if (choiceOptionEnabled(s, choiceById('c_gulf')!, 0)) a.resolveChoice(s, 0);
       return;
@@ -575,23 +454,19 @@ function answerChoiceS2(s: GameState, a: Actions, mem: BotMemory): void {
     a.resolveChoice(s, s.approval > -15 ? 0 : 1);
     return;
   }
-  // The publishers' modal: hold it (60 s of its 90) while the licence money comes in.
   if (publishersWait(s, mem) > 0) return;
   answerChoice(s, a, CHOICE_POLICY_S2);
 }
 
-/** Data in hand for the next run (or none needed). */
 function dataReady(s: GameState): boolean {
   const need = trainCost(s).data ?? 0;
   return s.data + 1e-9 >= need;
 }
 
 
-/** Every enabled release-slot action: red-team to zero, then release (publicly). */
 function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
   const run = s.training.run;
   if (!run || run.phase !== 'redteam') return;
-  // Variant: never red-team; every model ships with what the evaluation found.
   if (mem?.variant === 'redteam-never' && s.stage === 2) {
     if (canReleasePublic(s)) a.release(s);
     return;
@@ -600,22 +475,18 @@ function redTeamAndRelease(s: GameState, a: Actions, mem?: BotMemory): void {
   if (run.issues === 0 && canReleasePublic(s)) a.release(s);
 }
 
-/** The Focus for the next Stage 2 run: the cycle, with the variants' Safety count. */
 function focusFor(s: GameState, mem: BotMemory): (typeof FOCUS_CYCLE)[number] {
-  // Variants `focus-efficiency` / `focus-safety`: every Stage 2 run trains with that Focus.
   if (mem.variant === 'focus-efficiency') return 'efficiency';
   if (mem.variant === 'focus-safety') return 'safety';
   const focus = FOCUS_CYCLE[runsS2(s) % FOCUS_CYCLE.length]!;
   if (mem.variant === 'safety-0' && focus === 'safety') return 'capability';
   if (mem.variant === 'safety-2') {
-    // Two Safety runs, the third and the sixth; the cycle's own Safety turns become Capability.
     const n = runsS2(s);
     return n === 2 || n === 5 ? 'safety' : focus === 'safety' ? 'capability' : focus;
   }
   return focus;
 }
 
-/** Power per dollar: the cheapest MW on screen (gas, solar if the queue has room, nuclear). */
 function cheapestPower(s: GameState): 'gas' | 'solar' | 'nuclear' | '' {
   const options: ['gas' | 'solar' | 'nuclear', number][] = [];
   if (s.revealed['gasButton']) options.push(['gas', gasCost(s) / GAS_MW]);
@@ -625,7 +496,6 @@ function cheapestPower(s: GameState): 'gas' | 'solar' | 'nuclear' | '' {
   return options[0]?.[0] ?? '';
 }
 
-/** Power that does not wait in the interconnect queue: gas, or a reactor when it is cheaper per MW. */
 function cheapestInstantPower(s: GameState): 'gas' | 'nuclear' | '' {
   const gas = s.revealed['gasButton'] ? gasCost(s) / GAS_MW : Infinity;
   const nuclear = s.revealed['nuclearButton'] ? nuclearCost(s) / NUCLEAR_MW : Infinity;
@@ -643,12 +513,6 @@ function powerCostOf(s: GameState, kind: 'gas' | 'solar' | 'nuclear'): number {
   return kind === 'gas' ? gasCost(s) : kind === 'solar' ? solarCost(s) : nuclearCost(s);
 }
 
-/**
- * The reasonable bot in Stage 2 (stage2.md §9.1) under the wallet rule (arc G34): modals; Train,
- * pressed (armed when short) once the run's GPUs are there; cards that print no delay of 0:30 or more
- * for the waiting run (a named fix or a market card regardless); the build fund on the binding wall
- * (power, then room) and whole lots; the build share by what binds; Trust; the slider and toggles.
- */
 export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
@@ -662,14 +526,11 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   };
 
-  // 1. Train once the run's GPUs are there: it starts, or waits armed for its price.
   if (!s.training.armed && canPressTrain(s) && dataReady(s)) {
     a.setFocus(s, focusFor(s, mem));
     a.startTraining(s);
   }
 
-  // 2. Cards, Stage 2's own first, a named fix first: bought unless the waiting run prints a delay of
-  //    0:30 or more on them (a market card that pays back in a minute, or a named fix, regardless).
   const ordered = stage2First(visibleProjects(s));
   ordered.sort((x, y) => Number(y.urgent?.(s) === true) - Number(x.urgent?.(s) === true));
   const insightHeld = ordered
@@ -686,8 +547,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     buy(p);
   }
 
-  // 3. The build fund: the binding wall's fix (power, the cheapest MW that comes now; then room), then
-  //    the largest whole lot that fits. A hall goes up early, as the last one fills.
   const wall = buildWall(s);
   const powerShort = wall === 'power' || (freePowerGpus(s) < 2000 && freePowerGpus(s) <= freeSlots(s));
   if (powerShort) {
@@ -704,7 +563,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if ((wall === 'room' || freeSlots(s) < 2000 || freeSlots(s) < 0.3 * gpuCapacity(s)) && s.revealed['dcButton'] && s.buildFund >= datacenterCost(s)) {
     a.buildDatacenter(s);
   }
-  // The bot steers its own lots (the Standing order stays off): the largest whole lot that fits.
   if (standingOrderOn(s)) a.toggleStanding(s);
   {
     let guard = 0;
@@ -714,7 +572,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
     }
   }
 
-  // 4. The build share by what binds: 75 % while the run waits for GPUs, 50 % otherwise (a variant pins it).
   const pinned = /^share-(\d+)$/.exec(mem.variant);
   const want = pinned ? Number(pinned[1]) / 100 : gpusShort(s) ? 0.75 : 0.5;
   let turns = 0;
@@ -722,7 +579,6 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
 
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s)) && runDelaySeconds(s, sl3Cost(s)) < BOT_DELAY_LIMIT) a.buySL3(s);
 
-  // 5. The slider, the toggles, alignment compute.
   if (s.revealed['allocation']) {
     const fixed = /^slider-(\d+)$/.exec(mem.variant);
     const want = fixed ? Number(fixed[1]) : s.research >= researchCap(s) - 1 ? 10 : 20;
@@ -733,20 +589,16 @@ export function botStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['alignShare'] && s.alignShare < 0.05 - 1e-9) a.cycleAlignShare(s);
 }
 
-/** The bot declines a purchase that prints this much delay or more for the waiting run (arc G34). */
 const BOT_DELAY_LIMIT = 30;
 
 
 
-/** Stage 2 cards that widen the market (a reasonable player buys them as soon as they pay back fast). */
 const MARKET_CARDS = ['p_agent_platform', 'p_international', 'p_free_tier'];
 
-/** Stage 2 projects in table order, then the carried Stage 1 ones. */
 function stage2First(list: ProjectDef[]): ProjectDef[] {
   return [...list.filter((p) => !p.stages.includes(1)), ...list.filter((p) => p.stages.includes(1))];
 }
 
-/** Trust the bot may spend: it holds 3 for SL3 and 2 for the Policy team while either is on screen. */
 function trustSpare(s: GameState, amount: number, forId = ''): boolean {
   let hold = 0;
   if (s.revealed['sl3Button'] && s.securityLevel < 3) hold += 3;
@@ -754,19 +606,6 @@ function trustSpare(s: GameState, amount: number, forId = ''): boolean {
   return s.trust - amount >= hold;
 }
 
-/**
- * The critic's first-timer in Stage 2 (stage2.md §9.2): every affordable project in screen order,
- * every enabled Infrastructure button top to bottom, Train whenever it is enabled (focus as it was),
- * red-team to zero and release, the first enabled modal option, Marketing when affordable, Hire and
- * Expand alternately; never the slider or a toggle. `greedy` presses the infrastructure first and
- * as often as it can.
- */
-/**
- * The harness first-timer in Stage 2 (tools/critic/games/takeoff-late.mjs): Train first; red-team to
- * zero and release; infrastructure from the GPU lot row's reason (a lot when it is enabled, the
- * cheapest MW at "no power", a datacenter at "no room"), up to three a check; then every other
- * enabled purchase once (cards, Trust, the bigger lots, a short run, Security level 3).
- */
 export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
@@ -797,7 +636,6 @@ export function trainfirstStepS2(s: GameState, a: Actions, mem: BotMemory): void
   if (s.revealed['sl3Button'] && s.securityLevel < 3 && canPay(s, sl3Cost(s))) a.buySL3(s);
 }
 
-/** What the harness's sweep also presses in Stage 2 when it is enabled: the bigger lots. */
 function sweepExtras(s: GameState, a: Actions): void {
   if (s.revealed['lot5']) a.buyLotRow(s, 1);
   if (s.revealed['lot25']) a.buyLotRow(s, 2);
@@ -852,22 +690,18 @@ export function naiveStepS2(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.revealed['marketing'] && s.funds >= marketingCost(s)) a.buyMarketing(s);
 }
 
-/** For the sim's summary: does the next run have the GPUs it needs? */
 export function computeGateOpen(s: GameState): boolean {
   return !gpusShort(s);
 }
 
-/** The run in the release slot, for the sim (re-exported so the runner needs one import). */
 export function releaseSlot(s: GameState) {
   return evalRun(s);
 }
 
-/** Room for the next lot as the bot sees it (sim diagnostics). */
 export function roomLeft(s: GameState): number {
   return gpuCapacity(s) - s.gpus;
 }
 
-/** Used by the dev overlay's Autoplay too; `canRelease` ignores the outside-evaluation wait. */
 export function releasable(s: GameState): boolean {
   return canRelease(s);
 }

@@ -32,18 +32,10 @@ import { byId, setText, setDisabled, setTitle, make, showId } from './dom.js';
 import { renderMeter, renderCooldown } from './meter.js';
 import type { Perform } from './render.js';
 
-/**
- * Stage 3's screen (stage3.md §6): the three-way allocation with its rates, the training loop as the
- * grants leave it, the shipments and the build-out, the Alignment panel and its grant list,
- * Geopolitics, the Oversight Committee, Payments, Re-image. Visibility stays with `revealed` flags;
- * what a grant takes away is switched off here with the `off` class.
- */
-
 let perform: Perform;
 let current: GameState | null = null;
 const stateRef = (): GameState => current!;
 
-/** The state the last render drew (the switch buttons read it to know which way to step). */
 export function noteState3(s: GameState): void {
   current = s;
 }
@@ -55,7 +47,6 @@ export function mount3(p: Perform): void {
   bind('btn-sendBack', () => perform('sendBack'));
   bind('btn-experiments', () => perform('runExperiments', 1));
   bind('btn-experiments5', () => perform('runExperiments', 5));
-  // The standing switches are one button each that steps through its settings (arc G14: fewer controls).
   bind('btn-depth', () => perform('setRedteamDepth', redteamDepth(stateRef()) === 'quick' ? 'thorough' : 'quick'));
   bind('btn-step', () => {
     const v = (stateRef().flags['stepSize'] as string) || 'normal';
@@ -72,7 +63,6 @@ export function mount3(p: Perform): void {
   slider.addEventListener('input', () => perform('setMonitorShare', Number(slider.value)));
 }
 
-/** A control a grant took away (or the stage does not use): off the screen, its id kept. */
 export function setOff(id: string, off: boolean): void {
   const el = byId(id);
   if (el.classList.contains('off') !== off) el.classList.toggle('off', off);
@@ -83,11 +73,6 @@ function setOn(id: string, on: boolean): void {
   if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
 }
 
-/**
- * Explanatory text is on screen for its first `FOLD_SECONDS` of game time, then lives in its hover
- * (the owner: too much on screen; stage3.md §6.3's budget). Keyed by what it explains; a reload shows
- * each once more.
- */
 export const FOLD_SECONDS = 45;
 const firstSeen = new Map<string, number>();
 
@@ -95,21 +80,18 @@ export function folded(s: GameState, key: string): boolean {
   const now = s.stats.timePlayed;
   let at = firstSeen.get(key);
   if (at === undefined) {
-    // A restored save has been read already: what is on screen in its first frames starts folded.
     at = document.body.classList.contains('boot') ? now - FOLD_SECONDS : now;
     firstSeen.set(key, at);
   }
   return now - at >= FOLD_SECONDS;
 }
 
-/** A note that folds into a hover on `hostId` once it has been read. */
 function foldNote(s: GameState, id: string, text: string, hostId: string): void {
   const fold = text !== '' && folded(s, `${id}|${text.replace(/[\d.,:%×−+]+/g, '#')}`);
   setText(id, fold ? '' : text);
   if (text) setTitle(hostId, text);
 }
 
-/** `3.2M`, `450,000`: rates on one line with their control. */
 function fmtShort(n: number): string {
   const a = Math.abs(n);
   if (a >= 1e12) return `${fmtNum(n / 1e12, 1)}T`;
@@ -120,8 +102,6 @@ function fmtShort(n: number): string {
 
 const signed = (n: number, d = 0) => `${n < 0 ? '−' : n > 0 ? '+' : ''}${fmtNum(Math.abs(n), d)}`;
 
-// ---------- Research: three-way allocation (§2.2) ----------
-
 export function renderResearch3(s: GameState): void {
   const slider = byId<HTMLInputElement>('allocSlider');
   const max = String(RESEARCH_ALLOC_MAX_S3);
@@ -130,8 +110,6 @@ export function renderResearch3(s: GameState): void {
     slider.min = '5';
   }
   const rate = researchRate(s);
-  // Before Continual learning the slider names the next run's wait; after it, the status line does.
-  // A wait over an hour, or research stopped, is said in words (critic S3 round 1 §9.9).
   const need = (trainCost(s).research ?? 0) - s.research;
   const stopped = researchStopped(s);
   const eta = need > 0 && !isBought(s, 'p_auto_train') && stopped ? ` · ${stopped}` : '';
@@ -148,23 +126,17 @@ export function renderResearch3(s: GameState): void {
     setText('tasksPct', `${tasks}%`);
     setText('tasksRate', ` · ${fmtShort(potentialTasksPerSec(s))} tasks/s`);
   }
-  // `Human share of research` leaves once it reads 0.0 % (stage3.md §2.4).
   setOff('humanShareLine', s.flags['humanShareGone'] === true || humanShare(s) < 0.0005);
 }
-
-// ---------- Training (§2.5, §2.6) ----------
 
 export function renderTraining3(s: GameState): void {
   const auto = isBought(s, 'p_auto_train');
   if (auto) {
     setText('trainStatus', statusLine(s));
   }
-  // Anthrosoft has one home in Stage 3: Geopolitics.
   setOff('rivalLine', true);
-  // The run's GPUs are shown while they bind (within 15 % of what the fleet has free).
   const need = gpusNeeded(s);
   if (need > 0) showId('trainGpuLine', gpusAvailable(s) < 1.15 * need);
-  // Focus: three plain buttons and the selected one's trade under them (G17); the alignment remark is in the hover.
   const focus = s.training.focus;
   setText('focusNote', focus === 'capability' ? 'The most capable next model (+16–22%).'
     : focus === 'efficiency' ? 'Copies per GPU ×1.2; a smaller capability gain (+10%).'
@@ -172,7 +144,6 @@ export function renderTraining3(s: GameState): void {
   setTitle('btn-focus-capability', 'Capability: +16–22% a run. Each costs some of the alignment nobody can see.');
   setTitle('btn-focus-efficiency', 'Efficiency: +10% capability, copies per GPU ×1.2, more jobs displaced.');
   setTitle('btn-focus-safety', 'Safety: +10% capability, measured alignment +6.');
-  // What the grants took: Red-team, then Approve and Send back (a conceded order gives Approve back).
   setOff('btn-redteam', isBought(s, 'p_auto_redteam'));
   setOff('issuesLine', isBought(s, 'p_auto_redteam') && (s.training.run?.issues ?? 0) === 0);
   const signOff = autoApproveOn(s);
@@ -194,11 +165,9 @@ export function renderTraining3(s: GameState): void {
     const room = pts < EXPERIMENTS_MAX - 1e-9;
     setDisabled('btn-experiments', !room || s.research < unit);
     setDisabled('btn-experiments5', !room || s.research < 5 * unit);
-    // Experiments takes twenty units a run at most: one button is enough (arc G14's thirty controls).
     setOff('btn-experiments5', true);
     const name = s.training.pending?.name ?? (s.training.run?.phase === 'training' ? s.training.run.name : nextRunName(s));
     const gain = nextGainPct(s, 0.25) - nextGainPct(s);
-    // The gain to two decimals (the hover's +0.25), and the unit's price on the row.
     setText('experimentsNote', room
       ? `+${fmtNum(gain, 2)} points · ${fmtShort(unit)} research`
       : `${name} takes no more`);
@@ -216,7 +185,6 @@ export function renderTraining3(s: GameState): void {
     setText('stepSizeNote', v === 'small' ? 'gains ×0.6 · the team can look' : v === 'large' ? 'gains ×1.3 · the team likes it least' : 'gains as they come');
   }
   if (s.revealed['holdRuns']) {
-    // Held, the row says runs are stopped and how to release them (critic S3 round 1 §9 item 6).
     const held = s.flags['holdRuns'] === true;
     setText('btn-hold', held ? 'held — release' : 'running');
     setOn('btn-hold', held);
@@ -225,19 +193,15 @@ export function renderTraining3(s: GameState): void {
   }
 }
 
-/** `#trainStatus`: the next run's wait, the GPU shortfall, or the hold (stage3.md §2.5). */
 function statusLine(s: GameState): string {
   return trainStatus(s);
 }
 
-/** The meter on the Train row when the next run is short of GPUs (owner feedback 1, B1). */
 export function gpuShort3(s: GameState): { have: number; need: number } | null {
   const need = gpusNeeded(s);
   const have = gpusAvailable(s);
   return need > 0 && have < need ? { have, need } : null;
 }
-
-// ---------- Infrastructure (§2.1) ----------
 
 export function renderInfrastructure3(s: GameState): void {
   const sizes: [number, string, string][] = [[LOT_SIZES_S3[0], '', 'gpuLotSize'], [LOT_SIZES_S3[1], '5', 'gpuLot5Size'], [LOT_SIZES_S3[2], '25', 'gpuLot25Size']];
@@ -247,8 +211,6 @@ export function renderInfrastructure3(s: GameState): void {
     const cost = lotCostOf(s, n);
     setText(suffix ? `gpuBatch${suffix}Cost` : 'gpuBatchCost', fmtMoneyShort(cost));
     const why = orderReasonS3(s, n);
-    // Grey for the build fund's shortfall (the button says nothing: the fund is in Stores), or for
-    // power, room or the queue, which the row names.
     const short = !why && s.buildFund < cost;
     const reason = why === 'no room'
       ? `No room: ${roomFixS3(s)}.`
@@ -262,23 +224,19 @@ export function renderInfrastructure3(s: GameState): void {
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
     const id = suffix ? `btn-gpuBatch${suffix}` : 'btn-gpuBatch';
     setDisabled(id, !!why || short);
-    // One grey lot row at most, and only one the share fills within three minutes or a wall it names.
     const lit = !why && !short;
     const drawn = lit || (!greyShown && (!!why || buildEta(s, cost) <= 180));
     if (!lit && drawn) greyShown = true;
     setOff(suffix ? `lot${suffix}Row` : 'lotRow', !drawn);
-    // What the lot uses and adds is in its hover.
     setTitle(id, `${g6 ? 'Nimbus G6s, each the work of 2.5 G4s' : 'Nimbus G5s, each the work of 1.5 G4s'}. Every order is a shipment of 75 s, landing one at a time, two on order; a small lot rides in the shipment that waits. The lot uses ${fmtInt(mw)} MW (${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free) and adds about ${fmtMoneyShort(Math.round(lotReturn(s, n)))} a second.`);
   }
   setText('btn-standing', standingOrderOn(s) ? 'ON' : 'OFF');
   setOn('btn-standing', standingOrderOn(s));
 
-  // Halls and the reactor, until the build-out takes them.
   const dc = nextDatacenter(s);
   setText('dcNumber', String(dc.n));
   setText('dcSlots', fmtInt(dc.add));
   const building = datacenterBuilding(s);
-  // While a hall goes up its price is not a choice: the row shows the clock only.
   setText('datacenterCost', building ? '' : fmtMoneyShort(dc.cost));
   const site = needsSite2(s);
   const dcShort = !building && !site && s.buildFund < dc.cost;
@@ -307,19 +265,15 @@ export function renderInfrastructure3(s: GameState): void {
     setOn('btn-budget', b === 'ahead');
     foldNote(s, 'buildBudgetNote', b === 'lean' ? 'orders a hall or reactor when the next lot would not fit' : 'keeps one of each building; never stalls; about a tenth more of revenue', 'btn-budget');
   }
-  // Chips on order: what is on its way (Stores).
   const transit = inTransit(s);
   setText('chipsOnOrder', transit > 0 ? fmtInt(transit) : 'none');
 }
-
-// ---------- Alignment (§2.6–§2.8, §2.14) ----------
 
 const grantButtons = new Map<string, HTMLButtonElement>();
 
 export function renderAlignment(s: GameState): void {
   const measured = s.alignmentApparent;
   setText('alignmentApparent', fmtNum(measured, 1));
-  // A band edge prints only within five points of it (the load pass: edges that are not near go).
   setText('alignBands', measured >= 80 ? '— reassured' : measured >= 75 ? '— 80: reassured' : measured >= 55 ? (measured < 60 ? '— 55: advisories' : '') : '— advisories at every run');
   setText('alignTrue', fmtNum(s.alignmentTrue, 1));
   setText('interpretability', fmtInt(s.interpretability));
@@ -332,7 +286,6 @@ export function renderAlignment(s: GameState): void {
   setTitle('autonomyLine', marks.length ? `Handed over:\n${marks.join('\n')}${s.flags['neuralese'] === 'neuralese' ? '\nNeuralese' : ''}\nWARNING: risk of value drift increased.` : 'Nothing handed over yet.');
   setText('driftLost', fmtInt(Math.floor(s.stats.lostToDrift ?? 0)));
   setText('driftCaught', fmtInt(Math.floor(s.stats.recaptured ?? 0)));
-  // One number on the line; what the monitors caught is in its hover.
   setOff('driftCaughtPart', true);
   setTitle('driftLine', `Lost to value drift: ${fmtInt(Math.floor(s.stats.lostToDrift ?? 0))} · recaptured by the monitors: ${fmtInt(Math.floor(s.stats.recaptured ?? 0))}`);
   const share = rogueShare(s);
@@ -344,19 +297,15 @@ export function renderAlignment(s: GameState): void {
     rm.setAttribute('aria-label', label);
   }
   if (rm.classList.contains('warn') !== share >= ROGUE_WARN) rm.classList.toggle('warn', share >= ROGUE_WARN);
-  // No number while there is nothing to count (the meter says so): the share prints once it is there.
   setText('roguePct', share >= 0.0005 ? `${fmtNum(share * 100, 1)}% of the fleet` : 'none');
   setText('rogueNote', share >= ROGUE_WARN ? `— ${fmtInt(ROGUE_BREAKOUT * 100)}: one will try to leave` : share >= 0.01 ? `— ${fmtNum(ROGUE_WARN * 100, 1)}: warning` : '');
   setText('monitorGen', `Monitor: Sage-${monitorModel(s)}, two generations behind. Efficacy halved.`);
-  // Each instrument's finding with the month it was read: readings from different months are not a
-  // contradiction (critic S3 round 1 §9.9 item 7).
   const when = (key: string) => (typeof s.flags[`${key}At`] === 'number' ? ` (${dateLabel(s.flags[`${key}At`] as number).split(' ')[0]})` : '');
   setText('honeypotLine', `Honeypot${when('honeypot')}: ${s.flags['honeypot'] === 'clean' ? 'behaviour unchanged' : 'it behaves differently unwatched'}`);
   setText('noiseLine', `Noise test${when('noise')}: ${s.flags['noise'] === 'holding' ? 'holding back' : 'not holding back'}`);
   setText('successorLine', `Successor${when('successor')}: ${s.flags['successor'] === 'spec' ? 'aligned to the Spec' : 'aligned to Sage-4'}`);
   setText('lieLine', `Checkpoints${when('lie')}: alignment about ${fmtInt(counter(s, 'lieReading'))}`);
   if (s.revealed['alignWork']) {
-    // A share of research (the wallet-rule addendum): `10% · measured +0.2 a minute · runs 11% later`.
     const share = alignWorkShare(s);
     setOff('btn-alignWork5', true);
     setText('btn-alignWork', `Alignment work: ${Math.round(share * 100)}%`);
@@ -364,14 +313,12 @@ export function renderAlignment(s: GameState): void {
     const ret = s.interpretability >= 3
       ? `read from the weights +${fmtNum(ALIGN_WORK_TRUE * perMin, 1)} a minute`
       : `measured +${fmtNum(ALIGN_WORK_MEASURED * perMin, 1)} a minute`;
-    // Stage 4: a share of research delays generations (stage4.md §2.11).
     const what = s.stage >= 4 ? 'generations' : 'runs';
     setText('alignWorkNote', share > 0 ? `${ret} · ${what} ${fmtInt(Math.round((100 * share) / (1 - share)))}% later` : `10%: measured +${fmtNum(ALIGN_WORK_MEASURED * (60 * researchRate(s) * 0.1) / Math.max(1, researchUnit(s)), 1)} a minute · ${what} 11% later`);
   }
   renderGrants(s);
 }
 
-/** Grants render in their own list (stage3.md §2.6): a title, a price, at most eight words. */
 function renderGrants(s: GameState): void {
   const list = byId('grantList');
   const grants = visibleProjects(s).filter((p) => p.grant === true);
@@ -393,8 +340,6 @@ function renderGrants(s: GameState): void {
     }
     if (list.children[i] !== b) list.insertBefore(b, list.children[i] ?? null);
     grantLabel(s, def, b);
-    // A grant is a title, a price and eight words: read in its first 45 s, then in its hover (the cards
-    // keep theirs while they can be bought; the grants' would put the Alignment panel over the budget).
     const fold = folded(s, `card:${def.id}`);
     if (b.classList.contains('folded') !== fold) b.classList.toggle('folded', fold);
     const tip = fold ? def.description : '';
@@ -405,14 +350,11 @@ function renderGrants(s: GameState): void {
 function grantLabel(s: GameState, def: ProjectDef, b: HTMLButtonElement): void {
   const title = b.firstElementChild as HTMLElement;
   const gated = def.prereq && !def.prereq(s) && def.needs ? ` (${def.needs(s)})` : '';
-  // A research grant prints what it costs the waiting run (the wallet-rule addendum).
   const label = `${def.title} ${priceTag(s, def)}${gated}`;
   if (title.textContent !== label) title.textContent = label;
   const disabled = !def.canAfford(s);
   if (b.disabled !== disabled) b.disabled = disabled;
 }
-
-// ---------- Security (§2.9) ----------
 
 export function renderSecurity3(s: GameState): void {
   setText('securityNote', SECURITY_NOTES3[s.securityLevel] ?? SECURITY_NOTES[s.securityLevel] ?? `SL${s.securityLevel}`);
@@ -424,7 +366,6 @@ export function renderSecurity3(s: GameState): void {
   if (byId('btn-sl3').classList.contains('urgent') !== urgent) byId('btn-sl3').classList.toggle('urgent', urgent);
   setText('theftNote', theftRiskNote(s));
   if (s.revealed['reimage']) {
-    // The manual answer to a climbing rogue share: on screen while there is a share to answer (or a recharge to watch).
     setOff('btn-reimage', rogueShare(s) < 0.005 && reimageCooldown(s) <= 0);
     const cd = reimageCooldown(s);
     setDisabled('btn-reimage', cd > 0);
@@ -437,8 +378,6 @@ const SECURITY_NOTES3: Record<number, string> = {
   4: 'SL4 — clearances, a SCIF, nobody alone with the weights',
   5: 'SL5 — the government is in the building',
 };
-
-// ---------- Geopolitics (§2.10) ----------
 
 export function renderGeopolitics(s: GameState): void {
   setText('baiwenLine', `${baiwenWords(s)} (${leadTrend(s)})`);
@@ -459,11 +398,8 @@ export function renderGeopolitics(s: GameState): void {
   }
 }
 
-// ---------- Government, then the Oversight Committee (§2.11) ----------
-
 export function renderOversight(s: GameState): void {
   const seated = s.revealed['oversight'] === true;
-  // The Committee takes the government's controls with it (Share evals, Lobby).
   const home = byId(seated ? 'oversightControls' : 'governmentControls');
   for (const id of ['shareEvalsRow', 'lobbyRow']) {
     const row = byId(id);
@@ -476,7 +412,6 @@ export function renderOversight(s: GameState): void {
     setDisabled('btn-lobby', s.funds < cost);
     const g = s.govRelations;
     const next = nextSeatAt(s);
-    // One number for the return (G27); the next seat only when it is near (a band edge, not a goal).
     const gain = Math.min(100, g + lobbyGain(s)) - g;
     setText('lobbyNote', `relations +${fmtNum(gain, 1)}${next <= 100 && next - g <= 3 ? ` · seat ${next / 10} at ${next}` : ''}`);
     setTitle('btn-lobby', `Forty meetings on the Hill: relations ${fmtNum(g, 1)} → ${fmtNum(g + gain, 1)}${next <= 100 ? `; seat ${next / 10} at ${next}` : ''}. Each unit costs 1.3× the last; the price relaxes a step every 90 s.`);
@@ -490,14 +425,11 @@ export function renderOversight(s: GameState): void {
   const order = Math.max(0, Math.floor(orderThreshold(s) / 10));
   setText('seatsNote', n >= 8 ? '— escorts the chips' : n >= 6 ? (n === 6 ? '— will hear a halt · 5: no halt' : '— will hear a halt') : n > order ? (n === order + 1 ? `— shipments slow · ${order}: an order` : '— shipments slow') : '— drafts an order');
   setText('majorIncidents', `${fmtInt(s.majorIncidents ?? 0)} of 3`);
-  // The count is shown once there is something to count (a panel's detail while it binds).
   setOff('incidentsRow', (s.majorIncidents ?? 0) === 0 && counter(s, 'majorTotal') === 0);
   setText('memoLine', memoLine(s));
   setText('sessionLine', sessionLine(s));
   setText('orderLine', orderLine(s));
 }
-
-// ---------- Public (§2.12, §2.14) ----------
 
 export function renderPublic3(s: GameState): void {
   const a = Math.round(s.approval);
@@ -509,16 +441,12 @@ export function renderPublic3(s: GameState): void {
     setText('btn-payments', level >= PAYMENT_MAX ? 'level 5 (back to 0)' : `level ${level}`);
     const target = approvalTargetS3(s);
     const up = level >= PAYMENT_MAX ? -PAYMENT_MAX * PAYMENT_APPROVAL : PAYMENT_APPROVAL;
-    // What the next notch returns (G27), one number; the target itself is in the approval line's hover.
     setText('paymentsNote', `${fmtInt(level * PAYMENT_SHARE * 100)}% of revenue · next: approval ${signed(up)}`);
     setTitle('btn-payments', `Impact payments to displaced workers: 3% of revenue a level, approval target +7 a level, 0 to 5. The target is ${signed(target)} now; the next press makes it ${signed(target + up)}.`);
   }
-  // Only once there is a public model (critic S3 round 1 §9.9 item 9: the hover named Sage-4-mini at 0:02).
   if (s.revealed['publicModel'] === true) foldNote(s, 'publicModel', `Public model: Sage-4-mini (${fmtNum(publicCap(s), 1)}×)`, 'panel-public');
   else setTitle('panel-public', '');
 }
-
-// ---------- Stats and Stores (§2.13) ----------
 
 export function renderStats3(s: GameState): void {
   setText('statDrift', fmtInt(Math.floor(s.stats.lostToDrift ?? 0)));

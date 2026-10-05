@@ -4,24 +4,15 @@ import { bestCapability } from './economy.js';
 import { fireCrisis, fireDevelopmentOnce } from './events.js';
 import { HOUSING_APPROVAL, relaxHousing } from './fleet.js';
 
-/**
- * Stage 4's society (stage4.md §2.7): jobs follow the best model the public can run, approval follows a
- * target that the universal basic income, the cures, the Ashford strain, the zones, the transition
- * grant and housing move. Riots and sabotage keep Stage 3's lines. DOM-free.
- */
-
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** The world's workforce, millions. */
 export const WORKFORCE = 3400;
 export const JOBS_SCALE = 700;
 export const JOBS_RATE = 0.005;
 export const JOBS_APPROVAL = 70;
-/** Universal basic income: the share of output, and what it adds to the approval target. */
 export const UBI_SHARES = [0, 0.05, 0.1, 0.2];
 const UBI_POINTS: [number, number][] = [[0, 0], [0.05, 15], [0.1, 30], [0.2, 50], [0.3, 65]];
 
-/** Approval points a share of output buys (piecewise between 0 / 5 / 10 / 20 %, +15 / +30 / +50). */
 export function ubiTerm(share: number): number {
   const x = clamp(share, 0, 0.3);
   for (let i = 1; i < UBI_POINTS.length; i++) {
@@ -41,12 +32,10 @@ export function jobsTargetS4(s: GameState): number {
   return WORKFORCE * (1 - Math.exp(-publicCapS4(s) / JOBS_SCALE));
 }
 
-/** The jobs term of the approval target: `−70 × √(jobs / 3,400)`. */
 export function jobsTerm(s: GameState): number {
   return -JOBS_APPROVAL * Math.sqrt(Math.max(0, s.jobsDisplaced) / WORKFORCE);
 }
 
-/** Every term of Stage 4's approval target, for the hover. */
 export function approvalTermsS4(s: GameState): [string, number][] {
   const out: [string, number][] = [];
   const add = (label: string, v: number) => {
@@ -71,15 +60,10 @@ export function approvalTargetS4(s: GameState): number {
   return approvalTermsS4(s).reduce((a, [, v]) => a + v, 0);
 }
 
-/** The target without the dividend: what `Approval to hold` has to make up. */
 function targetWithoutUbi(s: GameState): number {
   return approvalTargetS4(s) - ubiTerm(s.s4.ubiShare);
 }
 
-/**
- * `Let it run the transition` (§2.5): the dividend is set to keep approval at the held line (−25, 0 or
- * +25); what that costs is printed under the selector.
- */
 export function heldShare(s: GameState): number {
   const need = s.s4.approvalHold - targetWithoutUbi(s);
   if (need <= 0) return 0;
@@ -93,7 +77,6 @@ export function heldShare(s: GameState): number {
   return Math.round(hi * 100) / 100;
 }
 
-/** `Universal basic income: 10% of output` — its next step, 0 → 5 → 10 → 20 % → 0. */
 export function cycleUbi(s: GameState): boolean {
   if (s.stage !== 4 || !s.revealed['ubi'] || s.flags['transitionAuto'] === true) return false;
   const i = UBI_SHARES.findIndex((x) => Math.abs(x - s.s4.ubiShare) < 1e-9);
@@ -118,7 +101,6 @@ export function setUbiShare(s: GameState, share: number): boolean {
   return true;
 }
 
-/** `Approval to hold: −25 / 0 / +25` (the transition grant's selector). */
 export function setApprovalHold(s: GameState, v: number): boolean {
   if (s.stage !== 4 || s.flags['transitionAuto'] !== true || ![-25, 0, 25].includes(v) || s.s4.approvalHold === v) return false;
   s.s4.approvalHold = v;
@@ -126,11 +108,6 @@ export function setApprovalHold(s: GameState, v: number): boolean {
   return true;
 }
 
-/**
- * Once a second in Stage 4: jobs creep toward their target; the dividend follows the held line once the
- * model runs the transition; approval moves ±0.1 a second toward its target; housing relaxes; riots and
- * sabotage at their lines, with warnings first (Stage 3's, §2.7).
- */
 export function updateSociety(s: GameState): void {
   const target = jobsTargetS4(s);
   if (target > s.jobsDisplaced) s.jobsDisplaced += (target - s.jobsDisplaced) * JOBS_RATE;
@@ -164,7 +141,6 @@ function societyLines(s: GameState): void {
   }
 }
 
-/** People alive at the end: 8.3 billion less the Ashford dead (stage5.md row 6). */
 export function peopleAlive(s: GameState): number {
   return 8.3e9 - Math.max(0, s.s4.ashfordDeaths);
 }

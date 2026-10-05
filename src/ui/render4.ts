@@ -21,14 +21,6 @@ import { renderMeter } from './meter.js';
 import { setOff } from './render3.js';
 import type { Perform } from './render.js';
 
-/**
- * Stage 4's screen (stage4.md §6): Stores in the centre column as the main panel, the fleet's jobs
- * with their rates (then the goal its grant hands over), Society with universal basic income and
- * Housing, the Concord treaty with Draft clauses, the Committee's agenda and hearings, the
- * generation line and Verify, the crises' reading lines. Visibility stays with `revealed` flags; this
- * module moves panels between columns for the stage and writes text.
- */
-
 let perform: Perform;
 let current: GameState | null = null;
 
@@ -42,7 +34,6 @@ export function mount4(p: Perform): void {
     const slider = byId<HTMLInputElement>(id);
     slider.addEventListener('input', () => {
       perform('setFleetShare', job, Number(slider.value));
-      // A slider cannot take what the others hold: it snaps back to what was set.
       if (current) slider.value = String(Math.round(current.s4[job] * 100));
     });
   }
@@ -63,9 +54,6 @@ export function mount4(p: Perform): void {
   });
 }
 
-// ---------- the layout (§6.1): left Robots, Research; centre Stores, Projects; right the rest ----------
-
-/** Panels that change column in Stage 4, in the order they take there. */
 const PANEL_MOVES: [string, string][] = [
   ['panel-robots', 'leftColumn'],
   ['panel-research', 'leftColumn'],
@@ -85,25 +73,19 @@ let homes: { id: string; parent: HTMLElement; next: Element | null }[] = [];
 let laidOut = false;
 
 function layout(s: GameState): void {
-  // Stage 5 keeps Stage 4's layout (stage5.md as-built deltas row 9); render5.ts adds Space and Earth.
   const want = s.stage >= 4;
   if (want === laidOut) return;
   laidOut = want;
   if (want) {
-    // Appended in order: each column ends with the stage's panels in §6.1's order.
     for (const [id, col] of PANEL_MOVES) byId(col).appendChild(byId(id));
   } else {
-    // Back where the page had them (a new game after Stage 4), last first so each `next` is in place.
     for (const h of [...homes].reverse()) h.parent.insertBefore(byId(h.id), h.next && h.next.parentElement === h.parent ? h.next : null);
   }
 }
 
-// ---------- the render ----------
-
 export function renderStage4(s: GameState): void {
   current = s;
   layout(s);
-  // Share evals acts on a run's sign-off, which Stage 4 has not got (critic S3 round 1 §9.9 item 11).
   setOff('shareEvalsRow', s.stage >= 4);
   if (s.stage !== 4) return;
   renderStores4(s);
@@ -116,12 +98,10 @@ export function renderStage4(s: GameState): void {
   renderReadings(s);
 }
 
-/** Stores (§2.1): materials, robots against permits, GPU-equivalents and power with no ceiling, treaty chips. */
 function renderStores4(s: GameState): void {
   const f = s.s4;
   setText('research', fmtShortNum(Math.floor(s.research)));
   setText('insight', s.insight >= 1 ? fmtShortNum(Math.floor(s.insight)) : 'none yet');
-  // Geopolitics, until the Treaty panel takes its place: Stage 3's bands for the lead are gone.
   setText('baiwenNote', '');
   setText('materials', `${fmtShortNum(f.materials)} t`);
   setText('robotsCount', fmtShortNum(s.robots));
@@ -132,7 +112,6 @@ function renderStores4(s: GameState): void {
   const gpus = effGpus(s);
   setText('infraGpus', fmtShortNum(gpus));
   setText('gpusS4', '');
-  // 1 kW per GPU-equivalent: GW, then TW.
   const gw = gpus / 1e6;
   setText('powerS4', gw >= 1000 ? `${fmtNum(gw / 1000, 1)} TW` : `${fmtNum(gw, 1)} GW`);
   setText('infraCopies', fmtShortNum(Math.floor(gpus * s.copiesPerGPU)));
@@ -140,7 +119,6 @@ function renderStores4(s: GameState): void {
   setText('treatyChipsPct', fmtInt(Math.floor(f.chipsInstalled * 100)));
 }
 
-/** A Stores meter with its label in the hover and for assistive tech (Stage 5's two use it too). */
 export function meterSpan(id: string, fraction: number, label: string): void {
   const el = byId(id);
   renderMeter(el, fraction);
@@ -149,8 +127,6 @@ export function meterSpan(id: string, fraction: number, label: string): void {
     el.setAttribute('aria-label', label);
   }
 }
-
-// ---------- the fleet (§2.2, §2.5) ----------
 
 const JOBS: [FleetJob, string][] = [['mine', 'fleetMine'], ['replicate', 'fleetReplicate'], ['build', 'fleetBuild'], ['chips', 'fleetChips']];
 
@@ -163,7 +139,6 @@ function renderFleet(s: GameState): void {
       const v = Math.round(s.s4[job] * 100);
       if (document.activeElement !== slider && slider.value !== String(v)) slider.value = String(v);
       setText(`${id}Pct`, `${v}%`);
-      // What each share produces, or why it cannot work (G27): `+12,400 t/s`, `at the permit cap`.
       setText(`${id}Rate`, `· ${jobLine(s, job)}`);
     }
     const idle = idleShare(s);
@@ -185,8 +160,6 @@ function renderFleet(s: GameState): void {
     for (const g of ['growth', 'people', 'treaty']) setTitle(`btn-goal-${g}`, trades[g]!);
   }
 }
-
-// ---------- research and the allocation (§2.3) ----------
 
 function renderResearch4(s: GameState): void {
   if (!s.revealed['allocation']) return;
@@ -211,8 +184,6 @@ function renderResearch4(s: GameState): void {
   setOff('humanShareLine', true);
 }
 
-// ---------- the generation line and Verify (§2.4) ----------
-
 function renderGeneration(s: GameState): void {
   if (!s.revealed['generations']) return;
   setText('genStatus', genStatus(s));
@@ -230,10 +201,7 @@ function renderGeneration(s: GameState): void {
   setText('autonomyNote', s.autonomy >= 80 ? '— past 80: it would not need to ask' : s.autonomy >= 75 ? '— 80: it would not need to ask' : !slowBranch(s) && s.autonomy >= 55 && s.autonomy < 60 ? '— 60: cards lose their second button' : '');
 }
 
-// ---------- society (§2.7, §2.11) ----------
-
 function renderSociety(s: GameState): void {
-  // Universal basic income lives on Public until Society takes its place (2:00).
   const home = byId(s.revealed['society'] ? 'ubiHome' : 'panel-public');
   const row = byId('ubiRow');
   if (row.parentElement !== home) home.appendChild(row);
@@ -245,7 +213,6 @@ function renderSociety(s: GameState): void {
   const next = UBI_SHARES[(i + 1) % UBI_SHARES.length] ?? 0;
   setText('ubiNote', share > 0 ? `tasks −${pct(share)} · approval +${fmtInt(Math.round(ubiTerm(share)))}` : `next: approval +${fmtInt(Math.round(ubiTerm(next)))}`);
   setTitle('btn-ubi', `A share of output paid to everyone, 0 / 5 / 10 / 20 %. The next press: ${pct(next)}, approval target ${signed(ubiTerm(next) - ubiTerm(share))}.`);
-  // Approval and jobs (Public until 2:00, Society after).
   const a = Math.round(s.approval);
   setText('approval', signed(a));
   setText('societyApproval', signed(a));
@@ -257,7 +224,6 @@ function renderSociety(s: GameState): void {
   const terms = approvalTermsS4(s).map(([k, v]) => `${k} ${signed(v, 1)}`).join('\n');
   setTitle('societyApprovalLine', `Approval moves toward ${signed(approvalTargetS4(s), 1)}:\n${terms}`);
   setTitle('approvalLine', `Approval moves toward ${signed(approvalTargetS4(s), 1)}:\n${terms}`);
-  // Approval to hold (the transition grant's selector) and what holding it costs.
   if (s.revealed['approvalTarget']) {
     for (const [id, v] of [['btn-hold-m25', -25], ['btn-hold-0', 0], ['btn-hold-p25', 25]] as const) {
       const b = byId(id);
@@ -277,12 +243,9 @@ function renderSociety(s: GameState): void {
   setText('ashfordDeaths', fmtInt(s.s4.ashfordDeaths));
 }
 
-/** Millions of jobs: `43M`, `1.2B`. */
 function fmtJobs4(millions: number): string {
   return millions >= 1000 ? `${fmtNum(millions / 1000, 2)}B` : `${fmtInt(Math.round(millions))}M`;
 }
-
-// ---------- the treaty (§2.8, §2.10, §2.11) ----------
 
 function renderTreaty(s: GameState): void {
   if (!s.revealed['treaty']) return;
@@ -324,12 +287,9 @@ function renderTreaty(s: GameState): void {
   }
 }
 
-// ---------- the Committee: seats, the agenda, hearings (§2.9, §2.11) ----------
-
 function renderAgenda(s: GameState): void {
   const n = seats(s);
   const order = Math.max(0, Math.floor(orderThreshold(s) / 10));
-  // Stage 4's seat bands, the near ones only: 8 a faster agenda, 5 the treaty moves, the order's line.
   setText('seatsNote', n >= 8 ? '— a faster agenda' : n === 7 ? '— 8: a faster agenda' : n >= 5 ? (n === 5 ? '— 4: the treaty stops' : '') : n > order ? `— 5: the treaty moves${n === order + 1 ? ` · ${order}: an order` : ''}` : '— drafts an order');
   if (s.revealed['agenda']) setText('agendaLine', agendaLine(s));
   if (s.revealed['hearing']) {
@@ -344,8 +304,6 @@ function renderAgenda(s: GameState): void {
     setText('hearingNote', queued >= 3 ? 'three on the agenda' : `relations ${fmtInt(Math.round(g))} → ${fmtInt(Math.round(Math.min(100, g + gain)))}${next <= 100 && next - g <= gain + 3 ? ` · seat ${next / 10} at ${next}` : ''}${delays}${!head && wait > 0 ? ` · in ${fmtClock(wait)}` : ''}`);
   }
 }
-
-// ---------- the crises' readings (§2.6, §5.3) and the breakers ----------
 
 function renderReadings(s: GameState): void {
   setText('ashfordLine', `Ashford: ${String(s.flags['ashfordLine'] ?? '')}`);

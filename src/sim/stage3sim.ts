@@ -11,11 +11,6 @@ import { LOT_SIZES_S3, orderReasonS3, lotCostOf } from '../engine/infrastructure
 import { PLAYER_MODALS } from '../engine/events.js';
 import { fmtClock, fmtInt, fmtMoney, fmtNum } from '../engine/format.js';
 
-/**
- * The sim's Stage 3 block (stage3.md §9.3): everything the acceptance table measures that a headless
- * run can see. One tracker per run; `tick` after every engine step while the run is in Stage 3.
- */
-
 export interface Mark3 {
   t: number;
   gpus: number;
@@ -33,9 +28,7 @@ export interface Mark3 {
   seats: number;
   approval: number;
   jobs: number;
-  /** Funds over revenue: seconds of income in hand (B15). */
   fundsSeconds: number;
-  /** Repeatables enabled now, by currency (B30). */
   researchSinks: number;
   revenueSinks: number;
 }
@@ -122,12 +115,9 @@ export interface Stage3Summary {
   choices: string[];
 }
 
-/** Mechanic modals (the content table's `mechanic: true` choice rows) and the vote. */
 const MECHANIC_MODALS = [...STAGE3_TABLE.filter((r) => r.kind === 'choice' && r.mechanic).map((r) => r.id), 'c_vote'];
-/** Projects that are verbs rather than cards: the Pause (§4.3 counts it among the mechanics). */
 const MECHANIC_PROJECTS = ['p_pause'];
 
-/** What each crisis's mitigation is, as a key of `cadence.seen` (B14: on screen ≥ 300 s before). */
 const MITIGATION: Record<string, string[]> = {
   cr_weights_theft: ['f:sl3Button'],
   cr_spy: ['p:p_sl4'],
@@ -140,7 +130,6 @@ const MITIGATION: Record<string, string[]> = {
   cr_nationalization: ['c:c_order'],
 };
 
-/** What a grant (or the order) takes away, for the REMOVED → GAINED log (B31). */
 const REMOVES: Record<string, string> = {
   p_auto_train: 'Train',
   p_auto_redteam: 'Red-team',
@@ -238,7 +227,6 @@ export class Stage3Tracker {
   private choices0 = 0;
   private prevRevealed: Record<string, boolean> = {};
 
-  /** Call after every step. */
   tick(s: GameState, actionTimes: number[]): void {
     const t = s.stats.timePlayed;
     if (this.start === null) {
@@ -253,7 +241,6 @@ export class Stage3Tracker {
     const ts = t - this.start!;
     this.ticks++;
 
-    // First-time reveals, as the engine's own `cadence.seen` records them.
     const seen = s.cadence.seen;
     for (; this.seenLen < seen.length; this.seenLen++) {
       const key = seen[this.seenLen]!;
@@ -274,7 +261,6 @@ export class Stage3Tracker {
     }
     this.prevChoice = s.activeChoice;
 
-    // Runs.
     for (const r of [s.training.run, s.training.pending]) {
       if (!r || this.seenRuns.has(r.id)) continue;
       this.seenRuns.add(r.id);
@@ -285,7 +271,6 @@ export class Stage3Tracker {
       }
     }
 
-    // Crises, by id.
     for (const [k, v] of Object.entries(s.flags)) {
       if (!k.startsWith('crisis:') || typeof v !== 'number') continue;
       const id = k.slice(7);
@@ -299,7 +284,6 @@ export class Stage3Tracker {
       }
     }
 
-    // Text rates.
     const cl = s.stats.consoleLines ?? 0;
     if (cl > this.console0) {
       const n = cl - this.console0;
@@ -313,7 +297,6 @@ export class Stage3Tracker {
     const ll = s.stats.logLines ?? 0;
     for (; this.log0 < ll; this.log0++) this.logTimes.push(t);
 
-    // Projects: reveal → purchase, dead grey.
     const vis = visibleProjects(s);
     for (const p of vis) {
       if (!this.shownAt.has(p.id)) this.shownAt.set(p.id, t);
@@ -325,7 +308,6 @@ export class Stage3Tracker {
       this.boughtSeen.add(id);
       const def = projectById(id);
       if (def && !def.pinned && def.stages.includes(3) && !def.stages.some((x) => x < 3)) this.latencies.push(Math.round(t - at));
-      // A grant's removal and what came with it (B31).
       if (REMOVES[id]) {
         const gained = Object.keys(s.revealed).filter((k) => s.revealed[k] && !this.prevRevealed[k]);
         this.removed.push(`${fmtClock(ts)} REMOVED ${REMOVES[id]} → GAINED ${gained.join(', ') || '(nothing)'}`);
@@ -338,19 +320,16 @@ export class Stage3Tracker {
       if (this.offeredAt[id] === undefined && vis.some((p) => p.id === id)) this.offeredAt[id] = t;
     }
 
-    // Presses (B10).
     for (const [verb, n] of Object.entries(s.stats.pressCounts)) {
       const before = this.prevPresses[verb] ?? this.presses0[verb] ?? 0;
       for (let k = before; k < n; k++) (this.pressTimes[verb] ??= []).push(t);
     }
     this.prevPresses = { ...s.stats.pressCounts };
 
-    // Goals and choices.
     if (vis.some((p) => !p.canAfford(s)) || s.revealed['graph']) this.greyTicks++;
     if (this.goalsShownAt === null && vis.some((p) => p.id === 'p_steward')) this.goalsShownAt = t;
     if (this.voteAt === null && voteReady(s)) {
       this.voteAt = t;
-      // The motions become pressable: the session line and both goals change (a new verb).
       this.mechanics.push([t, 'ready']);
       this.capAtVote = Math.round(bestCapability(s) * 100) / 100;
     }
@@ -371,7 +350,6 @@ export class Stage3Tracker {
       this.lastCapAt = t;
     }
 
-    // Hands: 2-s checks after 3:00 (G24/G25); the first meaningful choice.
     if (this.ticks % 20 === 0) {
       const n = enabledPurchasesS3(s).length;
       if (ts >= 180) {
@@ -403,7 +381,6 @@ export class Stage3Tracker {
     this.start = t;
     for (const k of s.cadence.seen) this.seenAt.set(k, t - 1e6);
     this.seenLen = s.cadence.seen.length;
-    // What is on screen at the arrival is its first beat.
     this.reveals.push(t);
     for (const [k, on] of Object.entries(s.revealed)) if (on && MECHANIC_FLAGS_S3.includes(k)) this.mechanics.push([t, k]);
     this.mechanics.push([t, 'arrival']);
@@ -429,7 +406,6 @@ export class Stage3Tracker {
 
   private markOf(s: GameState, t: number): Mark3 {
     const unit = researchUnit(s);
-    // A standing share counts as a sink (arc G27 as amended): Alignment work is one from its reveal.
     const researchSinks = (s.revealed['alignWork'] ? 1 : 0)
       + (s.revealed['experiments'] && counter(s, 'expPts') < EXPERIMENTS_MAX && s.research >= unit ? 1 : 0);
     const revenueSinks = (LOT_SIZES_S3.some((n) => !orderReasonS3(s, n) && s.funds >= lotCostOf(s, n)) ? 1 : 0)
@@ -499,7 +475,6 @@ export class Stage3Tracker {
     const last10 = longestGap(this.reveals, Math.max(start, stop - 600), stop);
     const mg = longestGap(this.mechanics.map(([x]) => x), start, stop);
     const intervals = this.trainStarts.slice(1).map((x, k) => x - this.trainStarts[k]!);
-    // Presses before each automation was offered, and the worst minute after it.
     const before = (verbs: string[], id: string) => {
       const at = this.offeredAt[id] ?? Infinity;
       return verbs.reduce((n, v) => n + (this.pressTimes[v] ?? []).filter((x) => x < at).length, 0);
@@ -557,7 +532,6 @@ export class Stage3Tracker {
       mechanicGap: Math.round(mg.gap),
       mechanicGapAt: [rel(mg.at[0]), rel(mg.at[1])],
       mechanics: this.mechanics.filter(([x]) => x > start).map(([x, n]) => `${fmtClock(x - start)} ${n}`),
-      // Reveals in the same second are one beat (a grant and the lever it hands over).
       maxReveals6min: maxInWindow([...new Set(this.reveals.filter((x) => x > start).map((x) => Math.floor(x)))], 360),
       governor: this.governorLines,
       idleRescues: s.stats.idleRescues - this.rescues0,
@@ -576,7 +550,6 @@ export class Stage3Tracker {
       latencyMedian: this.latencies.length ? median(this.latencies) : null,
       latencyWithin10Pct: this.latencies.length ? Math.round((100 * this.latencies.filter((x) => x <= 10).length) / this.latencies.length) : 0,
       latencyCount: this.latencies.length,
-      // From ts 30: the arrival's narration and its 10 s hold are the transition, not routine lines.
       consoleMax5: Math.round((10 * maxInWindow(this.consoleTimes.filter((x) => x > start + 30), 300)) / 5) / 10,
       logMax5: Math.round((10 * maxInWindow(this.logTimes.filter((x) => x > start + 30), 300)) / 5) / 10,
       repeatedLines: repeated,

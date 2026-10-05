@@ -6,14 +6,6 @@ import { chipsOpen } from '../engine/stage4.js';
 import type { ContentRow } from './stage2.js';
 import { approach4 } from './projects4.js';
 
-/**
- * The Stage 4 content table (stage4.md §4.2), in order: queue order, expected order, and the order the
- * cadence governor walks. Projects are rows by id (data/projects4.ts); the rest — panels, lines and
- * modals — are defined here with their trigger and prerequisite. Late rows wait for the approach
- * (treaty 60 %, 150× or September 2028).
- */
-
-/** New panels, verbs, toggles, sliders, Stores rows and reading lines (arc G2). */
 export const MECHANIC_FLAGS_S4 = [
   'robots', 'robotsRow', 'robotFleet', 'materialsRow', 'generations', 'society', 'housing', 'ubi', 'agenda', 'hearing',
   'treaty', 'draft', 'fleetGoal', 'approvalTarget', 'stance', 'treatyAppetite', 'fleetChips', 'breakers', 'ashford',
@@ -105,7 +97,6 @@ export const STAGE4_TABLE: ContentRow[] = [
   flagRow('#treatyAppetite', 'treatyAppetite', {
     late: true,
     mechanic: true,
-    // Treaty 75 %, or from 21:30 (a late row's date fallback, §4.1 item 2).
     trigger: (s) => s.s4.talks === 'open' && (s.s4.treaty >= 75 || ts(s) >= 1290),
     prereq: (s) => s.s4.talks === 'open',
   }),

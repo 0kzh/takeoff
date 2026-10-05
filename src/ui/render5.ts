@@ -10,14 +10,6 @@ import { byId, setText, setDisabled } from './dom.js';
 import { meterSpan } from './render4.js';
 import type { Perform } from './render.js';
 
-/**
- * Stage 5's screen (stage5.md §6): `panel-space` at the top of the left column (the four rows with their
- * returns, the standing split, the Industry share with both clocks, the mission line, the swarm); Stores
- * as the main panel with the flow, the two purses and what they built, Earth below in its own grey box;
- * Stats trimmed to the model, the copies and value drift. Visibility stays with `revealed` flags; this
- * module writes text and moves two panels for the stage.
- */
-
 let perform: Perform;
 let current: GameState | null = null;
 
@@ -36,7 +28,6 @@ export function mount5(p: Perform): void {
     const slider = byId<HTMLInputElement>(id);
     slider.addEventListener('input', () => {
       perform('setSplitShare', row, Number(slider.value));
-      // A slider cannot take what the others hold: it snaps back to what was set.
       if (current) slider.value = String(Math.round(current.s5.split[row] * 100));
     });
   }
@@ -46,8 +37,6 @@ export function mount5(p: Perform): void {
     earth: { parent: byId('panel-earth').parentElement!, next: byId('panel-earth').nextElementSibling },
   };
 }
-
-// ---------- the layout: Space at the top of the left column, Earth under Stores ----------
 
 let home: Record<'space' | 'earth', { parent: HTMLElement; next: Element | null }> | null = null;
 let laidOut = false;
@@ -76,8 +65,6 @@ export function renderStage5(s: GameState): void {
   renderStores5(s);
   renderStats5(s);
 }
-
-// ---------- the Space panel (§2.1, §2.2) ----------
 
 function renderSpace(s: GameState): void {
   for (const [row, id] of ROW_IDS) {
@@ -113,8 +100,6 @@ function renderSpace(s: GameState): void {
   }
 }
 
-// ---------- Stores (§2.5) ----------
-
 function renderStores5(s: GameState): void {
   const f = s.s5;
   setText('launchMass', `${fmtShortNum(f.massFlow)} t/s`);
@@ -136,7 +121,6 @@ function renderStores5(s: GameState): void {
   setText('earthRobots', fmtShortNum(s.robots));
   const gpus = earthGpus(s);
   setText('earthGpus', fmtShortNum(gpus));
-  // 1 kW per GPU-equivalent: GW, then TW.
   const gw = gpus / 1e6;
   setText('earthPower', gw >= 1000 ? `${fmtNum(gw / 1000, 1)} TW` : `${fmtNum(gw, 1)} GW`);
   const grey = byId('panel-earth');
@@ -144,13 +128,9 @@ function renderStores5(s: GameState): void {
   if (grey.classList.contains('quiet') !== quiet) grey.classList.toggle('quiet', quiet);
 }
 
-// ---------- Stats (§2.5): the model, the copies, value drift ----------
-
 function renderStats5(s: GameState): void {
   setText('statModel', `${s.training.modelName} · ${fmtInt(bestCapability(s))}×`);
   setText('statCopiesThinking', fmtBig(copies(s)));
-  // After Von Neumann probes the counter counts probes; before, it is what Stage 4 left.
   const f = s.s5;
-  // Nothing explains it (§2.3): no hover.
   setText('statDrift5', f.probesTotal > 0 ? `${fmtInt(Math.floor(f.probesLost))} probes` : fmtBig(Math.floor(s.stats.lostToDrift ?? 0)));
 }

@@ -1,5 +1,3 @@
-/** Console line pools. Tone: flat, present tense, slightly wry, no exclamation marks. */
-
 export const TRAINING_FLAVOR: string[][] = [
   [
     'Loss curve looks healthy.',
@@ -77,7 +75,6 @@ export const REDTEAM_LINES: string[] = [
   'Red team fixes a refusal that was too polite to be useful.',
 ];
 
-/** Second sentence of the release log line. */
 export const RELEASE_HEADLINES: string[] = [
   'The demo works on the first try.',
   'Enterprise waitlist doubles.',
@@ -86,7 +83,6 @@ export const RELEASE_HEADLINES: string[] = [
   'A columnist calls it competent. It is meant as a warning.',
 ];
 
-/** Rival lab releases (Anthrosoft). `{name}` is the model. */
 export const RIVAL_LINES: string[] = [
   'Anthrosoft ships a new Cadence. Its benchmark table has one more column than ours.',
   'Anthrosoft ships a new Cadence. Customers ask for a comparison.',

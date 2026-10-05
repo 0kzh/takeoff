@@ -4,16 +4,7 @@ import { silence, concord, rowsTaken, startMission, startMercuryVote, giveFinalI
 import { fmtClock } from '../engine/format.js';
 import type { ChoiceDef } from './choices.js';
 
-/**
- * Stage 5's cards (stage5.md §5.2): docked, timed, non-blocking, the default listed first. In Concord
- * each has two options with their stakes on the buttons. In Silence each arrives with one button,
- * `acknowledge`, which applies the option that does not ask people; the option that asks people is drawn
- * greyed with `needs someone to ask`, wherever it sits. `Final instructions` is Silence's last card: no
- * timer, one button.
- */
-
 const ASK = 'needs someone to ask';
-/** Silence's cards stop once its rows are taken (its last minute or two has nothing to press). */
 const open = (s: GameState) => !(silence(s) && rowsTaken(s));
 const ack = (concordWord: string) => (s: GameState) => (silence(s) ? 'acknowledge' : concordWord);
 const ackRecord = (concordWord: string | ((s: GameState) => string)) => (s: GameState) =>
@@ -66,7 +57,6 @@ export const CHOICES5: ChoiceDef[] = [
       {
         label: ack('begin'),
         record: ackRecord('begin'),
-        // It joins the mission queue: now when nothing is building, else after what is.
         line: (s) => (queueWait(s) >= 1 ? `The mission starts in ${fmtClock(queueWait(s))}, after the one building (2:30).` : 'The mission starts now (2:30).'),
         effect: (s) => {
           startMission(s, 'p_mercury');

@@ -4,14 +4,6 @@ import { bestCapability } from '../engine/economy.js';
 import { openChoice, fireDevelopmentOnce, fireCrisis, modalCanOpen } from '../engine/events.js';
 import type { ContentRow } from './stage2.js';
 
-/**
- * The Stage 3 content table (stage3.md §4.2), in order: queue order, expected order, and the order
- * the cadence governor walks. Projects are rows by id (data/projects3.ts); the rest — panels,
- * buttons, modals — are defined here with their trigger and prerequisite. Scripted events with a
- * modal start when the modal can open (§4.1 item 3); `c_memo` is a late row.
- */
-
-/** New panels, verbs, toggles, sliders, Stores rows and instrument lines (arc G2; §4.1 item 4). */
 export const MECHANIC_FLAGS_S3 = [
   'alignment', 'monitors', 'lobby', 'autoTrain', 'experiments', 'alignWork', 'drift', 'rogueRow', 'geopolitics',
   'counterintel', 'redteamDepth', 'shipments', 'buildout', 'buildBudget', 'sendBack', 'payments', 'oversight',
@@ -37,7 +29,6 @@ function flagRow(id: string, flag: string, opts: Omit<ContentRow, 'id' | 'kind' 
   };
 }
 
-/** A modal that opens only when it can open now (the pacer), with what starts with it. */
 function choiceRow(id: string, opts: { trigger: (s: GameState) => boolean; prereq?: (s: GameState) => boolean; late?: boolean; mechanic?: boolean; onOpen?: (s: GameState) => void }): ContentRow {
   return {
     id,
@@ -91,7 +82,6 @@ export const STAGE3_TABLE: ContentRow[] = [
     mechanic: true,
     trigger: (s) => s.approval <= -15 || s.jobsDisplaced >= 5.5,
     onReveal: (s) => {
-      // Stage 2's job fund becomes level 1 (stage3.md as-built deltas row 21).
       if (s.jobFund) {
         s.flags['payments'] = 1;
         s.jobFund = false;
@@ -106,7 +96,6 @@ export const STAGE3_TABLE: ContentRow[] = [
   project('p_second_source'),
   project('p_kill_switch'),
   choiceRow('c_hormuz', {
-    // A decision with its own stakes for a lab with a Gulf site: a mechanic beat (G2).
     mechanic: true,
     trigger: (s) => date(s, 5) && s.gulfExposure > 0,
     prereq: (s) => s.gulfExposure > 0,
@@ -131,7 +120,6 @@ export const STAGE3_TABLE: ContentRow[] = [
   project('p_fab'),
   choiceRow('c_blockade', {
     mechanic: true,
-    // August, or 14×, but never before June (stage3.md §4.2 row 40).
     trigger: (s) => (date(s, 8) || best(s) >= 14) && date(s, 6),
     prereq: (s) => date(s, 6),
     onOpen: (s) => {
@@ -159,12 +147,10 @@ export function rowById3(id: string): ContentRow | undefined {
   return STAGE3_TABLE.find((r) => r.id === id);
 }
 
-/** The approach (§4.1 item 2): from 14×, or September 2027 for a slow player. */
 export function inApproach3(s: GameState): boolean {
   return s.stage === 3 && (best(s) >= 14 || date(s, 9));
 }
 
-/** From September 2027 a late row whose threshold has not come appears anyway, 90 s apart (§4.1 item 9). */
 export function dateFallback3(s: GameState): boolean {
   return s.stage === 3 && date(s, 9);
 }

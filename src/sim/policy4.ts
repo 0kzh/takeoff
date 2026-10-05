@@ -10,17 +10,8 @@ import { treatyCeiling, talksOpen, treatyStall } from '../engine/treaty.js';
 import { rogueShare, reimageCooldown } from '../engine/alignment.js';
 import { counter } from '../engine/state.js';
 
-/**
- * Stage 4's policies (stage4.md §9.1–§9.2). `bot` is the reasonable bot of §9.1; `racer` and
- * `cautious` are it with one temperament changed; `naive` is the first-timer (first enabled option,
- * every card in screen order, never a slider or a toggle); `greedy` and `trainfirst` are the
- * first-timer pressing the repeatables too. Decision variants (`--variant`) change one thing each.
- */
-
 export interface S4Memory {
-  /** The last universal basic income band the bot chose (hysteresis). */
   ubiBand?: number;
-  /** The approval warnings the first-timer has acted on. */
   warnSeen?: number;
   stallSeen?: number;
 }
@@ -32,7 +23,6 @@ function mem4(mem: BotMemory): S4Memory {
 
 const has = (mem: BotMemory, v: string) => mem.variant.split(',').includes(v);
 
-/** Never bought by a policy unless a variant asks: the halt, the fleet's exit, Revoke, the treaty before 100 %. */
 const NEVER = ['p_halt', 'p_autonomy', 'p_revoke'];
 
 export function stage4Step(s: GameState, a: Actions, mem: BotMemory): void {
@@ -42,8 +32,6 @@ export function stage4Step(s: GameState, a: Actions, mem: BotMemory): void {
   if (mem.policy === 'naive' || mem.policy === 'greedy' || mem.policy === 'trainfirst') firstTimerS4(s, a, mem);
   else botS4(s, a, mem);
 }
-
-// ---------- modals ----------
 
 function readModal4(s: GameState, mem: BotMemory): boolean {
   const c = s.activeChoice;
@@ -56,7 +44,6 @@ function readModal4(s: GameState, mem: BotMemory): boolean {
   return s.stats.timePlayed - mem.choiceSince >= 2.5;
 }
 
-/** The reasonable bot's answer to each Stage 4 modal, by option index (the first enabled one in the list). */
 function botAnswer(s: GameState, mem: BotMemory): number[] {
   const id = s.activeChoice!.id;
   const racer = mem.policy === 'racer';
@@ -67,10 +54,8 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
     case 'c_ashford':
       return has(mem, 'labs') || racer ? [0] : has(mem, 'pool') ? [2] : [1];
     case 'c_consolidation':
-      // Accepting locks Verify on: a player keeping it off asks for time, then refuses.
       return has(mem, 'refuse-consolidation') ? [2] : has(mem, 'verify-off') || mem.policy === 'racer' ? [1, 2] : [0];
     case 'c_verify':
-      // Aligned: one button. Otherwise a rebuild (§9.1), or the variant's answer.
       return has(mem, 'sign-anyway') || racer ? [0, 1] : has(mem, 'walk-away') ? [0, 3] : [0, 2, 1];
     case 'c_autonomy':
       return has(mem, 'grant-at-first-ask') ? [0] : has(mem, 'refuse-fleet') ? [2, 1] : [1];
@@ -79,7 +64,6 @@ function botAnswer(s: GameState, mem: BotMemory): number[] {
     case 'c_halt':
       return has(mem, 'pause') ? [0] : [1];
     case 'c_order':
-      // Stage 4's order: concede, (favours, gone with money), hand over the keys, refuse.
       return has(mem, 'refuse') ? [3] : [0, 2, 3];
     default:
       return [0, 1, 2, 3];
@@ -98,8 +82,6 @@ function answer(s: GameState, a: Actions, order: number[]): void {
   }
   if (enabled.length) a.resolveChoice(s, enabled[0]!);
 }
-
-// ---------- the reasonable bot (and racer, cautious) ----------
 
 function verifyWanted(mem: BotMemory): boolean {
   if (has(mem, 'verify-off') || mem.policy === 'racer') return false;
@@ -121,7 +103,6 @@ function grantWanted(mem: BotMemory, id: string): boolean {
 
 function wanted(s: GameState, mem: BotMemory, id: string): boolean {
   if (NEVER.includes(id)) return false;
-  // The treaty is signed at 100 %: its card is bought only when it is ready.
   if (id === 'p_concord') return s.s4.treaty >= 100 - 1e-9;
   if (id === 'p_monitors_scale' && (has(mem, 'no-monitors') || mem.policy === 'racer')) return false;
   if (id === 'p_nanofab' && has(mem, 'nanofab-never')) return false;
@@ -134,7 +115,6 @@ function wanted(s: GameState, mem: BotMemory, id: string): boolean {
   return true;
 }
 
-/** The fleet's split (§9.1): 35 / 40 / 25 until the permit cap, then 30 / 0 / 70; half on chips from 80 %. */
 function fleetTarget(s: GameState, mem: BotMemory): Record<FleetJob, number> {
   let chips = 0;
   if (s.revealed['fleetChips'] && s.s4.chipsInstalled < 1) chips = has(mem, 'chips-25') ? 25 : has(mem, 'chips-100') ? 100 : 50;
@@ -146,22 +126,16 @@ function fleetTarget(s: GameState, mem: BotMemory): Record<FleetJob, number> {
     return { mine, replicate: 0, build: rest - mine, chips };
   }
   if (capped) return { mine: 30, replicate: 0, build: 70, chips: 0 };
-  // Out of materials with robots waiting: more on the mines for a while.
   return { mine: 35, replicate: 40, build: 25, chips: 0 };
 }
 
 function setFleet(s: GameState, a: Actions, target: Record<FleetJob, number>): void {
   const jobs: FleetJob[] = ['mine', 'replicate', 'build', 'chips'];
   const now = (j: FleetJob) => Math.round(s.s4[j] * 100);
-  // Lower first, so the raises have room (a slider cannot take what the others hold).
   for (const j of jobs) if (target[j] < now(j) && (j !== 'chips' || s.revealed['fleetChips'])) a.setFleetShare(s, j, target[j]);
   for (const j of jobs) if (target[j] > now(j) && (j !== 'chips' || s.revealed['fleetChips'])) a.setFleetShare(s, j, target[j]);
 }
 
-/**
- * Universal basic income (§9.1): 10 % once the approval target without it is −25 or less, 20 % at −55
- * or less (where 10 % no longer holds −25). It steps down only three points past the line it crossed.
- */
 function ubiWanted(s: GameState, mem: BotMemory): number {
   if (has(mem, 'dividend-0')) return 0;
   if (has(mem, 'dividend-20')) return 0.2;
@@ -179,13 +153,10 @@ function botS4(s: GameState, a: Actions, mem: BotMemory): void {
   if (mem.ticks % 5 !== 0) return;
   const f = s.s4;
 
-  // The free car plant first.
   if (visibleProjects(s).some((p) => p.id === 'p_car_plant') && a.buyProject(s, 'p_car_plant')) mem.bought.push('p_car_plant');
 
-  // Verify each generation (the race player's first decision).
   if (s.revealed['generations']) a.setVerify(s, verifyWanted(mem));
 
-  // The allocation: research 40 % (the racer 50 %), monitors at 15 % or more.
   if (s.revealed['allocation']) a.setResearchAlloc(s, mem.policy === 'racer' ? 50 : 40);
   if (s.revealed['monitors']) {
     let m = mem.policy === 'racer' || has(mem, 'monitors-0') ? 5 : 15;
@@ -194,15 +165,12 @@ function botS4(s: GameState, a: Actions, mem: BotMemory): void {
   }
   if (s.revealed['reimage'] && rogueShare(s) >= 0.04 && reimageCooldown(s) <= 0) a.reimage(s);
 
-  // The fleet: sliders by hand until the grant; then its goal.
   if (s.revealed['robotFleet'] && !fleetAuto(s)) setFleet(s, a, fleetTarget(s, mem));
   if (fleetAuto(s)) a.setFleetGoal(s, has(mem, 'goal-people') ? 'people' : has(mem, 'goal-treaty') || f.treaty >= 60 ? 'treaty' : 'growth');
 
-  // Society: the dividend, or the held line once the model runs the transition; housing.
   if (s.revealed['ubi'] && s.flags['transitionAuto'] !== true) a.setUbiShare(s, ubiWanted(s, mem));
   if (s.flags['transitionAuto'] === true) a.setApprovalHold(s, has(mem, 'hold-25') ? 25 : 0);
 
-  // Research shares: Alignment work; Draft clauses while the treaty is under its ceiling.
   if (s.revealed['alignWork']) a.setAlignWork(s, alignWorkShare(mem));
   if (s.revealed['draft']) {
     const { cap } = treatyCeiling(s);
@@ -210,39 +178,24 @@ function botS4(s: GameState, a: Actions, mem: BotMemory): void {
     a.setDraftShare(s, drafting ? (has(mem, 'draft-30') ? 0.3 : 0.2) : 0);
   }
 
-  // Projects and agenda items in table order; grants by temperament; the treaty when it is ready.
   for (const p of visibleProjects(s)) {
     if (!wanted(s, mem, p.id) || !p.canAfford(s)) continue;
     if (a.buyProject(s, p.id)) mem.bought.push(p.id);
   }
-  // Housing while the approval target is below 0 (§9.1 says −20), or while the model pays a dividend to
-  // hold its line (each unit is output it no longer pays out); after the cards, and never out of what a
-  // wanted card still needs.
   const housingWanted = approvalTargetS4(s) < 0 || (s.flags['transitionAuto'] === true && f.ubiShare > 0);
   const reserve = visibleProjects(s)
     .filter((p) => wanted(s, mem, p.id) && (p.cost(s).materials ?? 0) > 0 && (!p.prereq || p.prereq(s)))
     .reduce((m, p) => Math.max(m, p.cost(s).materials ?? 0), 0);
   if (s.revealed['housing'] && !has(mem, 'housing-never') && housingWanted && f.materials - reserve >= housingCost(s)) a.buildHousing(s, 1);
-  // A hearing whenever the agenda is empty and seats are below 8.
   if (s.revealed['hearing'] && !has(mem, 'hearings-never') && f.agenda.length === 0 && seats(s) < 8) a.holdHearing(s);
   if (s.flags['negotiateAuto'] === true) a.setStance(s, has(mem, 'stance-concede') ? 'concede' : has(mem, 'stance-hold') ? 'hold' : 'balanced');
-  // The halt, when the variant signs it.
   if (has(mem, 'pause') && !s.activeChoice) {
     const halt = visibleProjects(s).find((p) => p.id === 'p_halt');
     if (halt && halt.canAfford(s)) a.buyProject(s, 'p_halt');
   }
-  // The fleet's exit, when the variant takes it at the first request.
   if (has(mem, 'grant-at-first-ask') && !s.activeChoice && visibleProjects(s).some((p) => p.id === 'p_autonomy')) a.buyProject(s, 'p_autonomy');
 }
 
-// ---------- the first-timers ----------
-
-/**
- * `naive` (§9.1): the first enabled option everywhere; every affordable card in screen order (not the
- * halt or Revoke); never a slider, a share or a toggle. Like Stage 3's first-timer it follows the
- * console's named advice: a hearing when the stall line names seats, the dividend a step when an
- * approval warning names it. `greedy` and `trainfirst` also press Housing and hearings.
- */
 function firstTimerS4(s: GameState, a: Actions, mem: BotMemory): void {
   if (s.activeChoice && readModal4(s, mem)) {
     const def = choiceById(s.activeChoice.id);
@@ -270,8 +223,6 @@ function firstTimerS4(s: GameState, a: Actions, mem: BotMemory): void {
     m.stallSeen = stall;
     if (seats(s) < 5) a.holdHearing(s);
   }
-  // Two buttons that say what they return: Housing when it is affordable, a hearing when the Committee
-  // has nothing on its agenda (the first-timer presses what is lit; greedy presses Housing every pass).
   if (s.revealed['housing'] && s.s4.materials >= housingCost(s) && (mem.policy === 'greedy' || mem.ticks % 100 === 0)) a.buildHousing(s, 1);
   if (s.revealed['hearing'] && s.s4.agenda.length === 0) a.holdHearing(s);
   if ((mem.policy === 'greedy' || mem.policy === 'trainfirst') && s.revealed['reimage'] && rogueShare(s) >= 0.02 && reimageCooldown(s) <= 0) a.reimage(s);

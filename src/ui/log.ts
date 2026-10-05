@@ -7,18 +7,12 @@ const MONTH_NAMES: Record<string, string> = {
   Jul: 'July', Aug: 'August', Sep: 'September', Oct: 'October', Nov: 'November', Dec: 'December',
 };
 
-/** Entries drawn in the column; older ones have faded out of view anyway (ADR). Stage 2 on: four. */
 export const LOG_SHOWN = 5;
 const logShown = (s: GameState): number => (s.stage >= 2 ? 4 : LOG_SHOWN);
 
 let lastKey = '';
 let lastLength = -1;
 
-/**
- * ADR notification column, newest on top, fading out at the bottom. Entries are grouped under a
- * month heading (`Sep 2025`) instead of repeating the date on every line; each is still stored as
- * `Mon YYYY — text`. Lines that arrived since the last draw fade in.
- */
 export function renderLog(s: GameState): void {
   const last = s.log[s.log.length - 1];
   const key = `${s.log.length}|${last?.date ?? ''}|${last?.text ?? ''}|${logShown(s)}`;
@@ -37,7 +31,6 @@ export function renderLog(s: GameState): void {
     const fresh = i >= freshFrom ? ' fresh' : '';
     if (entry.date !== month) {
       month = entry.date;
-      // The header shows the year; a heading in the same year needs only the month.
       const heading = month.endsWith(currentYear) ? MONTH_NAMES[month.slice(0, 3)] ?? month : month;
       list.append(make('div', { class: `logMonth${oldMonths.has(month) ? '' : fresh}` }, heading));
     }

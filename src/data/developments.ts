@@ -3,31 +3,17 @@ import { monthOf, fmtNum } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { moveLead } from '../engine/world.js';
 
-/**
- * World timeline for the Developments log. Each entry fires on `month` (months since Jul 2025)
- * or on `trigger`, whichever comes first, and the log stamps it with the current game date.
- * Stage 1 runs at five minutes a month: Aug ≈ 5:00, Sep ≈ 10:00, Oct ≈ 15:00, Nov ≈ 20:00, Dec ≈ 25:00.
- * Stage 2 runs at 3½ minutes a month: Feb ≈ 3:30, Apr ≈ 10:30, Jul ≈ 21:00, Oct ≈ 31:30, Dec ≈ 38:30.
- * Entries fire only in their own stage.
- */
 export interface DevelopmentDef {
   id: string;
   stage: number;
   text?: string | ((s: GameState) => string);
   month?: number;
   trigger?: (s: GameState) => boolean;
-  /** Must hold for the entry to fire at all, by date or by trigger (e.g. the Pentagon needs relations ≥ 40). */
   requires?: (s: GameState) => boolean;
   console?: string;
   crisis?: string;
   choice?: string;
   effect?: (s: GameState) => void;
-  /**
-   * Stage 1's calendar is a queue (stage1-round3-fixes.md §4): these open in `month` order, the first
-   * 60 s after the first release and each later one 2:36 after the last was answered, never while a
-   * run waits for evaluation, Red-team or Release (engine/events.ts `updateCalendar`). One whose
-   * `requires` fails gives its slot to the next and comes back.
-   */
   calendar?: boolean;
 }
 
@@ -38,12 +24,10 @@ const num = (s: GameState, k: string): number => {
 
 
 export const DEVELOPMENTS: DevelopmentDef[] = [
-  // ---- Stage 1: Jul 2025 → Dec 2025 ----
   {
     id: 'd_agents',
     stage: 1,
     text: 'Agents can order food and fill spreadsheets. Sometimes.',
-    // The Developments column is the reveal between the first GPUs and the first Trust.
     trigger: (s) => s.stats.timePlayed >= 100 || s.tasks >= 600,
   },
   {
@@ -72,12 +56,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     month: monthOf(2025, 9),
     trigger: (s) => s.priceRaises >= 3 && s.stats.timePlayed >= 300,
   },
-  // Each calendar event waits for what it talks about (critic round 3 §6.3: a $15,000 bridge round
-  // at 0 tasks; two researchers leaving a lab of one). The six are a queue behind the player's
-  // progress (`calendar`); one whose condition fails gives its slot to the next and comes back, and
-  // any still waiting are dropped with the stage.
-  // The calendar's first event, always: Anthrosoft arrives as a dialog (`A Rival Lab`), a minute after
-  // Sage's first public release. Its first Cadence ships as the dialog opens (choices.ts `c_anthrosoft`).
   {
     id: 'd_anthrosoft',
     stage: 1,
@@ -92,7 +70,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     choice: 'c_bridge',
     calendar: true,
     month: monthOf(2025, 9) + 0.2,
-    // A fund bridges a business with money coming in, ahead of a proper round.
     requires: (s) => s.stats.revPerSec >= 10 && !(s.projects['p_series_a']?.bought ?? 0),
   },
   {
@@ -101,8 +78,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
-  // ---- The calendar: after `A Rival Lab`, six choices in this order, each 2:36 after the last was
-  // answered. ----
   {
     id: 'd_rival',
     stage: 1,
@@ -110,7 +85,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     choice: 'c_rival',
     calendar: true,
     month: monthOf(2025, 9) + 0.85,
-    // A rival undercuts a released model, at a price there is room to cut.
     requires: (s) => s.stats.publicReleases >= 1 && s.price > 0.1,
   },
   {
@@ -130,7 +104,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     text: 'Anthrosoft finishes the most expensive training run in history. Ours is next.',
     month: monthOf(2025, 11),
-    // Not before Anthrosoft has arrived (`d_anthrosoft`).
     requires: (s) => s.revealed['rival'] === true,
     trigger: (s) => s.training.runIndex >= 3,
   },
@@ -151,7 +124,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_journalist',
     calendar: true,
-    // The piece is about how a released model was tested, and the answer costs research.
     requires: (s) => s.stats.publicReleases >= 1 && s.revealed['research'] === true,
     text: 'A reporter is writing about how frontier models are tested. Nobody is sure who tests them.',
     month: monthOf(2025, 10) + 0.5,
@@ -161,7 +133,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_letter',
     calendar: true,
-    // Signatories who work here, and three who can resign with a lab left behind them.
     requires: (s) => s.researchers >= 5,
     text: 'Two hundred researchers sign a letter asking frontier labs to slow down. Eleven work at OpenMind.',
     month: monthOf(2025, 11) + 0.15,
@@ -190,7 +161,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_poach',
     calendar: true,
-    // Two researchers to poach, and a lab left behind them.
     requires: (s) => s.researchers >= 3,
     text: 'Pay for AI researchers passes that of professional athletes. Nobody checks the comparison.',
     month: monthOf(2025, 11) + 0.8,
@@ -200,7 +170,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_leaderboard',
     calendar: true,
-    // The board ranks a lab with a record: two released models. It names Anthrosoft, so not before it.
     requires: (s) => s.stats.publicReleases >= 2 && s.revealed['rival'] === true,
     month: monthOf(2025, 12) + 0.45,
   },
@@ -217,7 +186,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     month: monthOf(2026, 1),
     trigger: (s) => s.stats.incidents >= 1,
   },
-  // ---- Stage 2: Jan 2026 → Dec 2026 (stage2.md §5.1) ----
   {
     id: 'd_fifth_code',
     stage: 2,
@@ -248,7 +216,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 2,
     choice: 'c_hearing',
     month: monthOf(2026, 5),
-    // stage2.md says 300k tasks/s; the built economy reaches 80k where the paper model reached 300k.
     trigger: (s) => s.stats.tasksPerSec >= 80000,
   },
   {
@@ -333,7 +300,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 2,
     text: 'An intrusion at Abilene is stopped at the air gap. Nobody outside hears of it.',
   },
-  // ---- Stage 3: Jan 2027 → Oct 2027, 270 s a month (stage3.md §5.1) ----
   {
     id: 'd_airgap3',
     stage: 3,
@@ -435,7 +401,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     },
     month: monthOf(2026, 12),
   },
-  // ---------- Stage 4 (stage4.md §5.1) ----------
   { id: 'd_parity_scare', stage: 4, text: 'Washington hears that Baiwen-4 is as good as anything OpenMind has. The Committee asks for talks.' },
   { id: 'd_factory', stage: 4, text: 'The first Atlas factory makes an Atlas factory.' },
   { id: 'd_car_plants', stage: 4, text: 'A tenth of America\'s car plants now make robots. A hundred thousand a month.', month: monthOf(2028, 2) },

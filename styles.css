@@ -1,5 +1,3 @@
-/* Takeoff — Universal Paperclips layout, A Dark Room log and modals. Black, white and greys only. */
-
 body {
   font-family: "Times New Roman", Times, serif;
   font-size: 16px;
@@ -21,7 +19,6 @@ hr {
 [data-reveal] { display: none; }
 span[data-reveal].shown { display: inline; }
 div[data-reveal].shown, .panel.shown { display: block; }
-/* `data-hide="flag"`: hidden while the flag is on (a line whose value moved into Stores). */
 .hideFlag { display: none !important; }
 
 .note { color: #555; font-size: 13px; }
@@ -32,16 +29,12 @@ div[data-reveal].shown, .panel.shown { display: block; }
 #buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart, #gasMW, #solarMW, #nuclearMW { display: none; }
 #buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown, #gasMW.shown, #solarMW.shown, #nuclearMW.shown { display: inline; }
 #trainCosts { margin-top: 4px; }
-/* A bar keeps its box when it is shown (as an inline it collapsed to an empty frame). */
 .costRow { display: none; align-items: center; gap: 8px; }
 .costRow.shown { display: flex; }
 .costRow .progress { width: 140px; flex: none; margin: 2px 0; }
 .costText { white-space: nowrap; }
-/* The first render after a load restores the screen; only later reveals fade in. */
 body.boot * { animation: none !important; }
 #marketState { white-space: nowrap; }
-
-/* ---------- reveals read as reveals (ADR fades new elements in; UP blinks new projects) ---------- */
 
 @keyframes revealIn {
   from { opacity: 0; }
@@ -54,7 +47,6 @@ body.boot * { animation: none !important; }
   animation: revealIn 0.8s ease-out;
 }
 #modalOverlay.shown { animation-duration: 0.3s; }
-/* The opening screen is not a reveal. */
 #consoleDiv.shown, #panel-task.shown, #panel-power.shown { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   [data-reveal].shown,
@@ -65,8 +57,6 @@ body.boot * { animation: none !important; }
     animation: none;
   }
 }
-
-/* ---------- console (UP) ---------- */
 
 #consoleDiv {
   background: #000;
@@ -96,8 +86,6 @@ p.console { color: #fff; }
   100% { opacity: 0; }
 }
 
-/* ---------- header row ---------- */
-
 #topDiv {
   display: flex;
   justify-content: space-between;
@@ -108,14 +96,6 @@ p.console { color: #fff; }
 h2 { line-height: 70%; margin: 18px 0 14px; }
 #gameDate { font-size: 16px; padding-right: 4px; }
 
-/* ---------- columns ---------- */
-
-/*
- * Left to right in the order they fill: the lab's own rows, Training (from the first GPU), Research and
- * Projects (about 3:00), then Developments (3:30). No column stands empty between two with panels, and
- * none moves when a later one arrives. Stage 4 makes Stores the centre column, so there the centre
- * column keeps the page's order.
- */
 #columns { display: flex; align-items: flex-start; gap: 12px; }
 .column { flex: none; }
 #middleColumn { order: 1; }
@@ -128,8 +108,6 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
 
 .panel { margin-bottom: 16px; line-height: 1.3; }
 #panel-task { margin-bottom: 10px; }
-
-/* ---------- Developments log (ADR) ---------- */
 
 #panel-log { position: relative; }
 #logList {
@@ -152,8 +130,6 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
 .logEntry { margin-bottom: 8px; }
 .logEntry.choice { font-style: italic; }
 .logDate { white-space: nowrap; }
-
-/* ---------- buttons (UP .button2) ---------- */
 
 .button2 {
   border: 1px solid #1a1a1a;
@@ -197,7 +173,6 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   font-weight: bold;
 }
 
-/* ADR cooldown: the training bar drains behind the label. */
 .cooldown {
   position: relative;
   overflow: hidden;
@@ -212,9 +187,7 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   background: #888;
 }
 .cooldownLabel { position: relative; }
-/* Release and Keep internal fill as the rollout runs; they keep their own width. */
 #btn-release, #btn-releaseInternal { min-width: 0; }
-/* While it cools the button is the training bar: black border, white track, gray fill. */
 .cooldown.cooling, .cooldown.cooling:hover, .cooldown.cooling:active {
   background: #fff;
   border: 1px solid #000;
@@ -224,12 +197,9 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   opacity: 1;
 }
 
-/* ---------- projects (UP .projectButton) ---------- */
-
 .projectButton {
   display: block;
   width: 275px;
-  /* UP's 60 px card, grown when a title and its price wrap (no clipped description). */
   min-height: 60px;
   height: auto;
   background: #c8c8c8;
@@ -246,23 +216,16 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   cursor: pointer;
 }
 .projectButton:hover { border: 1px solid rgba(0, 0, 0, 0.25); }
-/* A read card keeps its title and price; its description lives in the hover (the on-screen budget). */
 .projectButton.folded .projectDesc,
 .projectButton.folded br { display: none; }
 .projectButton:active { background: #d1d1d1; border: 1px solid #000; }
 .projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
 .projectButton.rescue { border-style: dashed; }
 .projectButton.pinned { border-width: 2px; }
-/* Needed now: a wall's answer or a card the stage cannot go on without (arc G31). Stages 1–2 draw their
-   cards as they were first built (plain, dashed for a rescue, heavier for a pinned goal); the mark is
-   Stage 3's and later. */
 body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent { border-left: 5px solid #000; }
 body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectTitle::after { content: ' — needed'; font-weight: normal; font-style: italic; }
-/* A Stage 5 mission says what its fund lacks, under its sentence. */
 .projectReason { display: block; }
 .projectReason:empty { display: none; }
-
-/* ---------- training ---------- */
 
 #train-idle, #train-running, #train-eval, #train-redteam { display: none; margin-top: 6px; }
 #train-idle.shown, #train-running.shown, #train-eval.shown, #train-redteam.shown { display: block; }
@@ -282,7 +245,6 @@ body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectT
 .benchFill { transition: width 0.3s; }
 .benchValue { width: 30px; text-align: right; }
 
-/* The bars and the reviewers' lines carry the evaluation; the total below has the numbers. */
 .benchValue, .cardScore { display: none; }
 #train-eval.collapsed #evalHeader,
 #train-eval.collapsed #benchmarks,
@@ -293,9 +255,6 @@ body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectT
 .cardLine { font-style: italic; }
 #evalTotal { font-size: 14px; margin-bottom: 4px; }
 
-/* ---------- Stage 2: Stores (A Dark Room), inline reasons, toggles ---------- */
-
-/* ADR's stores: a 1 px box with its legend punched through the top border. */
 .stores {
   position: relative;
   border: 1px solid #000;
@@ -323,11 +282,8 @@ div.storeRow[data-reveal] { display: none; }
 div.storeRow[data-reveal].shown { display: flex; }
 .storeRow:hover .storeKey, .storeRow.tipOpen .storeKey { text-decoration: underline; }
 .storeVal { text-align: right; white-space: nowrap; }
-/* A long row wraps inside the box instead of running past it (critic S3 round 1 §9 item 8: the GPU row
-   ran 12 px past the box from the millionth GPU): the meter keeps its line, the figures move under it. */
 .storeRow { flex-wrap: wrap; }
 .storeRow .storeVal { white-space: normal; margin-left: auto; min-width: 0; }
-/* A row's words (`runs 5,000 GPUs`, `the halls are full · Build Datacenter`) sit under its figure. */
 #gpuFull, #powerFull { display: block; white-space: normal; line-height: 1.2; }
 #storeTip {
   display: none;
@@ -364,8 +320,6 @@ div.storeRow[data-reveal].shown { display: flex; }
 #train-eval.condensed #evalTotal { display: none; }
 #train-eval.condensed #evalLine { display: block; }
 
-/* ---------- Stage 2: the capability graph (stage2.md §3) ---------- */
-
 #graphWrap { position: relative; width: 310px; max-width: 100%; }
 #graphCanvas { display: block; width: 310px; height: 190px; max-width: 100%; border: 1px solid #000; background: #fff; box-sizing: border-box; }
 #graphTip {
@@ -384,9 +338,6 @@ div.storeRow[data-reveal].shown { display: flex; }
 #leadLine { font-size: 14px; display: none; }
 #leadLine.shown { display: inline; }
 
-/* ---------- modal (ADR event panel) ---------- */
-
-/* Non-blocking: the overlay is a positioning layer only; the page behind keeps taking clicks. */
 #modalOverlay {
   display: none;
   position: fixed;
@@ -432,8 +383,6 @@ div.storeRow[data-reveal].shown { display: flex; }
 .modalButton.twoLine:disabled .optLine { color: #999; }
 .modalButton:disabled { color: #999; border-color: #999; text-decoration: none; cursor: default; }
 
-/* ---------- ending ---------- */
-
 #endingScreen {
   display: none;
   position: fixed;
@@ -444,13 +393,10 @@ div.storeRow[data-reveal].shown { display: flex; }
 }
 #endingScreen.shown { display: block; }
 #endingBox { max-width: 520px; margin: 80px auto; }
-/* The end screen is the page (coordinator, round 3): nothing of the game below it, scrolled as a page. */
 body.ended > *:not(#endingScreen):not(#dev) { display: none !important; }
 body.ended #endingScreen { position: static; min-height: 100vh; overflow: visible; }
 @media (max-width: 600px) { #endingBox { margin: 32px 16px; } }
 #endingStats td { padding: 2px 16px 2px 0; }
-
-/* ---------- toast (ADR "saved.") ---------- */
 
 #toast {
   position: fixed;
@@ -462,12 +408,9 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   transition: opacity 1s;
   pointer-events: none;
 }
-/* A repeatable offer (the custom contract) reads as a standing offer, not one more card. */
 .projectButton.repeatable { border: 3px double #000; }
 #focusNote { margin-top: 2px; }
 #toast.visible { opacity: 1; transition: opacity 0.2s; }
-
-/* ---------- dev overlay ---------- */
 
 #dev {
   display: none;
@@ -491,8 +434,6 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 #dev textarea { width: 100%; height: 50px; font-family: inherit; font-size: 10px; box-sizing: border-box; }
 #devHidden { white-space: pre-wrap; border-top: 1px solid #888; margin-top: 4px; padding-top: 4px; }
 
-/* ---------- responsive ---------- */
-
 @media (max-width: 1100px) {
   #topDiv { width: 100%; }
   #columns { flex-wrap: wrap; }
@@ -504,21 +445,14 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 }
 
 @media (max-width: 700px) {
-  /* Developments as a list that scrolls down, not a strip past the screen's edge (critic S3 round 1 §9 item 8). */
   #logList { display: block; max-height: 260px; overflow-x: hidden; overflow-y: auto; }
   .logEntry, .logMonth { flex: none; }
-  /*
-   * One column (stage2.md §6.4): the columns dissolve and the panels take their own order —
-   * Tasks, Stores, Training, Projects, Business, Infrastructure, Research, the graph, then the
-   * world panels; the Developments log is a strip at the bottom.
-   */
   #columns { flex-direction: column; align-items: stretch; }
   .column { display: contents; }
   #columns > .column > .panel { width: 100%; box-sizing: border-box; }
   #panel-task { order: 1; }
   #panel-stores { order: 2; }
   #panel-power { order: 3; }
-  /* From Stage 2 the stage's controls come first: the lots, Train and the slider (critic C10). */
   body[data-stage="2"] #panel-infrastructure { order: 3; }
   body[data-stage="2"] #panel-research { order: 4; }
   #panel-training { order: 4; }
@@ -534,8 +468,6 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   #panel-public { order: 14; }
   #panel-stats { order: 15; }
   #panel-alignment, #panel-geopolitics, #panel-oversight { order: 16; }
-  /* Stage 3 (stage3.md §6.4): Tasks, Stores, Training, the graph, Alignment, Projects, Research,
-     Oversight, Geopolitics, Security, Public, Business, Infrastructure, Stats. */
   body[data-stage="3"] #panel-training { order: 3; }
   body[data-stage="3"] #panel-graph { order: 4; }
   body[data-stage="3"] #panel-alignment { order: 5; }
@@ -552,7 +484,6 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   #allocSlider, #monitorSlider { width: 100%; max-width: 260px; }
   #panel-robots, #panel-society, #panel-treaty, #panel-space { order: 17; }
   #panel-log { order: 30; }
-  /* Stores rows in two columns; a row with two numbers (x / y) takes the whole width. */
   #panel-stores.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
   #row-research, #row-gpus, #row-power, #row-chips, #row-rogue { grid-column: 1 / -1; }
   .projectButton { width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -562,22 +493,16 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   #graphCanvas { width: 100%; height: auto; aspect-ratio: 310 / 190; }
   #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
   #dev { width: auto; left: 8px; }
-  /* Touch targets nearer 44 px (critic round 2 §6.8). The "saved." toast has no free corner on a
-     phone, so it stays silent there rather than cover the last line of text. */
   .button2 { min-height: 36px; padding: 6px 10px; font-size: 13px; margin: 2px 0; }
   .modalButton { min-height: 44px; }
   #toast { display: none; }
 }
 
-/* ---------- Stage 3 (stage3.md §6) ---------- */
-
-/* A control a grant took away (Train, Red-team, Approve, the hall and reactor buttons). */
 .off { display: none !important; }
 #monitorSlider { width: 110px; vertical-align: middle; margin: 0 2px; }
 #experimentsRow, #redteamDepthRow, #stepSizeRow, #holdRow, #alignWorkRow, #buildBudgetRow, #paymentsRow { margin-top: 3px; }
 #shipmentRow, #theftNote { font-size: 14px; }
 #grantList { margin-top: 6px; }
-/* A grant: the hand-over, drawn apart from the cards (UP's probe-trust button sits by itself). */
 .projectButton.grant { width: 310px; min-height: 44px; border-style: double; border-width: 3px; }
 body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent { border: 2px solid #000; font-weight: bold; }
 body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
@@ -592,15 +517,10 @@ body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, 
 #endingChoices div { margin-bottom: 2px; }
 #btn-newGame { font-size: 14px; }
 
-/* Compact versions of the original training bar fit beside capacity figures. */
 .meter { display: inline-block; width: 90px; vertical-align: middle; overflow: hidden; text-align: left; }
-/* A meter sits inside a sentence: an inline fill keeps that sentence on one line when it is read or copied. */
 .meterFill { display: inline-block; vertical-align: top; }
 .meter.warn .meterFill { background: #b00000; }
 
-/* ---------- Stage 4 (stage4.md §6) ---------- */
-
-/* Stores is the main panel: the centre column, its full width. */
 body[data-stage="4"] #middleColumn { width: 360px; }
 body[data-stage="4"] #middleColumn .projectButton { width: 340px; }
 body[data-stage="4"] #panel-stores { font-size: 15px; }
@@ -621,8 +541,6 @@ body[data-stage="4"] #panel-stores { font-size: 15px; }
 #treatyWait:empty, #treatyLeadNote:empty, #societyApprovalNote:empty { display: none; }
 
 @media (max-width: 700px) {
-  /* Stage 4 at 390 px: Tasks, Stores, the fleet, Projects, Alignment (the generation line), the graph,
-     the treaty, the Committee, Society, Research, Security, Stats. */
   body[data-stage="4"] #panel-stores { order: 2; }
   body[data-stage="4"] #panel-robots { order: 3; }
   body[data-stage="4"] #panel-projects { order: 4; }
@@ -639,9 +557,6 @@ body[data-stage="4"] #panel-stores { font-size: 15px; }
   .fleetRow input[type="range"] { width: 45%; }
 }
 
-/* ---------- Stage 5 (stage5.md §6) ---------- */
-
-/* Space at the top of the left column; Stores stays the main panel in the centre, Earth grey under it. */
 body[data-stage="5"] #leftColumn { width: 330px; }
 body[data-stage="5"] #middleColumn { width: 360px; }
 body[data-stage="5"] #middleColumn .projectButton { width: 340px; }
@@ -662,7 +577,6 @@ body[data-stage="5"] #panel-stores { font-size: 15px; }
 #panel-earth.quiet .storeRow:hover .storeKey { text-decoration: none; }
 
 @media (max-width: 700px) {
-  /* Stage 5 at 390 px: Tasks, Stores, Space, Projects, Earth, Stats, the graph. */
   body[data-stage="5"] #panel-stores { order: 2; }
   body[data-stage="5"] #panel-space { order: 3; }
   body[data-stage="5"] #panel-projects { order: 4; }

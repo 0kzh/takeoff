@@ -6,7 +6,6 @@ const TOAST_EVERY_MS = 30000;
 const ACTION_SAVE_DELAY_MS = 250;
 
 export interface Saver {
-  /** Saves after a player action; bursts of clicks collapse into one write. */
   markDirty(): void;
   saveNow(): void;
   clear(): void;
@@ -60,7 +59,6 @@ export function createSaver(state: GameState): Saver {
       localStorage.setItem(SAVE_KEY, serialize(state));
       toast();
     } catch {
-      // Storage full or blocked (private mode): the game keeps running unsaved.
     }
   };
 

@@ -2,7 +2,6 @@ export interface Seeded {
   rngSeed: number;
 }
 
-/** mulberry32 over the seed stored in state, so saves and the sim are reproducible. */
 export function rng(s: Seeded): number {
   s.rngSeed = (s.rngSeed + 0x6d2b79f5) | 0;
   let t = s.rngSeed;

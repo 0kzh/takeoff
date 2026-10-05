@@ -5,16 +5,11 @@ export interface CrisisDef {
   id: string;
   stage: number;
   title: string;
-  /** Console line; a function when it depends on the state (curtailment spared or not). */
   console: string | ((s: GameState, source?: string) => string);
-  /** Developments line; '' for none (a development that fires the crisis has already logged it). */
   log: string | ((s: GameState, source?: string) => string);
-  /** Seconds the penalty lasts; 0 for none. */
   duration: number;
   demandMult: number;
-  /** Stage 2: share of power capacity left while it lasts. */
   powerMult?: number;
-  /** Stage 2: research rate multiplier while it lasts. */
   researchMult?: number;
   effect: (s: GameState) => void;
 }
@@ -26,7 +21,6 @@ function relations(gov: number, approval: number) {
   };
 }
 
-/** Incidents scheduled by releasing with unresolved red-team issues (design.md §3.2 step 4). */
 export const INCIDENTS: CrisisDef[] = [
   {
     id: 'inc_jailbreak',
@@ -60,7 +54,6 @@ export const INCIDENTS: CrisisDef[] = [
   },
 ];
 
-/** The Safety Institute's advisory (stage2.md §5.3): a public release at 3× or more with measured alignment under 55. */
 export const ADVISORY: CrisisDef = {
   id: 'inc_advisory',
   stage: 2,
@@ -72,7 +65,6 @@ export const ADVISORY: CrisisDef = {
   effect: (s) => moveGov(s, -2),
 };
 
-/** Engineered crises (design.md §7.2, stage2.md §5.3). Later-stage entries are fired by their stage or the dev overlay. */
 export const CRISES: CrisisDef[] = [
   {
     id: 'cr_rival_open_weights',
@@ -160,7 +152,6 @@ export const CRISES: CrisisDef[] = [
     duration: 0,
     demandMult: 1,
     effect: (s) => {
-      // stage3.md §5.3: lead to at most half a month; Baiwen's line jumps; SL3 at half price for 5:00.
       s.lead = Math.min(s.lead, 0.5);
       s.baiwenCapability = Math.max(s.baiwenCapability, 0.97 * Math.max(s.capability, s.training.internalCapability));
       s.flags['weightsStolen'] = true;
@@ -189,7 +180,6 @@ export const CRISES: CrisisDef[] = [
     id: 'cr_rogue_copy',
     stage: 3,
     title: 'Rogue copy',
-    // The breakout (engine/alignment.ts) prints its own lines; this row lets the dev overlay fire it.
     console: '',
     log: '',
     duration: 0,
@@ -260,7 +250,6 @@ export const CRISES: CrisisDef[] = [
     stage: 3,
     title: 'Taiwan blockade',
     console: 'The Blockade — 4:00 until the strait reopens.',
-    // The development d_blockade carries the Developments line (one line for one event).
     log: '',
     duration: 0,
     demandMult: 1,
@@ -339,19 +328,16 @@ export const CRISES: CrisisDef[] = [
       s.flags['nationalized'] = true;
       s.flags['nationalizedAt'] = s.stats.timePlayed;
       s.flags['nationalizedDate'] = s.date;
-      // The ending's second line (stage3.md §7.4); the end screen follows.
       s.consoleQueue.push({ delay: 2, text: 'OpenMind is a government program. The building is the same. The badges are not.' });
     },
   },
 ];
 
-/** A tenth of the fleet stands at Al-Marsa; half if hardened; none once the chips came home (§5.3). */
 export function marsaGpus(s: GameState): number {
   if (s.gulfExposure <= 0 || s.flags['chipsHome'] === true) return 0;
   return 0.1 * s.gpus * (s.flags['marsaHardened'] === true ? 0.5 : 1);
 }
 
-/** Solar + storage farms or plants behind the meter ride through a curtailment. */
 export function curtailmentSpared(s: GameState): boolean {
   return s.solarFarms >= 1 || s.btm;
 }

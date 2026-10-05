@@ -1,5 +1,3 @@
-// Zero-dependency static file server for local development.
-// With --watch it also runs `tsc --watch` and reloads open pages when files change.
 import { spawn } from 'node:child_process';
 import { mkdirSync, watch } from 'node:fs';
 import { createServer } from 'node:http';
@@ -13,8 +11,6 @@ const HOST = process.env.HOST || '127.0.0.1';
 const WATCH = process.argv.includes('--watch');
 const RELOAD_PATH = '/__reload';
 
-// Injected into served HTML in watch mode. A stylesheet change swaps the sheet in place; anything
-// else reloads the page (the game saves on unload, so a reload resumes where it was).
 const RELOAD_CLIENT = `<script>
 (() => {
   const source = new EventSource('${RELOAD_PATH}');
@@ -39,7 +35,6 @@ let timer = null;
 function notify(kind) {
   if (kind === 'reload' || pending === null) pending = kind;
   clearTimeout(timer);
-  // tsc writes its outputs one file at a time; wait for the burst to finish.
   timer = setTimeout(() => {
     for (const res of clients) res.write(`event: ${pending}\ndata: 1\n\n`);
     pending = null;

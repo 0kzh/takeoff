@@ -8,11 +8,6 @@ import { seats } from '../engine/world3.js';
 import { PLAYER_MODALS } from '../engine/events.js';
 import { fmtClock, fmtNum } from '../engine/format.js';
 
-/**
- * The sim's Stage 4 block (stage4.md §9.3, the C-table): everything the acceptance table measures that a
- * headless run can see. One tracker per run; `tick` after every engine step while the run is in Stage 4.
- */
-
 export interface Mark4 {
   t: number;
   robots: number;
@@ -104,12 +99,9 @@ export interface Stage4Summary {
   choices: string[];
 }
 
-/** Mechanic modals (the content table's `mechanic: true` choice rows). */
 const MECHANIC_MODALS = [...STAGE4_TABLE.filter((r) => r.kind === 'choice' && r.mechanic).map((r) => r.id), 'c_verify'];
-/** Verbs that are cards: the three exits and the halt, Verify Baiwen-4's wait, Revoke. */
 const MECHANIC_PROJECTS = ['p_concord', 'p_halt', 'p_autonomy', 'p_verify', 'p_revoke', 'p_talks', 'p_last_signoff'];
 
-/** What a grant takes away, for the REMOVED → GAINED log (C27). */
 const REMOVES: Record<string, string> = {
   p_fleet_auto: 'the fleet sliders',
   p_transition_auto: 'Universal basic income',
@@ -163,7 +155,6 @@ export class Stage4Tracker {
   private prevChoice: unknown = null;
   private ticks = 0;
   private greyTicks = 0;
-  /** Seconds with two or more pinned goals on screen, sampled once a second: [t, two]. */
   private pinnedSamples: [number, boolean][] = [];
   private gens0 = 0;
   private genLandings: number[] = [];
@@ -198,7 +189,6 @@ export class Stage4Tracker {
   private robotsAt30: number | null = null;
   private carPlantAt: number | null = null;
 
-  /** Call after every step. */
   tick(s: GameState, actionTimes: number[]): void {
     const t = s.stats.timePlayed;
     if (this.start === null) {
@@ -233,18 +223,14 @@ export class Stage4Tracker {
     }
     this.prevChoice = s.activeChoice;
 
-    // The named waits (§4.3 counts the verification wait among the mechanics): Baiwen-4's read, Concord-1's design.
     if (s.s4.baiwen === 'verifying' && !this.mechanics.some(([, n]) => n === 'verifying')) this.mechanics.push([t, 'verifying']);
     if (typeof s.flags['concordLeft'] === 'number' && (s.flags['concordLeft'] as number) > 0 && !this.mechanics.some(([, n]) => n === 'designing')) this.mechanics.push([t, 'designing']);
-    // Generations, as they land.
     while (this.gens0 < s.s4.generations) {
       this.gens0++;
       this.genLandings.push(t);
-      // The verification wait is a mechanic the first time (§4.3 counts it).
       if (this.gens0 === 1) this.mechanics.push([t, 'first generation']);
     }
 
-    // Crises: when each fires, its band, and how long its mitigation had been on screen.
     const crisis = (id: string, fired: boolean, mitigation: string[], band: () => string) => {
       if (!fired || this.crisisSeen.has(id)) return;
       this.crisisSeen.add(id);
@@ -265,7 +251,6 @@ export class Stage4Tracker {
       }
     }
 
-    // Text rates.
     const cl = s.stats.consoleLines ?? 0;
     if (cl > this.console0) {
       const n = cl - this.console0;
@@ -279,7 +264,6 @@ export class Stage4Tracker {
     const ll = s.stats.logLines ?? 0;
     for (; this.log0 < ll; this.log0++) this.logTimes.push(t);
 
-    // Projects: reveal → purchase, dead grey, the removals.
     const vis = visibleProjects(s);
     for (const p of vis) {
       if (!this.shownAt.has(p.id)) this.shownAt.set(p.id, t);
@@ -300,7 +284,6 @@ export class Stage4Tracker {
     if (this.carPlantAt !== null && this.robotsAt30 === null && t - this.carPlantAt >= 30) this.robotsAt30 = Math.round(s.robots);
     this.fleetNow = s.stats.pressCounts['fleet'] ?? 0;
 
-    // Goals: a greyed card or the graph's next rung; two pinned goals in the last ten minutes.
     if (vis.some((p) => !p.canAfford(s)) || s.revealed['graph']) this.greyTicks++;
     if (this.ticks % 10 === 0) this.pinnedSamples.push([t, vis.filter((p) => p.pinned).length >= 2]);
 
@@ -314,7 +297,6 @@ export class Stage4Tracker {
       this.lastCapAt = t;
     }
 
-    // Hands: 2-s checks after 3:00 (G24/G25).
     if (this.ticks % 20 === 0 && ts >= 180) {
       const n = enabledPurchasesS4(s).length;
       this.handsChecks++;
@@ -452,7 +434,6 @@ export class Stage4Tracker {
       genLandings: this.genLandings.map(rel),
       intervalMean: intervals.length ? Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length) : null,
       intervalMax: intervals.length ? Math.round(Math.max(...intervals)) : null,
-      // At the exit, not at the end of the run (the run goes on into Stage 5, where capability keeps rising).
       capabilityAtExit: this.exitState?.capability ?? Math.round(bestCapability(s) * 10) / 10,
       reveals: this.reveals.length,
       longestRevealGap: Math.round(g.gap),

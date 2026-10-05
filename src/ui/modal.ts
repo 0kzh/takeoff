@@ -4,17 +4,9 @@ import { costLabel } from '../engine/projects.js';
 import { byId, make, setShown, setText } from './dom.js';
 
 let lastKey = '';
-/** Where keyboard focus was before the event panel took it; it goes back when the panel closes. */
 let returnFocus: HTMLElement | null = null;
 let escapeBound = false;
 
-/**
- * ADR event panel, centred on the screen (styles.css `#modal`). The game keeps running underneath, and
- * so does the page: the panel does not catch clicks outside itself. It takes keyboard focus when it
- * opens; Escape on a timed panel takes its default (what the timer would do), and does nothing on an
- * untimed one.
- * From Stage 2, each option prints its effect and cost under its label; a greyed one says what it needs.
- */
 export function renderModal(s: GameState, choose: (index: number) => void, dismiss: () => void): void {
   if (!escapeBound) {
     escapeBound = true;
@@ -31,7 +23,6 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
     lastKey = '';
     return;
   }
-  // Effect and cost under each label (critic round 2 §5), wherever the modal's options carry them.
   const lines = def.options.some((o) => o.line !== undefined);
   const key = `${active.id}|${JSON.stringify(active.context)}`;
   if (key !== lastKey) {

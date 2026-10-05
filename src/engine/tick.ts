@@ -41,7 +41,6 @@ export const TICK_MS = 100;
 export const SLOW_TICK_EVERY = 10;
 const MAX_TICKS_PER_CALL = 36000;
 
-/** Advances the simulation by `dtMs` of game time in fixed 100 ms steps. Pure state, no DOM. */
 export function tick(s: GameState, dtMs: number): void {
   if (s.ending) {
     endingTick(s, dtMs);
@@ -58,13 +57,8 @@ export function tick(s: GameState, dtMs: number): void {
   if (n >= MAX_TICKS_PER_CALL) s.tickAccum = 0;
 }
 
-/** The two endings that keep counting (stage5.md §7.2): Tasks Completed rises at the last second's rate. */
 export const COUNTING_ENDINGS = ['concord', 'silence'];
 
-/**
- * After an ending only the counter moves, and only in Concord and Silence: at the rate the last second
- * of play ran at. The clock, the date and time played stay where the run ended.
- */
 function endingTick(s: GameState, dtMs: number): void {
   if (!COUNTING_ENDINGS.includes(s.ending)) return;
   const rate = typeof s.flags['endRate'] === 'number' ? (s.flags['endRate'] as number) : s.stats.tasksPerSec;
@@ -76,21 +70,6 @@ function endingTick(s: GameState, dtMs: number): void {
   }
 }
 
-/**
- * One 100 ms logic step. Order of operations:
- *   1. production   — copies complete tasks (Stage 1: each burns 1 kWh)
- *   2. power        — Stage 1: Grid Contract auto-buy, the stuck timer, the price walk (slow);
- *                     Stage 2: plants in the queue come online
- *   3. billing      — AUTO moves the price; the market bills; contracts pay; hype and effects decay
- *   4. data and research — the crawl and the synthetic writers; research toward the cap; insight; Trust
- *   5. training     — both pipeline slots and the red-team cooldown; the Abilene interconnect
- *   6. projects     — panel reveals, project triggers and the drip, Stage 2 rows, the late drip, the governor
- *   7. events       — scheduled crises, choice timers, developments, rival releases, idle guard
- *   8. clock        — game date
- *   9. stage checks — stage exits, endings
- *  10. stats        — time played; slow tick: averages, milestones, bottleneck lines, the standing
- *                     order, jobs/approval/relations, the data wall, Stage 2 rescues
- */
 export function step(s: GameState): void {
   const dt = TICK_SECONDS;
   const slow = (s.tickCount + 1) % SLOW_TICK_EVERY === 0;
@@ -178,10 +157,6 @@ function slowStats(s: GameState): void {
   stage5Slow(s);
 }
 
-/**
- * When the plateau began (the desks offer waits 45 s for Trust or another fix first); Stage 1's is the
- * card wall, a card on screen the lab cannot hold (a Stage 1 run costs no research).
- */
 function trackPlateau(s: GameState): void {
   for (const [key, on] of [['plateauSince', atPlateau(s)], ['cardWallSince', cardWall(s)]] as const) {
     if (on) {
@@ -192,7 +167,6 @@ function trackPlateau(s: GameState): void {
   }
 }
 
-/** UP-style report: `10,000 tasks completed in 7 minutes 12 seconds` (whole minutes from ten minutes on). */
 function taskMilestones(s: GameState): void {
   while (s.tasks >= s.stats.nextTaskMilestone) {
     const t = s.stats.timePlayed;
@@ -201,10 +175,6 @@ function taskMilestones(s: GameState): void {
   }
 }
 
-/**
- * The most research anything on screen asks for: the next run, or a visible project. Stage 1's runs
- * cost no research: the lab's size limits cards only (stage1-round3-fixes.md §1).
- */
 export function researchWanted(s: GameState): { amount: number; what: string } {
   let best = { amount: 0, what: '' };
   if (s.stage >= 2 && s.revealed['training'] && !s.training.run) {
@@ -217,11 +187,6 @@ export function researchWanted(s: GameState): { amount: number; what: string } {
   return best;
 }
 
-/**
- * The fix for a full lab that is on screen right now, named in the wall's console line. A card is
- * named only if the lab can hold its price (critic round 3 §6.2: `The Experiment tracker doubles
- * it` 25 times for a 3,000-research card in a 1,000-research lab); otherwise Expand Lab.
- */
 function capFix(s: GameState): string {
   const cap = researchCap(s);
   const shown = (id: string) => visibleProjects(s).some((p) => p.id === id && (p.cost(s).research ?? 0) <= cap);
@@ -237,15 +202,8 @@ function capFix(s: GameState): string {
   return s.revealed['expandLab'] ? 'Expand Lab with the next Trust.' : 'More room comes with Trust.';
 }
 
-/** Seconds between two wall lines while research stays pinned under something it cannot hold. */
 export const WALL_REPEAT_SECONDS = 120;
 
-/**
- * Research at its cap: name the wall and the fix when something on screen needs more than the lab
- * holds (the Research Plateau when it is the next training run), and say it again every 2 minutes
- * while it lasts. A wall is only marked as told when a line prints (critic round 2 §4.1: a cap reached
- * before the Projects panel had nothing to say, was marked, and never spoke again).
- */
 function researchWall(s: GameState): void {
   if (!s.revealed['research'] || s.stage >= 3) return;
   const cap = researchCap(s);
@@ -256,7 +214,6 @@ function researchWall(s: GameState): void {
     if (now - ((s.flags['wallSaidAt'] as number) ?? -999) < WALL_REPEAT_SECONDS) return;
     s.flags['wallSaidAt'] = now;
     const fix = capFix(s);
-    // The same wall, the same fix: said three times, then left to the screen until something changes.
     const key = `${want.what}|${cap}|${fix}`;
     if (s.flags['wallLineKey'] === key) {
       if (counter(s, 'wallLineCount') >= 3) return;
@@ -279,17 +236,12 @@ function researchWall(s: GameState): void {
     s.flags[key] = true;
     say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
   } else if (now - ((s.flags['capLineAt'] as number) ?? -999) >= 120) {
-    // Stage 2: the cap moves with every room; the line carries its number, at most every 2 minutes.
     s.flags[key] = true;
     s.flags['capLineAt'] = now;
     say(s, `Research at capacity: ${fmtInt(cap)}. Insight accrues.`);
   }
 }
 
-/**
- * Stage 2: a wall in front of the next run (the lab's research cap, the data wall) that has stood for
- * three minutes is named again with the cards that answer it, every three minutes (critic C9, G31).
- */
 function wallWatch(s: GameState): void {
   if (s.stage !== 2 || !s.revealed['training'] || !trainSlotFree(s)) return;
   const cost = trainCost(s);
@@ -319,10 +271,6 @@ function wallWatch(s: GameState): void {
   }
 }
 
-/**
- * Stage 1 at the wall (owner feedback 1, B1): First Datacenter is re-priced once to what four minutes
- * of income reach, and the wall's line repeats every 180 s while it stands (arc G31).
- */
 function wallStage1(s: GameState): void {
   datacenterAtWall(s);
   if (!needsDatacenter(s) || !trainSlotFree(s)) return;
@@ -332,17 +280,12 @@ function wallStage1(s: GameState): void {
   say(s, `${nextRunName(s)} needs ${fmtInt(gpusNeeded(s))} GPUs. The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`);
 }
 
-/**
- * Stage 1: the next Trust milestone is never more than 2½ minutes away at the current task rate
- * (critic C13: a slow player went sixteen minutes without one, Hire and Expand grey throughout).
- */
 function trustPace(s: GameState): void {
   if (s.stage !== 1 || !s.revealed['research']) return;
   const soon = Math.ceil((s.tasks + 150 * Math.max(1, s.stats.tasksPerSec)) / 100) * 100;
   if (s.nextTrust > soon) s.nextTrust = soon;
 }
 
-/** Every player verb. Each returns true when it changed state. */
 export const actions = {
   clickTask,
   buyPower,

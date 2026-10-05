@@ -9,22 +9,10 @@ import { openChoice, fireDevelopmentOnce } from '../engine/events.js';
 import { dateLabel, fmtClock } from '../engine/format.js';
 import type { ProjectDef, ProjectInput } from './projects.js';
 
-/**
- * Stage 3's projects (stage3.md §4.2), in table order. Funds prices are seconds of revenue fixed
- * when the row appears (`revealFunds`, amendment 9); research prices are the list's × 0.72 (as-built
- * deltas row 2) with the 90 s floor (`revealResearch: 90`, §4.1 item 6) on every row but the free
- * monitor, Continual learning, the exit goals and the late rows. Departure: the spec exempts only the
- * free late rows, but at the approach's 20–40M research a second the floor priced the late tests
- * (`Isolate the checkpoints`, lab V) above a training run, so a careful player could not read the
- * model before the vote; their list prices are what the approach was sized for. Grants render in
- * the Alignment panel (`grant: true`); late rows wait for their capability (`lateAt`).
- */
-
 const best = (s: GameState) => bestCapability(s);
 const approvals = (s: GameState) => counter(s, 'approvalsS3');
 const r = (list: number) => Math.round(list * 0.72);
 
-/** A grant's purchase (§2.6): autonomy, the WARNING line first, a mark on the graph, the record. */
 export function granted(s: GameState, title: string, autonomy: number): void {
   s.autonomy = Math.min(100, s.autonomy + autonomy);
   say(s, 'WARNING: risk of value drift increased.');
@@ -34,7 +22,6 @@ export function granted(s: GameState, title: string, autonomy: number): void {
   s.choicesMade.push({ id: `g:${title}`, option: 'granted', date: dateLabel(s.date) });
 }
 
-/** Lab rows (§2.8): each a level, true +3, measured 30 % of the way to the true number. */
 function labRow(
   project: (def: ProjectInput) => ProjectDef,
   n: number,
@@ -67,22 +54,16 @@ function labName(id: string): string {
   return ({ p_interp1: 'Interpretability lab I', p_interp2: 'Interpretability lab II', p_interp3: 'Interpretability lab III', p_interp4: 'Interpretability lab IV' } as Record<string, string>)[id] ?? id;
 }
 
-/** A motion is already before the Committee (open or waiting behind another card). */
 function voteOpen(s: GameState): boolean {
   return s.activeChoice?.id === 'c_vote' || s.choiceQueue.some((c) => c.id === 'c_vote');
 }
 
-/**
- * The two motions' tag: `(needs the Committee's vote)` — the 25× it waits for is on the graph's line,
- * its one home on screen — then `(ready)`.
- */
 function motionTag(s: GameState): string {
   const rest = voteRest(s);
   if (voteReady(s) && rest > 0) return `(the Committee hears it again in ${fmtClock(Math.ceil(rest))})`;
   return voteReady(s) ? '(ready)' : '(needs the Committee\'s vote)';
 }
 
-/** The exit goals open the vote for their motion (a modal the player's click opens: no spacing). */
 function motion(id: string, title: string, motionKey: 'slow' | 'race', description: string): ProjectInput {
   return {
     id,
@@ -114,7 +95,6 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       urgent: () => true,
       buy: (s) => {
         s.revealed['monitors'] = true;
-        // The Stage 2 alignment compute becomes the Monitors share (stage3.md §2.2): at least 5 %.
         s.monitorShare = Math.max(0.05, Math.round((s.alignShare ?? 0.01) * 20) / 20);
       },
       consoleMsg: 'Sage-2 is watching Sage-3. It is slower, and it is on our side as far as anyone can tell.',
@@ -453,7 +433,6 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
     labRow(
       project, 4, 'Interpretability lab IV', 25000, r(400e6),
       (s) => isBought(s, 'p_interp3') && best(s) >= 12,
-      // Carried into Stage 4 (stage4.md §4.2): its research price re-based to 90 s there.
       'p_interp3', { stages: [3, 4] },
       'With monitors at 15 % or more, drift stops.',
     ),
@@ -487,7 +466,6 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       },
       consoleMsg: 'Ground optioned for a domestic fab. The first wafer is three years out for people, less for robots.',
     }),
-    // ---- the approach (late: each at its own capability, or from September 2027) ----
     project({
       id: 'p_noise',
       lateAt: 14.5,
@@ -658,7 +636,6 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
       buy: (s) => {
         s.flags['dpa'] = true;
         s.flags['dpaAt'] = s.stats.timePlayed;
-        // The rival labs' halls and their power come with the chips.
         s.flags['extraSlots'] = counter(s, 'extraSlots') + 1000000;
         s.powerCapacityMW += 1000;
         s.shipments.unshift({ gpus: 1000000, gen: 5, remaining: 60 });
@@ -669,13 +646,10 @@ export function stage3Projects(project: (def: ProjectInput) => ProjectDef): Proj
   ];
 }
 
-/** The vote's capability, for the text of the goals. */
 export const VOTE_AT = VOTE_CAP;
 
-/** Interpretability changed (a lab, neuralese): keep the level and the true-alignment line in step. */
 export function afterInterpretabilityChange(s: GameState): void {
   syncInterpretability(s);
 }
 
-/** Logs for the end screen and the Developments column (re-exported for the choices). */
 export { logNews };

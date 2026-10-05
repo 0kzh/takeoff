@@ -19,16 +19,9 @@ import { enterStage } from './stages.js';
 import { effGpus } from './infrastructure.js';
 import { housingCost } from './fleet.js';
 
-/**
- * Stage 4's coordinator (stage4.md): the arrival on both branches, the generations and Verify, the
- * fleet, society and the treaty each tick or second, the three crises read by the hidden number, the
- * fleet's request, autonomy taken, and the three exits with `alignedAtHandover` (arc §4). DOM-free.
- */
-
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const clamp100 = (v: number) => clamp(v, 0, 100);
 
-/** Stage 4's lead ranges over [−6, 12] months (as-built deltas row 2). */
 export const LEAD_MIN_S4 = -6;
 export const LEAD_MAX_S4 = 12;
 
@@ -38,44 +31,31 @@ export function moveLead4(s: GameState, by: number): void {
   if (Math.abs(s.lead - before) >= 0.05) s.flags['graphDirty'] = true;
 }
 
-/** Seconds into Stage 4. */
 export function ts4(s: GameState): number {
   return s.stats.timeInStage;
 }
 
-/** A month in Stage 4 is 150 s: true from the start of `month` of `year`. */
 export function at(s: GameState, year: number, month: number): boolean {
   return s.date >= monthOf(year, month);
 }
 
-/** Payments levels become universal basic income (§1.1): 1–2 → 5 %, 3–4 → 10 %, 5 → 20 %. */
 function ubiFromPayments(level: number): number {
   return level >= 5 ? 0.2 : level >= 3 ? 0.1 : level >= 1 ? 0.05 : 0;
 }
 
-/**
- * The arrival's state (stage4.md §1.1, as-built deltas): the generation price fixed from the arriving
- * lab, money retired, Verify set by the branch, the slow branch's model swap, the narrated floors, the
- * payments converted, approval re-based, the treaty's opening value, Baiwen-4 rolled. Returns the lines
- * the arrival narrates after the vote's (the caller narrates them all at once).
- */
 export function arriveStage4(s: GameState): { lines: string[]; news: string[] } {
   const lines: string[] = [];
   const news: string[] = [];
   const slow = slowBranch(s);
   const f = (s.s4 = newStage4());
-  // Generations are priced from the arriving lab (deltas row 3): 110 s of what its copies research at
-  // 40 %, at the frontier it arrives with.
   f.genCap0 = Math.max(1, bestCapability(s));
   f.genBase = GEN_BASE_SECONDS * Math.max(1, researchCapacityAt(s, 0.4));
   s.flags['s3Compute'] = Math.round(effGpus(s));
-  // Money retires: funds and the build fund together.
   const written = Math.max(0, s.funds) + Math.max(0, s.buildFund);
   s.funds = 0;
   s.buildFund = 0;
   s.unbilled = 0;
   s.flags['moneyWrittenOff'] = Math.round(written);
-  // Verify: on for the slow branch; off on the race branch for a lab that kept `Stop asking for sign-off`.
   f.verifyOn = slow || !isBought(s, 'p_auto_approve');
   const best = bestCapability(s);
   if (slow) {
@@ -90,7 +70,6 @@ export function arriveStage4(s: GameState): { lines: string[]; news: string[] } 
     s.flags['genLine'] = 'Steward';
     s.flags['sage4Off'] = Math.round(s.date * 100) / 100;
     s.flags['sage4OffCap'] = Math.round(best * 10) / 10;
-    // Thoughts are in English again: neuralese's −2 on interpretability ends.
     if (s.flags['neuralese'] === 'neuralese') {
       s.flags['neuralese'] = 'transparent';
       syncInterpretability(s);
@@ -100,7 +79,6 @@ export function arriveStage4(s: GameState): { lines: string[]; news: string[] } 
     s.training.internalCapability = best;
     s.flags['genLine'] = 'Sage';
   }
-  // Floors, narrated with both values (G32).
   const govBefore = Math.round(s.govRelations);
   if (s.govRelations < 30) {
     s.govRelations = 30;
@@ -112,18 +90,14 @@ export function arriveStage4(s: GameState): { lines: string[]; news: string[] } 
     news.push(`The news moves on. Approval settles at −60 (from ${apprBefore}).`);
   }
   if (s.lead < LEAD_MIN_S4) s.lead = LEAD_MIN_S4;
-  // Stage 3's payments become a universal basic income, in a line.
   const level = Math.max(0, Math.min(5, counter(s, 'payments')));
   f.ubiShare = ubiFromPayments(level);
   if (level > 0) lines.push(`Payments become a universal basic income: level ${level} → ${Math.round(f.ubiShare * 100)}% of output.`);
   s.flags['payments'] = 0;
-  // Approval's new formula starts where Stage 3 ended (§1.1): the jobs term and the dividend the
-  // payments became are taken out of the base, so the target on arrival is the approval Stage 3 left.
   f.approvalBase = s.approval - jobsTerm(s) - ubiTerm(f.ubiShare);
   f.treatyOpening = treatyOpening(s);
   f.baiwenAligned = rng(s) < 0.3;
   f.askLeft = 0;
-  // The monitors the Committee holds (a conceded order) stay at 15 % or more.
   if (s.flags['conceded'] === true) s.monitorShare = Math.max(0.15, s.monitorShare ?? 0);
   s.flags['tasksAtArrival'] = s.tasks;
   s.flags['monthSeenS4'] = Math.floor(s.date);
@@ -140,15 +114,11 @@ export function arriveStage4(s: GameState): { lines: string[]; news: string[] } 
   lines.push('Counter-intelligence is the Committee\'s now.');
   news.push(`Baiwen-4 is believed to be as capable as ${s.training.modelName}. Nobody is sure.`);
   if (s.flags['dpa'] === true) news.push('Five labs\' datacenters now carry OpenMind\'s logo. Their staff carry boxes.');
-  // A lab below five seats can hold hearings from the first second (deltas row 10).
   if (seats(s) < 5) s.revealed['hearing'] = true;
   s.flags['s4ArrivedAt'] = s.stats.timePlayed;
   return { lines, news };
 }
 
-// ---------- generations (§2.4) ----------
-
-/** Seconds until the next generation arrives (research, then training, then the read). */
 export function genEta(s: GameState): number {
   const f = s.s4;
   const verify = f.verifyOn ? verifySeconds(s) : 0;
@@ -157,7 +127,6 @@ export function genEta(s: GameState): number {
   return Math.max(0, generationCost(s) - s.research) / rate + GEN_SECONDS + verify;
 }
 
-/** `Steward-2 arrives in 1:30` · `Steward-1 is reading Steward-2 — 0:40` (the Alignment panel's line). */
 export function genStatus(s: GameState): string {
   const f = s.s4;
   if (f.gen?.phase === 'reading') return `${s.training.modelName} is reading ${f.gen.name} — ${fmtClock(Math.ceil(f.gen.remaining))}`;
@@ -166,7 +135,6 @@ export function genStatus(s: GameState): string {
   return `${name} arrives in ${Number.isFinite(eta) && eta < 36000 ? fmtClock(eta) : 'a long while'}`;
 }
 
-/** Every tick: a generation starts when research suffices; it trains 50 s; with Verify on it is read first. */
 export function updateGenerations(s: GameState, dt: number): void {
   const f = s.s4;
   if (!f.gen) {
@@ -187,7 +155,6 @@ export function updateGenerations(s: GameState, dt: number): void {
     f.gen.remaining = secs;
     f.gen.total = secs;
     f.gen.verified = true;
-    // The read is taught once in the console; after that the generation line carries it.
     if (s.flags['readSaid'] !== true) {
       s.flags['readSaid'] = true;
       say(s, `${s.training.modelName} is reading ${f.gen.name} — ${fmtClock(secs)}.`);
@@ -197,14 +164,11 @@ export function updateGenerations(s: GameState, dt: number): void {
   landGeneration(s);
 }
 
-/** True alignment a generation nobody read costs, below 100×, to 250×, beyond (slow, race). */
 export const UNREAD_SLOW = [2, 4, 6];
 export const UNREAD_RACE = [4, 8, 12];
 
-/** What a verified generation adds to measured alignment (and a fifth of what it trails the real thing by). */
 export const VERIFY_MEASURED = 3;
 
-/** The rung names on the graph (stage4.md §3). */
 export const RUNG_NAMES: Record<number, string> = {
   100: 'superhuman remote worker',
   250: 'superintelligent AI researcher',
@@ -229,22 +193,16 @@ function landGeneration(s: GameState): void {
   if (g.verified) {
     f.verifiedGens += 1;
     s.alignmentTrue = clamp100(s.alignmentTrue + (slow ? 5 : 2));
-    // Read first, it is measured as it is: the measured number gains 3, and a fifth of what it trails by.
     s.alignmentApparent = clamp100(s.alignmentApparent + VERIFY_MEASURED + 0.2 * Math.max(0, s.alignmentTrue - s.alignmentApparent));
     moveLead4(s, -0.15);
     const marks = typeof s.flags['verifyMarks'] === 'string' ? (s.flags['verifyMarks'] as string) : '';
     s.flags['verifyMarks'] = `${marks}${marks ? '|' : ''}${Math.round(s.date * 100) / 100}`;
   } else {
-    // Unread, the bigger the model the more it costs (deltas: the careful arrival no longer saturates;
-    // the race branch's −4 / −8 / −12 against §2.4's −3 / −6 / −10, so that Verify left off still hands
-    // a careful race arrival over misaligned once Monitors at scale and the labs have added theirs).
     const size = g.capAfter < 100 ? 0 : g.capAfter < 250 ? 1 : 2;
     s.alignmentTrue = clamp100(s.alignmentTrue - (slow ? UNREAD_SLOW[size]! : UNREAD_RACE[size]!));
     moveLead4(s, 0.1);
   }
   if ((s.monitorShare ?? 0) >= 0.15 - 1e-9) s.alignmentTrue = clamp100(s.alignmentTrue + 1);
-  // Measured alignment's bottom band (§2.11): under 55, a generation nobody read costs relations 2 (a
-  // lab that reads each one first keeps the Committee's ear while its number climbs).
   if (s.alignmentApparent < 55 && !g.verified) moveGov(s, -2);
   s.flags['graphDirty'] = true;
   const rung = S4_RUNGS.find((x) => before < x - 1e-9 && g.capAfter >= x - 1e-9);
@@ -253,7 +211,6 @@ function landGeneration(s: GameState): void {
   if (g.capAfter >= 200 && !s.developments['d_mirror']) fireDevelopmentOnce(s, 'd_mirror');
 }
 
-/** `Verify each generation` (§2.4): on, each generation waits to be read; off, it is not. */
 export function toggleVerify(s: GameState): boolean {
   if (s.stage !== 4 || !s.revealed['generations']) return false;
   if (s.flags['verifyLocked'] === true && s.s4.verifyOn) return false;
@@ -267,14 +224,10 @@ export function setVerify(s: GameState, on: boolean): boolean {
   return toggleVerify(s);
 }
 
-// ---------- the three crises (§5.3) ----------
-
-/** The band of true alignment a crisis reads: 60 or more, 40–59, or below 40. */
 export function band(s: GameState): 60 | 40 | 0 {
   return s.alignmentTrue >= 60 ? 60 : s.alignmentTrue >= 40 ? 40 : 0;
 }
 
-/** The Ashford strain begins when its card is answered (`c_ashford`): the cure's clock and the deaths by band. */
 export function startAshford(s: GameState, choice: 'labs' | 'trials' | 'pool'): void {
   const f = s.s4;
   if (f.ashfordPhase !== 'none') return;
@@ -316,7 +269,6 @@ function ashfordTick(s: GameState): void {
   fireDevelopmentOnce(s, 'd_ashford_end');
 }
 
-/** Nanofabrication bought: the line fails 5:30 later (§5.3). */
 export const NANO_SECONDS = 330;
 
 function nanoTick(s: GameState): void {
@@ -352,12 +304,10 @@ function nanoTick(s: GameState): void {
     s.flags['nanoLine'] = 'contained in 2:00';
     s.revealed['nano'] = true;
   } else {
-    // Nothing is printed for two minutes; the materials hover shows the loss.
     f.nanoDrain = 120;
   }
 }
 
-/** When the shutdown can fire (§5.3): treaty 85 %, or 400×, or December 2028, and 300 s after the breakers card appeared. */
 function shutdownDue(s: GameState): boolean {
   if (s.flags['shutdownDone'] === true) return false;
   const shown = s.flags['hardenedShownAt'];
@@ -404,9 +354,6 @@ function shutdownTick(s: GameState): void {
   }
 }
 
-// ---------- the fleet's request, autonomy, the race branch's cards ----------
-
-/** Past 80, the warning every 180 s (§2.5). */
 function autonomyWarning(s: GameState): void {
   if (s.autonomy < 80) return;
   const now = s.stats.timePlayed;
@@ -415,7 +362,6 @@ function autonomyWarning(s: GameState): void {
   say(s, `Autonomy granted: ${fmtInt(s.autonomy)}. Past 80, a model that wanted the fleet would not need to ask.`);
 }
 
-/** The fleet asks again three minutes after `not yet`. */
 function askTick(s: GameState): void {
   const f = s.s4;
   if (f.askLeft <= 0 || s.flags['askRefused'] === true) return;
@@ -423,7 +369,6 @@ function askTick(s: GameState): void {
   if (f.askLeft <= 0) openChoice(s, 'c_autonomy', {});
 }
 
-/** The race branch's single-button cards and the slow branch's console requests (§5.2). */
 function cards(s: GameState): void {
   const t = ts4(s);
   const race = !slowBranch(s);
@@ -445,15 +390,11 @@ function cards(s: GameState): void {
   }
 }
 
-/** What each Stage 4 grant adds to autonomy (§2.5). */
 const GRANT_AUTONOMY: Record<string, number> = { p_fleet_auto: 15, p_transition_auto: 5, p_negotiate_auto: 10 };
 
-/** `Revoke a grant` (§2.5): the newest Stage 4 grant and its control come back; autonomy −10. */
 export function revokeNewest(s: GameState): void {
   const id = s.s4.grants.pop();
   if (!id) return;
-  // A revoked grant is not offered again, and Revoke takes back no more autonomy than the grant gave
-  // (a buy-and-revoke loop drove autonomy down for 30 s of research a turn).
   s.flags[`revoked:${id}`] = true;
   s.autonomy = Math.max(0, s.autonomy - Math.min(10, GRANT_AUTONOMY[id] ?? 10));
   if (id === 'p_fleet_auto') {
@@ -477,14 +418,10 @@ export function revokeNewest(s: GameState): void {
   say(s, 'One grant taken back. It hands over the controls without comment.');
 }
 
-// ---------- the exits (§7) ----------
-
-/** arc §4: true ≥ 60, or (true ≥ 40 and interpretability ≥ 4 and monitors ≥ 15 %). */
 export function alignedAtHandover(s: GameState): boolean {
   return s.alignmentTrue >= 60 || (s.alignmentTrue >= 40 && s.interpretability >= 4 && (s.monitorShare ?? 0) >= 0.15 - 1e-9);
 }
 
-/** Treaty signed, fleet granted, or fleet taken: the exit kind and the hidden verdict are stored, then Stage 5. */
 export function exitStage4(s: GameState, kind: 'treaty' | 'granted' | 'taken'): void {
   if (s.stage !== 4 || s.ending) return;
   s.flags['exitKind'] = kind;
@@ -492,7 +429,6 @@ export function exitStage4(s: GameState, kind: 'treaty' | 'granted' | 'taken'): 
   s.flags['peopleAlive'] = peopleAlive(s);
   s.flags['exitCap'] = Math.round(bestCapability(s) * 10) / 10;
   s.flags['exitDate'] = s.date;
-  // Tasks a second in Stage 4's last second: the gate must not move them (stage5.md D22, G32).
   s.flags['exitRate'] = potentialTasksPerSec(s);
   s.flags['exitTs4'] = s.stats.timeInStage;
   if (kind === 'treaty') s.flags['treatySigned'] = true;
@@ -501,7 +437,6 @@ export function exitStage4(s: GameState, kind: 'treaty' | 'granted' | 'taken'): 
   enterStage(s, 5);
 }
 
-/** `Sign the halt` (c_halt): The Pause, from Stage 4 (§7.3). */
 export function signHalt(s: GameState): void {
   if (s.flags['pauseSigned'] === true) return;
   const cap = Math.round(bestCapability(s) * 10) / 10;
@@ -520,9 +455,6 @@ export function signHalt(s: GameState): void {
   logNews(s, 'OpenMind and Baiwen sign a halt. Nothing above the line is trained anywhere.');
 }
 
-// ---------- the coordinator ----------
-
-/** Every tick in Stage 4: the fleet, the generations, drift. */
 export function stage4Tick(s: GameState, dt: number): void {
   if (s.stage !== 4) return;
   if (s.flags['s4Pending'] === true) {
@@ -538,7 +470,6 @@ export function stage4Tick(s: GameState, dt: number): void {
   if (c > 0 && !s.revealed['robotsRow']) s.revealed['robotsRow'] = true;
 }
 
-/** Once a second in Stage 4. */
 export function stage4Slow(s: GameState): void {
   if (s.stage !== 4 || s.flags['pauseSigned'] === true) return;
   const due = s.flags['majorDue4'];
@@ -578,7 +509,6 @@ export function stage4Slow(s: GameState): void {
   developments4(s);
 }
 
-/** Once a Stage 4 month: relations −1 (the Committee always wants more, §2.9). */
 function monthly(s: GameState): void {
   const month = Math.floor(s.date);
   if (counter(s, 'monthSeenS4') === month) return;
@@ -586,7 +516,6 @@ function monthly(s: GameState): void {
   moveGov(s, -1);
 }
 
-/** Developments keyed to state rather than the calendar (§5.1). */
 function developments4(s: GameState): void {
   if (s.robots >= 50000) fireDevelopmentOnce(s, 'd_factory');
   if (s.s4.treaty >= 80) fireDevelopmentOnce(s, 'd_reykjavik');
@@ -594,10 +523,6 @@ function developments4(s: GameState): void {
   if (at(s, 2028, 9) && !isBought(s, 'p_nanofab')) fireDevelopmentOnce(s, 'd_nano_baiwen');
 }
 
-/**
- * The distinct purchases a player could press right now in Stage 4 (arc G24/G25): every enabled project
- * and grant, Housing, a hearing, Re-image. Shares and sliders are settings, not purchases.
- */
 export function enabledPurchasesS4(s: GameState): string[] {
   if (s.stage !== 4) return enabledPurchases(s);
   const out: string[] = [];
@@ -608,12 +533,10 @@ export function enabledPurchasesS4(s: GameState): string[] {
   return out;
 }
 
-/** The Stores row for treaty chips and the fleet's chips job, once Concord-1 is designed and the treaty is at 80 %. */
 export function chipsOpen(s: GameState): boolean {
   return s.flags['concord1'] === true && s.s4.treaty >= 80 - 1e-9;
 }
 
-/** What the materials row's rate reads: `+12,400 t/s`. */
 export function materialsRate(s: GameState): string {
   return `+${fmtShortNum(minedPerSec(s))} t/s`;
 }

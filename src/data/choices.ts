@@ -11,40 +11,25 @@ import { rivalRelease } from '../engine/events.js';
 type Ctx = Record<string, number | string>;
 
 export interface ChoiceOption {
-  /** A function when the button's word depends on the run (Stage 5's Silence reads `acknowledge`). */
   label: string | ((s: GameState) => string);
-  /** Short id recorded in the choice history and shown on the end screen (a function when what was chosen depends on what else could be). */
   record: string | ((s: GameState) => string);
-  /** A function when it names a price that scales with the stage (or was fixed when the modal opened). */
   tooltip?: string | ((s: GameState, ctx: Ctx) => string);
-  /** Stage 2 on: effect and cost in a few words, printed on the button under the label. */
   line?: string | ((s: GameState, ctx: Ctx) => string);
-  /** What a greyed option is waiting for, when it is not simply its price. */
   needs?: string | ((s: GameState, ctx: Ctx) => string);
   cost?: Cost | ((s: GameState, ctx: Ctx) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
-  /**
-   * Stage 4's single-button cards (stage4.md §5.2): an option given away by a grant is drawn, greyed,
-   * only while `Revoke a grant` is on screen; otherwise it is not drawn and the card's text names it.
-   */
   visible?: (s: GameState, ctx: Ctx) => boolean;
   effect: (s: GameState, ctx: Ctx) => void;
-  /** Logged in italics in the Developments column. */
   log?: string | ((s: GameState, ctx: Ctx) => string);
 }
 
-/** An ADR-style modal: title, a few lines of text, 2–3 buttons. The game does not pause. */
 export interface ChoiceDef {
   id: string;
   title: string;
   text: (s: GameState, ctx: Ctx) => string[];
-  /** Seconds before `defaultOption` is chosen automatically. */
   timer?: number;
-  /** A queued modal that no longer applies when its turn comes is dropped. */
   valid?: (s: GameState, ctx: Ctx) => boolean;
-  /** When it is put on screen (a price fixed to the economy of that moment). */
   onOpen?: (s: GameState, ctx: Ctx) => void;
-  /** What the timer chooses: an index, or (an order with options greyed) the first careful one enabled. */
   defaultOption?: number | ((s: GameState, ctx: Ctx) => number);
   options: ChoiceOption[];
 }
@@ -55,12 +40,10 @@ function runFor(s: GameState, ctx: Ctx): TrainingRun | undefined {
 
 const clamp100 = (v: number) => Math.min(100, Math.max(0, v));
 
-/** The gamble costs a minute of the lab's research, to two figures (at least 500). */
 function gambleCost(s: GameState): number {
   return Math.max(500, twoFigures(60 * researchRate(s)));
 }
 
-/** To two significant figures, rounded up. */
 function twoFigures(raw: number): number {
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
   return Math.ceil(raw / unit) * unit;
@@ -70,7 +53,6 @@ function twoFigures(raw: number): number {
 
 const ctxNum = (ctx: Ctx, k: string, d = 0) => (typeof ctx[k] === 'number' ? (ctx[k] as number) : Number(ctx[k] ?? d));
 
-/** A lasting multiplier on the contract customers (a board observer, a price cut). */
 function scaleContracts(s: GameState, m: number): void {
   const now = typeof s.flags['contractTermsMult'] === 'number' ? (s.flags['contractTermsMult'] as number) : 1;
   s.flags['contractTermsMult'] = now * m;
@@ -80,14 +62,9 @@ function gambleOdds(s: GameState): number {
   return Math.min(0.8, 0.45 + 0.05 * s.researchers);
 }
 
-/** Lockdown and the Bureau (stage2.md §5.2, sized to the late economy: critic round 2 §5). */
 const LOCKDOWN_SECONDS = 60;
 const BUREAU_SECONDS = 120;
 
-/**
- * Al-Marsa's price: a minute of revenue when the offer opens (fixed then; the spec's $8M at scale 1
- * is out of reach inside the 90 s timer at minute 21), half again if the lab asked for a month.
- */
 function gulfPrice(s: GameState): number {
   const base = typeof s.flags['gulfBase'] === 'number' ? (s.flags['gulfBase'] as number) : gulfBaseNow(s);
   return s.flags['gulfPremium'] === true ? Math.round(base * 1.5) : base;
@@ -103,7 +80,6 @@ function runName(s: GameState, ctx: Ctx): string {
   return runFor(s, ctx)?.name ?? 'the model';
 }
 
-/** The publishers' licence (scale-1 dollars): about 20 s of revenue when the crawl runs out (critic follow-up B5). */
 const publishersLicence = (s: GameState): number => s2(s, 150000);
 
 import { CHOICES3 } from './choices3.js';
@@ -119,7 +95,6 @@ export const CHOICES: ChoiceDef[] = [
       '"It might work. It might also break a few things."',
     ],
     timer: 20,
-    // The timer's default first, then what costs something (stage1-round3-fixes.md §4).
     defaultOption: 0,
     valid: (s, ctx) => runFor(s, ctx)?.phase === 'training',
     options: [
@@ -162,7 +137,6 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_sage2',
     title: 'Release Sage-2',
-    // Every event carries a timer with a harmless default (critic follow-up B7): unanswered, it ships.
     timer: 90,
     defaultOption: 0,
     text: (s, ctx) => [
@@ -236,7 +210,6 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_bridge',
     title: 'A Bridge Round',
-    // A twentieth of First Datacenter, fixed when the offer arrives (critic round 2 §5).
     onOpen: (s, ctx) => {
       if (!ctx['amount']) ctx['amount'] = Math.round((0.05 * datacenterPrice(s)) / 1000) * 1000;
     },
@@ -262,7 +235,6 @@ export const CHOICES: ChoiceDef[] = [
         record: 'bridge',
         tooltip: (_s, ctx) => `+${fmtMoney(ctxNum(ctx, 'amount', 10000))} now. −1 Trust. The observer steers deals to the fund's portfolio: contract customers buy 30% less, for good.`,
         line: (_s, ctx) => `+${fmtMoneyShort(ctxNum(ctx, 'amount', 10000))} now · −1 Trust · contracts 30% smaller`,
-        // The board seat is paid in Trust the lab has (critic round 3 §10.9: `Trust: 0 (1 owed)`).
         cost: { trust: 1 },
         effect: (s, ctx) => {
           addFunds(s, ctxNum(ctx, 'amount', 10000));
@@ -320,11 +292,9 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_poach',
     title: 'A Better Offer',
-    // A minute of revenue, fixed when the offer arrives.
     onOpen: (s, ctx) => {
       if (!ctx['price']) ctx['price'] = Math.max(2000, twoFigures(60 * s.stats.revPerSec));
     },
-    // The contract sentence only when there is a contract to take (critic round 3 §6.3).
     text: (s) => [
       'A larger lab has offered two of your researchers twice their salary.',
       (s.projects['p_contract']?.bought ?? 0) > 0 ? 'They built the contract models. Their bank would follow them.' : 'They built the last two training runs.',
@@ -409,8 +379,6 @@ export const CHOICES: ChoiceDef[] = [
       },
     ],
   },
-  // Anthrosoft's arrival (developments.ts `d_anthrosoft`): a notice with one button. Its first Cadence
-  // ships as the dialog opens, and the Training panel gains its standing row.
   {
     id: 'c_anthrosoft',
     title: 'A Rival Lab',
@@ -485,7 +453,6 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_journalist',
     title: 'A Reporter Calls',
-    // A minute of research, fixed when she calls.
     onOpen: (s, ctx) => {
       if (!ctx['research']) ctx['research'] = Math.max(1500, twoFigures(30 * researchRate(s)));
     },
@@ -557,7 +524,6 @@ export const CHOICES: ChoiceDef[] = [
       },
     ],
   },
-  // ---- Stage 2 (stage2.md §5.2): seven unprompted modals, ≥ 150 s apart ----
   {
     id: 'c_hearing',
     title: 'A Senate Hearing',
@@ -620,7 +586,6 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'license the archives',
         record: 'licensed',
-        // stage2.md: $400,000 at scale 1; $250,000 is in reach when the crawl runs out.
         tooltip: (s) => `${fmtMoneyShort(publishersLicence(s))}. +10 T of data now. Approval +2.`,
         line: (s) => `+10 T data now · approval +2 · ${fmtMoneyShort(publishersLicence(s))}`,
         cost: (s) => ({ funds: publishersLicence(s) }),
@@ -885,12 +850,10 @@ export const CHOICES: ChoiceDef[] = [
   },
 ];
 
-/** Every answer to the hearing puts the government on the board. */
 function hearingDone(s: GameState): void {
   s.flags['hearingDone'] = true;
   s.revealed['government'] = true;
 }
 
 
-// Stage 3's modals live in data/choices3.ts (it imports only this file's types).
 CHOICES.push(...CHOICES3, ...CHOICES4, ...CHOICES5);

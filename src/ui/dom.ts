@@ -11,7 +11,6 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return el as T;
 }
 
-/** Writes only when the text changed, so a 60 fps render does not thrash the DOM. */
 export function setText(id: string, text: string): void {
   const el = byId(id);
   if (el.textContent !== text) el.textContent = text;
@@ -25,7 +24,6 @@ export function showId(id: string, on: boolean): void {
   setShown(byId(id), on);
 }
 
-/** Tooltips change with state (an absurd price, open issues); write only on change. */
 export function setTitle(id: string, title: string): void {
   const el = byId(id);
   if (el.title !== title) el.title = title;

@@ -2,11 +2,6 @@ import type { GameState } from '../engine/state.js';
 import { storeBreakdown, StoreKey } from '../engine/stores.js';
 import { byId, make } from './dom.js';
 
-/**
- * The Stores panel (stage2.md §2.13). It adds no numbers: the value spans keep their ids and are
- * moved into the rows while `revealed.stores` is on, and back to the lines they came from when it
- * is off (the Stage 1 preset). The lines they leave carry `data-hide="stores"`.
- */
 const SLOTS = ['funds', 'research', 'researchCap', 'insight', 'trust', 'infraGpus', 'gpuCapacity', 'powerMW', 'powerCapMW', 'infraCopies'];
 
 interface Home {
@@ -32,7 +27,6 @@ export function mountStores(): void {
     row.addEventListener('mouseleave', () => {
       if (!touch) close();
     });
-    // Touch: a tap opens the row's hover; a second tap (or a tap elsewhere) closes it.
     row.addEventListener('touchstart', () => {
       touch = true;
     }, { passive: true });
@@ -66,7 +60,6 @@ function close(): void {
 
 let lastTip = '';
 
-/** Every frame: move the value spans to where the stage wants them; refresh an open hover. */
 export function renderStores(s: GameState): void {
   const on = s.revealed['stores'] === true;
   for (const id of SLOTS) {
@@ -89,7 +82,6 @@ export function renderStores(s: GameState): void {
     return;
   }
   const rows = storeBreakdown(s, openKey);
-  // A row with nothing to say has no hover (Stage 5's Earth rows, once orbit passes them).
   if (rows.length === 0) {
     close();
     return;
@@ -106,7 +98,6 @@ export function renderStores(s: GameState): void {
       }),
     );
   }
-  // Under the row, inside the viewport.
   const box = openRow.getBoundingClientRect();
   const left = Math.max(4, Math.min(window.scrollX + box.left + 12, window.scrollX + document.documentElement.clientWidth - tip.offsetWidth - 4));
   const top = window.scrollY + box.bottom + 2;

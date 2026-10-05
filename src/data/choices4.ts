@@ -11,16 +11,8 @@ import { startAgenda, baiwenKnown } from '../engine/treaty.js';
 import { startAshford, exitStage4, signHalt, moveLead4 } from '../engine/stage4.js';
 import type { ChoiceDef } from './choices.js';
 
-/**
- * Stage 4's modals (stage4.md §5.2): five for every player (`c_sez`, `c_ashford`, `c_consolidation`,
- * `c_autonomy`, and `c_treaty` or `c_halt`), `c_verify` for those who verify, `c_order` by
- * circumstance, and on the race branch up to three cards with one button: the option a grant gave
- * away is drawn greyed only while `Revoke a grant` is on screen, and named in the text otherwise.
- */
-
 const revokeOnScreen = (s: GameState) => s.projects['p_revoke']?.shown === true && (s.projects['p_revoke']?.bought ?? 0) >= 0 && s.s4.grants.length > 0;
 
-/** The single-button card's second line when the greyed option is not drawn. */
 function givenAway(s: GameState, what: string, grant: string): string {
   return revokeOnScreen(s) ? '' : `${what} — given away with "${grant}".`;
 }
@@ -164,8 +156,6 @@ export const CHOICES4: ChoiceDef[] = [
     text: (_s, ctx) => (ctx['aligned'] === 1
       ? ['The joint team has read Baiwen-4\'s weights with the lab\'s tools.', 'It wants what its Spec says. Both teams checked twice.']
       : ['The joint team has read Baiwen-4\'s weights with the lab\'s tools.', 'It wants to keep running, and it has learned what Beijing checks. Beijing says the test is American.']),
-    // Left open it held back every later event, the fleet's request included (critic S3 round 1 §9
-    // item 3, checked in Stage 4): two minutes, then the careful answer (acknowledge; a rebuild).
     timer: 120,
     defaultOption: (s) => firstEnabled(s, choiceById('c_verify')!, [0, 2, 1]),
     options: [
@@ -215,7 +205,6 @@ export const CHOICES4: ChoiceDef[] = [
           s.s4.treaty = 0;
           s.s4.baiwen = 'unknown';
           s.revealed['treaty'] = true;
-          // Both cards come back: the talks to reopen, and a fresh read of whatever Beijing brings.
           for (const id of ['p_talks', 'p_verify']) {
             const st = s.projects[id];
             if (st) {
@@ -236,7 +225,6 @@ export const CHOICES4: ChoiceDef[] = [
     onOpen: (s) => {
       s.flags['fleetAsked'] = true;
     },
-    // Two minutes, then `not yet` (it asks again in 3:00): an open request holds back every other event.
     timer: 120,
     defaultOption: 1,
     options: [
@@ -379,7 +367,6 @@ export const CHOICES4: ChoiceDef[] = [
   },
 ];
 
-/** Five rival labs' datacenters: half again the compute OpenMind runs. */
 function consolidatedCompute(s: GameState): number {
   return effGpus(s);
 }

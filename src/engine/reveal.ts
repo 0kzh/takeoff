@@ -7,55 +7,24 @@ import { STAGE5_TABLE, STAGE5_ORDER, MECHANIC_FLAGS_S5 } from '../data/stage5.js
 import { bestCapability } from './economy.js';
 import { visibleProjects } from './projects.js';
 
-/**
- * The reveal scheduler (stage2.md §4.1). A project whose trigger fires joins a queue; the queue
- * releases one project every `DRIP_SECONDS`, in table order, while fewer than `maxVisible` are on
- * screen, so a burst of triggers reads as one idea at a time.
- *
- * Skip the wait: rescues and urgent fixes (a wall's named remedy) appear at once and ignore the
- * cap; the stage goal (`pinned`) appears at once; the direct consequence of a purchase (`chain`)
- * appears at once when there is room.
- *
- * Stage 2 adds (stage2.md §4.1): buttons, panels and modals are rows of the same content table
- * (data/stage2.ts) and appear when their trigger fires, without the drip; *late* rows cannot
- * appear before the approach (best model ≥ 3×) and are released one per `LATE_SECONDS`; and the
- * governor reveals the next row whose prerequisite holds when nothing new has appeared for
- * `GOVERNOR_SECONDS`.
- */
 export const DRIP_SECONDS = 15;
-/** Stage 1 once the Training panel is up. */
 export const STAGE1_DRIP_SECONDS = 30;
-/** Stage 1 until the Training panel is on screen: one card per 60 s (critic round 2 §6.1: minutes 3–10). */
-/** Stage 1: a card waits for room at most this long after the last first-time reveal (no long holes while saving). */
 export const STAGE1_GOVERNOR_SECONDS = 140;
 export const EARLY_DRIP_SECONDS = 60;
 export const LATE_SECONDS = 75;
-/** A hole in first-time reveals the governor fills (A2 allows 180 s; natural triggers get the first 170). */
 export const GOVERNOR_SECONDS = 170;
-/** No new panel or mechanic for this long: the governor pulls the next mechanic row (arc G2). */
 export const MECHANIC_GOVERNOR_SECONDS = 240;
-/** The late drip's spacing between two mechanics of the approach. */
 export const LATE_MECHANIC_SPACING = 150;
 
-/** Projects on screen at once (Stage 1: rescues, urgent fixes, the stage goal and side-offers not counted; Stage 2: only rescues and G6). */
 export function maxVisible(s: GameState): number {
-  // Stage 3 holds five: its grants have a list of their own, and the screen is the densest yet (arc G14).
   return s.stage === 1 ? 4 : s.stage === 3 ? 5 : 6;
-  // Stage 4: six (stage4.md §4.1), grants in their own list.
 }
 
-/** Stage 3: grants on offer at once, and their spacing (stage3.md §4.1 item 1). */
 export const GRANTS_ON_OFFER = 3;
 export const GRANT_SECONDS = 15;
-/** Stage 3's late rows released on the date fallback, 90 s apart (§4.1 item 9). */
 export const FALLBACK_SECONDS = 90;
-/** Stage 3's drip for its first five minutes (§4.1 item 8). */
 export const OPENING_DRIP_S3 = 30;
 
-/**
- * Stage 1 slows the drip while the early systems arrive: one card a minute until the Training panel,
- * then one every 30 s (critic round 2 §6.1: no more than 16 new things in any six minutes); Stage 2, 15 s.
- */
 function dripSeconds(s: GameState): number {
   if (s.stage >= 3) return s.stats.timeInStage < 300 ? OPENING_DRIP_S3 : DRIP_SECONDS;
   if (s.stage !== 1) return DRIP_SECONDS;
@@ -63,17 +32,11 @@ function dripSeconds(s: GameState): number {
   return STAGE1_DRIP_SECONDS;
 }
 
-/**
- * Stage 1's governor, for an empty queue: after 140 s with nothing new, the first of these
- * standalone cards that is not out yet comes out, its trigger aside (arc G1; Stage 2 has its own).
- */
 const STAGE1_GOVERNED = ['p_dogfood', 'p_batch', 'p_agents', 'p_recruiter', 'p_alignment_team', 'p_safety_framework', 'p_distributed'];
 
 function stage1Governor(s: GameState): void {
   if (s.stage !== 1 || !s.revealed['training'] || s.activeChoice) return;
   if (s.stats.timePlayed - s.cadence.lastRevealAt < STAGE1_GOVERNOR_SECONDS) return;
-  // It may go one past the cap (stage1-round3-fixes.md §4), so the stream cannot stall behind four
-  // cards nobody is buying, and no further.
   if (room(s) < 0) return;
   for (const id of STAGE1_GOVERNED) {
     const def = projectDef(id);
@@ -89,53 +52,30 @@ function remainingUses(s: GameState, def: ProjectDef): number {
   return def.uses - (s.projects[def.id]?.bought ?? 0);
 }
 
-/** Ignores the cap and the queue. */
 function exempt(s: GameState, def: ProjectDef): boolean {
   return def.rescue === true || def.pinned === true || def.urgent?.(s) === true;
 }
 
-/**
- * Never blocked by the cap: rescues, urgent fixes and the stage goal; in Stage 1 also side-offers.
- * Stage 2 holds every other card to six on screen, side-offers and Stage 1 leftovers included
- * (critic B4) except the G6 pre-order (`ignoresCap`); after a quiet spell one or two more may join them
- * (`overdue`). Stage 3 still lets old offers ride along.
- */
 function uncapped(s: GameState, def: ProjectDef): boolean {
   if (exempt(s, def)) return true;
   if (s.stage === 2) return def.ignoresCap === true;
   return def.sideline === true || (s.stage >= 2 && def.stages.some((x) => x < s.stage));
 }
 
-/** Seconds into Stage 2 after which priced cards appear whether or not the first run has started. */
 export const FIRST_RUN_WAIT_S2 = 240;
 
-/**
- * Stage 1's first lab (stage1-round3-fixes.md §3 (c)): before the Training panel only these come out,
- * in this order. The Training panel now comes with the first GPU (docs/specs/early-train.md), before
- * the Projects panel exists, so in practice this only keeps them out of the on-sight hold.
- */
 export const OPENING_CARDS = ['p_prompting', 'p_grid', 'p_insight'];
-/** Once shown, the Projects panel is never empty longer than this while a card's trigger has fired (§3 (a)). */
 export const EMPTY_PANEL_SECONDS = 10;
-/** A card already paid for when it would come out waits this long at most for a purchase to take the balance below it (§4). */
 export const ON_SIGHT_SECONDS = 60;
 
 function eligible(s: GameState, def: ProjectDef): boolean {
   if (!def.stages.includes(s.stage) || remainingUses(s, def) <= 0) return false;
   if (s.stage === 1 && !s.revealed['training'] && !def.rescue && !OPENING_CARDS.includes(def.id)) return false;
-  // Stage 2's approach items belong to Stage 2: none appears after the Stage 3 arrival (B6), except
-  // the carried cards (their `stages` name Stage 3: code review, honesty evals, the second campus).
   if (s.stage >= 3 && def.late && !def.stages.includes(s.stage)) return false;
-  // Stage 2's first run comes first (stage2-round2-fixes.md item 1): a priced card waits for it to
-  // start, unless it answers a wall, so the arrival's money and research go into the first model. The
-  // cards carried from Stage 1 wait too (their research floors took the run's 35,000 in the first
-  // minute); four minutes in they come regardless, for a lab that has not trained.
   if (s.stage === 2 && counter(s, 'runsS2') < 1 && s.stats.timeInStage < FIRST_RUN_WAIT_S2 && !exempt(s, def)) {
     const c = def.cost(s);
     if ((c.research ?? 0) > 0 || (c.funds ?? 0) > 0) return false;
   }
-  // Before the Research panel, only rescues can appear (their prices are not in research). Stage 5 has
-  // no research panel: its cards are missions.
   return def.rescue === true || s.revealed['research'] === true || s.stage >= 5;
 }
 
@@ -151,11 +91,9 @@ function show(s: GameState, def: ProjectDef): void {
   if (first) def.onShow?.(s);
 }
 
-/** Position in the project table (built on first use: the data module imports this one). */
 let tableOrder: Map<string, number> | null = null;
 function order(id: string): number {
   if (!tableOrder) tableOrder = new Map(PROJECTS.map((p, i) => [p.id, i]));
-  // Stage 4's carried rows (labs, monitors) queue in its table's order, after its own rows.
   const s4 = STAGE4_ORDER.get(id);
   if (s4 !== undefined) return 100000 + s4;
   const s5 = STAGE5_ORDER.get(id);
@@ -177,7 +115,6 @@ function enqueue(s: GameState, id: string): void {
   else q.splice(at, 0, id);
 }
 
-/** Late rows wait in content-table order. */
 function enqueueLate(s: GameState, id: string): void {
   const q = s.cadence.lateQueue;
   if (q.includes(id)) return;
@@ -187,38 +124,21 @@ function enqueueLate(s: GameState, id: string): void {
   else q.splice(at, 0, id);
 }
 
-/**
- * Stage 2: nothing new for 160 s, so a triggered card may come out over the cap (before the governor's
- * 170 s), up to `OVERFLOW` cards past it: a shelf of offers nobody can afford yet never stalls the stage.
- */
 const OVERFLOW = 2;
 function overdue(s: GameState): boolean {
   return s.stage === 2 && s.stats.timePlayed - s.cadence.lastRevealAt >= GOVERNOR_SECONDS - 10;
 }
 
-/** Free places under the cap. Stage 2 counts the stage goal and urgent fixes too (only rescues ride free). */
 function room(s: GameState): number {
-  // Stage 3: grants have their own list; the stage goals ride free as before.
   const counted = s.stage === 2
     ? visibleProjects(s).filter((p) => !p.rescue)
     : visibleProjects(s).filter((p) => !uncapped(s, p) && !p.grant);
   return maxVisible(s) - counted.length;
 }
 
-/**
- * A modal and a new card are separate beats: a card waits this long after a modal opens, and an
- * unprompted modal this long after a first-time reveal (engine/events.ts).
- */
 export const BEAT_GAP_SECONDS = 4;
 
-/**
- * Stage 1 (stage1-round3-fixes.md §4, "cards are goals, not a conveyor"): a card whose price is already
- * in hand when it would come out waits until a purchase takes the balance below it, for at most 60 s,
- * then comes out lit; with the panel empty, 10 s at most (§3 (a)). Rescues, the stage goal, urgent
- * fixes and gifts (a card with no price) never wait. True while it waits.
- */
 function heldOnSight(s: GameState, def: ProjectDef, now: number, empty: boolean): boolean {
-  // The first lab's four cards are beats with their own timing (§3), not goals to wait for.
   if (s.stage !== 1 || exempt(s, def) || OPENING_CARDS.includes(def.id)) return false;
   const key = `sight:${def.id}`;
   const c = def.cost(s);
@@ -235,14 +155,12 @@ function heldOnSight(s: GameState, def: ProjectDef, now: number, empty: boolean)
   return now - at < (empty ? EMPTY_PANEL_SECONDS : ON_SIGHT_SECONDS);
 }
 
-/** Every tick: triggers feed the queue; the drip releases from it. */
 export function updateProjects(s: GameState): void {
   if (!s.revealed['projects']) return;
   const now = s.stats.timePlayed;
   let free = room(s);
   const approach = inApproach(s);
   const modalBeat = now - s.cadence.lastModalAt < BEAT_GAP_SECONDS;
-  // Stage 1: when the panel last emptied (its last card bought); the next card comes 10 s after (§3 (a)).
   const stage1 = s.stage === 1;
   if (stage1) {
     const onScreen = visibleProjects(s).some((p) => !p.rescue);
@@ -251,7 +169,6 @@ export function updateProjects(s: GameState): void {
   }
   const emptyAt = s.flags['panelEmptyAt'];
   const empty = stage1 && typeof emptyAt === 'number';
-  // The Training panel is a beat of its own (arc G5): cards wait 10 s after it appears.
   const trainingAt = s.flags['trainingAt'];
   const trainingBeat = stage1 && typeof trainingAt === 'number' && now - trainingAt < EMPTY_PANEL_SECONDS;
 
@@ -262,7 +179,6 @@ export function updateProjects(s: GameState): void {
       if (approach) enqueueLate(s, def.id);
       continue;
     }
-    // Stages 3–4: grants wait for a place in their own list; Stage 3's late rows for the approach.
     if ((s.stage === 3 || s.stage === 4) && def.grant) {
       enqueueGrant(s, def.id);
       continue;
@@ -271,7 +187,6 @@ export function updateProjects(s: GameState): void {
       if (approach3) enqueueLate3(s, def.id);
       continue;
     }
-    // Until the Training panel is up, a chained card waits for the drip like any other (critic round 2 §6.1).
     const early = s.stage === 1 && !s.revealed['training'];
     if (exempt(s, def)) show(s, def);
     else if (def.chain && !early && !trainingBeat && free > 0 && !modalBeat && !s.cadence.queue.includes(def.id) && !heldOnSight(s, def, now, empty)) {
@@ -280,7 +195,6 @@ export function updateProjects(s: GameState): void {
     } else enqueue(s, def.id);
   }
 
-  // Lapsed offers leave the screen; queued entries that can no longer appear leave quietly.
   for (const def of PROJECTS) {
     if (def.expires && s.projects[def.id]?.shown && def.expires(s)) withdrawProject(s, def.id);
   }
@@ -289,17 +203,10 @@ export function updateProjects(s: GameState): void {
     return !!def && !s.projects[id]?.shown && eligible(s, def);
   });
 
-  // A release redraws the Training panel and prints its lines: the next card waits 4 s so the two
-  // are separate beats (no beat adds more than ~8 numbers).
   const released = s.flags['releasedAt'];
   const releaseBeat = typeof released === 'number' && now - released < 4;
-  // Stage 1: the drip only spaces cards that would overlap; an empty panel gets its next card 10 s
-  // after its last one was bought (stage1-round3-fixes.md §3 (a)).
   const dripDue = now - s.cadence.lastDripAt >= dripSeconds(s) || (empty && now - (emptyAt as number) >= EMPTY_PANEL_SECONDS);
   if (s.cadence.queue.length && !releaseBeat && !modalBeat && !trainingBeat && dripDue) {
-    // The first queued project that fits: side-offers never wait for room. After a quiet spell
-    // (Stage 1: 140 s, one card past the cap at most; Stage 2: 160 s, eight cards at most) the next one
-    // comes out over the cap. Stage 1 holds a card already paid for (heldOnSight).
     const quiet = s.stage === 1
       ? s.revealed['training'] === true && now - s.cadence.lastRevealAt >= STAGE1_GOVERNOR_SECONDS && free >= 0
       : overdue(s) && free > -OVERFLOW;
@@ -316,7 +223,6 @@ export function updateProjects(s: GameState): void {
   if (s.cadence.queue.length === 0) stage1Governor(s);
 }
 
-/** Stage 3: a grant whose trigger fired waits in table order for a place in the list. */
 function enqueueGrant(s: GameState, id: string): void {
   const q = (s.cadence.grantQueue ??= []);
   if (q.includes(id)) return;
@@ -325,7 +231,6 @@ function enqueueGrant(s: GameState, id: string): void {
   else q.splice(at, 0, id);
 }
 
-/** Stage 3's late rows wait in content-table order (projects and the memo alike). */
 function enqueueLate3(s: GameState, id: string): void {
   const q = s.cadence.lateQueue;
   if (q.includes(id)) return;
@@ -335,15 +240,12 @@ function enqueueLate3(s: GameState, id: string): void {
   else q.splice(at, 0, id);
 }
 
-/** Takes a project off the screen and out of the queue (it stopped making sense). */
 export function withdrawProject(s: GameState, id: string): void {
   const st = s.projects[id];
   if (st) st.shown = false;
   s.cadence.queue = s.cadence.queue.filter((q) => q !== id);
   s.cadence.lateQueue = s.cadence.lateQueue.filter((q) => q !== id);
 }
-
-// ---------- Stage 2: buttons, panels and modals; the late drip; the governor ----------
 
 function rowDone(s: GameState, row: ContentRow): boolean {
   if (row.kind === 'project') {
@@ -366,7 +268,6 @@ function rowLate(row: ContentRow): boolean {
   return row.late === true;
 }
 
-/** Reveals a row now if it can appear now (a project needs room unless it skips the cap, or `overCap` past it). */
 function revealRow(s: GameState, row: ContentRow, overCap = 0): boolean {
   if (row.kind === 'project') {
     const def = projectDef(row.id);
@@ -378,11 +279,6 @@ function revealRow(s: GameState, row: ContentRow, overCap = 0): boolean {
   return row.reveal?.(s) === true;
 }
 
-/**
- * Every tick in Stage 2: rows other than projects appear when their trigger fires (late ones go to
- * the late queue); the late drip releases one late row per 75 s from the approach on; the
- * governor fills any 150 s hole in first-time reveals.
- */
 export function updateStageContent(s: GameState): void {
   if (s.stage === 3) {
     updateStage3Content(s);
@@ -418,12 +314,8 @@ function lateDrip(s: GameState, approach: boolean): void {
   });
   if (!approach || c.lateQueue.length === 0) return;
   if (s.stats.timePlayed - c.lastLateAt < LATE_SECONDS) return;
-  // The stage goal (pinned) leads the approach: it is the carrot for the rest of the stage.
   const pinnedFirst = [...c.lateQueue].sort((x, y) => Number(projectDef(y)?.pinned === true) - Number(projectDef(x)?.pinned === true));
-  // A full shelf holds the approach back until the stage has been quiet for a while.
   const over = overdue(s) ? OVERFLOW : 0;
-  // The approach's mechanics are spaced (critic C8: a late stretch with nothing new after a bunch of
-  // three): a mechanic row waits until the last mechanic is 150 s old.
   const mechanicSpaced = s.stats.timePlayed - c.lastMechanicAt >= LATE_MECHANIC_SPACING;
   for (const id of pinnedFirst) {
     const row = rowById(id);
@@ -437,11 +329,6 @@ function lateDrip(s: GameState, approach: boolean): void {
   }
 }
 
-/**
- * The cadence governor (arc G1): 150 s without a first-time reveal and no modal open → reveal the
- * first row of the table that is not out yet and whose prerequisite holds, ignoring its trigger.
- * Late rows still wait for the approach. Logged in `cadence.governed` (the sim prints GOVERNOR).
- */
 function governor(s: GameState, approach: boolean): void {
   const c = s.cadence;
   const now = s.stats.timePlayed;
@@ -451,7 +338,6 @@ function governor(s: GameState, approach: boolean): void {
   if (!reveals && !mechanics) return;
   for (const row of STAGE2_TABLE) {
     if (row.governed === false || rowDone(s, row)) continue;
-    // A mechanic hole is filled with a mechanic; a reveal hole with any row.
     if (!reveals && row.mechanic !== true) continue;
     const late = rowLate(row);
     if (late && !approach) continue;
@@ -459,7 +345,6 @@ function governor(s: GameState, approach: boolean): void {
     if (!revealRow(s, row, OVERFLOW)) continue;
     c.governed.push(`${Math.round(now)}:${row.id}`);
     c.lastRevealAt = now;
-    // A mechanic row (a modal that opens a panel) counts as the mechanic now, not when it resolves.
     if (row.mechanic) c.lastMechanicAt = now;
     if (late) {
       c.lastLateAt = now;
@@ -468,8 +353,6 @@ function governor(s: GameState, approach: boolean): void {
     return;
   }
 }
-
-// ---------- Stage 3: the grant list, the approach, the governor (stage3.md §4.1) ----------
 
 function rowDone3(s: GameState, row: ContentRow): boolean {
   if (row.kind === 'project') {
@@ -484,17 +367,10 @@ function rowLate3(row: ContentRow): boolean {
   return row.late === true;
 }
 
-/** A late row's capability threshold (the memo: 14×). */
 function lateAtOf(id: string): number {
   return projectDef(id)?.lateAt ?? 14;
 }
 
-/**
- * Every tick in Stage 3: rows other than projects appear when their trigger fires (the late ones go
- * to the late queue); grants enter their list three at most, 15 s apart; the approach releases one
- * late row per 75 s once the best model passes its threshold (from September 2027 regardless, 90 s
- * apart); the governor fills a 170 s hole with the next non-late row whose prerequisite holds.
- */
 function updateStage3Content(s: GameState): void {
   const approach = inApproach3(s);
   for (const row of STAGE3_TABLE) {
@@ -543,11 +419,7 @@ function lateDrip3(s: GameState, approach: boolean): void {
     const row = rowById3(id);
     if (!row || !rowPrereq(s, row)) continue;
     const due = best >= lateAtOf(id) - 1e-9;
-    // The date fallback releases rows whose threshold has not come, in table order, 90 s apart.
     if (!due && !(fallback && since >= FALLBACK_SECONDS)) continue;
-    // One card past the shelf, the approach being the densest screen of the stage (arc G14); after a
-    // quiet spell (a shelf of cards nobody can afford yet) up to three, so the approach never stalls.
-    // A test (noise, successor, lie test) gets the same three once the last mechanic is 150 s old.
     const quiet = now - c.lastRevealAt >= GOVERNOR_SECONDS - 20
       || (projectDef(id)?.instrument === true && now - c.lastMechanicAt >= LATE_MECHANIC_SPACING);
     if (revealRow(s, row, quiet ? OVERFLOW + 1 : 1)) {
@@ -558,7 +430,6 @@ function lateDrip3(s: GameState, approach: boolean): void {
   }
 }
 
-/** How near its threshold a late row must be for the governor to pull it as a last resort. */
 const LATE_REACH = 0.85;
 
 function governor3(s: GameState): void {
@@ -568,9 +439,6 @@ function governor3(s: GameState): void {
   const reveals = now - c.lastRevealAt >= GOVERNOR_SECONDS;
   const mechanics = now - c.lastMechanicAt >= MECHANIC_GOVERNOR_SECONDS;
   if (!reveals && !mechanics) return;
-  // The next row of the table that can come out; late rows wait for their threshold. When nothing
-  // else can come out, the last resort is the next late row within 15 % of its threshold (a slow
-  // lab otherwise sat four minutes at 13.6× with nothing new before the memo at 14×).
   const best = bestCapability(s);
   for (const lastResort of [false, true]) {
     for (const row of STAGE3_TABLE) {
@@ -578,7 +446,6 @@ function governor3(s: GameState): void {
       if (lastResort && best < LATE_REACH * lateAtOf(row.id)) continue;
       if (!reveals && row.mechanic !== true) continue;
       if (row.kind === 'project' && projectDef(row.id)?.grant) {
-        // A grant the governor pulls joins the list (it is still a grant).
         const def = projectDef(row.id);
         if (!def || !eligible(s, def) || visibleProjects(s).filter((p) => p.grant).length >= GRANTS_ON_OFFER) continue;
         show(s, def);
@@ -599,17 +466,10 @@ function governor3(s: GameState): void {
   }
 }
 
-// ---------- Stage 4: the table, the grant list, the governor (stage4.md §4.1) ----------
-
 function rowLate4(row: ContentRow): boolean {
   return row.kind !== 'project' && row.late === true;
 }
 
-/**
- * Every tick in Stage 4: rows other than projects appear when their trigger fires (late ones only once
- * the approach has begun); grants enter their list three at most, 15 s apart; the governor fills a 170 s
- * hole with the next row whose prerequisite holds (late rows only in the approach).
- */
 function updateStage4Content(s: GameState): void {
   const approach = inApproach4(s);
   for (const row of STAGE4_TABLE) {
@@ -649,14 +509,6 @@ function governor4(s: GameState, approach: boolean): void {
   }
 }
 
-// ---------- Stage 5: the table and the governor (stage5.md §4.1) ----------
-
-/**
- * Every tick in Stage 5: rows other than projects appear when their trigger fires; missions come through
- * the queue and the drip like any card. The governor fills a 170 s hole with the next row whose
- * prerequisite holds; the mechanic governor is off (G2 is relaxed to 360 s here, §4.3). There are no late
- * items: the last project is one row among three on the board.
- */
 function updateStage5Content(s: GameState): void {
   for (const row of STAGE5_TABLE) {
     if (row.kind === 'project' || rowDone3(s, row) || !row.trigger || !row.trigger(s)) continue;
@@ -667,7 +519,6 @@ function updateStage5Content(s: GameState): void {
   if (s.activeChoice || now - c.lastRevealAt < GOVERNOR_SECONDS) return;
   for (const row of STAGE5_TABLE) {
     if (row.governed === false || rowDone3(s, row)) continue;
-    // The last project waits for its threshold; the far goals for theirs to come near.
     if (row.id === 'p_reflection' || row.id === 'p_relay' || row.id === 'p_jupiter') continue;
     if (!rowPrereq(s, row)) continue;
     if (!revealRow(s, row, OVERFLOW)) continue;
@@ -677,13 +528,8 @@ function updateStage5Content(s: GameState): void {
   }
 }
 
-/** Lookup sets for `cadence.seen`, keyed by the array itself (a load replaces the array). */
 const seenSets = new WeakMap<string[], Set<string>>();
 
-/**
- * First-time reveals since the last tick: a `revealed` flag turning true, a project shown, a modal
- * opened. Keeps `cadence.lastRevealAt` (the governor's clock) and `cadence.seen`.
- */
 export function noteReveals(s: GameState): void {
   const seen = s.cadence.seen;
   let known = seenSets.get(seen);
@@ -704,7 +550,6 @@ export function noteReveals(s: GameState): void {
   }
   for (const [id, st] of Object.entries(s.projects)) {
     if (!st.shown) continue;
-    // Rescues are the game noticing a stall, and carried-over projects are not new (arc §6).
     const def = projectDef(id);
     const carried = !!def && s.stage >= 2 && def.stages.some((x) => x < s.stage);
     mark(`p:${id}`, !!def && !def.rescue && !carried);

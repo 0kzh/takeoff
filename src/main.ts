@@ -8,22 +8,18 @@ import { mount, render, Perform } from './ui/render.js';
 import { loadSave, createSaver } from './ui/save.js';
 import { mountDev } from './ui/dev.js';
 
-/** Real time per frame is clamped so a backgrounded tab does not fast-forward (no offline progress). */
 const MAX_FRAME_MS = 250;
 
-/** `?seed=N` starts a reproducible new game when there is no save (playtests, the smoke test). */
 const seedParam = new URLSearchParams(location.search).get('seed');
 const state: GameState = loadSave() ?? newGame(seedParam !== null && Number.isFinite(Number(seedParam)) ? Number(seedParam) : Date.now());
 const saver = createSaver(state);
 
-/** `?speed=0` boots paused, so a test that reloads mid-game gets no real-time frames before it takes over. */
 let speed = new URLSearchParams(location.search).get('speed') === '0' ? 0 : 1;
 let autoplay = false;
 let policy: PolicyName = 'bot';
 let bot = newBotMemory(policy);
 
 function advance(dtMs: number): void {
-  // After an ending only the counter moves (Concord and Silence keep counting): no policy plays.
   if (!autoplay || state.ending) {
     tick(state, dtMs);
     return;
@@ -45,7 +41,6 @@ const perform = ((name: keyof typeof actions, ...args: unknown[]) => {
 }) as Perform;
 
 mount(perform);
-// The end screen's way back (stage5.md §7.2): a fresh game, the old save gone.
 const newGameButton = document.getElementById('btn-newGame');
 if (newGameButton) confirmPress(newGameButton, 'Start again in July 2025? Press again', () => {
   saver.clear();
@@ -74,7 +69,6 @@ mountDev({
   advance,
 });
 render(state);
-// Restoring a save shows everything at once; fade-ins are for reveals during play.
 requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('boot')));
 
 let last = performance.now();

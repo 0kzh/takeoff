@@ -6,7 +6,6 @@ export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
 }
 
-/** A price in words: `$12M, 3 Trust`; Stage 4's big research prices short (`1.2B research`). */
 export function costLabel(c: Cost, short = false): string {
   const parts: string[] = [];
   const n = (v: number) => (short ? fmtShortNum(v) : fmtInt(v));
@@ -15,7 +14,6 @@ export function costLabel(c: Cost, short = false): string {
   if (c.insight) parts.push(`${n(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
   if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
-  // The purse is named on the row (critic S3 round 1 §9 item 5).
   if (c.build) parts.push(`${fmtMoneyShort(c.build)} from the build fund or funds`);
   if (c.power) parts.push(`${fmtInt(c.power)} kWh`);
   return parts.length ? parts.join(', ') : 'free';
@@ -46,10 +44,8 @@ export function buyProject(s: GameState, id: string): boolean {
   const st = projectState(s, id);
   st.bought += 1;
   if (remainingUses(s, def) > 0 && def.rehide) st.shown = false;
-  // A grant's first line is its WARNING (stage3.md §4.2), so its effect runs before its message.
   if (def.grant) def.buy(s);
   if (def.consoleMsg) say(s, def.consoleMsg);
-  // Stage 2's carried cards keep their console line in Stage 3; the Developments log is Stage 3's own.
   const carriedIntoS3 = s.stage >= 3 && def.stages.some((x) => x < 3);
   if (def.logMsg && !carriedIntoS3) logNews(s, def.logMsg);
   if (!def.grant) def.buy(s);

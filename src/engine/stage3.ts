@@ -19,10 +19,6 @@ import { updateOversight } from './oversight.js';
 import { updateEvents3 } from './events3.js';
 import { recordPrice } from './market.js';
 
-/**
- * Stage 3's coordinator (stage3.md §2): what runs every tick (shipments, the loop, drift) and once a
- * second (the budget and the build-out, the world, the Committee, the scripted beats, the walls).
- */
 export function stage3Tick(s: GameState, dt: number): void {
   if (s.stage !== 3) return;
   updateShipments(s, dt);
@@ -58,18 +54,12 @@ export function setBuildBudget(s: GameState, v: BuildBudget): boolean {
   return true;
 }
 
-/**
- * `Let Sage plan the build-out` (§2.1, §2.6): halls and reactors order themselves. Lean orders one
- * when the next lot would not fit; ahead keeps one of each under construction (about a tenth of
- * revenue more). Both are paid from the build fund (arc G34); the lots stay the player's.
- */
 export function runBuildout(s: GameState): void {
   if (s.flags['buildout'] !== true) return;
   const ahead = buildBudget(s) === 'ahead';
   const big = LOT_SIZES_S3[LOT_SIZES_S3.length - 1];
   const roomShort = freeSlots(s) < big;
   const powerShort = freePowerGpus(s) < big;
-  // Datacenter 10 needs the second campus: the build-out buys it from the fund it plans with.
   const campus = needsSite2(s) && (ahead || roomShort) ? visibleProjects(s).find((p) => p.id === 'p_site2') : undefined;
   if (campus && s.buildFund >= (campus.cost(s).build ?? Infinity)) buyProject(s, 'p_site2');
   if (!datacenterBuilding(s) && !needsSite2(s) && (ahead || roomShort)) {
@@ -92,7 +82,6 @@ export function runBuildout(s: GameState): void {
   }
 }
 
-/** `Build-out: Datacenter 11 ordered · Reactor 3 — 1:12` (the Infrastructure panel once handed over). */
 export function buildoutLine(s: GameState): string {
   const parts: string[] = [];
   const hall = datacenterBuilding(s);
@@ -103,27 +92,20 @@ export function buildoutLine(s: GameState): string {
   return `Build-out: ${parts.join(' · ')}`;
 }
 
-/** `Shipment: 100,000 Nimbus G6 in 0:48 · 1 waiting` ('' when nothing is on its way). */
 export function shipmentLine(s: GameState): string {
   const q = s.shipments ?? [];
   if (q.length === 0) return s.flags['blockade'] === true ? `The Blockade — ${fmtClock(counter(s, 'blockadeLeft'))} until the strait reopens` : '';
   const head = q[0]!;
-  // Two on order at most: the second is named in words (the on-screen count, stage3.md §6.3).
   const behind = q.length - 1;
   return `Shipment: ${fmtInt(head.gpus)} GPUs in ${fmtClock(Math.ceil(head.remaining))}${behind === 1 ? ' · another behind it' : behind > 1 ? ` · ${behind} behind it` : ''}`;
 }
 
-/**
- * Walls repeat every 180 s and name the control that answers them (arc G31): the next run short of
- * GPUs, the lots stopped by room or power. Each capacity value is named once when it binds.
- */
 function stage3Walls(s: GameState): void {
   const now = s.stats.timePlayed;
   if (trainSlotFree(s) && gpusShort(s) && s.research >= (trainCost(s).research ?? 0)) {
     if (typeof s.flags['gpuWallSince'] !== 'number') s.flags['gpuWallSince'] = now;
     else if (now - (s.flags['gpuWallSince'] as number) >= 20 && now - counter(s, 'gpuWallSaidAt') >= 180) {
       s.flags['gpuWallSaidAt'] = now;
-      // What actually stops the lots (critic S3 round 1 §9.9 item 6): the campus, the Standing order off, or nothing.
       const fix = needsSite2(s) && freeSlots(s) < LOT_SIZES_S3[0]
         ? 'Datacenter 10 needs the New Carlisle campus, from the build fund or funds.'
         : !standingOrderOn(s)
@@ -153,21 +135,14 @@ function stage3Walls(s: GameState): void {
   }
 }
 
-/** The hall is the wall right now (its button is drawn `urgent`, arc G31). */
 export function hallUrgent(s: GameState): boolean {
   return s.stage === 3 && !datacenterBuilding(s) && freeSlots(s) < LOT_SIZES_S3[0] && !needsSite2(s);
 }
 
-/** A reactor is the wall right now. */
 export function reactorUrgent(s: GameState): boolean {
   return s.stage === 3 && !s.powerQueue.some((o) => o.kind === 'nuclear') && freePowerGpus(s) < LOT_SIZES_S3[0];
 }
 
-/**
- * The distinct purchases a player could press right now in Stage 3 (arc G24/G25): every enabled
- * project and grant, the training verbs still in the player's hands, the lots (once), the hall and
- * the reactor, SL3, and the five repeatable sinks. Other stages: `enabledPurchases`.
- */
 export function enabledPurchasesS3(s: GameState): string[] {
   if (s.stage !== 3) return enabledPurchases(s);
   const out: string[] = [];
@@ -190,7 +165,6 @@ export function enabledPurchasesS3(s: GameState): string[] {
   return out;
 }
 
-/** Datacenter price for the button (re-exported for the UI). */
 export function hallPrice(s: GameState): number {
   return datacenterCost(s);
 }

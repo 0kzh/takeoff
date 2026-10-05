@@ -11,25 +11,11 @@ import { fmtClock } from '../engine/format.js';
 import { granted } from './projects3.js';
 import type { ProjectDef, ProjectInput } from './projects.js';
 
-/**
- * Stage 4's projects (stage4.md §4.2), in table order. Research prices are 90 s of the research rate
- * when the row appears (`revealResearch: 90`), materials prices the list or 90 s of mining
- * (`revealMaterials: 90`), agenda items the Committee's time. Grants render in the Alignment panel's
- * list and each hands over a selector in the same beat (§2.5, G28). The exits are pinned.
- */
-
 const best = (s: GameState) => bestCapability(s);
-/**
- * A research card costs this many seconds of the research rate when it appears (stage4.md §4.1 item 1
- * has 90 s; §9.5's knob: the first generations are more than 5:30 apart for a player who buys every
- * card, and 45 s halves the gaps). Each card prints what it delays the next generation by.
- */
 export const RESEARCH_SECONDS_S4 = 30;
 const treaty = (s: GameState) => s.s4.treaty;
-/** The approach (§4.1 item 2): treaty 60 %, or 150×, or September 2028. */
 export const approach4 = (s: GameState) => treaty(s) >= 60 || best(s) >= 150 || at(s, 2028, 9);
 
-/** An agenda item's card: free, 90 s of the Committee's time, queued behind whatever is running. */
 function agendaRow(project: (def: ProjectInput) => ProjectDef, id: string, key: string, description: string, extra: Partial<ProjectInput>): ProjectDef {
   return project({
     id,
@@ -49,7 +35,6 @@ function agendaRow(project: (def: ProjectInput) => ProjectDef, id: string, key: 
   });
 }
 
-/** A grant's selector arrives in the same beat as its removal (G28); Revoke undoes the newest. */
 function grant4(s: GameState, id: string, title: string, autonomy: number): void {
   granted(s, title, autonomy);
   s.s4.grants.push(id);
@@ -70,7 +55,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
         s.robots += CAR_PLANT_ROBOTS;
         s.s4.robotsBuilt += CAR_PLANT_ROBOTS;
         s.revealed['robotsRow'] = true;
-        // The fleet's jobs and materials are their own beat, 30 s on (§1.3).
         s.flags['fleetAt'] = s.stats.timePlayed + 30;
       },
       consoleMsg: '10,000 Atlas-class units walk off a car line in Ohio. They need something to do.',
@@ -92,8 +76,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
     project({
       id: 'p_deep_mines',
       title: 'Deep mines',
-      // The fleet's own techs are paid in what the fleet makes (§4.2 adds research; the first
-      // generations' gaps are the cost of it).
       cost: { materials: 40000 },
       revealMaterials: 90,
       description: 'Mines deeper than people could work them: mining ×2.',
@@ -125,7 +107,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
     agendaRow(project, 'p_talks', 'talks', 'Open treaty talks with Beijing: the Treaty panel and its progress.', {
       trigger: (s) => ts4(s) >= 270,
       urgent: (s) => s.s4.talks !== 'open' && !s.s4.agenda.some((x) => x.id === 'talks'),
-      // On the agenda, the card leaves; walking away puts it back (c_verify).
       canAfford: (s) => s.s4.talks !== 'open' && !s.s4.agenda.some((x) => x.id === 'talks'),
       onShow: (s) => {
         s.revealed['agenda'] = true;
@@ -209,7 +190,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       description: 'One treaty, one enforcer: Concord-1 on every chip on both sides of the Pacific.',
       stages: [4],
       uses: Infinity,
-      // Greyed from the talks' first day (§2.8 has 40 %): the stage's goal, on screen whatever the treaty waits for.
       trigger: (s) => talksOpen(s),
       canAfford: (s) => treaty(s) >= 100 - 1e-9 && s.activeChoice?.id !== 'c_treaty',
       buy: (s) => {
@@ -260,8 +240,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       description: 'Stop here: nothing above the line is trained anywhere, and the fleet stops replicating.',
       stages: [4],
       uses: Infinity,
-      // From 12:00 with the talks open (§4.2 row 21 waits for treaty 50 % and the approach): the other
-      // way out stays on screen beside the treaty, for a lab whose treaty is stuck as for one whose is not.
       trigger: (s) => talksOpen(s) && ts4(s) >= 720,
       canAfford: (s) => s.approval > -60 && s.activeChoice?.id !== 'c_halt',
       buy: (s) => {
@@ -388,7 +366,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       trigger: (s) => talksOpen(s) && (best(s) >= (s.flags['negotiateAuto'] === true ? 150 : 250) || at(s, 2028, 10)),
       prereq: (s) => talksOpen(s) && best(s) >= (s.flags['negotiateAuto'] === true ? 150 : 250) - 1e-9,
       needs: (s) => `needs a ${s.flags['negotiateAuto'] === true ? 150 : 250}× model`,
-      // A named wait (§2.8 has none): the enforcer takes 1:30 to write, and the chips wait for it.
       buy: (s) => {
         s.flags['concordLeft'] = CONCORD_DESIGN_SECONDS;
       },
@@ -414,7 +391,6 @@ export function stage4Projects(project: (def: ProjectInput) => ProjectDef): Proj
       revealMaterials: 60,
       description: 'Every fab on both sides prints the treaty\'s chip: installation ×1.25.',
       stages: [4],
-      // The last fifth's own card (stage4.md §9.5: a hole after minute 27 wants a late row), halfway through the chips.
       trigger: (s) => s.s4.chipsInstalled >= 0.4,
       buy: (s) => {
         s.flags['chipLines'] = true;

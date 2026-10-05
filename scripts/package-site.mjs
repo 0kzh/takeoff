@@ -1,4 +1,3 @@
-// Assemble the static site while preserving the browser's dist/main.js URL.
 import { cpSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

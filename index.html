@@ -8,11 +8,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="boot">
-  <!--
-    Every panel for every stage is present from the start and hidden. `data-reveal="flag"` shows an
-    element while state.revealed[flag] is true; `data-hide="flag"` hides it while the flag is true.
-    render.ts is the only code that toggles visibility (and that moves value spans into Stores).
-  -->
   <div id="consoleDiv" data-panel="console" data-reveal="console">
     <p class="consoleOld" id="consoleOld">
       <span class="consoleLine"><span>&nbsp;.&nbsp;</span><span id="readout5"></span></span><br>
@@ -42,7 +37,6 @@
         <button class="button2" id="btn-task" title="Complete one task by hand. Never needs power.">Complete Task</button>
       </div>
 
-      <!-- A Dark Room stores (stage2.md §2.13): the value spans move in here from their panels. -->
       <div id="panel-stores" class="panel stores" data-panel="stores" data-reveal="stores" data-legend="stores">
         <div class="storeRow" id="row-funds" data-store="funds" data-hide="stage4"><span class="storeKey">funds</span><span class="storeVal" data-slot="funds"></span></div>
         <div class="storeRow" id="row-buildFund" data-store="buildFund" data-reveal="buildShare"><span class="storeKey">build fund</span><span class="storeVal" id="buildFund">$0</span></div>
@@ -59,7 +53,6 @@
         <div class="storeRow" id="row-monitors" data-store="monitors" data-reveal="monitors" data-hide="takeoff"><span class="storeKey">monitors</span><span class="storeVal" id="monitorCopies">0</span></div>
         <div class="storeRow" id="row-rogue" data-store="rogue" data-reveal="rogueRow" data-hide="takeoff"><span class="storeKey">rogue copies</span><span class="storeVal" id="rogueCopies">0</span></div>
         <div class="storeRow" id="row-treatyChips" data-store="treatyChips" data-reveal="fleetChips"><span class="storeKey">treaty chips</span><span class="storeVal"><span class="meter" id="chipsMeter" role="img"></span> <span id="treatyChipsPct">0</span> of 100%</span></div>
-        <!-- Stage 5 (stage5.md §2.5): the flow, the two purses, what it built; Earth below, in grey. -->
         <div class="storeRow" id="row-launch" data-store="launch" data-reveal="launchRow"><span class="storeKey">launch mass</span><span class="storeVal" id="launchMass">0 t/s</span></div>
         <div class="storeRow" id="row-matter" data-store="matter" data-reveal="matterRow"><span class="storeKey">matter</span><span class="storeVal" id="matter">0 t</span></div>
         <div class="storeRow" id="row-missionFund" data-store="missionFund" data-reveal="missionFund"><span class="storeKey">mission fund</span><span class="storeVal"><span class="meter" id="fundMeter" role="img"></span> <span id="fundText">0 of 0 t</span></span></div>
@@ -70,7 +63,6 @@
         <div class="storeRow" id="row-probes" data-store="probes" data-reveal="probesRow"><span class="storeKey">probes</span><span class="storeVal" id="probesCount">0</span></div>
       </div>
 
-      <!-- Stage 5: Earth as three grey rows under their own legend (stage5.md §1.1). -->
       <div id="panel-earth" class="panel stores earth" data-panel="earth" data-reveal="earth" data-legend="earth">
         <div class="storeRow" id="row-earthRobots" data-store="earthRobots"><span class="storeKey">robots</span><span class="storeVal" id="earthRobots">0</span></div>
         <div class="storeRow" id="row-earthGpus" data-store="earthGpus"><span class="storeKey">GPUs</span><span class="storeVal" id="earthGpus">0</span></div>
@@ -144,7 +136,6 @@
         <span class="hiddenIds">Datacenters: <span id="datacenters">0</span> · Nimbus chip price: <span id="chipPrice">$ 50.00</span> · Powered GPUs: <span id="activeGpus">0</span> · Tasks per sec: <span id="infraTasksPerSec">0</span></span>
       </div>
 
-      <!-- Stage 4 (stage4.md §6.1): the fleet's jobs with their rates, then the goal its grant hands over. -->
       <div id="panel-robots" class="panel" data-panel="robots" data-reveal="robotFleet">
         <b>Robots</b>
         <hr>
@@ -216,7 +207,6 @@
         <span data-reveal="order"><span id="orderLine" class="warn"></span><br></span>
       </div>
 
-      <!-- Stage 4 (stage4.md §2.8): in place of Geopolitics once Treaty talks completes. -->
       <div id="panel-treaty" class="panel" data-panel="treaty" data-reveal="treaty">
         <b>Concord treaty</b>
         <hr>
@@ -351,7 +341,6 @@
         <span class="hiddenIds">Lost to value drift: <span id="statDrift">0</span></span>
         <span data-hide="alignment"><span id="alignLine">Alignment (as measured): <span id="statAlignment">50</span></span> <span id="alignNote" class="note"></span></span>
         </span>
-        <!-- Stage 5 (stage5.md §2.5): the model, the copies, value drift; nothing else. -->
         <span data-reveal="beyond">Model: <span id="statModel">Sage</span><br>Copies thinking: <span id="statCopiesThinking">0</span><br>Lost to value drift: <span id="statDrift5">0</span></span>
         <span class="hiddenIds">Tasks per sec: <span id="statTasksPerSec">0</span> · Revenue per sec: <span id="statRevPerSec">$ 0.00</span> · Capability: <span id="statCapability">1.00</span>×</span>
       </div>
@@ -390,8 +379,6 @@
         <span class="hiddenIds">Lead over Baiwen: <span id="lead">3</span> months · Baiwen capability: <span id="baiwenCapability">0.70</span>×</span>
       </div>
 
-      <!-- Stage 5 (stage5.md §6): the rows (each ×1 / ×10 / max with its return), the standing split, the
-           Industry share, the mission line, the swarm; late in some runs, one sentence in their place. -->
       <div id="panel-space" class="panel" data-panel="space" data-reveal="space">
         <b>Space</b>
         <hr>

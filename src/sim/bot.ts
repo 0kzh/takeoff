@@ -1,8 +1,3 @@
-/**
- * Headless simulator: `npm run sim -- --minutes 45 --seed 1 [--policy bot|naive|greedy] [--preset N]
- * [--stop-at-stage N] [--quiet] [--json]`. Plays the engine through `actions` at 100 ms steps with
- * no DOM, prints a timeline and one summary block per stage played (Stage 1, Stage 2).
- */
 import { newGame, GameState, isBought } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
@@ -25,11 +20,9 @@ import { Stage4Tracker, Stage4Summary, printStage4 } from './stage4sim.js';
 import { Stage5Tracker, Stage5Summary, printStage5, printWholeGame, screenValues } from './stage5sim.js';
 import { setSkin, swarmReached, ROWS_TAKEN_AT } from '../engine/space.js';
 
-/** The only Node global the sim needs; avoids a dependency on @types/node. */
 declare const process: { argv: string[]; exitCode?: number };
 
 interface Args {
-  /** `--skin-test`: the preset twice, the verdict flipped in one, the answers Silence applies in both (D7). */
   skinTest?: boolean;
   minutes: number;
   seed: number;
@@ -59,14 +52,11 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-/** Rescue content does not count as a reveal: it is the game noticing a stall, not new content. */
 const RESCUE_PROJECTS = ['p_beg_power', 'p_press', 'p_beg_data'];
 const RESCUE_CHOICES = ['c_customer_email'];
 
-/** Stage 2 panels and mechanics (A4): a new panel, verb, toggle, slider or Stores row. */
 const S2_MECHANICS = MECHANIC_FLAGS;
 
-/** Verbs whose automation makes pressing them a chore (A12): verb → when its automation exists. */
 const AUTOMATED: Record<string, (s: GameState) => boolean> = {
   gpuLot: (s) => (s.projects['p_standing_order']?.bought ?? 0) > 0,
   price: (s) => s.stage >= 2,
@@ -75,89 +65,59 @@ const AUTOMATED: Record<string, (s: GameState) => boolean> = {
 export interface Summary {
   seed: number;
   policy: PolicyName;
-  /** Seconds at which Stage 2 began, or null when it did not within the run. */
   transition: number | null;
   firstGpu: number | null;
-  /** Longest gap between first-time reveals from 0:00 to the transition (or the end of the run). */
   longestRevealGap: number;
   longestRevealGapAt: [number, number];
   revealGapsOver120: [number, number][];
   longestNoveltyGap: number;
   longestNoveltyGapAt: [number, number];
   powerPresses: number;
-  /** Most Buy Power presses in any 5-minute window of Stage 1. */
   worstPressWindow: number;
   capabilityAtTransition: number | null;
-  /** Idle rescues in Stage 1. */
   idleRescues: number;
   rescuesAtZeroTasks: number;
-  /** Stretches in Stage 1 where nothing was produced, or the copies sat without power, for 60 s+. */
   softLocks: [number, number][];
   reveals: number;
-  /** When First Datacenter was first shown (greyed), and seconds from the wall to its purchase (null: bought before the wall). */
   datacenterShown: number | null;
   wallToDc: number | null;
-  /** Training runs started in Stage 1, and the GPUs each needed. */
   runs: number;
   runGpus: number[];
-  /** Longest stretch in Stage 1 with a free slot and Train blocked by the GPU requirement (s), and when. */
   gpuBlockedMax: number;
   gpuBlockedAt: number;
-  /** Modals opened in Stage 1 (every opening, gambles and rescues included). */
   modals: number;
-  /** Smallest gap between two modals that opened on their own (player-caused confirms excluded). */
   minModalSpacing: number | null;
   research: number | null;
   projects: number | null;
   grid: number | null;
-  /** Reveal → purchase per Stage 1 project bought (critic round 2 §6.2). */
   latencyMedian: number | null;
   latencyWithin10Pct: number;
   latencies: [string, number][];
-  /** Most first-time reveals in any six minutes of Stage 1 (critic round 2 §6.1: ≤ 16). */
   maxReveals6min: number;
   maxReveals6minAt: number;
-  /** The state on the last Stage 1 tick (the decision variants' exit state). */
   exitState1: ExitState1 | null;
-  /** Stage 1 modal answers, `id:option`. */
   choices1: string[];
-  /** Stage 1 round-3 measures (stage1-round3-fixes.md §1–§4). */
   s1x: Stage1Extra;
-  /** Stage 2 block (null when the run never reached Stage 2). */
   s2: Stage2Summary | null;
-  /** Stage 3 block (null when the run never reached Stage 3). */
   s3: Stage3Summary | null;
   s4: Stage4Summary | null;
   s5: Stage5Summary | null;
 }
 
-/** stage1-round3-fixes.md acceptance, as the sim can see it. Times are seconds from the start. */
 export interface Stage1Extra {
-  /** Run starts in Stage 1, and the longest gap between two of them. */
   trainStarts: number[];
   maxStartGap: number | null;
   firstRun: number | null;
-  /** Seconds the Train row was up with nothing in the slot and the run could not start, by cause. */
   blocked: Record<string, number>;
-  /** Seconds Train was disabled (a requirement unmet) with nothing training, before the wall. */
   disabledIdle: number;
-  /** First Datacenter: seconds on screen before its purchase, and that as a share of the stage (%). */
   dcOnScreen: number | null;
   dcShare: number | null;
-  /** Dollar purchases that delayed the waiting run (or the datacenter) by 10 s or more, and those with no delay printed on their row. */
   delayed: number;
   unprinted: number;
-  /** Research at the cap between the Projects panel and the Training panel (s); the panel's longest empty stretch then (s). */
   capBeforeTraining: number;
   emptyPanelMax: number;
-  /** Longest stretch with Marketing on screen and grey from 5:00 on (s). */
   marketingGreyMax: number;
-  /** Longest gap between dollar purchases other than power, runs included, from the card to the wall (s). */
   dollarGapMax: number | null;
-  /**
-   * Most console lines in any 26 s from the first Train to 60 s after the first release: the game's own,
-   * and with the replies to the policy's purchases (`Grid contract signed.`) counted too.
-   */
   linesIn26: number;
   linesIn26All: number;
 }
@@ -196,7 +156,6 @@ export interface Mark {
 
 export interface Stage2Summary {
   start: number;
-  /** Seconds in Stage 2 until `Let Sage-3 write the code` (null: not reached). */
   duration: number | null;
   exitHow: string;
   capabilityAtExit: number;
@@ -206,26 +165,21 @@ export interface Stage2Summary {
   intervalMax: number | null;
   durationMin: number | null;
   durationMax: number | null;
-  /** The GPUs each Stage 2 run needed. */
   runGpus: number[];
   longestRevealGap: number;
   longestRevealGapAt: [number, number];
   revealGapsOver120: [number, number][];
-  /** Longest reveal gap inside the last 10 minutes of the stage. */
   lastTenGap: number;
   lastTenGapAt: [number, number];
-  /** Longest gap between new panels or mechanics. */
   mechanicGap: number;
   mechanicGapAt: [number, number];
   reveals: number;
   greyedGoalPct: number;
-  /** Share of Stage 2 with Train blocked by the GPU requirement alone (bot ≤ 5 %, trainfirst ≤ 25 %). */
   gpuBlockedPct: number;
   gpuPressesBeforeStanding: number;
   gpuPresses: number;
   powerPurchases: number;
   datacenters: number;
-  /** Most presses of an automated verb in any 60 s after its automation exists. */
   choreWorst: { verb: string; presses: number } | null;
   idleRescues: number;
   governor: string[];
@@ -250,26 +204,18 @@ export interface Stage2Summary {
   pressCounts: Record<string, number>;
   incidents: number;
   mechanics: string[];
-  /** Seconds of each blocker inside the longest interval between training starts. */
   longestIntervalBlockers: string;
-  /** Reveal → purchase, per Stage 2 project bought (critic round 2: goals, not a conveyor belt). */
   latencyMedian: number | null;
   latencyWithin10Pct: number;
   latencies: [string, number][];
-  /** The state on the last Stage 2 tick, before Stage 3's clamps (critic round 2 §5 variants). */
   exitState: ExitState | null;
-  /** Stage 2 modal answers, `id:option`. */
   choices: string[];
-  /** Hands and eyes (arc G24–G26): 2-s checks after minute 3 with nothing enabled / two or more things. */
   handsNonePct: number;
   handsTwoPct: number;
-  /** Share of the time after minute 10 inside stretches of 30 s or more without a player action. */
   clickGapPct: number;
-  /** The wallet rule (arc G34, stage2-round2-fixes.md §1): a whole lot lit, Train pressable or armed, lot presses. */
   lotLitPct: number;
   trainReadyPct: number;
   lotPresses: number;
-  /** Longest stretch between two changes of the deployed model's capability (the stage end closes the last). */
   longestRelease: number;
   longestReleaseAt: number;
 }
@@ -295,7 +241,6 @@ export interface SimResult {
   summary: Summary;
 }
 
-/** Share (%) of [from, to] inside gaps of 30 s or more between consecutive actions (the edges count). */
 function clickGapShare(times: number[], from: number, to: number): number {
   if (to <= from) return 0;
   const pts = [from, ...times.filter((x) => x > from && x < to).sort((a, b) => a - b), to];
@@ -331,7 +276,6 @@ function longestGap(times: number[], start: number, end: number): { gap: number;
   return { gap, at, over };
 }
 
-/** Anything on screen the player cannot buy yet, or a `+1 Trust at` / `Next:` line (arc G3). */
 function greyedGoal(s: GameState): boolean {
   if (s.revealed['research'] && s.stage < 3) return true;
   if (s.revealed['graph']) return true;
@@ -344,7 +288,6 @@ function greyedGoal(s: GameState): boolean {
   return s.revealed['marketing'] === true && s.funds < marketingCost(s);
 }
 
-/** ≥ 2 affordable purchases competing for the same money, or a modal (arc G10). */
 function meaningfulChoice(s: GameState): boolean {
   if (s.activeChoice) return true;
   const prices: number[] = [];
@@ -363,11 +306,6 @@ function meaningfulChoice(s: GameState): boolean {
   return prices.reduce((x, y) => x + y, 0) > s.funds;
 }
 
-/**
- * Stage 1: why the next run cannot start while the Train row is up with nothing in the slot ('' when it
- * can, or when there is no row): money (armable), GPUs to rent, the rental quota, the wall, an
- * evaluation month; a run costs no research in Stage 1, so `research` and `lab` should never appear.
- */
 function trainBlockedBy(s: GameState): string {
   if (!s.revealed['training'] || s.training.run || s.training.pending || canStartTraining(s)) return '';
   if (s.training.cooldown > 0) return 'cooldown';
@@ -380,7 +318,6 @@ function trainBlockedBy(s: GameState): string {
   return 'other';
 }
 
-/** What keeps the next run from starting right now ('' never: 'ready' when nothing does). */
 function runBlocker(s: GameState): string {
   const t = s.training;
   if (t.pending || (t.run && t.run.phase === 'training')) return 'training';
@@ -415,7 +352,6 @@ export function simulate(args: Args): SimResult {
   const preset = presetByKey(args.preset);
   const s = args.preset !== '1' && preset ? preset.build(args.seed) : newGame(args.seed);
   const mem = newBotMemory(args.policy, false, args.variant);
-  // `--variant flip`: Stage 5 runs in the other skin (the dev switch; D7's comparison).
   const flip = args.variant.split(',').includes('flip');
   let flipped = false;
   const flipNow = () => {
@@ -455,14 +391,12 @@ export function simulate(args: Args): SimResult {
   let transition: number | null = null;
   let capAtTransition: number | null = null;
 
-  // Stage 1 bookkeeping: reveal → purchase, the exit state, the modal answers.
   const s1ShownAt = new Map<string, number>();
   const s1BoughtSeen = new Set<string>();
   const s1Latency: [string, number][] = [];
   let s1Snap: ExitState1 | null = null;
   const s1Choices: string[] = [];
 
-  // Stage 2 bookkeeping.
   let s2Start: number | null = s.stage === 2 ? t0 : null;
   let s2End: number | null = null;
   let s2LotPresses: number | null = null;
@@ -485,7 +419,6 @@ export function simulate(args: Args): SimResult {
   let s2Rescues = 0;
   let s2GreyTicks = 0;
   let s2Ticks = 0;
-  /** Stage 2 ticks with a free slot and Train blocked only by the GPU requirement (owner feedback 1). */
   let s2GpuBlockedTicks = 0;
   let maxVisible = 0;
   let maxVisibleCapped = 0;
@@ -499,13 +432,10 @@ export function simulate(args: Args): SimResult {
   let standingAt: number | null = null;
   const marks: Mark[] = [];
   let nextMark = 0;
-  // Hands and eyes: the player's actions (all but the task button), and the 2-s purchase checks.
   const actionTimes: number[] = [];
   let handsChecks = 0;
   let handsNone = 0;
   let lotLit = 0;
-  // A whole lot is lit when the build fund covers one that fits. A player who buys it at once sees it lit
-  // for a moment only, so a check counts the window since the last one: lit at any tick, or a lot bought.
   let lotLitWindow = false;
   const windowEnabled = new Set<string>();
   let batchesAtCheck = s.gpuBatches;
@@ -521,16 +451,13 @@ export function simulate(args: Args): SimResult {
   const t3 = new Stage3Tracker();
   const t4 = new Stage4Tracker();
   const t5 = new Stage5Tracker();
-  // Stage 1 round-3 measures: dollar purchases (for the delay audit and the gaps between them).
   let delayedBuys = 0;
   let unprintedBuys = 0;
   const dollarBuys: number[] = [];
-  /** A Stage 1 purchase's dollar price, and whether its row prints the delay it causes (arc G34 rule 3). */
   const dollarOf = (prop: string, args: unknown[]): { funds: number; printed: boolean } | null => {
     if (s.stage !== 1) return null;
     if (prop === 'buyPower') return { funds: powerBlockCost(s), printed: false };
     if (prop === 'buyMarketing') return { funds: marketingCost(s), printed: true };
-    // A GPU the next run still needs is part of the run (its row prints no delay).
     if (prop === 'rentGpu') return gpusShort(s) && !needsDatacenter(s) ? null : { funds: gpuCost(s), printed: true };
     if (prop === 'buyProject') {
       const def = projectById(String(args[1]));
@@ -565,7 +492,6 @@ export function simulate(args: Args): SimResult {
       };
     },
   }) as typeof actions;
-  // Train blocked by cause, Train disabled while idle, research at the cap, the empty panel, Marketing grey, console lines.
   const blocked: Record<string, number> = {};
   let disabledIdle = 0;
   let capBeforeTraining = 0;
@@ -578,7 +504,6 @@ export function simulate(args: Args): SimResult {
   let replyLines = 0;
   let linesSeen = s.stats.consoleLines ?? 0;
   const s1Starts: number[] = [];
-  /** Per second in Stage 2: what kept the next run from starting (for the longest interval). */
   const blockLog: [number, string][] = [];
   const revHistory: [number, number][] = [];
   let revenueBefore: number | null = null;
@@ -621,7 +546,6 @@ export function simulate(args: Args): SimResult {
       }
     }
   }
-  // Projects seen before the run starts (a preset) are carried over, not new.
   for (const [id, st] of Object.entries(s.projects)) if (st.shown || st.bought) seenProjects.add(id);
   if (s.stage === 2) {
     s2LogStart = s.log.length;
@@ -631,7 +555,6 @@ export function simulate(args: Args): SimResult {
 
   const beginStage2 = (t: number) => {
     s2Start = t;
-    // Release intervals count from the arrival, not from the start of the game.
     lastCap = s.capability;
     lastCapAt = t;
     s2LogStart = s.log.length;
@@ -644,8 +567,6 @@ export function simulate(args: Args): SimResult {
   };
 
   for (let i = 0; i < totalTicks; i++) {
-    // The critic's harness looks every 2 s and then acts; a policy here acts every few ticks, so what it
-    // bought at once was still lit to it. A check counts every purchase enabled since the last check.
     if (s.stage === 2 && s2Start !== null && s.stats.timePlayed - s2Start >= 178) {
       for (const k of enabledPurchases(s)) windowEnabled.add(k);
       if (!lotLitWindow && s.revealed['infrastructure'] && lotLitNow()) lotLitWindow = true;
@@ -658,7 +579,6 @@ export function simulate(args: Args): SimResult {
       if (lotLitWindow || s.gpuBatches > batchesAtCheck) lotLit++;
       lotLitWindow = false;
       batchesAtCheck = s.gpuBatches;
-      // Train on screen and idle (no run training, a free slot): pressable or armed (G34: ≥ 80 %).
       if (s.revealed['training'] && trainSlotFree(s) && !trainingRun(s)) {
         trainIdleChecks++;
         if (canPressTrain(s) || s.training.armed) trainReady++;
@@ -667,25 +587,20 @@ export function simulate(args: Args): SimResult {
     }
     const linesBefore = s.stats.consoleLines ?? 0;
     policyStep(s, tracked, mem);
-    // Lines printed in reply to the policy's own purchases, and the engine's (the 26-s count below).
     replyLines += (s.stats.consoleLines ?? 0) - linesBefore;
     step(s);
     t3.tick(s, actionTimes);
     t4.tick(s, actionTimes);
     flipNow();
     t5.tick(s, actionTimes);
-    // An ending stops the run (tick() would; the sim steps directly).
     if (s.ending) break;
     const t = s.stats.timePlayed;
-    // Stage 1: a free slot with Train blocked by the GPU requirement (owner feedback U1's measure).
     if (s.stage === 1) {
       const why = trainBlockedBy(s);
       if (why) blocked[why] = Math.round(((blocked[why] ?? 0) + 0.1) * 10) / 10;
       if (why && why !== 'money' && why !== 'wall' && s.flags['wallAt'] === undefined && !canPressTrain(s)) disabledIdle += 0.1;
-      // From the first card (the credit rescue can open the panel early; an empty panel draws no heading).
       if (s.revealed['projects'] && !s.revealed['training'] && Object.entries(s.projects).some(([id, st]) => (st.shown || st.bought > 0) && !RESCUE_PROJECTS.includes(id))) {
         if (s.research >= researchCap(s) - 0.5) capBeforeTraining += 0.1;
-        // §3 (a): no card on screen while a card's trigger has fired (an empty panel draws no heading).
         const empty = !visibleProjects(s).some((p) => !p.rescue) && s.cadence.queue.length > 0;
         if (empty && emptySince === null) emptySince = t;
         if (!empty && emptySince !== null) {
@@ -693,7 +608,6 @@ export function simulate(args: Args): SimResult {
           emptySince = null;
         }
       }
-      // After the opening (the built beats to 3:32 and the first lab, untouched by round 3).
       const grey = t - t0 >= 300 && s.revealed['marketing'] === true && s.funds < marketingCost(s);
       if (grey && greySince === null) greySince = t;
       if (!grey && greySince !== null) {
@@ -739,7 +653,6 @@ export function simulate(args: Args): SimResult {
       if (id === 'p_ai_assistants') mark('s2:assistants', t);
 
     }
-    // Purchases the policy made through the engine's verbs (and their count), for the press log.
     for (const [verb, n] of Object.entries(s.stats.pressCounts)) {
       const before = prevPresses[verb] ?? 0;
       for (let k = before; k < n; k++) {
@@ -774,14 +687,12 @@ export function simulate(args: Args): SimResult {
           seenProjects.add(p.id);
           revealTimes.push(t);
           noveltyTimes.push(t);
-          // Carried Stage 1 projects first shown in Stage 2 are not Stage 2 content.
           if (s.stage === 2 && !p.stages.includes(1)) s2Reveals.push(t);
         }
       }
     }
     prevShown = new Set(visible.map((p) => p.id));
     if (s.activeChoice && s.activeChoice !== prevChoice && !countedChoices.has(s.activeChoice)) {
-      // A modal pushed back by a player's own (Sage-2) modal reopens as the same entry: count it once.
       countedChoices.add(s.activeChoice);
       if (s.stage === 1) {
         modals++;
@@ -793,11 +704,9 @@ export function simulate(args: Args): SimResult {
       }
     }
     prevChoice = s.activeChoice;
-    // Training runs (either pipeline slot).
     for (const r of [s.training.run, s.training.pending]) {
       if (!r || prevRunIds.has(r.id)) continue;
       prevRunIds.add(r.id);
-      // The prologue's Sage-1 is not a training run of the stage (Sage-1.1 is the first).
       if (r.prologue) {
         mark('prologueStart', t);
         continue;
@@ -861,7 +770,6 @@ export function simulate(args: Args): SimResult {
         s2End = t;
         s2Exit = s.flags['exitReadySince'] === undefined ? 'bought' : 'bought';
         s2Cap = bestCapability(s);
-        // Stage 3 orders lots too: the G34 count is Stage 2's.
         s2LotPresses = (s.stats.pressCounts['gpuLot'] ?? 0) - (pressesAtStart['gpuLot'] ?? 0);
       }
       prevStage = s.stage;
@@ -892,7 +800,6 @@ export function simulate(args: Args): SimResult {
       out(t, `GOVERNOR ${g.split(':').slice(1).join(':')}`);
     }
 
-    // Soft-lock watch (Stage 1, after the first GPU): no tasks for 60 s, or idle copies for 60 s.
     if (s.stage === 1 && s.gpus > 0) {
       if (s.tasks > lastTasks) lastTaskGain = t;
       lastTasks = s.tasks;
@@ -1113,8 +1020,6 @@ export function simulate(args: Args): SimResult {
     void s2LogStart;
   }
 
-  // The densest six minutes of first-time reveals in Stage 1 (what is on screen at second 0 is the
-  // opening screen, not a reveal).
   const s1Reveals = revealTimes.filter((x) => x > t0 && x <= horizon).sort((x, y) => x - y);
   let maxReveals6min = 0;
   let maxReveals6minAt = 0;
@@ -1125,7 +1030,6 @@ export function simulate(args: Args): SimResult {
       maxReveals6minAt = Math.round(s1Reveals[a]! - t0);
     }
   }
-  // Stage 1 round-3 measures.
   if (emptySince !== null) emptyPanelMax = Math.max(emptyPanelMax, Math.min(end, milestones['reveal:training'] ?? end) - emptySince);
   if (greySince !== null) marketingGreyMax = Math.max(marketingGreyMax, horizon - greySince);
   const dcShownAt = milestones['shown:p_datacenter'];
@@ -1275,11 +1179,6 @@ function printStage2(sum: Stage2Summary): void {
   }
 }
 
-/**
- * D7, the skins are equal: the same preset and seed twice, the verdict flipped in the second, both giving
- * at each card the option Silence applies. Every number on screen at every five-minute mark must match
- * until the swarm reaches 0.006 %; then Silence spends all matter 15 / 25 / 60.
- */
 function skinTest(args: Args): void {
   const variant = [args.variant, 'answers-silence'].filter(Boolean).join(',');
   const a = simulate({ ...args, variant, quiet: true });

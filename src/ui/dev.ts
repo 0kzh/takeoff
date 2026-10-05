@@ -22,18 +22,12 @@ export interface DevHost {
   getSpeed: () => number;
   setSpeed: (n: number) => void;
   getAutoplay: () => boolean;
-  /**
-   * `which` picks the simulator policy that plays: 'bot' (default) or 'naive' (the critic's
-   * first-timer). `holdTransition` leaves Break ground for the player to click.
-   */
   setAutoplay: (on: boolean, which?: PolicyName, holdTransition?: boolean, variant?: string) => void;
-  /** Game advance used by the main loop (honours autoplay). */
   advance: (dtMs: number) => void;
 }
 
 const SPEEDS = [1, 5, 20];
 
-/** Replaces the live state in place, then saves. The reference held by window.__game stays valid. */
 function load(host: DevHost, next: GameState): void {
   replaceState(host.state, next);
   resetGraph();
@@ -43,7 +37,6 @@ function load(host: DevHost, next: GameState): void {
 }
 
 export function loadPreset(host: DevHost, key: number | string): GameState {
-  // `3c`, `4s`…: a named variant of a stage's start (EXTRA_PRESETS); a number: the stage's start.
   if (typeof key === 'string' && EXTRA_PRESETS[key]) {
     const extra = presetByKey(key)!;
     const param = new URLSearchParams(location.search).get('seed');
@@ -52,7 +45,6 @@ export function loadPreset(host: DevHost, key: number | string): GameState {
   }
   const n = Number(key);
   const preset = presetFor(n);
-  // `?seed=N` makes a preset reproducible too (the smoke tests); otherwise a fresh seed each time.
   const param = new URLSearchParams(location.search).get('seed');
   load(host, preset.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
   if (!preset.ready || preset.stage !== n) {
@@ -161,7 +153,6 @@ export function mountDev(host: DevHost): void {
     }),
   );
 
-  // Stage 5 (stage5.md §9): flip the verdict Stage 4 left (the skin follows it), and open each end screen.
   const endRow = row(
     btn('dev-skin', 'Flip skin', () => {
       setSkin(host.state, host.state.flags['alignedAtHandover'] !== true);

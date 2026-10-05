@@ -8,15 +8,6 @@ import {
 import { INFRA_LINES, CONCORD_LINES } from './stage5.js';
 import type { ProjectDef, ProjectInput } from './projects.js';
 
-/**
- * Stage 5's missions (stage5.md §2.2, §4.2), in table order. A mission is a card in the Projects list;
- * it costs 20 s of the flow when it appears (`revealMatter: 20`, fixed then), paid from the mission fund,
- * and then builds for its time, one at a time (the Autofactory and Mercury build beside the queue).
- * `Launch contracts` is free; the two far goals are priced by their requirement alone; the last project
- * is priced like any mission and looks like one. `Disassemble Mercury` is started by its card, never
- * shown. Everything here is read inside closures: this module is evaluated inside an import cycle.
- */
-
 interface MissionInput {
   id: string;
   title: string;
@@ -32,12 +23,9 @@ interface MissionInput {
 }
 
 export function stage5Projects(project: (def: ProjectInput) => ProjectDef): ProjectDef[] {
-  /** A mission costs this many seconds of the flow when it appears (as-built deltas row 7). */
   const PRICE_SECONDS = 20;
   const mission = (m: MissionInput): ProjectDef => {
     const priced = m.priced !== false;
-    // `(7,400 t · 1:30)`, `(free · 0:05)`, `(2:00)`: the price and the build time on the card; a far goal
-    // whose requirement is unmet prints the requirement instead (the card's `needs`).
     const tag = (s: GameState): string => {
       if (m.prereq && !m.prereq(s)) return '';
       const fund = def.cost(s).fund ?? 0;
@@ -128,7 +116,6 @@ export function stage5Projects(project: (def: ProjectInput) => ProjectDef): Proj
       seconds: 120,
       description: 'Collectors around the Sun. What they gather powers the orbital datacenters.',
       trigger: (s) => launchDone(s) && (orbitalEffective(s) >= 2e9 || ts5(s) >= 330),
-      // The stage cannot end without it (G31).
       urgent: () => true,
       complete: (s) => revealCollectors(s),
     }),
@@ -173,7 +160,6 @@ export function stage5Projects(project: (def: ProjectInput) => ProjectDef): Proj
       title: 'Disassemble Mercury',
       seconds: 150,
       description: 'Mercury, taken apart for its mass: launch mass ×3.',
-      // Started by its card (`c_mercury`), never shown.
       trigger: () => false,
       complete: (s) => {
         multiplyFlow(s, 3, 'Mercury');
@@ -236,8 +222,6 @@ export function stage5Projects(project: (def: ProjectInput) => ProjectDef): Proj
     mission({
       id: 'p_reflection',
       title: 'The long reflection',
-      // 1:30, not §7.1's 2:00: covered about 65 s after it appears and built in two minutes, the ending
-      // came 3:10 after the last first-time reveal for every arrival whose probes left early (D2's 180 s).
       seconds: 90,
       description: 'Stop adding to the swarm for a while and decide, together, what it is for.',
       trigger: (s) => concord(s) && swarmReached(s, 0.01),

@@ -48,14 +48,12 @@ let revealEls: HTMLElement[] = [];
 let hideEls: HTMLElement[] = [];
 let perform: Perform;
 
-/** Wires every static button to its action. Called once at boot. */
 export function mount(p: Perform): void {
   perform = p;
   revealEls = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
   hideEls = Array.from(document.querySelectorAll<HTMLElement>('[data-hide]'));
   const bind = (id: string, fn: () => void) => byId(id).addEventListener('click', fn);
   bind('btn-task', () => perform('clickTask'));
-  // The Pause's end screen keeps the first button: it still adds one.
   bind('btn-endingTask', () => perform('clickTask'));
   bind('btn-buyPower', () => perform('buyPower'));
   bind('btn-grid', () => perform('toggleGrid'));
@@ -64,7 +62,6 @@ export function mount(p: Perform): void {
   bind('btn-marketing', () => perform('buyMarketing'));
   bind('btn-gpu', () => perform('rentGpu'));
   bind('btn-datacenter', () => perform('buildDatacenter'));
-  // Each row buys the lot it shows now (Stage 2's sizes climb with the fleet; Stage 3 has its own).
   bind('btn-gpuBatch', () => perform('buyLotRow', 0));
   bind('btn-gpuBatch5', () => perform('buyLotRow', 1));
   bind('btn-gpuBatch25', () => perform('buyLotRow', 2));
@@ -94,10 +91,8 @@ export function mount(p: Perform): void {
   mount5(p);
 }
 
-/** One render per frame. Text is diffed into spans; visibility comes only from `state.revealed`. */
 export function render(s: GameState): void {
   noteState3(s);
-  // The stage on the body, for the one-column order at 390 px (critic C10: the stage's controls first).
   if (document.body.dataset['stage'] !== String(s.stage)) document.body.dataset['stage'] = String(s.stage);
   for (const el of revealEls) setShown(el, s.revealed[el.dataset['reveal']!] === true);
   for (const el of hideEls) {
@@ -125,17 +120,14 @@ export function render(s: GameState): void {
   renderEnding(s);
 }
 
-/** Rates under 10 keep one decimal so the opening backlog (1.9/s of 4.0/s) reads as a gap. */
 function fmtRate(n: number): string {
   return n < 10 ? fmtNum(n, 1) : fmtInt(Math.round(n));
 }
 
-/** Stage 2 prices: three decimals below a dime (`$ 0.067`). */
 function fmtTaskPrice(p: number): string {
   return (p < 0.1 ? `$ ${p.toFixed(3)}` : fmtMoney(p)).replace(' ', '\u00a0');
 }
 
-/** A bordered meter: the exact values remain in its label and hover. */
 function setMeter(id: string, fraction: number, label: string, warn = false): void {
   const el = byId(id);
   renderMeter(el, fraction);
@@ -155,9 +147,6 @@ function setToggle(id: string, on: boolean, text: string): void {
 function renderPower(s: GameState): void {
   if (s.stage >= 2) return;
   setText('power', fmtInt(s.power));
-  // A store that drains: the bar's scale is the block Buy Power sells right now; the row prints the
-  // amount alone, as it did before the bar (the scale is in the bar's hover). Red only when it is
-  // close to empty in time: under 20 s at the copies' draw, and no Grid Contract topping it up.
   const block = powerBlock(s);
   const left = powerSecondsLeft(s);
   const low = left < 20 && !(s.gridAuto && isBought(s, 'p_grid'));
@@ -165,10 +154,8 @@ function renderPower(s: GameState): void {
   setText('powerNote', copiesIdle(s) ? 'copies idle' : '');
   setText('powerBlock', fmtInt(powerBlock(s)));
   setText('powerCost', fmtMoney(powerBlockCost(s)));
-  // The manual verb never needs power and is never disabled.
   setDisabled('btn-task', false);
   setDisabled('btn-buyPower', s.funds < powerBlockCost(s));
-  // Kept beside the Grid Contract as the manual fallback (Paperclips keeps Wire beside WireBuyer).
   showId('buyPowerRow', true);
   setTitle(
     'btn-buyPower',
@@ -185,7 +172,6 @@ function renderBusiness(s: GameState): void {
   setText('unbilled', fmtInt(s.unbilled));
   setText('price', fmtMoney(s.price));
   if (s.autoPrice) {
-    // Priced automatically (Dynamic pricing in Stage 1; always from Stage 2): one read-only line.
     setText('billRate', fmtInt(s.stats.soldPerSec));
     setText('billPrice', s.stage >= 2 ? fmtTaskPrice(s.price) : fmtMoney(s.price));
     if (s.stage >= 2) setTitle('billPrice', marketBreakdown(s).map(([k, v]) => `${k} ×${fmtNum(v, v < 10 ? 2 : 1)}`).join(' · '));
@@ -197,7 +183,6 @@ function renderBusiness(s: GameState): void {
     const state = marketState(s);
     setText('soldPerSec', fmtRate(billed));
     setText('tasksPerSec', fmtRate(made));
-    // "Billing all 106/s produced" when nothing is left over: one number instead of two equal ones.
     const all = billed >= 0.99 * made && made > 0;
     setText('billingOf', all ? 'Billing all ' : 'Billing ');
     showId('billingOfPart', !all);
@@ -220,7 +205,6 @@ function renderBusiness(s: GameState): void {
   setText('marketingCost', fmtMoney(marketingCost(s)));
   setDisabled('btn-marketing', s.funds < marketingCost(s));
   setTitle('btn-marketing', `Marketing level ${fmtInt(s.hypeLevel)}. More demand at every price: ×1.1 per level.`);
-  // The level appears with the first purchase (owner feedback 1, beat 7).
   showId('hypeLevelLine', s.hypeLevel > 1);
 }
 
@@ -232,30 +216,24 @@ function renderCompute(s: GameState): void {
   setText('gpuNote', quota ? 'quota reached — the provider has no more to rent' : '');
   setText('gpus', fmtInt(s.gpus));
   setText('gpuQuota', fmtInt(rentQuota(s)));
-  // The quota as a bar from 60 rented (owner feedback 1), with `rented / quota` beside it as before.
   if (s.revealed['quota']) setMeter('quotaMeter', s.gpus / rentQuota(s), `${fmtInt(s.gpus)} of the ${fmtInt(rentQuota(s))} the cloud rents`);
   setText('copies', fmtInt(copies(s)));
   const run = trainingRun(s);
   const note = copiesIdle(s) ? '(idle: no power)' : run ? `(${fmtInt(run.gpus ?? 0)} GPUs are training)` : '';
   setText('copiesNote', note);
-  // Copies equal GPUs until training diverts some or efficiency adds more: show the line when it says something.
   showId('copiesRow', copies(s) !== s.gpus);
 }
 
-/** One line per verb, no stock numbers (stage2.md §6.1): the stocks are in Stores. */
 function renderInfrastructure(s: GameState): void {
   if (!s.revealed['infrastructure']) return;
   setText('infraGpus', fmtInt(s.gpus));
   setText('gpuCapacity', fmtInt(gpuCapacity(s)));
   setText('powerMW', fmtNum(powerDrawMW(s), 1));
   setText('powerCapMW', fmtInt(s.powerCapacityMW));
-  // Stores rows are one line each: `GPUs 11,000 / 25,000`, and power's capacity alone (the draw is the
-  // GPU count again), with a word in front when all of it is in use or some GPUs have none.
   const cap = gpuCapacity(s);
   const dark = Math.max(0, s.gpus - activeGpus(s));
   const powerFull = freePowerGpus(s) < 100;
   setText('powerAll', s.stage >= 3 ? '' : dark > 0 ? `${fmtInt(dark)} GPUs dark: ` : powerFull ? 'all in use: ' : '');
-  // Stage 3 names what answers a wall under the figure (the build-out moves the fix around).
   setText('gpuFull', s.stage >= 3 && s.gpus >= cap ? `the halls are full · ${roomFixS3(s)}` : '');
   setText('powerFull', s.stage < 3 ? '' : dark > 0
     ? `${fmtInt(dark)} GPUs dark${powerScale(s) < 1 ? ': a crisis holds power back' : ': add power'}`
@@ -273,10 +251,6 @@ function renderInfrastructure(s: GameState): void {
   }
   setText('chipsOnOrder', chipsOnOrder(s) > 0 ? fmtInt(chipsOnOrder(s)) : 'none yet');
 
-  // GPU lots, whole lots from the build fund: `Buy GPUs (1,000) $120,000`, and beside a greyed button
-  // the wall that greys it (`no room`, `no power`); short of money the button is grey and says nothing
-  // (the fund is in Stores). A grey row more than three minutes from the fund's income is not drawn,
-  // and at most one grey lot row is.
   let greyShown = false;
   const window = lotSizes(s);
   for (const [row, suffix] of [[0, ''], [1, '5'], [2, '25']] as const) {
@@ -290,9 +264,7 @@ function renderInfrastructure(s: GameState): void {
     const lit = !wallWhy && s.buildFund >= cost;
     const mw = Math.max(1, Math.round((n * KW_PER_GPU) / 1000));
     setDisabled(id, !lit);
-    // What the lot uses and adds is in its hover.
     setTitle(id, `${s.g5 ? 'Nimbus G5s, each the work of 1.5 G4s' : 'Nimbus G4s'}, ${fmtMoneyShort(gpuUnitPrice(s))} each, from the build fund. The lot uses ${fmtInt(mw)} MW (${fmtInt(Math.floor(freePowerGpus(s) / 1000))} free) and adds about ${fmtMoneyShort(Math.round(lotReturn(s, n)))} a second at today's market.`);
-    // Grey is for goals: a wall the row names, or a shortfall the share fills within three minutes.
     const near = !!wallWhy || buildEta(s, cost) <= 180;
     const drawn = lit || (near && !greyShown);
     if (!lit && drawn) greyShown = true;
@@ -307,26 +279,21 @@ function renderInfrastructure(s: GameState): void {
   setText('datacenterCost', fmtMoneyShort(dc.cost));
   const building = datacenterBuilding(s);
   const dcShort = !building && s.buildFund < dc.cost;
-  // A hall going up is a named wait; short of money the button is grey and says nothing.
   setText('dcReason', building ? `building — ${fmtClock(Math.ceil(building.remaining))}` : '');
   setDisabled('btn-datacenter', !!building || dcShort);
   setTitle('btn-datacenter', `Room for ${fmtInt(dc.add)} more GPUs once it is built (${fmtClock(dcBuildSeconds(s))}); ${fmtInt(freeSlots(s))} slots are free now. Paid from the build fund.`);
-  // The build fund's rows share one grey place (round 2 item 7, `grey is for goals`): a lit row is always
-  // drawn, the wall's named fix always, and one grey row within three minutes of the share's income.
   const dcLit = !building && !dcShort;
   const dcDrawn = !!building || dcLit || wall === 'room' || (!greyShown && buildEta(s, dc.cost) <= 180);
   if (!dcLit && !building && wall !== 'room' && dcDrawn) greyShown = true;
   setOff('dcRow', !dcDrawn);
   byId('btn-datacenter').classList.toggle('urgent', wall === 'room' && standingStall(s) === 'room');
 
-  // One grey plant row at most, as with the lots: the one a power wall names first.
   const plant = (id: string, rowId: string, costId: string, reasonId: string, kind: 'gas' | 'solar' | 'nuclear', cost: number) => {
     setText(costId, fmtMoneyShort(cost));
     const why = plantReason(s, kind);
     setText(reasonId, why || (kind === 'solar' ? 'joins the queue' : kind === 'nuclear' && s.govRelations >= 60 ? 'cheaper: good relations' : ''));
     const lit = !why && s.buildFund >= cost;
     setDisabled(id, !lit);
-    // The plant a power wall names stays drawn; any other grey plant only within three minutes.
     const named = wall === 'power' && kind === (s.revealed['gasButton'] ? 'gas' : 'solar');
     const drawn = lit || named || (!greyShown && buildEta(s, cost) <= 180);
     if (!lit && !named && drawn) greyShown = true;
@@ -336,7 +303,6 @@ function renderInfrastructure(s: GameState): void {
   plant('btn-turbines', 'gasRow', 'turbineCost', 'gasReason', 'gas', gasCost(s));
   plant('btn-solar', 'solarRow', 'solarCost', 'solarReason', 'solar', solarCost(s));
   plant('btn-nuclear', 'nuclearRow', 'nuclearCost', 'nuclearReason', 'nuclear', nuclearCost(s));
-  // A plant's size is on its button until the first one is built (then in its tooltip and the Stores).
   setText('nuclearLabel', 'Nuclear PPA');
   setText('nuclearMW', ` (+${fmtInt(NUCLEAR_MW)} MW)`);
   showId('gasMW', s.gasPlants === 0);
@@ -351,21 +317,18 @@ function renderInfrastructure(s: GameState): void {
   showId('interconnectLine', q.length > 0);
 }
 
-/** `Build share: 50%`: the share of income that fills the build fund (its row is in Stores). */
 function renderBuildShare(s: GameState): void {
   if (!s.revealed['buildShare']) return;
   setText('btn-buildShare', `${Math.round(s.buildShare * 100)}%`);
   setText('buildFund', fmtMoneyShort(Math.floor(s.buildFund)));
 }
 
-/** `Standing order: ON`, the toggle as it was before the build fund. */
 function renderStanding(s: GameState): void {
   if (!s.revealed['standingOrder']) return;
   const on = standingOrderOn(s);
   setToggle('btn-standing', on, on ? 'ON' : 'OFF');
 }
 
-/** Trust on screen is never negative: what the lab owes is said in words (critic round 2 §4.3). */
 function fmtTrust(trust: number): string {
   return trust >= 0 ? fmtInt(trust) : `0 (${fmtInt(-trust)} owed)`;
 }
@@ -375,7 +338,6 @@ function renderResearch(s: GameState): void {
   setText('trust', fmtTrust(s.trust));
   setText('nextTrust', fmtInt(s.nextTrust));
   setDisabled('btn-hireResearcher', s.trust < 1);
-  // From Stage 2 Trust buys only what names it: the Hire and Expand row goes with its buttons.
   const hire = s.revealed['hireResearcher'] === true && s.revealed['hireFaded'] !== true;
   setOff('hireRow', s.stage >= 2 && !hire && s.revealed['expandLab'] !== true);
   setOff('trustCostNote', s.stage >= 2);
@@ -386,11 +348,9 @@ function renderResearch(s: GameState): void {
   const cap = researchCap(s);
   setText('research', fmtInt(Math.floor(s.research)));
   setText('researchCap', fmtInt(Number.isFinite(cap) ? cap : 0));
-  // Stage 1's research line carries the bar; in Stores the row is `research 320,592 / 416,000`.
   if (Number.isFinite(cap) && cap > 0 && !s.revealed['stores']) {
     setMeter('researchMeter', s.research / cap, `${fmtInt(Math.floor(s.research))} of ${fmtInt(cap)} the lab holds`);
   }
-  // Lab Space is folded into the cap it produces; Insight reads "none yet" until there is some.
   setText('insight', s.insight >= 1 ? fmtInt(Math.floor(s.insight)) : 'none yet');
   setText('insightNote', s.research >= cap ? '(accruing)' : '(accrues at capacity)');
   if (s.revealed['allocation']) {
@@ -398,7 +358,6 @@ function renderResearch(s: GameState): void {
     const slider = byId<HTMLInputElement>('allocSlider');
     if (document.activeElement !== slider && slider.value !== String(pct)) slider.value = String(pct);
     setText('allocPct', `${pct}%`);
-    // The slider and its share, as before; what the share does is in the slider's hover.
     if (s.stage === 2) setText('allocRate', '');
     setTitle('allocSlider', s.stage === 2 ? `Research +${fmtInt(Math.round(aiResearchRate(s)))} a second; revenue −${fmtInt(Math.round(revenueCostOfAlloc(s) * 100))}%.` : '');
     const share = humanShare(s) * 100;
@@ -410,11 +369,9 @@ function renderResearch(s: GameState): void {
 
 const projectButtons = new Map<string, HTMLButtonElement>();
 
-/** Buttons are kept and updated in place so a hover or a half-finished click survives a re-render. */
 function renderProjects(s: GameState): void {
   const list = byId('projectList');
   const visible = s.revealed['projects'] ? visibleProjects(s).filter((p) => !(p.grant && s.stage >= 3)) : [];
-  // Stage 1: the heading is not drawn without a card (stage1-round3-fixes.md §3 (a)).
   setOff('panel-projects', s.stage === 1 && visible.length === 0);
   const ids = new Set(visible.map((p) => p.id));
   for (const [id, b] of projectButtons) {
@@ -437,26 +394,20 @@ function renderProjects(s: GameState): void {
     if (list.children[i] !== b) list.insertBefore(b, list.children[i] ?? null);
     const title = b.firstElementChild as HTMLElement;
     const needs = s.stage >= 3 && def.prereq && def.needs && !def.prereq(s) ? ` (${def.needs(s)})` : '';
-    // A card is its title, its price and its sentence, in every stage and for as long as it is on screen.
     const label = `${def.title} ${priceTag(s, def)}${needs}`;
     if (title.textContent !== label) title.textContent = label;
-    // What a greyed card is waiting on lives in its hover: the lab it needs, or (First Datacenter) the
-    // GPUs the next model needs against what the cloud rents.
     const tip = def.id === 'p_datacenter' && s.stage === 1 ? datacenterTip(s) : labReason(s, def.cost(s).research ?? 0);
     if (b.title !== tip) b.title = tip;
-    // Stage 5: a mission is grey only while its fund is short, and says by how much and when (§2.2).
     const reason = b.querySelector<HTMLElement>('.projectReason');
     const why = def.mission ? missionNeeds(s, def) : '';
     if (reason && reason.textContent !== why) reason.textContent = why;
     const disabled = !def.canAfford(s);
     if (b.disabled !== disabled) b.disabled = disabled;
-    // The card that answers a standing wall, or that the stage cannot go on without (arc G31).
     const urgent = def.urgent?.(s) === true;
     if (b.classList.contains('urgent') !== urgent) b.classList.toggle('urgent', urgent);
   });
 }
 
-/** First Datacenter's hover: the GPUs the next model needs against what the cloud rents. */
 function datacenterTip(s: GameState): string {
   const st = datacenterStatus(s);
   return `The next model needs ${fmtInt(st.need)} GPUs; the cloud rents ${fmtInt(st.rent)}.${st.afterTooBig && !st.needed ? ' The one after will not fit.' : ''}`;
@@ -465,16 +416,12 @@ function datacenterTip(s: GameState): string {
 function renderTraining(s: GameState): void {
   if (!s.revealed['training']) return;
   const t = s.training;
-  // The prologue (docs/specs/early-train.md): before Sage-1 is deployed the panel is the Train row only.
   setOff('modelLines', inPrologue(s));
   setText('modelName', t.deployedName === t.modelName ? t.modelName : `${t.deployedName} (internal: ${t.modelName})`);
   setText('capability', fmtNum(s.capability, 2));
-  // The multiplier appears once it has moved (1.00× before the first release says nothing yet).
   showId('capabilityPart', s.capability > 1.0001 || s.stats.trainings > 0);
   setText('rivalCap', fmtNum(s.rivalCapability, 2));
-  // The rival's number waits for the Stage 2 graph; until then, words (its value is in the tooltip).
   const lead = s.capability / s.rivalCapability;
-  // Stage 2: when Anthrosoft leads, what it costs the market is in the line's hover.
   const marketCut = s.stage === 2 ? Math.round((1 - qualityMultS2(s)) * 100) : 0;
   setText('rivalStanding', lead > 1.02 ? 'Ahead of Anthrosoft' : lead < 0.98 ? 'Anthrosoft is ahead' : 'Level with Anthrosoft');
   setTitle('rivalLine', `Anthrosoft's latest Cadence model: ${fmtNum(s.rivalCapability, 2)}×.${lead < 0.98 && marketCut >= 1 ? ` While it leads, the market is ${marketCut}% smaller.` : ''}`);
@@ -482,7 +429,6 @@ function renderTraining(s: GameState): void {
     const b = byId(`btn-focus-${focus}`);
     if (b.classList.contains('selected') !== (t.focus === focus)) b.classList.toggle('selected', t.focus === focus);
   }
-  // Each button's own figures (`focusBase` in engine/training.ts): they are nowhere else on screen.
   if (s.stage >= 2) {
     setTitle('btn-focus-capability', 'Capability: the next model is 7–10% more capable. Customers notice.');
     setTitle('btn-focus-efficiency', 'Efficiency: +7% capability, and copies per GPU ×1.15.');
@@ -492,13 +438,10 @@ function renderTraining(s: GameState): void {
     setTitle('btn-focus-efficiency', 'Efficiency: +5% capability, and 25% more copies on every GPU.');
     setTitle('btn-focus-safety', 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.');
   }
-  // Three plain buttons and the selected Focus's trade in one line under them; each button's own
-  // figures are in its tooltip.
   setText('focusNote', focusNote(s, t.focus));
 
   const slotRun = evalRun(s);
   const running = trainingRun(s);
-  // Idle: no run at all, or (two pipelines) one waiting in evaluation and none training.
   const idle = !running && (!t.run || trainSlotFree(s));
   showId('train-idle', idle);
   showId('train-running', !!running);
@@ -511,10 +454,6 @@ function renderTraining(s: GameState): void {
   if (s.stage === 3) renderTraining3(s);
 }
 
-/**
- * The selected Focus's trade, one short line (the exact figures are in the tooltips). Stage 1 carries
- * one number; Stage 2, with five more panels on screen, says it in words (critic follow-up B4).
- */
 function focusNote(s: GameState, focus: Focus): string {
   const s2 = s.stage >= 2;
   if (focus === 'capability') return s2 ? 'The most capable next model.' : 'The most capable next model (about +12%).';
@@ -527,7 +466,6 @@ function renderIdle(s: GameState): void {
   const cost = trainCost(s);
   setDisabled('btn-train', !canStartTraining(s));
   setTitle('btn-train', canStartTraining(s) ? 'Start the run.' : 'Not yet: it needs its price and its GPUs.');
-  // Cost: one line a price, named by its unit, with a bar of what the lab holds against it; the GPUs are a price too.
   const gpus = trainGpuFigures(s);
   const rows: [string, (n: number) => string, number, number][] = [
     ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
@@ -540,11 +478,9 @@ function renderIdle(s: GameState): void {
     showId(`costRow-${key}`, need > 0);
     if (need <= 0) continue;
     setText(`costText-${key}`, fmt(need));
-    // What the lab holds is on its own panel; the hover keeps the exact pair.
     setTitle(`costRow-${key}`, `${fmt(have)} of ${fmt(need)}`);
     setWidth(byId(`costBar-${key}`), have / need);
   }
-  // At a wall the bar cannot say what lifts it; one line does.
   setText('trainGpus', trainGpuFix(s));
   showId('trainGpuLine', trainGpuFix(s) !== '');
 }
@@ -558,8 +494,6 @@ function renderRunning(s: GameState, run: TrainingRun): void {
   const waiting = run.elapsed >= run.duration && s.training.run !== run;
   const left = Math.max(0, Math.ceil(run.duration - run.elapsed));
   setText('runRemaining', waiting ? 'trained; waits for the release slot —' : `${left} s`);
-  // Stages 1–2: `34 s remaining` under the bar, as before; the GPUs the run holds are in the bar's hover
-  // (and, in Stage 1, beside Copies running). Stage 3 keeps its own line.
   const gpus = run.gpus ?? 0;
   setText('runLine', waiting
     ? `${run.name} is trained; it waits for the release slot.`
@@ -569,12 +503,10 @@ function renderRunning(s: GameState, run: TrainingRun): void {
 
 function renderEval(s: GameState, run: TrainingRun): void {
   const t = s.training;
-  // Evaluation: bars and evaluator cards fill in over five seconds, then fold into one line.
   const evalP = run.phase === 'evaluating' ? Math.min(1, run.evalElapsed / EVAL_SECONDS) : 1;
   const evalEl = byId('train-eval');
   const collapsed = run.phase === 'redteam';
   if (evalEl.classList.contains('collapsed') !== collapsed) evalEl.classList.toggle('collapsed', collapsed);
-  // Automated evals: one line, the bars and cards in its hover (stage2.md §6.2).
   const condensed = s.revealed['evalLine'] === true;
   if (evalEl.classList.contains('condensed') !== condensed) evalEl.classList.toggle('condensed', condensed);
   setText('evalName', run.name);
@@ -601,7 +533,6 @@ function renderEval(s: GameState, run: TrainingRun): void {
   }
   setText('evalScore', evalP >= 1 ? fmtInt(totalScore(run)) : '…');
   setText('evalCap', evalP >= 1 ? fmtNum(run.capAfter, 2) : '…');
-  // What the run changes when it ships (`copies per GPU 1.88 → 2.35`) is in the total's hover.
   setTitle('evalTotal', evalP >= 1 ? `Reviewers' score: ${totalScore(run)}/40.${s.stage === 2 && run.focus !== 'capability' ? ` ${focusChange(s, run)}` : ''}` : '');
   if (condensed) {
     const done = evalP >= 1;
@@ -609,7 +540,6 @@ function renderEval(s: GameState, run: TrainingRun): void {
     setText(
       'evalLine',
       done
-        // Stage 3 says the count once (`Open issues: 1` is the line below) and drops the score.
         ? s.stage >= 3
           ? `${run.name} … ${fmtNum(run.capAfter, 2)}×${run.phase === 'redteam' ? '' : ` · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`}`
           : `${run.name} … ${totalScore(run)}/40 · ${fmtNum(run.capAfter, 2)}× · ${issues === 0 ? 'no issues open' : `${issues} issue${issues === 1 ? '' : 's'} open`}`
@@ -627,7 +557,6 @@ function renderEval(s: GameState, run: TrainingRun): void {
   }
 
   if (run.phase === 'redteam') {
-    // The prologue's Sage-1 skips the red team: Deploy is its only control (Stage 3 sets its own).
     if (s.stage < 3) {
       setOff('issuesLine', !!run.prologue);
       setOff('btn-redteam', !!run.prologue);
@@ -641,7 +570,6 @@ function renderEval(s: GameState, run: TrainingRun): void {
     setDisabled('btn-release', !canReleasePublic(s));
     setDisabled('btn-releaseInternal', !canRelease(s));
     setText('releaseLabel', run.prologue ? `Deploy ${run.name}` : run.issues > 0 ? `Release (${run.issues} open)` : 'Release');
-    // Release pressed: the button that was pressed fills over the rollout, and the model ships when it is full.
     const rollout = releaseProgress(s);
     const filling = rollout ? Math.max(0.01, rollout.p) : 0;
     renderCooldown(byId('btn-release'), byId('releaseBar'), rollout?.isPublic ? filling : 0);
@@ -660,7 +588,6 @@ function renderEval(s: GameState, run: TrainingRun): void {
   }
 }
 
-/** Stage 2's world panels: Security, Government, Public, Stats. */
 function renderWorld(s: GameState): void {
   if (s.stage < 2) return;
   setText('securityLevel', fmtInt(s.securityLevel));
@@ -673,12 +600,10 @@ function renderWorld(s: GameState): void {
     const c = sl3Cost(s);
     setText('sl3Cost', c.trust ? `${fmtMoneyShort(c.funds)}, ${c.trust} Trust` : fmtMoneyShort(c.funds));
     setDisabled('btn-sl3', s.securityLevel >= 3 || s.funds < c.funds || s.trust < c.trust);
-    // Bought, the row goes (critic S2 round 2 §8.8.7: it stayed, greyed, into Stage 3).
     setOff('sl3Row', s.securityLevel >= 3);
   }
   setText('govRelations', fmtInt(Math.round(s.govRelations)));
   setText('govMood', govMood(s));
-  // What each band of relations, approval and measured alignment does is in its line's hover.
   setText('govNote', '');
   setText('approvalNote', '');
   setText('alignNote', '');
@@ -700,7 +625,6 @@ function renderWorld(s: GameState): void {
   }
 }
 
-/** Stage 3's world: Security, Government then Oversight, Public, Alignment, Geopolitics, Stats. */
 function renderWorld3(s: GameState): void {
   renderSecurity3(s);
   setText('govRelations', fmtInt(Math.round(s.govRelations)));
@@ -725,17 +649,12 @@ function renderWorld3(s: GameState): void {
   renderStats3(s);
 }
 
-/**
- * The lead in words: `Lead over Baiwen: 1.5 months`, or `Baiwen ahead by: 2.0 months` (critic S3 round 1
- * §9.9 item 10: a negative lead with an ASCII hyphen under `Baiwen is 2.0 months ahead.`).
- */
 function renderStatLead(s: GameState): void {
   const half = Math.round(Math.abs(s.lead) * 2) / 2;
   setText('statLeadLabel', s.lead < -0.05 ? 'Baiwen ahead by:' : 'Lead over Baiwen:');
   setText('statLead', fmtNum(half, 1));
 }
 
-/** Later-stage panels are hidden but kept current so revealing one shows real values. */
 function renderLater(s: GameState): void {
   const n = (id: string, v: number, d = 0) => setText(id, d ? fmtNum(v, d) : fmtInt(v));
   if (s.stage < 2) {
@@ -763,11 +682,6 @@ function renderLater(s: GameState): void {
 
 let endingShown = '';
 
-/**
- * The end screen (stage5.md §7.2): the title; Tasks Completed alone and its sentence (the Pause
- * leaves Complete Task under it, which still adds one); the epilogue; the table; every choice and
- * grant; New game.
- */
 function renderEnding(s: GameState): void {
   const screen = byId('endingScreen');
   setShown(screen, !!s.ending);

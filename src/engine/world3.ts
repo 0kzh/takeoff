@@ -5,54 +5,37 @@ import { bestCapability, qualityMult, pricingRevenue } from './economy.js';
 import { moveGov, recordRival, approvalTerms, RIVAL_LINES_S2 } from './world.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 
-/**
- * The world around the lab in Stage 3 (stage3.md §2.10–§2.12, §2.14): the lead over Baiwen on its
- * own wider scale, Anthrosoft's own schedule, jobs on what the public can run, approval and its
- * bands, relations drifting once the Committee sits, and the revenue sinks that steer them —
- * `Lobby`, `Counter-intelligence`, `Payments`. DOM-free; randomness through rng.
- */
-
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** Stage 3's lead ranges over [−2, 12] months (§2.10). */
 export const LEAD_MIN_S3 = -2;
 export const LEAD_MAX_S3 = 12;
 
-/** Moves the lead on Stage 3's scale; a change the player can see marks the graph for a redraw. */
 export function moveLead3(s: GameState, by: number): void {
   const before = s.lead;
   s.lead = clamp(s.lead + by, LEAD_MIN_S3, LEAD_MAX_S3);
   if (Math.abs(s.lead - before) >= 0.05) s.flags['graphDirty'] = true;
 }
 
-/** Seconds into Stage 3 (`ts` in the spec). */
 export function ts3(s: GameState): number {
   return s.stats.timeInStage;
 }
 
-/** True once the date reaches `month` of 2027 (or `year`). */
 export function at2027(s: GameState, month: number, year = 2027): boolean {
   return s.date >= monthOf(year, month);
 }
 
-/** Seats on the Oversight Committee with OpenMind: `floor(relations / 10)` (§2.11). */
 export function seats(s: GameState): number {
   return Math.max(0, Math.min(10, Math.floor(s.govRelations / 10)));
 }
 
-/** The Committee is seated (the Oversight panel replaced Government). */
 export function committeeSeated(s: GameState): boolean {
   return s.revealed['oversight'] === true;
 }
 
-// ---------- Anthrosoft and Baiwen (§2.10) ----------
-
-/** Anthrosoft's Stage 3 pace (as-built deltas row 17): 3.5× on arrival to about 9× in 45 minutes. */
 export function rivalPaceS3(s: GameState): number {
   return 3.5 * Math.pow(9 / 3.5, Math.max(0, ts3(s)) / 2700);
 }
 
-/** Anthrosoft ships on its own schedule, never further back than 0.8 × Sage's best. */
 export function rivalReleaseS3(s: GameState): void {
   s.rivalVersion += 1;
   const before = qualityMult(s);
@@ -61,7 +44,6 @@ export function rivalReleaseS3(s: GameState): void {
   s.nextRivalIn = Math.round(rand(s, 240, 360));
   const name = `Cadence-${s.rivalVersion}`;
   recordRival(s, name);
-  // Flavour in this stage (stage3.md §2.10): every other release makes the Developments log.
   if (s.rivalVersion % 2 === 0) logNews(s, pick(s, [...RIVAL_LINES, ...RIVAL_LINES_S2]).replace('{name}', name));
   const after = qualityMult(s);
   if (s.rivalCapability > bestCapability(s) && after < before - 1e-6) {
@@ -70,7 +52,6 @@ export function rivalReleaseS3(s: GameState): void {
   s.flags['graphDirty'] = true;
 }
 
-/** `holding`, `closing`, `pulling away`: the lead's trend over the last month (Geopolitics). */
 export function leadTrend(s: GameState): string {
   const was = s.flags['leadMonthAgo'];
   if (typeof was !== 'number') return 'holding';
@@ -78,7 +59,6 @@ export function leadTrend(s: GameState): string {
   return d > 0.15 ? 'pulling away' : d < -0.15 ? 'closing' : 'holding';
 }
 
-/** `1.5 months behind` / `0.5 months ahead` (Baiwen's line on the Geopolitics panel). */
 export function baiwenWords(s: GameState): string {
   const m = Math.round(Math.abs(s.lead) * 10) / 10;
   const unit = m === 1 ? 'month' : 'months';
@@ -87,12 +67,6 @@ export function baiwenWords(s: GameState): string {
   return `${fmtNum(m, 1)} ${unit} behind`;
 }
 
-/**
- * Once a Stage 3 month (§2.10): pace `clamp(0.5 × (g − 0.18) / 0.18, −0.5, +0.5)`, g the growth of
- * the best model this month in nats; after a theft Baiwen trains its own (+0.3); the spy's drip
- * (−0.25 until SL4); the lead's bands (§2.14: 4 or more, relations +1; under 1, −1); the
- * Committee always wants more (−1 a month once seated).
- */
 export function monthlyStage3(s: GameState): void {
   const best = bestCapability(s);
   const prev = typeof s.flags['capMonthAgo'] === 'number' ? (s.flags['capMonthAgo'] as number) : best;
@@ -107,20 +81,15 @@ export function monthlyStage3(s: GameState): void {
   s.flags['leadMonthAgo'] = s.lead;
 }
 
-// ---------- jobs and approval (§2.12) ----------
-
-/** What the public can run themselves (`flags.publicCap`): the last public model, and the mini. */
 export function publicCap(s: GameState): number {
   const v = s.flags['publicCap'];
   return typeof v === 'number' ? v : Math.max(1, s.capability);
 }
 
-/** Millions of jobs: `0.12 × √(tasks/s ÷ 10⁶) × (publicCap / 2)^1.5`; never falls. */
 export function jobsTargetS3(s: GameState): number {
   return 0.12 * Math.sqrt(Math.max(0, s.stats.tasksPerSec) / 1e6) * Math.pow(publicCap(s) / 2, 1.5);
 }
 
-/** Payments: 3 % of revenue a level (0–5), approval target +7 a level (§2.14). */
 export const PAYMENT_SHARE = 0.03;
 export const PAYMENT_APPROVAL = 7;
 export const PAYMENT_MAX = 5;
@@ -134,7 +103,6 @@ const S2_TERMS_KEPT = [
   'community agreement', 'joint statement', 'system card', 'candid testimony',
 ];
 
-/** Every term of Stage 3's approval target, for the hover (§2.12). */
 export function approvalTermsS3(s: GameState): [string, number][] {
   const now = s.stats.timePlayed;
   const out: [string, number][] = [];
@@ -142,11 +110,8 @@ export function approvalTermsS3(s: GameState): [string, number][] {
     if (Math.abs(v) >= 0.05) out.push([label, v]);
   };
   add('jobs displaced', -12 * Math.log2(1 + Math.max(0, s.jobsDisplaced) / 2));
-  // Stage 2's standing terms (stage3.md §2.12): gas, Al-Marsa, the Pentagon, the free tier, the job
-  // fund, the community, the pact, the card, the testimony. The rest were Stage 2's news.
   for (const [label, v] of approvalTerms(s)) {
     if (!S2_TERMS_KEPT.includes(label)) continue;
-    // Stage 2's job fund counts until Payments takes it over as level 1.
     if (label === 'job-transition fund' && s.revealed['payments'] === true) continue;
     add(label, v);
   }
@@ -167,9 +132,6 @@ export function approvalTargetS3(s: GameState): number {
   return approvalTermsS3(s).reduce((a, [, v]) => a + v, 0);
 }
 
-// ---------- repeatable revenue sinks (§2.14) ----------
-
-/** Lobby: 15 s of revenue, each unit ×1.3 the next, relaxing a step every 90 s; a fifth off at approval ≥ −15. */
 export const LOBBY_SECONDS = 15;
 export const COUNTERINTEL_SECONDS = 25;
 export const HEAT = 1.3;
@@ -179,7 +141,6 @@ function heatOf(s: GameState, key: string): number {
   return counter(s, key);
 }
 
-/** Approval at −15 or better: lobbying and counter-intelligence cost a fifth less (§2.14). */
 function approvalDiscount(s: GameState): number {
   return s.approval >= -15 ? 0.8 : 1;
 }
@@ -192,19 +153,16 @@ export function counterintelCost(s: GameState): number {
   return Math.round(sinkSeconds(s, COUNTERINTEL_SECONDS) * Math.pow(HEAT, heatOf(s, 'ciHeat')) * approvalDiscount(s));
 }
 
-/** `seconds` of the slow revenue figure (a minute's, never a Re-image's), two significant figures. */
 function sinkSeconds(s: GameState, seconds: number): number {
   const raw = seconds * Math.max(1, pricingRevenue(s));
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
   return Math.round(raw / unit) * unit;
 }
 
-/** What one more unit of Lobby does to relations (tapered by `moveGov`): `78.3 → 78.6`. */
 export function lobbyGain(s: GameState): number {
   return Math.min(1, (100 - s.govRelations) / 80);
 }
 
-/** `Lobby`: relations +1 (tapered), once a unit; the price heats up. */
 export function lobby(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['lobby']) return false;
   const cost = lobbyCost(s);
@@ -217,7 +175,6 @@ export function lobby(s: GameState): boolean {
   return true;
 }
 
-/** `Counter-intelligence`: Baiwen 0.1 months further behind; the price heats up. */
 export function counterintel(s: GameState): boolean {
   if (s.stage < 3 || !s.revealed['counterintel']) return false;
   const cost = counterintelCost(s);
@@ -230,14 +187,12 @@ export function counterintel(s: GameState): boolean {
   return true;
 }
 
-/** `Payments: level n` — one more level (or, at five, back to none). */
 export function stepPayments(s: GameState, up = true): boolean {
   if (s.stage < 3 || !s.revealed['payments']) return false;
   const level = paymentsLevel(s);
   const next = up ? (level >= PAYMENT_MAX ? 0 : level + 1) : Math.max(0, level - 1);
   if (next === level) return false;
   s.flags['payments'] = next;
-  // Stage 2's job fund is level 1 of this (stage3.md as-built deltas row 21).
   s.jobFund = false;
   press(s, 'payments');
   if (next > 0 && !s.flags['paymentsSaid']) {
@@ -248,7 +203,6 @@ export function stepPayments(s: GameState, up = true): boolean {
   return true;
 }
 
-/** The heat on Lobby and Counter-intelligence relaxes one step every 90 s. */
 function relaxHeat(s: GameState): void {
   const now = s.stats.timePlayed;
   for (const [heat, at] of [['lobbyHeat', 'lobbyAt'], ['ciHeat', 'ciAt']] as const) {
@@ -259,13 +213,6 @@ function relaxHeat(s: GameState): void {
   }
 }
 
-// ---------- the slow tick ----------
-
-/**
- * Once a second in Stage 3: jobs creep toward a target that never falls; approval follows its own
- * target at ±0.1 a second; the payments come out of revenue; Anthrosoft ships; heat relaxes; a new
- * month moves the lead. Crises and the Committee have their own modules.
- */
 export function updateWorld3(s: GameState): void {
   if (s.stage !== 3) return;
   const target = jobsTargetS3(s);
@@ -283,13 +230,11 @@ export function updateWorld3(s: GameState): void {
   }
 }
 
-/** The revenue a payments level takes, for its button: `level 2 · 6% of revenue`. */
 export function paymentsCostLine(s: GameState): string {
   const level = paymentsLevel(s);
   return level === 0 ? 'off' : `level ${level} · ${level * 3}% of revenue · ${fmtMoneyShort(Math.round(level * PAYMENT_SHARE * s.stats.revPerSec))}/s`;
 }
 
-/** `seat 8 at 80` — the next seat edge above relations. */
 export function nextSeatAt(s: GameState): number {
   return Math.min(100, (seats(s) + 1) * 10);
 }

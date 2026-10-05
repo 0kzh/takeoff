@@ -18,30 +18,23 @@ import {
   MERCURY_TONNES, probeDoubling, probeDriftPerMin, rowsTaken, EARTH_GROWTH,
 } from './space.js';
 
-/**
- * The Stores hover (stage2.md §2.13): for one row, every source and sink per second and a bold
- * total, as `[label, text, kind]` rows. DOM-free, so the sim and tests can read it.
- */
 export type StoreKey = 'funds' | 'research' | 'insight' | 'trust' | 'gpus' | 'power' | 'copies' | 'data' | 'chips'
   | 'materials' | 'robots' | 'treatyChips' | 'monitors' | 'rogue'
   | 'launch' | 'matter' | 'missionFund' | 'orbital' | 'swarm' | 'mercury' | 'people' | 'probes' | 'earthRobots' | 'earthGpus' | 'earthPower';
 export type TipRow = [string, string, ('total' | 'note')?];
 
-/** `+$2,148/s`, `−$43/s`, `+$1.2M/s`: whole dollars in a hover. */
 const signedMoney = (v: number) => {
   const a = Math.abs(v);
   const text = a >= 1e6 ? fmtMoney(a).replace('$ ', '$') : `$${fmtInt(Math.round(a))}`;
   return `${v < 0 ? '−' : '+'}${text}/s`;
 };
 
-/** Stock that is filling at `rate` per second toward `cap`: `full in 2:31`. */
 function fillsIn(stock: number, cap: number, rate: number): string {
   if (stock >= cap - 0.5) return 'full';
   if (rate <= 0) return 'not filling';
   return `full in ${fmtClock((cap - stock) / rate)}`;
 }
 
-/** Stage 4's rows (stage4.md §2.1): materials, robots, GPU-equivalents, power, treaty chips. */
 function storeBreakdown4(s: GameState, key: StoreKey): TipRow[] | null {
   if (s.stage !== 4) return null;
   const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -85,11 +78,6 @@ function storeBreakdown4(s: GameState, key: StoreKey): TipRow[] | null {
   }
 }
 
-/**
- * Stage 5's rows (stage5.md §2.5): the flow by where it comes from; where matter goes; what fills the
- * fund; what orbital compute is made of; the swarm; Mercury; the probes. Earth's three rows say they grow
- * by themselves, and lose their hovers once orbit passes them.
- */
 function storeBreakdown5(s: GameState, key: StoreKey): TipRow[] | null {
   if (s.stage !== 5) return null;
   const f = s.s5;
@@ -140,7 +128,6 @@ function storeBreakdown5(s: GameState, key: StoreKey): TipRow[] | null {
     case 'earthRobots':
     case 'earthGpus':
     case 'earthPower':
-      // Kept for reference once orbit passes Earth: no hover (§4.2 row 5).
       return s.revealed['earthGrey'] ? [] : [['growing by itself', `+${fmtSmallPct(EARTH_GROWTH * 100)}%/s`]];
     default:
       return null;
@@ -162,7 +149,6 @@ export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
       const gross = lines.reduce((a, [, v]) => a + v, 0);
       if (s.jobFund) lines.push(['job-transition fund', -JOB_FUND_SHARE * gross]);
       const total = lines.reduce((a, [, v]) => a + v, 0);
-      // A line under 0.5 % of the total folds into "other".
       const rows: TipRow[] = [];
       let other = 0;
       for (const [label, v] of lines) {
@@ -256,7 +242,6 @@ export function storeBreakdown(s: GameState, key: StoreKey): TipRow[] {
   return [];
 }
 
-/** `chips on order` row value. */
 export function chipsOnOrder(s: GameState): number {
   return s.flags['g6Preorder'] === true ? 100000 : 0;
 }

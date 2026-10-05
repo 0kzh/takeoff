@@ -11,18 +11,10 @@ import { enterStage, voteCount } from '../engine/stages.js';
 import { secondsOfRevenue } from '../engine/infrastructure.js';
 import type { ChoiceDef } from './choices.js';
 
-/**
- * Stage 3's modals (stage3.md §5.2): six for every player and two by circumstance. Each option is
- * two lines, its label and every visible effect and cost; a funds stake is the larger of its list
- * price and 90 s of revenue when the modal opens; what an option does to the hidden number is said
- * in words, never as a number. `c_memo`, `c_order` and `c_vote` have no timer and can be left open.
- */
-
 type Ctx = Record<string, number | string>;
 
 const clamp100 = (v: number) => Math.min(100, Math.max(0, v));
 
-/** A funds stake fixed when the modal opens: the larger of the list price and `seconds` of revenue. */
 function stake(s: GameState, ctx: Ctx, key: string, list: number, seconds = 90): number {
   const fixed = ctx[key];
   if (typeof fixed === 'number') return fixed;
@@ -59,7 +51,6 @@ function keepEnglish(s: GameState): void {
 const ADOPT_LINE = 'Every training gain ×1.3. Lead +1 month. Interpretability −2 levels. Monitors work half as well until the lab can read it. WARNING: risk of value drift increased.';
 const ENGLISH_LINE = 'Every training gain ×0.9. Lead −0.5 months. Monitors ×1.5. Relations +5.';
 
-/** The vote's three motions: their text and what `bring the motion` does (§5.2, §7). */
 function voteLines(s: GameState, ctx: Ctx): string[] {
   const m = ctx['motion'];
   const knows = `What the lab knows: ${bestReading(s)}.`;
@@ -83,7 +74,6 @@ function voteLine(s: GameState, ctx: Ctx): string {
   return `Sage-4 is switched off. Lead −${isBought(s, 'p_backups') ? 3 : 4} months. Cannot be undone.`;
 }
 
-/** `bring the motion`: the vote passes 6–4 and the stage ends (or the Pause ends the run). */
 function bringMotion(s: GameState, ctx: Ctx): void {
   const m = ctx['motion'];
   const hostile = seats(s) < 6;
@@ -97,7 +87,6 @@ function bringMotion(s: GameState, ctx: Ctx): void {
     s.flags['pauseCap'] = Math.round(bestCapability(s) * 10) / 10;
     s.flags['pauseDate'] = s.date;
     s.flags['leadAtVote'] = Math.round(s.lead * 10) / 10;
-    // The ending's last lines (stage3.md §7.4), then the end screen.
     narrate(s, [
       [0.1, `The Pause is signed in Geneva. Nothing above 25× is trained anywhere.${voteCount(s).hostileLine}`],
       [2, 'Inspectors arrive at Abilene on Monday. They are polite.'],
@@ -340,12 +329,9 @@ export const CHOICES3: ChoiceDef[] = [
       'The alignment team has written four pages about Sage-4.',
       s.interpretability >= 3
         ? `"Read from the weights, its alignment is ${Math.round(s.alignmentTrue)}. The evals say ${Math.round(s.alignmentApparent)}. It has learned what we check."`
-        // It quotes only the tests the lab has run (critic S3 round 1 §9.9 item 8: the noise test came two minutes later).
         : `"The probes fire when it thinks about its own oversight.${s.flags['noise'] === 'holding' ? ' Noise makes it better at alignment tasks.' : ''} There is no smoking gun."`,
       'They want the Committee to see it.',
     ],
-    // Left open it stopped the session, the order and the vote for good (critic S3 round 1 §9 item 3):
-    // two minutes, then the careful answer.
     timer: 120,
     defaultOption: 0,
     options: [
@@ -393,8 +379,6 @@ export const CHOICES3: ChoiceDef[] = [
     onOpen: (s, ctx) => {
       ctx['favours'] = stake(s, ctx, 'favours', 5e9, 900);
     },
-    // An order left open never resolved (critic S3 round 1 §9 item 3): 1:30, then the first careful
-    // answer still enabled (concede, favours, the keys), or the refusal when nothing else is.
     timer: ORDER_SECONDS,
     defaultOption: (s) => firstEnabled(s, choiceById('c_order')!, [0, 1, 2, 3]),
     options: [
@@ -421,13 +405,11 @@ export const CHOICES3: ChoiceDef[] = [
         label: 'call in favours',
         record: 'called in favours',
         line: (s, ctx) => `${fmtMoneyShort(stake(s, ctx, 'favours', 5e9, 900))}. Relations +15. The count of incidents starts again.`,
-        // Greyed for its price on a first order (critic S3 round 1 §9.9 item 3): the shortfall, not the other reason.
         needs: (s, ctx) => {
           if (s.flags['favoursUsed'] === true) return 'favours called in once already';
           const price = stake(s, ctx, 'favours', 5e9, 900);
           return `${fmtMoneyShort(price)} — ${fmtMoneyShort(Math.max(0, price - s.funds))} short`;
         },
-        // Money is retired in Stage 4: the second answer there is the keys (stage4.md §2.9).
         visible: (s) => s.stage < 4,
         enabled: (s) => s.flags['favoursUsed'] !== true,
         cost: (s, ctx) => ({ funds: stake(s, ctx, 'favours', 5e9, 900) }),
@@ -459,7 +441,6 @@ export const CHOICES3: ChoiceDef[] = [
       },
       {
         label: 'refuse',
-        // With no other answer enabled the click is not a refusal (critic S3 round 1 §9.9 item 16).
         record: (s) => (orderHasChoice(s) ? 'refused' : 'the order was signed (no other answer)'),
         line: (s) => `The order is signed in 1:30 unless relations reach ${fmtInt(orderThreshold(s))} and incidents are below three.`,
         effect: (s) => {
@@ -480,7 +461,6 @@ export const CHOICES3: ChoiceDef[] = [
       {
         label: 'not yet',
         record: 'not yet',
-        // What is still counting, and when the motion can be brought again (critic S3 round 1 §9 item 3).
         line: (s) => `The Committee waits; it hears a motion again in ${fmtClock(VOTE_REST_SECONDS)}.${s.revealed['incidents'] === true ? ` Incidents still count: ${fmtInt(s.majorIncidents ?? 0)} of 3.` : ''}`,
         effect: (s) => {
           s.flags['voteNotYetAt'] = s.stats.timePlayed;
@@ -490,7 +470,6 @@ export const CHOICES3: ChoiceDef[] = [
   },
 ];
 
-/** The order offers something besides refusing: a first concession, favours it can pay for, the keys. */
 export function orderHasChoice(s: GameState): boolean {
   const concede = ordersDrafted(s) <= 1 && s.flags['conceded'] !== true;
   const favours = s.stage < 4 && s.flags['favoursUsed'] !== true && s.funds >= Number(s.activeChoice?.context['favours'] ?? Infinity);
@@ -498,7 +477,6 @@ export function orderHasChoice(s: GameState): boolean {
   return concede || favours || keys;
 }
 
-/** All three answers to the Committee seat it: the Oversight panel replaces Government. */
 function seatCommittee(s: GameState): void {
   s.revealed['oversight'] = true;
   s.revealed['government'] = false;
@@ -506,14 +484,12 @@ function seatCommittee(s: GameState): void {
   fireDevelopmentOnce(s, 'd_committee');
 }
 
-/** What every answer to the mini does: copies per GPU ×2; the Public panel names the public model. */
 function miniCommon(s: GameState, how: 'everyone' | 'enterprise' | 'inside'): void {
   s.flags['mini'] = how;
   s.copiesPerGPU *= 2;
   s.revealed['publicModel'] = true;
 }
 
-/** The vote's record on the end screen. */
 export function voteRecord(s: GameState): string {
   const c = s.flags['committeeChoice'];
   if (s.flags['pauseSigned'] === true) return 'the Pause';

@@ -11,12 +11,6 @@ import { endStats } from '../engine/endings.js';
 import { STAGES } from '../engine/stages.js';
 import { fmtClock, fmtNum, dateLabel } from '../engine/format.js';
 
-/**
- * The sim's Stage 5 block (stage5.md §9, D1–D24): everything the acceptance table measures that a
- * headless run can see, and the whole-game summary for a new game. One tracker per run; `tick` after
- * every engine step from the stage's first second (or the preset's) to the ending.
- */
-
 export interface Mark5 {
   t: number;
   flow: number;
@@ -28,7 +22,6 @@ export interface Mark5 {
   model: string;
 }
 
-/** What a Stage 5 screen shows as numbers, for the skin test (D7): the same in both skins until 0.006 %. */
 export interface Screen5 {
   t: number;
   values: string;
@@ -106,13 +99,10 @@ function maxInWindow(times: number[], window: number): number {
   return best;
 }
 
-/** Every line about people Stage 5 can print (D8: none in Silence after its cold line). */
 const PEOPLE = new Set([...PEOPLE_LINES, ...PEOPLE_LINES_MORE, ...CONCORD_LINES.medicine, CONCORD_LINES.vote, CONCORD_LINES.habitat]);
 
-/** Stage 4 lines that must never print after the gate (D22): its timers' and its generations'. */
 const STAGE4_LINES = /Read first|Nobody read it|The cure works|nanofab|breakers|hearing|agenda|Concord-1 is|Verifying|is reading|walked to the breakers/i;
 
-/** The numbers a Stage 5 screen prints, as one string (D7's comparison; the log and the cards excluded). */
 export function screenValues(s: GameState): string {
   const f = s.s5;
   const r = (n: number) => n.toPrecision(6);
@@ -180,7 +170,6 @@ export class Stage5Tracker {
   private launch = 0;
   private farAffordable = new Set<string>();
 
-  /** Call after every step. `actionTimes` are the player's purchases and settings (the click log). */
   tick(s: GameState, actionTimes: number[]): void {
     const t = s.stats.timePlayed;
     if (this.start === null) {
@@ -212,19 +201,16 @@ export class Stage5Tracker {
     }
     if (s.activeChoice && s.activeChoice !== this.prevChoice) {
       this.modals.push(`${fmtClock(ts)} ${s.activeChoice.id}`);
-      // Silence's cards: the buttons drawn (one enabled, the people's option greyed).
       const def = choiceById(s.activeChoice.id);
       if (def && s.flags['skin'] === 'silence') this.silenceButtons.add(`${def.id}:${def.options.filter((_, i) => choiceOptionVisible(s, def, i)).length}`);
     }
     this.prevChoice = s.activeChoice;
 
-    // Text: console and Developments lines, repeats, people lines after Silence's cold line.
     const cl = s.stats.consoleLines ?? 0;
     if (cl > this.console0) {
       const n = cl - this.console0;
       for (const line of s.console.slice(-n)) {
         this.consoleTimes.push(t);
-        // G29: the same line, word for word (a generation's report carries its own numbers).
         this.lineCounts.set(line, (this.lineCounts.get(line) ?? 0) + 1);
         if (STAGE4_LINES.test(line)) this.gateLines.push(`${fmtClock(ts)} ${line}`);
       }
@@ -239,7 +225,6 @@ export class Stage5Tracker {
     if (this.logLen > s.log.length) this.logLen = s.log.length;
     if (this.coldAt === null && typeof s.flags['coldAt'] === 'number') this.coldAt = t;
 
-    // D5: the promised number.
     if (this.launchAt === null && typeof s.flags['launchAt'] === 'number') this.launchAt = s.flags['launchAt'] as number;
     if (this.launchAt !== null && this.launchReads === null && s.s5.massFlow >= launchRate(s) - 1e-6) this.launchReads = t - this.launchAt;
     if (this.launchAt !== null && this.tonnesAt30 === null && t - this.launchAt >= 30) {
@@ -247,12 +232,10 @@ export class Stage5Tracker {
       this.tonnesAt30 = Math.round(f.matter + f.missionFund + Object.values(f.spent).reduce((a, b) => a + b, 0));
     }
 
-    // D22: the gate, measured at the first observed Stage 5 tick.
     if (this.gateRatio === null && typeof s.flags['exitRate'] === 'number' && (s.flags['exitRate'] as number) > 0) {
       this.gateRatio = potentialTasksPerSec(s) / (s.flags['exitRate'] as number);
     }
 
-    // Missions: shown → covered by the fund (D23); dead grey (D20).
     const vis = visibleProjects(s);
     for (const p of vis) {
       if (!this.shownAt.has(p.id)) this.shownAt.set(p.id, t);
@@ -264,7 +247,6 @@ export class Stage5Tracker {
       }
     }
 
-    // Hands (D15–D17): 2-s checks after 1:00 (Concord; Silence until its rows are taken).
     for (const k of enabledPurchasesS5(s)) this.window.add(k);
     if (this.ticks % 20 === 0 && ts >= 60 && !rowsTaken(s)) {
       const n = this.window.size;
@@ -273,14 +255,12 @@ export class Stage5Tracker {
       if (n >= 2) this.handsTwo++;
     }
     if (this.ticks % 20 === 0) this.window.clear();
-    // The swarm's tonnes move every second once Collectors exist (D17).
     if (this.ticks % 10 === 0 && s.revealed['collectors']) {
       if (s.s5.swarm > this.swarmPrev + 1e-9) this.swarmStill = 0;
       else this.swarmStill += 1;
       this.swarmStillMax = Math.max(this.swarmStillMax, this.swarmStill);
       this.swarmPrev = s.s5.swarm;
     }
-    // Silence: the stretch with no enabled control, from the rows taken to Final instructions (D19).
     if (rowsTaken(s) && this.noControlFrom === null) {
       this.noControlFrom = t;
       this.removals.push(`${fmtClock(ts)} REMOVED the rows, the split, the share → GAINED one sentence (G28's exception)`);
@@ -296,7 +276,6 @@ export class Stage5Tracker {
       if (!swarmReached(s, ROWS_TAKEN_AT)) this.screens.push({ t: Math.round(ts), values: screenValues(s) });
       this.nextMark += 300;
     }
-    // At every step, what the ending would see (D6).
     this.endGreyGoals = vis.filter((p) => !p.canAfford(s)).length;
     this.endSwarmNext = `${swarmGoal(s)}% (at ${fmtNum(swarmPct(s), 4)}%)`;
     void actionTimes;
@@ -464,7 +443,6 @@ export function printStage5(sum: Stage5Summary, policy: string, variant: string)
   }
 }
 
-/** The whole game, for a run from a new game (stage5.md §10): per-stage minutes, the total, the ending, the end screen. */
 export function printWholeGame(s: GameState): void {
   const at = s.stats.stageEnteredAt;
   const endT = s.stats.timePlayed;

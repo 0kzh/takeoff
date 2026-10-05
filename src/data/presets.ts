@@ -9,23 +9,16 @@ import { DEVELOPMENTS } from './developments.js';
 export interface Preset {
   stage: number;
   label: string;
-  /** False for stages whose content is not built yet; they load the latest real preset. */
   ready: boolean;
   build: (seed: number) => GameState;
 }
 
-/**
- * Stage 1 projects the median run had bought at First Datacenter: bot, seeds 1–5 (20:14 / 20:31 / 21:40 /
- * 21:15 / 20:40); seed 2, the median of the income the five bring into Stage 2 ($3,494/s of $2,822–4,936)
- * and within 10 s of the median time (seed 5, which brings the least).
- */
 const STAGE1_BOUGHT = [
   'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
   'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
   'p_desks', 'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
   'p_abatement', 'p_reserved',
 ];
-/** Repeatables and the cards bought more than once by then. */
 const STAGE1_REPEATS: Record<string, number> = { p_desks: 2, p_contract: 7 };
 
 const STAGE1_MODELS: ModelRecord[] = [
@@ -51,17 +44,8 @@ const STAGE1_CHOICES: ChoiceRecord[] = [
   { id: 'c_poach', option: 'matched', date: 'Nov 2025' },
 ];
 
-/**
- * The state the bot hands over at the moment it buys First Datacenter: the median of seeds 1–5
- * (`npm run sim`, bot policy; seed 2 at 20:31), rebuilt after the wallet rule and Stage 1's round 3 (a run costs money
- * and GPUs, five rented runs, the wall at 1.68×). Every field the run had changed from a new game, its
- * flags included, so the preset is that run's real state. `enterStage(2)` then plays the real arrival:
- * the rented GPUs go back, 1,000 owned GPUs, lab room, the contracts'
- * share of sales frozen as their rate, the arrival scale from the income it brings.
- */
 function stage1End(seed: number): GameState {
   const s = newGame(seed);
-  // Sage-1 has long been live (docs/specs/early-train.md): no prologue.
   delete s.flags['prologue'];
   Object.assign(s, {
     date: 5.1329,
@@ -219,12 +203,6 @@ function stage2(seed: number): GameState {
   return s;
 }
 
-// ---------- Stage 3 start: the sim's median Stage 2 exit (bot, seeds 1–5 from the Stage 2 preset) ----------
-
-/**
- * Projects bought by the median run (seed 2) when Sage-3 shipped: the bot's exits from the rebuilt
- * Stage 2 preset take 36:28 / 36:46 / 39:09 / 37:43 / 35:52 (seeds 1–5). Stage 1's cards included.
- */
 const STAGE2_BOUGHT = [
   'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
   'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
@@ -238,7 +216,6 @@ const STAGE2_BOUGHT = [
 ];
 const STAGE2_REPEATS: Record<string, number> = { p_desks: 2, p_contract: 7 };
 
-/** Every model of the median run, Stage 1's included. */
 const STAGE2_MODELS: ModelRecord[] = [
   { name: 'Sage-1', capability: 1, date: 0, public: true },
   { name: 'Sage-1.1', capability: 1.118, date: 1.76, public: true },
@@ -293,11 +270,6 @@ const STAGE2_REVEALED = [
     'queue', 'nuclearButton', 'secondPipeline', 'jobFund', 'stats', 'sl3Button', 'shareEvals',
 ];
 
-/**
- * The state on the last tick of Stage 2, with Sage-3 just shipped: every number the median of the bot's
- * five exits (stage3.md §1.1's fields and the rest), the median run's records, flags and lists. Rebuilt
- * after the wallet rule and Stage 1's round 3.
- */
 function stage2End(seed: number): GameState {
   const s = stage2(seed);
   Object.assign(s, {
@@ -547,19 +519,12 @@ function stage2End(seed: number): GameState {
   return s;
 }
 
-/** Stage 3 start (stage3.md §1.1): the median Stage 2 exit, then the arrival as the exit project runs it. */
 function stage3(seed: number): GameState {
   const s = stage2End(seed);
   enterStage(s, 3);
   return s;
 }
 
-/**
- * Stage 3 start (careless), stage3.md §1.1: the same exit after a Stage 2 played for speed — Al-Marsa
- * signed (1,525 MW, Gulf exposure), the theft warning reviewed quietly, little alignment compute, the
- * public and Washington cool. Set before the arrival so its clamps and lines are the arrival's own:
- * true alignment 40 and whistleblow risk 2 after the retention penalty.
- */
 function stage3Careless(seed: number): GameState {
   const s = stage2End(seed);
   Object.assign(s, {
@@ -581,21 +546,9 @@ function stage3Careless(seed: number): GameState {
   return s;
 }
 
-// ---------- Stage 4 starts: the sim's median Stage 3 exits, the vote applied (stage3.md §7.3, §9.6) ----------
-
-/**
- * The median seed of the policy's five exits from its Stage 3 preset (seeds 1–5), rebuilt with the
- * presets above: the reasonable bot from `Stage 3 start` (42:24–45:24, median seed 4 at 42:41), the
- * naive player from the careless start (46:02–49:33, median seed 4 at 46:51).
- */
 const S3_MEDIAN_SEED = 4;
 const S3_MEDIAN_SEED_CARELESS = 4;
 
-/**
- * Plays Stage 3 with the simulator's policy until a model has passed 25× and the session is ready,
- * then brings the chosen motion: the state on Stage 4's first tick is a real exit, not a sketch.
- * Deterministic (seeded); about a second of CPU.
- */
 function stage4From(start: (seed: number) => GameState, seed: number, policy: 'bot' | 'naive', motion: 'slow' | 'race'): GameState {
   const s = start(seed);
   const mem = newBotMemory(policy);
@@ -606,7 +559,6 @@ function stage4From(start: (seed: number) => GameState, seed: number, policy: 'b
       if (open?.id === 'c_vote') actions.resolveChoice(s, 0);
       if ((s.stage as number) === 4) break;
     }
-    // The policy answers modals and buys; it never brings its own motion here (voteReady is checked first).
     policyStep(s, actions, mem);
     step(s);
   }
@@ -614,13 +566,6 @@ function stage4From(start: (seed: number) => GameState, seed: number, policy: 'b
   return s;
 }
 
-// ---------- Stage 5 starts: real Stage 4 exits (stage4.md §7.2, §9.6) ----------
-
-/**
- * Plays Stage 4 from a Stage 4 preset with the simulator's policy until an exit fires: the state on
- * Stage 5's first tick is a real hand-over. `5c` is `4s` played by the reasonable bot to the treaty
- * (aligned); `5s` is `4cr` played by the first-timer to the fleet granted (misaligned).
- */
 function stage5From(start: () => GameState, policy: 'bot' | 'naive' | 'racer'): GameState {
   const s = start();
   const mem = newBotMemory(policy);
@@ -632,10 +577,6 @@ function stage5From(start: () => GameState, policy: 'bot' | 'naive' | 'racer'): 
   return s;
 }
 
-/**
- * A Stage 4 start is the same Stage 3 exit for every seed; `seed` seeds what Stage 4 rolls (Baiwen-4's
- * alignment, drift, incidents), so `--seed 1…5` are five different Stage 4s from one arrival.
- */
 function seeded(s: GameState, seed: number): GameState {
   s.rngSeed = seedFrom(1000003 * seed + 4);
   if (s.stage === 4) s.s4.baiwenAligned = rng(s) < 0.3;
@@ -655,14 +596,12 @@ export const PRESETS: Preset[] = [
   { stage: 5, label: 'Stage 5 start (aligned)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'bot') },
 ];
 
-/** Presets that are variants of a stage's start (`--preset 3c`, the dev overlay's second row). */
 export const EXTRA_PRESETS: Record<string, Preset> = {
   '3c': { stage: 3, label: 'Stage 3 start (careless)', ready: true, build: stage3Careless },
   '4s': { stage: 4, label: 'Stage 4 start (slow)', ready: true, build: stage4Slow },
   '4r': { stage: 4, label: 'Stage 4 start (race)', ready: true, build: stage4Race },
   '4cs': { stage: 4, label: 'Stage 4 start (careless, slow)', ready: true, build: stage4CarelessSlow },
   '4cr': { stage: 4, label: 'Stage 4 start (careless, race)', ready: true, build: stage4CarelessRace },
-  // Stage 5's arrivals are real Stage 4 exits; `seed` seeds that Stage 4 (stage5.md as-built deltas, item 15).
   '5c': { stage: 5, label: 'Stage 5 start (aligned: the treaty)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'bot') },
   '5s': { stage: 5, label: 'Stage 5 start (misaligned: the fleet granted)', ready: true, build: (seed) => stage5From(() => stage4CarelessRace(seed), 'naive') },
   '5g': { stage: 5, label: 'Stage 5 start (aligned: the fleet granted, 150 t/s)', ready: true, build: (seed) => stage5From(() => stage4Slow(seed), 'naive') },
@@ -673,7 +612,6 @@ export function presetFor(stage: number): Preset {
   return PRESETS[Math.min(PRESETS.length, Math.max(1, stage)) - 1]!;
 }
 
-/** `3`, `3c`, `4s`…: a stage number or a named variant. */
 export function presetByKey(key: string): Preset | undefined {
   if (EXTRA_PRESETS[key]) return EXTRA_PRESETS[key];
   const n = Number(key);

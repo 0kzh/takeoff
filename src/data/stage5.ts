@@ -3,15 +3,6 @@ import { openChoice, modalCanOpen } from '../engine/events.js';
 import { swarmReached, ts5, launchDone, silence, rowsTaken } from '../engine/space.js';
 import type { ContentRow } from './stage2.js';
 
-/**
- * The Stage 5 content table (stage5.md §4.2), in order: queue order, expected order, and the order the
- * cadence governor walks. Missions are rows by id (data/projects5.ts); the second row and the two cards
- * are defined here with their trigger and prerequisite. There are no late items: a late item would
- * announce the end (§4.1). What the engine reveals on its own (Earth's rows, the graph, Silence's
- * take-over, the last cards) is in engine/space.ts.
- */
-
-/** New panels, rows, sliders, Stores rows and instrument changes (arc G2, relaxed to 360 s here). */
 export const MECHANIC_FLAGS_S5 = [
   'space', 'launchRow', 'matterRow', 'rowFoundry', 'rowOrbital', 'orbitalRow', 'industryShare', 'missionFund', 'split',
   'collectors', 'earthGrey', 'graphRetired', 'flowGrows', 'mercuryRow', 'peopleRow', 'rowProbe', 'rowsTaken',
@@ -49,7 +40,6 @@ function choiceRow(id: string, opts: { trigger: (s: GameState) => boolean; prere
 
 const project = (id: string): ContentRow => ({ id, kind: 'project' });
 
-/** Silence's cards stop once its rows are taken: the last minute or two has nothing to press. */
 const cardsOpen = (s: GameState) => !(silence(s) && rowsTaken(s));
 
 export const STAGE5_TABLE: ContentRow[] = [
@@ -84,11 +74,6 @@ export const STAGE5_TABLE: ContentRow[] = [
 
 export const STAGE5_ORDER: Map<string, number> = new Map(STAGE5_TABLE.map((r, i) => [r.id, i]));
 
-/**
- * People lines (§5.1), drawn in order, never in the second a card appears: the first four at 0:45, 1:45,
- * 3:00 and 4:30, then one every 150 s. Concord keeps them to the end; Silence keeps the first four, then
- * the sixth only, then the cold line.
- */
 export const PEOPLE_LINES = [
   'A school in Recife reopens with a teacher for every child. The teachers are people.',
   'The universal basic income is raised again. Nobody can say what it is a share of any more.',
@@ -101,7 +86,6 @@ export const PEOPLE_LINES = [
   'People are arguing about what the swarm is for. It is the best argument anyone has had.',
 ];
 
-/** Concord's second list, after the ninth: one every 150 s, in order and round again, no line more than three times. */
 export const PEOPLE_LINES_MORE = [
   'The school in Recife needs a second building. People build it.',
   'The diner in Ohio has a waiting list. The owner keeps it on paper.',
@@ -113,14 +97,11 @@ export const PEOPLE_LINES_MORE = [
   'Somebody\'s grandmother turns 121. She says it is the soup.',
 ];
 
-/** The seconds into the stage the first nine people lines are due. */
 export const PEOPLE_AT = [45, 105, 180, 270, 465, 615, 765, 915, 1065];
 export const PEOPLE_EVERY = 150;
 
-/** The one line Silence adds, at swarm 0.005 %. After it the log is infrastructure only. */
 export const COLD_LINE = 'A cold is going around. Most people do not notice it.';
 
-/** Infrastructure lines (both skins, on their triggers). */
 export const INFRA_LINES = {
   launch: 'A launch a second from four sites. The noise is a weather system.',
   factory: 'The Moon has a factory. It is building the second.',
@@ -129,7 +110,6 @@ export const INFRA_LINES = {
   oort: 'The first probe reports from the Oort cloud. It has company.',
 };
 
-/** The lines Concord's missions and choices print (§5.1). */
 export const CONCORD_LINES = {
   medicine: [
     'The ring\'s tenth returns its answers: malaria, most heart disease, the common cold.',
