@@ -29,7 +29,7 @@ export interface TrainingEventDef {
 export const TRAINING_EVENTS: TrainingEventDef[] = [
   { id: 'loss_spike', line: 'Loss spike. Rolling back to the last checkpoint. +10 s.' },
   { id: 'lucky_seed', line: 'Lucky seed. The run converges early. −10 s.' },
-  { id: 'contamination', line: 'Data contamination found in the eval set. Results will be lower.' },
+  { id: 'contamination', line: 'Data contamination found in the eval set. The gain is smaller than it looked.' },
   { id: 'emergent', line: 'Emergent ability. Nobody trained it to do that.' },
 ];
 
@@ -88,8 +88,8 @@ export const RELEASE_HEADLINES: string[] = [
 
 /** Rival lab releases (Anthrosoft). `{name}` is the model. */
 export const RIVAL_LINES: string[] = [
-  'Anthrosoft ships {name}. Its benchmark table has one more column than ours.',
-  'Anthrosoft ships {name}. Customers ask for a comparison.',
-  'Anthrosoft ships {name}. Their launch video is better than ours.',
-  'Anthrosoft ships {name}. Two of our customers switch for a week.',
+  'Anthrosoft ships a new Cadence. Its benchmark table has one more column than ours.',
+  'Anthrosoft ships a new Cadence. Customers ask for a comparison.',
+  'Anthrosoft ships a new Cadence. Their launch video is better than ours.',
+  'Anthrosoft ships a new Cadence. Two of our customers switch for a week.',
 ];

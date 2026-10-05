@@ -1,13 +1,19 @@
 import { GameState, newGame, replaceState, SAVE_VERSION } from '../engine/state.js';
 import { actions, tick } from '../engine/tick.js';
-import { researchCap, TURBINE_MW } from '../engine/economy.js';
+import { researchCap } from '../engine/economy.js';
+import { GAS_MW } from '../engine/infrastructure.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
+import { setSkin } from '../engine/space.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
-import { PRESETS, presetFor } from '../data/presets.js';
+import { PRESETS, presetFor, EXTRA_PRESETS, presetByKey } from '../data/presets.js';
 import { byId, make } from './dom.js';
+import { confirmPress } from './confirm.js';
+import { resetGraph } from './graph.js';
+import { resetLogCache } from './log.js';
 import type { Saver } from './save.js';
+import type { PolicyName } from '../sim/policy.js';
 
 export interface DevHost {
   state: GameState;
@@ -16,7 +22,11 @@ export interface DevHost {
   getSpeed: () => number;
   setSpeed: (n: number) => void;
   getAutoplay: () => boolean;
-  setAutoplay: (on: boolean) => void;
+  /**
+   * `which` picks the simulator policy that plays: 'bot' (default) or 'naive' (the critic's
+   * first-timer). `holdTransition` leaves Break ground for the player to click.
+   */
+  setAutoplay: (on: boolean, which?: PolicyName, holdTransition?: boolean, variant?: string) => void;
   /** Game advance used by the main loop (honours autoplay). */
   advance: (dtMs: number) => void;
 }
@@ -26,15 +36,28 @@ const SPEEDS = [1, 5, 20];
 /** Replaces the live state in place, then saves. The reference held by window.__game stays valid. */
 function load(host: DevHost, next: GameState): void {
   replaceState(host.state, next);
+  resetGraph();
+  resetLogCache();
   host.saver.saveNow();
   host.render();
 }
 
-export function loadPreset(host: DevHost, n: number): GameState {
+export function loadPreset(host: DevHost, key: number | string): GameState {
+  // `3c`, `4s`…: a named variant of a stage's start (EXTRA_PRESETS); a number: the stage's start.
+  if (typeof key === 'string' && EXTRA_PRESETS[key]) {
+    const extra = presetByKey(key)!;
+    const param = new URLSearchParams(location.search).get('seed');
+    load(host, extra.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
+    return host.state;
+  }
+  const n = Number(key);
   const preset = presetFor(n);
-  load(host, preset.build(Date.now() % 100000));
+  // `?seed=N` makes a preset reproducible too (the smoke tests); otherwise a fresh seed each time.
+  const param = new URLSearchParams(location.search).get('seed');
+  load(host, preset.build(param !== null && Number.isFinite(Number(param)) ? Number(param) : Date.now() % 100000));
   if (!preset.ready || preset.stage !== n) {
-    host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage 2 preset.` });
+    const latest = [...PRESETS].reverse().find((p) => p.ready && p.stage < n);
+    host.state.consoleQueue.push({ delay: 0.1, text: `Stage ${n} preset pending. Loaded the Stage ${latest?.stage ?? 2} preset.` });
   }
   host.render();
   return host.state;
@@ -60,7 +83,7 @@ function grant(host: DevHost, what: string): void {
       break;
     case 'power':
       if (s.stage < 2) s.power += 10000;
-      else s.powerCapacityMW += TURBINE_MW;
+      else s.powerCapacityMW += GAS_MW * 5;
       break;
     case 'trust':
       s.trust += 5;
@@ -76,7 +99,9 @@ function hiddenReadout(s: GameState): string {
     .map((d) => `${d.id}${d.month !== undefined ? ` @${dateLabel(d.month)}` : ''}`)
     .join(', ');
   return [
-    `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)}`,
+    `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)} · lead ${fmtNum(s.lead, 2)} · SL${s.securityLevel}`,
+    `data ${fmtNum(s.data, 1)} T (synthetic ${fmtNum(s.dataSynthetic, 1)}) · crawl left ${fmtNum(s.crawlLeft, 1)} · autonomy ${s.autonomy}`,
+    `late queue ${s.cadence.lateQueue.join(', ') || '—'} · governed ${s.cadence.governed.length}`,
     `alignment apparent ${fmtNum(s.alignmentApparent, 1)} · true ${fmtNum(s.alignmentTrue, 1)}`,
     `idle rescues ${s.stats.idleRescues} · quiet ${fmtNum(s.idle.quiet, 0)} s`,
     `time in stage ${fmtDuration(s.stats.timeInStage)} · played ${fmtDuration(s.stats.timePlayed)}`,
@@ -98,7 +123,16 @@ export function mountDev(host: DevHost): void {
     return div;
   };
 
-  const stageRow = row('Stage ', ...PRESETS.map((p) => btn(`dev-stage-${p.stage}`, String(p.stage), () => loadPreset(host, p.stage))));
+  const stageRow = row(
+    'Stage ',
+    ...PRESETS.map((p) => btn(`dev-stage-${p.stage}`, String(p.stage), () => loadPreset(host, p.stage))),
+    ' ',
+    ...Object.entries(EXTRA_PRESETS).map(([key, p]) => {
+      const b = btn(`dev-stage-${key}`, key, () => loadPreset(host, key));
+      b.title = p.label;
+      return b;
+    }),
+  );
   const speedButtons = SPEEDS.map((n) => btn(`dev-speed-${n}`, `×${n}`, () => host.setSpeed(n)));
   const autoplay = btn('dev-autoplay', 'Autoplay', () => host.setAutoplay(!host.getAutoplay()));
   const speedRow = row('Speed ', ...speedButtons, ' ', autoplay);
@@ -127,6 +161,21 @@ export function mountDev(host: DevHost): void {
     }),
   );
 
+  // Stage 5 (stage5.md §9): flip the verdict Stage 4 left (the skin follows it), and open each end screen.
+  const endRow = row(
+    btn('dev-skin', 'Flip skin', () => {
+      setSkin(host.state, host.state.flags['alignedAtHandover'] !== true);
+      host.saver.markDirty();
+      host.render();
+    }),
+    ' End ',
+    ...['concord', 'silence', 'pause', 'project'].map((id) => btn(`dev-end-${id}`, id, () => {
+      actions.forceEnding(host.state, id);
+      host.saver.saveNow();
+      host.render();
+    })),
+  );
+
   const hidden = make('div', { id: 'devHidden' });
   hidden.style.display = 'none';
   const hiddenToggle = btn('dev-show-hidden', 'Show hidden', () => {
@@ -145,16 +194,19 @@ export function mountDev(host: DevHost): void {
       if (next) load(host, next);
       else text.value = 'Import failed: not a Takeoff save.';
     }),
-    btn('dev-reset', 'Reset', () => {
-      if (!confirm('Reset the game? This deletes the save.')) return;
-      host.saver.clear();
-      replaceState(host.state, newGame(Date.now()));
-      host.saver.saveNow();
-      host.render();
-    }),
+    (() => {
+      const b = btn('dev-reset', 'Reset', () => {});
+      confirmPress(b, 'Delete the save? Press again', () => {
+        host.saver.clear();
+        replaceState(host.state, newGame(Date.now()));
+        host.saver.saveNow();
+        host.render();
+      });
+      return b;
+    })(),
   );
 
-  root.append(make('b', {}, 'dev'), stageRow, speedRow, grants, eventRow, saveRow, text, hidden);
+  root.append(make('b', {}, 'dev'), stageRow, speedRow, grants, eventRow, endRow, saveRow, text, hidden);
 
   const refresh = () => {
     speedButtons.forEach((b, i) => b.classList.toggle('devActive', SPEEDS[i] === host.getSpeed()));
@@ -191,7 +243,7 @@ export function mountDev(host: DevHost): void {
       fire: (id: string) => actions.fireEvent(host.state, id),
     },
     presets: PRESETS,
-    loadPreset: (n: number) => loadPreset(host, n),
+    loadPreset: (n: number | string) => loadPreset(host, n),
     setSpeed: host.setSpeed,
     setAutoplay: host.setAutoplay,
     save: () => host.saver.saveNow(),

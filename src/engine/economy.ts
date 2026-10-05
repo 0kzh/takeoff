@@ -1,82 +1,283 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, addFunds } from './state.js';
-import { trainingShare } from './training.js';
+import { GameState, say, canPay, pay, press, isBought, bump, counter, creditIncome, inPrologue } from './state.js';
+import { busyGpus, trainCost } from './training.js';
+import { visibleProjects } from './projects.js';
+import { fmtMoneyShort, fmtInt } from './format.js';
+import { effGpus } from './infrastructure.js';
+import { sellS2 } from './market.js';
+import { alignWorkShare, alignWorkTick } from './alignment.js';
+import { draftTick } from './treaty.js';
+import { mechanicClear } from './stages.js';
+
+export {
+  activeGpus, effGpus, gpuCapacity, powerDrawMW, KW_PER_GPU, datacenterCost, buildDatacenter, buyGpuBatch, buyTurbines,
+} from './infrastructure.js';
 
 export const TICK_SECONDS = 0.1;
 export const MIN_PRICE = 0.01;
+/** The smallest power block; it grows with the fleet (see `powerBlock`). */
 export const POWER_BLOCK = 1000;
-/** Stage 2+: kW drawn by one powered GPU (a full 10,000-GPU datacenter draws 10 MW). */
-export const KW_PER_GPU = 1;
-export const DATACENTER_GPUS = 10000;
-export const GPU_BATCH = 1000;
-export const TURBINE_MW = 100;
+/** First Datacenter's grid connection: 5 MW on site when Stage 2 opens. */
 export const GRID_MW = 5;
 
+/** Word of mouth: the market starts near half size and fills out as tasks get done. */
+/** The market's built full size from the first second (owner feedback 1: every task simply sells; no ramp). */
+export const MARKET_START = 3;
+export const MARKET_FULL = 3;
+export const MARKET_GROWTH_TASKS = 1500;
+
+/**
+ * Each Custom model contract is a customer that buys at your price (critic round 2 §5): it adds
+ * `15 % × 1.15^k` to demand, so price, hype, marketing and incidents act on it like on the rest of
+ * the market. Stage 2 freezes what the contracts were paying into a fixed rate.
+ */
+export const CONTRACT_WEIGHT = 0.25;
+export const CONTRACT_WEIGHT_GROWTH = 1.15;
+/** Seconds an incident pauses every contract customer ("The bank pauses its pilot."). */
+export const CONTRACT_PAUSE_SECONDS = 90;
+
+
 // ---------- costs ----------
+
+/**
+ * The cloud provider rents OpenMind only so many Nimbus G4s: 80, and 20 more with each of the Bulk
+ * GPU lease, the Second cloud region and Reserved capacity (research-priced steps from ~10 to ~24
+ * minutes: renting stays a live decision until Break ground).
+ */
+export const RENT_QUOTA = 80;
+export const QUOTA_STEP = 20;
+const QUOTA_CARDS = ['p_compute_deal', 'p_region', 'p_reserved'];
+
+export function rentQuota(s: GameState): number {
+  return RENT_QUOTA + QUOTA_STEP * QUOTA_CARDS.filter((id) => (s.projects[id]?.bought ?? 0) > 0).length;
+}
+
+/** Every G4 the provider will rent is rented: owning compute (Abilene) is the way past it. */
+export function atRentQuota(s: GameState): boolean {
+  return s.stage < 2 && s.gpus >= rentQuota(s);
+}
 
 /** UP AutoClipper curve: `5 + 1.1^n`, so the first GPU is $6 (→ `1.08^n` after Bulk GPU lease). */
 export function gpuCost(s: GameState): number {
   return Math.round((5 + Math.pow(s.gpuCostGrowth, s.gpus)) * 100) / 100;
 }
 
+/**
+ * `$100 × 2^(levels bought)` (stage1-round3-fixes.md §2): the levels a round, a card or an event gives
+ * raise the level, not the price (it reached $12,800–$204,800 and stood grey for 13–23 minutes).
+ */
 export function marketingCost(s: GameState): number {
-  return 100 * Math.pow(2, s.hypeLevel - 1);
+  return 100 * Math.pow(2, s.marketingBought ?? 0);
 }
 
-export function datacenterCost(s: GameState): number {
-  return 250000 * Math.pow(1.5, s.datacenters);
+/** The block the fleet warrants: 1,000 kWh, 10,000 at 20 GPUs, 100,000 at 200. */
+export function fleetPowerBlock(s: GameState): number {
+  if (s.gpus >= 200) return 100000;
+  if (s.gpus >= 20) return 10000;
+  return POWER_BLOCK;
 }
 
-export function gpuBatchCost(s: GameState): number {
-  return Math.round(GPU_BATCH * s.chipPrice * Math.pow(1.04, s.gpuBatches));
+/**
+ * What Buy Power sells now: the fleet's block, or — when the money is short — the biggest smaller
+ * block the lab can pay for, so growing the fleet never strands a player between block sizes.
+ */
+export function powerBlock(s: GameState): number {
+  let block = fleetPowerBlock(s);
+  while (block > POWER_BLOCK && s.funds < blockPrice(s, block)) block /= 10;
+  return block;
 }
 
-export function turbineCost(s: GameState): number {
-  return Math.round(300000 * Math.pow(1.6, s.turbines));
+function blockPrice(s: GameState, block: number): number {
+  return Math.round(s.powerPrice * (block / 1000) * 100) / 100;
+}
+
+/** `powerPrice` is per 1,000 kWh, so a block's price is proportional to its size. */
+export function powerBlockCost(s: GameState): number {
+  return blockPrice(s, powerBlock(s));
+}
+
+/**
+ * Slow tick, Stage 1: the first time Buy Power actually sells a bigger block (the fleet warrants it
+ * and the money is there), say so (critic round 3 §10.2: the line printed at the 20th GPU while
+ * the button still sold 1,000 kWh to a player with $28).
+ */
+export function powerBlockNews(s: GameState): void {
+  // With the Grid Contract buying, the block is the grid's business (said when the player buys by hand).
+  if (s.stage !== 1 || !s.revealed['buyPower'] || (s.gridAuto && isBought(s, 'p_grid'))) return;
+  const block = powerBlock(s);
+  if (block <= POWER_BLOCK || s.flags[`blockSaid${block}`]) return;
+  s.flags[`blockSaid${block}`] = true;
+  say(s, `Power can now be bought ${fmtInt(block)} kWh at a time.`);
+}
+
+/** Seconds of power left at the copies' current draw (1 kWh a task; Infinity when nothing draws). */
+export function powerSecondsLeft(s: GameState): number {
+  const draw = copiesIdle(s) ? 0 : potentialTasksPerSec(s);
+  return draw > 0 ? s.power / draw : Infinity;
+}
+
+/** A manual price far past what clears the market sells nothing; the raise stops there (critic round 3). */
+export const PRICE_CEILING_MULT = 20;
+
+export function priceCeiling(s: GameState): number {
+  return Math.max(1, PRICE_CEILING_MULT * autoTarget1(s));
 }
 
 // ---------- research ----------
 
+/** Lab space × 1,000 × the lab multipliers. Stage 3 retires the cap (stage3.md §1.1). */
 export function researchCap(s: GameState): number {
+  if (s.stage >= 3) return Infinity;
   return s.labSpace * 1000 * s.labMult;
 }
 
-export function researchRate(s: GameState): number {
-  return s.researchers * 10 * s.humanEff * s.researchMult;
+/** The best model OpenMind has, deployed or internal: what research and the jobs model use. */
+export function bestCapability(s: GameState): number {
+  return Math.max(s.capability, s.training.internalCapability);
 }
 
-/** Insight accrues only while research sits at its cap (UP creativity). */
+/** `min(1, 3 / best)`: the model starts to out-think the people who train it (1 through Stage 1). */
+export function humanEfficiency(s: GameState): number {
+  return Math.min(1, 3 / Math.max(1, bestCapability(s)));
+}
+
+/** Research multiplier from crises (a lock-down, the Bureau, a subpoena). */
+export function researchEffects(s: GameState): number {
+  let m = 1;
+  for (const e of s.effects) if (e.researchMult !== undefined) m *= e.researchMult;
+  return m;
+}
+
+export function humanResearchRate(s: GameState): number {
+  return s.researchers * 10 * humanEfficiency(s) * s.researchMult * researchEffects(s);
+}
+
+/**
+ * Copies on research: `10 × √(copies × allocation) × best^1.5` once AI research assistants exist
+ * (stage2.md §2.4 has 8; §9.5's knob for research that binds too long in minutes 12–24).
+ */
+export const AI_RESEARCH_COEFF = 10;
+
+export function aiResearchRate(s: GameState): number {
+  if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return 0;
+  // Stage 3: rogue copies work for nobody (stage3.md §2.4: the working copies).
+  const onResearch = workingCopies(s) * s.researchAlloc;
+  return AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
+}
+
+export function researchRate(s: GameState): number {
+  return humanResearchRate(s) + aiResearchRate(s);
+}
+
+/**
+ * The research a second the lab would make with `alloc` of its copies on research and no run holding
+ * GPUs: what the Stage 3 arrival measures to price its runs (`arrivalRunScale` in engine/training.ts).
+ */
+export function researchCapacityAt(s: GameState, alloc: number): number {
+  if (s.stage < 2 || !isBought(s, 'p_ai_assistants')) return humanResearchRate(s);
+  const onResearch = effGpus(s) * s.copiesPerGPU * copiesOnline(s) * alloc;
+  return humanResearchRate(s)
+    + AI_RESEARCH_COEFF * Math.sqrt(onResearch) * Math.pow(bestCapability(s), 1.5) * s.aiResearchMult * researchEffects(s);
+}
+
+/** `Human share of research: 17%`. */
+export function humanShare(s: GameState): number {
+  const total = researchRate(s);
+  return total > 0 ? humanResearchRate(s) / total : 1;
+}
+
+/** Insight accrues while research sits at its cap (UP creativity); from Stage 3, always, at a sixth of that. */
 export function insightRate(s: GameState): number {
+  if (s.stage >= 3) return (Math.sqrt(researchRate(s)) / 60) * s.insightMult;
   return (Math.sqrt(researchRate(s)) / 10) * s.insightMult;
+}
+
+/** Below the cap, insight trickles in at a tenth of the rate once the Research cluster exists. */
+export function insightTrickle(s: GameState): number {
+  return isBought(s, 'p_research_cluster') ? 0.1 * insightRate(s) : 0;
 }
 
 // ---------- compute & production ----------
 
-export function gpuCapacity(s: GameState): number {
-  return s.datacenters * DATACENTER_GPUS;
-}
-
-/** GPUs that have power. Stage 1 buys power by the kWh, so every rented GPU is active. */
-export function activeGpus(s: GameState): number {
-  if (s.stage < 2) return s.gpus;
-  return Math.min(s.gpus, Math.floor((s.powerCapacityMW * 1000) / KW_PER_GPU));
-}
-
-export function powerDrawMW(s: GameState): number {
-  return (activeGpus(s) * KW_PER_GPU) / 1000;
-}
-
+/** Copies running: compute × copies per GPU, less what a training run diverts. */
 export function copies(s: GameState): number {
-  return Math.floor(activeGpus(s) * (1 - trainingShare(s)) * s.copiesPerGPU);
+  // The prologue: the GPUs train Sage-1 and run nothing until it is deployed (docs/specs/early-train.md).
+  if (inPrologue(s)) return 0;
+  // GPUs a run holds while it trains serve no tasks; the rest keep serving (owner feedback U1).
+  return Math.floor(Math.max(0, effGpus(s) - busyGpus(s)) * s.copiesPerGPU * copiesOnline(s));
 }
 
-/** Tasks per second per copy: `capability^0.8 × prompting boosts`. */
+/** Share of copies online: a breakout or a re-image takes machines offline for a while (Stage 3). */
+export function copiesOnline(s: GameState): number {
+  let m = 1;
+  for (const e of s.effects) if (e.copiesMult !== undefined) m *= e.copiesMult;
+  return m;
+}
+
+/** Stage 3: the copies that work for OpenMind (rogue copies sit on its GPUs and do nothing for it). */
+export function workingCopies(s: GameState): number {
+  return Math.max(0, copies(s) - Math.floor(s.rogueCopies ?? 0));
+}
+
+/** Tasks per second per copy: `capability^0.8 × prompting boosts` (Stage 3: the best model). */
 export function perCopyRate(s: GameState): number {
-  return Math.pow(s.capability, 0.8) * s.copyBoost;
+  return Math.pow(s.stage >= 3 ? bestCapability(s) : s.capability, 0.8) * s.copyBoost;
+}
+
+/**
+ * What the research slider costs in revenue, as a share (round 2 item 5's `revenue −24%`): the AUTO
+ * market's task revenue grows with the square root of what the copies on tasks make, so moving a share
+ * to research costs `1 − √(tasks now / tasks at none)` of task revenue; contracts do not move.
+ */
+export function revenueCostOfAlloc(s: GameState): number {
+  const extra = s.stage >= 3 ? (s.monitorShare ?? 0) : alignExtra(s);
+  const atNone = Math.max(1e-9, 1 - extra);
+  const now = Math.max(0, 1 - s.researchAlloc - extra);
+  const taskRevenue = Math.max(0, s.stats.revPerSec - Math.max(0, s.contractIncome || 0));
+  const share = s.stats.revPerSec > 0 ? taskRevenue / s.stats.revPerSec : 1;
+  return (1 - Math.sqrt(now / atNone)) * share;
+}
+
+/** Alignment compute above the 1 % baseline comes out of the copies on tasks (stage2.md §2.11). */
+export function alignExtra(s: GameState): number {
+  return Math.max(0, s.alignShare - 0.01);
+}
+
+/** Share of copies on tasks: what the research slider and alignment compute leave (Stage 3: and the monitors). */
+export function taskShare(s: GameState): number {
+  if (s.stage >= 3) return Math.max(0, 1 - s.researchAlloc - (s.monitorShare ?? 0));
+  return Math.max(0, 1 - s.researchAlloc - alignExtra(s));
 }
 
 export function potentialTasksPerSec(s: GameState): number {
-  return copies(s) * (1 - s.researchAlloc) * perCopyRate(s);
+  // From Stage 4: the universal basic income is paid in output (stage4.md §2.3), in both of Stage 5's
+  // skins to the end (stage5.md as-built deltas row 2: the gate moves nothing).
+  const ubi = s.stage >= 4 ? 1 - s.s4.ubiShare : 1;
+  return (s.stage >= 3 ? workingCopies(s) : copies(s)) * taskShare(s) * perCopyRate(s) * ubi * stage5TaskMult(s);
+}
+
+/**
+ * Stage 5's own multipliers on the count (stage5.md §4.2, §5.2): a tenth held for people (the charter),
+ * a tenth of the ring on medicine for two minutes, Jupiter rebuilt as a computer.
+ */
+export function stage5TaskMult(s: GameState): number {
+  if (s.stage < 5) return 1;
+  let m = 1;
+  if (s.flags['charter'] === true) m *= 0.9;
+  if (s.effects.some((e) => e.id === 'medicine')) m *= 0.9;
+  if (s.flags['jupiter'] === true) m *= 3;
+  return m;
+}
+
+/** Stage 1: copies stop when the power runs out. */
+export function copiesIdle(s: GameState): boolean {
+  return s.stage < 2 && s.power < 1 && copies(s) > 0;
+}
+
+/** What the copies are making right now (zero without power), plus the player's recent clicks. */
+export function productionPerSec(s: GameState): number {
+  const fromCopies = copiesIdle(s) ? 0 : potentialTasksPerSec(s);
+  return fromCopies + s.stats.clicksPerSec;
 }
 
 // ---------- demand & billing (UP §3.3) ----------
@@ -87,8 +288,9 @@ export function effectsDemandMult(s: GameState): number {
   return m;
 }
 
-/** Falls when a rival ships something better than the deployed model. */
+/** Falls when a rival ships something better than the deployed model (Stage 2: linear, clamped). */
 export function qualityMult(s: GameState): number {
+  if (s.stage >= 2) return Math.min(1.25, Math.max(0.8, s.capability / Math.max(0.01, s.rivalCapability)));
   return Math.sqrt(s.capability / s.rivalCapability);
 }
 
@@ -97,23 +299,80 @@ export function marketingMult(s: GameState): number {
 }
 
 /**
- * Baseline market for AI agents relative to UP's paperclip market. Part of `boosts`; it
- * compresses UP's 90-minute first stage into ~30 minutes without touching the curve's shape.
+ * Baseline market for AI agents relative to UP's paperclip market. It starts near UP's size, so
+ * a player clicking at the opening price sees a backlog build within seconds, and grows with
+ * tasks completed until it compresses UP's 90-minute first stage into ~30 minutes.
  */
-export const MARKET_SIZE = 3;
+export function marketSize(s: GameState): number {
+  const grown = Math.min(1, s.tasks / MARKET_GROWTH_TASKS);
+  return MARKET_START + (MARKET_FULL - MARKET_START) * grown;
+}
 
-/** `demand = (0.8 / price) × 1.1^(hype−1) × qualityMult × hypeBoost(t) × boosts`; shown ×10 as a percent. */
+/** `demand = (0.8 / price) × 1.1^(hype−1) × qualityMult × hypeBoost(t) × boosts × contracts`; shown ×10 as a percent. */
 export function demand(s: GameState): number {
-  return (0.8 / s.price) * marketingMult(s) * qualityMult(s) * s.hypeBoost * MARKET_SIZE * s.demandMult * effectsDemandMult(s);
+  return demandAt(s, s.price);
+}
+
+/** Demand at price `p`, everything else as it is now. */
+export function demandAt(s: GameState, p: number): number {
+  return (0.8 / p) * marketingMult(s) * qualityMult(s) * s.hypeBoost * marketSize(s) * s.demandMult * effectsDemandMult(s) * (1 + contractDemand(s));
 }
 
 export function demandPercent(s: GameState): number {
   return demand(s) * 10;
 }
 
+/** Tasks per second the market bills at the current price, on average (the billing ceiling). */
 export function expectedSalesPerSec(s: GameState): number {
   const d = demand(s);
   return 10 * Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
+}
+
+/** Expected sales at price `p` (no floor: smooth, for AUTO's search). */
+function smoothSalesAt(s: GameState, p: number): number {
+  const d = demandAt(s, p);
+  return 10 * Math.min(1, d / 100) * 0.7 * Math.pow(d, 1.15);
+}
+
+/**
+ * Stage 1 AUTO (Dynamic pricing): the price at which the market takes what the copies make plus a
+ * thirtieth of the backlog. Sales fall with price, so a bisection on log-price finds it.
+ */
+export function autoTarget1(s: GameState): number {
+  const want = Math.max(0.5, productionPerSec(s) + s.unbilled / 30);
+  let lo = Math.log(MIN_PRICE);
+  let hi = Math.log(50);
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (smoothSalesAt(s, Math.exp(mid)) > want) lo = mid;
+    else hi = mid;
+  }
+  return Math.max(MIN_PRICE, Math.exp((lo + hi) / 2));
+}
+
+/** The price is absurd when practically nobody buys: under half a task a second, or 2% of output. */
+export function priceAbsurd(s: GameState): boolean {
+  return expectedSalesPerSec(s) < Math.max(0.5, 0.02 * productionPerSec(s));
+}
+
+/** What the billing line shows: the ceiling while there is a backlog, else what actually sells. */
+export function billingPerSec(s: GameState): number {
+  const ceiling = expectedSalesPerSec(s);
+  const made = productionPerSec(s);
+  return s.unbilled >= Math.max(5, made) ? ceiling : Math.min(ceiling, made);
+}
+
+export type MarketState = 'idle' | 'selling out' | 'backlog growing' | 'backlog shrinking' | 'nobody buys';
+
+/** One phrase next to the price buttons: what the price is doing to the backlog. */
+export function marketState(s: GameState): MarketState {
+  const ceiling = expectedSalesPerSec(s);
+  const made = productionPerSec(s);
+  if (made <= 0 && s.unbilled < 1) return 'idle';
+  if (priceAbsurd(s)) return 'nobody buys';
+  if (ceiling < made * 0.97) return 'backlog growing';
+  if (s.unbilled > Math.max(20, made * 3)) return 'backlog shrinking';
+  return 'selling out';
 }
 
 /** Copies complete tasks; in Stage 1 each task burns 1 kWh. */
@@ -129,7 +388,7 @@ export function produce(s: GameState, dt: number): void {
       s.taskFrac = 0;
       if (!s.flags['powerOut']) {
         s.flags['powerOut'] = true;
-        say(s, 'Power exhausted — copies idle.');
+        say(s, 'Power is out. The copies have stopped. Buy Power starts them.');
       }
       return;
     }
@@ -141,58 +400,162 @@ export function produce(s: GameState, dt: number): void {
 
 function completeTasks(s: GameState, n: number): void {
   s.tasks += n;
-  s.unbilled += n;
+  // Stage 4 bills nothing: tasks are still counted (stage4.md §1.1).
+  if (s.stage < 4) s.unbilled += n;
 }
 
-function bill(s: GameState, n: number): void {
+/**
+ * The first tasks bill at the expected rate, carried as a fraction, so the opening minute (and the
+ * first GPU) does not depend on the luck of the roll; after that, UP's lumpy sale roll.
+ */
+export const SMOOTH_SALES = 200;
+
+/**
+ * Every 100 ms. Stage 1: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by
+ * unbilled (UP). Stage 2+: the deterministic market (engine/market.ts).
+ */
+export function sell(s: GameState, dt: number = TICK_SECONDS): void {
+  if (s.stage >= 4) return;
+  if (s.stage >= 2) {
+    sellS2(s, dt);
+    return;
+  }
+  const d = demand(s);
+  if (s.tasksSold < SMOOTH_SALES) {
+    s.saleFrac += Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
+    const due = Math.min(s.unbilled, Math.floor(s.saleFrac));
+    if (s.unbilled <= 0) s.saleFrac = Math.min(s.saleFrac, 1);
+    if (due <= 0) return;
+    s.saleFrac -= due;
+    bill(s, due);
+    return;
+  }
+  if (rng(s) >= d / 100) return;
+  if (s.unbilled <= 0) return;
+  const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
   if (n <= 0) return;
-  const revenue = Math.floor(n * s.price * 1000) / 1000;
+  bill(s, n);
+}
+
+/** Every cent is kept: fractions of a cent accumulate (UP floors per sale; 485 tasks at $0.01 paid $0.38). */
+function bill(s: GameState, n: number): void {
+  const revenue = n * s.price;
   s.unbilled -= n;
   s.tasksSold += n;
-  s.funds = Math.floor((s.funds + revenue) * 100) / 100;
+  s.funds += revenue;
   s.totalRevenue += revenue;
   s.stats.secRevenue += revenue;
   s.stats.secSold += n;
 }
 
-/** Every 100 ms: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by unbilled. */
-export function sell(s: GameState): void {
-  const d = demand(s);
-  if (rng(s) >= d / 100) return;
-  if (s.unbilled <= 0) return;
-  const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
-  bill(s, n);
+// ---------- contracts (customers who buy at your price) ----------
+
+/** The contract customers' weight before pauses: Σ `15 % × 1.15^k`, × renewals and the lasting modal terms. */
+export function contractWeight(s: GameState): number {
+  const n = s.projects['p_contract']?.bought ?? 0;
+  let w = 0;
+  for (let k = 0; k < n; k++) w += CONTRACT_WEIGHT * Math.pow(CONTRACT_WEIGHT_GROWTH, k);
+  return w * contractTerms(s);
+}
+
+/** Renewal season ×1.25; a bridge observer ×0.9; a price cut ×0.8 (flags set by projects and choices). */
+export function contractTerms(s: GameState): number {
+  const num = (k: string) => (typeof s.flags[k] === 'number' ? (s.flags[k] as number) : 1);
+  return num('contractMult') * num('contractTermsMult');
+}
+
+/** An incident pauses the contract customers for a minute. */
+export function contractsPaused(s: GameState): boolean {
+  const until = s.flags['contractsPausedUntil'];
+  return typeof until === 'number' && s.stats.timePlayed < until;
+}
+
+/** Stage 1: the contract customers' share of demand (0 while paused; Stage 2 pays a frozen rate instead). */
+export function contractDemand(s: GameState): number {
+  if (s.stage >= 2 || contractsPaused(s)) return 0;
+  return contractWeight(s);
+}
+
+/** What one more contract would add to demand. */
+export function nextContractWeight(s: GameState): number {
+  return CONTRACT_WEIGHT * Math.pow(CONTRACT_WEIGHT_GROWTH, s.projects['p_contract']?.bought ?? 0) * contractTerms(s);
+}
+
+/** Dollars per second from contracts: Stage 1's share of billing, frozen at the Stage 2 arrival. */
+export function contractRate(s: GameState): number {
+  return s.stage >= 2 ? s.contractIncome : contractRateStage1(s);
+}
+
+/** Stage 1: the part of billed revenue the contract customers pay (their share of demand). */
+export function contractRateStage1(s: GameState): number {
+  const c = s.stage >= 2 ? contractWeight(s) : contractDemand(s);
+  return c > 0 ? (s.stats.revPerSec * c) / (1 + c) : 0;
+}
+
+/** Stage 2: the job-transition fund's share of revenue while it is on. */
+export const JOB_FUND_SHARE = 0.02;
+
+/** Recurring income every tick: Stage 2's frozen contracts, less the job fund (Stage 1's contracts bill as tasks). */
+export function payContracts(s: GameState, dt: number): void {
+  // Money is retired in Stage 4 (stage4.md §1.1): nothing is billed or paid from here.
+  if (s.stage >= 4) return;
+  const rate = s.stage >= 2 ? s.contractIncome : 0;
+  if (rate > 0) {
+    const amount = rate * dt;
+    creditIncome(s, amount);
+    s.totalRevenue += amount;
+    s.stats.secRevenue += amount;
+  }
+  if (s.stage >= 2 && s.jobFund) {
+    // Two percent of the revenue booked over the last ten seconds, never a fixed fee.
+    const fee = JOB_FUND_SHARE * s.stats.revPerSec * dt;
+    s.funds = Math.max(0, Math.round((s.funds - fee) * 100) / 100);
+  }
 }
 
 // ---------- power (Stage 1, UP wire) ----------
 
+/** The Grid Contract tops power up whenever it falls below 60 % of the fleet's block. */
+export const GRID_TOP_UP = 0.6;
+
 export function autoBuyPower(s: GameState): void {
   if (!s.gridAuto || s.stage >= 2) return;
-  const need = Math.max(1, potentialTasksPerSec(s) * TICK_SECONDS * 2);
+  const floor = Math.max(1, GRID_TOP_UP * fleetPowerBlock(s), potentialTasksPerSec(s) * TICK_SECONDS * 2);
   let guard = 0;
-  while (s.power < need && s.funds >= s.powerPrice && guard++ < 20) purchasePower(s);
+  while (s.power < floor && s.funds >= powerBlockCost(s) && guard++ < 20) purchasePower(s);
 }
 
-/** Random walk every second, drifting 2% toward a base that rises 0.1% per purchase; clamp [14, 32]. */
+/** Random walk every second, drifting 2% toward a base that rises 0.1% per purchase; clamp [0.7, 1.6] × base ($14–32 at the start). */
 export function powerPriceWalk(s: GameState): void {
+  if (s.stage >= 2) return;
   s.powerPrice += (rng(s) * 2 - 1) * 0.5;
   s.powerPrice += (s.powerBase - s.powerPrice) * 0.02;
-  s.powerPrice = Math.min(32, Math.max(14, s.powerPrice));
+  s.powerPrice = Math.min(1.6 * s.powerBase, Math.max(0.7 * s.powerBase, s.powerPrice));
   s.powerPrice = Math.round(s.powerPrice * 100) / 100;
 }
 
 function purchasePower(s: GameState): void {
-  s.funds = Math.round((s.funds - s.powerPrice) * 100) / 100;
-  s.power += POWER_BLOCK;
+  const block = powerBlock(s);
+  s.funds = Math.round((s.funds - powerBlockCost(s)) * 100) / 100;
+  s.power += block;
   s.powerBought += 1;
   s.powerBase *= 1.001;
   s.flags['powerOut'] = false;
 }
 
+/** Seconds the copies have had no power and the lab no money to buy more (the credit rescue waits ~3 s). */
+export function trackStuck(s: GameState, dt: number): void {
+  const stuck = s.stage < 2 && s.power < 1 && s.funds < powerBlockCost(s);
+  s.stuckFor = stuck ? s.stuckFor + dt : 0;
+}
+
+// ---------- the Abilene site ----------
+
 // ---------- trust & research ----------
 
-/** Fibonacci milestones on Tasks: 3,000, 5,000, 8,000, 13,000 … */
+/** Fibonacci milestones on Tasks: 2,000, 3,000, 5,000, 8,000, 13,000 … (Trust retires in Stage 3). */
 export function trustCheck(s: GameState): void {
+  if (s.stage >= 3) return;
   while (s.tasks >= s.nextTrust) {
     s.trust += 1;
     s.nextTrust = s.fib2 * 1000;
@@ -200,86 +563,198 @@ export function trustCheck(s: GameState): void {
     s.fib1 = s.fib2;
     s.fib2 = next;
     s.flags['trustMilestones'] = ((s.flags['trustMilestones'] as number) || 0) + 1;
-    say(s, 'Milestone reached: TRUST INCREASED');
+    // The first milestone opens the Research panel, which prints its own line. From Stage 2 the line
+    // prints only when the Trust reaches something new (critic C6).
+    if (expandLabBeat(s)) {
+      say(s, `Trust +1. Hire a researcher, or expand the lab: it is full at ${fmtInt(researchCap(s))}.`);
+      continue;
+    }
+    const line = s.revealed['research'] ? trustRewardLine(s) : '';
+    if (line) say(s, line);
   }
+}
+
+/** Beat 11 waits this long after the Projects panel (beat 9): one mechanic at a time. */
+export const EXPAND_LAB_AFTER_PROJECTS = 40;
+
+/**
+ * Beat 11 (stage1-round3-fixes.md §3): Expand Lab arrives beside Hire in the tick of a Trust award, the
+ * first one at least 40 s after the Projects panel with the lab full; never while Trust is 0. True
+ * when it revealed the button (the award's line names both uses).
+ */
+function expandLabBeat(s: GameState): boolean {
+  if (s.stage !== 1 || s.revealed['expandLab'] || !s.revealed['projects'] || s.trust < 1) return false;
+  const at = s.flags['projectsAt'];
+  if (typeof at !== 'number' || s.stats.timePlayed - at < EXPAND_LAB_AFTER_PROJECTS) return false;
+  if (s.research < researchCap(s) - 0.5) return false;
+  // Not in the beat of the first training cycle's Focus row or another first-time mechanic (with Sage-1
+  // trained in the opening, the first release can land beside this award: docs/specs/early-train.md).
+  if (!mechanicClear(s)) return false;
+  s.revealed['expandLab'] = true;
+  return true;
+}
+
+/** Milestone lines say what the Trust is for (or that it only paid back what the lab owed). */
+export function trustRewardLine(s: GameState): string {
+  if (s.stage >= 2) {
+    const reach = trustReach(s);
+    return reach.length ? `Trust ${s.trust}: ${reach.join(', ')} within reach.` : '';
+  }
+  if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
+  return s.revealed['expandLab'] ? 'Trust +1. Hire a researcher or expand the lab.' : 'Trust +1. Hire a researcher.';
 }
 
 export function researchTick(s: GameState, dt: number): void {
   if (!s.revealed['research']) return;
   const cap = researchCap(s);
   if (s.research < cap) {
-    s.research = Math.min(cap, s.research + researchRate(s) * dt);
+    let gained = researchRate(s) * dt;
+    // Stages 3–4: `Alignment work` takes its share of research before it reaches the pool; in Stage 4
+    // `Draft clauses` takes its own (stage4.md §2.11).
+    const share = s.stage >= 3 && s.stage <= 4 && s.revealed['alignWork'] ? alignWorkShare(s) : 0;
+    const draft = s.stage === 4 && s.revealed['draft'] ? s.s4.draftShare : 0;
+    const total = gained;
+    if (share > 0) alignWorkTick(s, total * share);
+    if (draft > 0) draftTick(s, total * draft);
+    gained = total * Math.max(0, 1 - share - draft);
+    s.research = Math.min(cap, s.research + gained);
   }
-  if (s.research >= cap) {
+  if (s.stage >= 3) {
+    s.insight += insightRate(s) * dt;
+  } else if (s.research >= cap) {
     s.flags['hitCap'] = true;
     if (s.insightUnlocked) s.insight += insightRate(s) * dt;
-    if (!s.flags['atCap']) {
-      s.flags['atCap'] = true;
-      if (s.insightUnlocked) say(s, 'Research at capacity — insight accrues.');
-    }
+    s.flags['atCap'] = true;
   } else {
+    if (s.insightUnlocked) s.insight += insightTrickle(s) * dt;
     s.flags['atCap'] = false;
   }
 }
 
 // ---------- player verbs ----------
 
-/** Always works. With nothing unsold, the customer pays for the click at once. */
+/** The one verb that always works: no power needed, never disabled. */
 export function clickTask(s: GameState): boolean {
+  // Stage 1 with nothing unsold: the customer pays for the click at once (owner feedback 1, beat 1).
   const payNow = s.stage === 1 && s.unbilled <= 0;
   completeTasks(s, 1);
   if (payNow) bill(s, 1);
+  s.stats.secClicks += 1;
   s.flags['clicks'] = ((s.flags['clicks'] as number) || 0) + 1;
   return true;
 }
 
 export function buyPower(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['buyPower'] || s.funds < s.powerPrice) return false;
+  if (s.stage >= 2 || !s.revealed['buyPower'] || s.funds < powerBlockCost(s)) return false;
   purchasePower(s);
+  s.stats.powerPresses += 1;
   return true;
 }
 
 export function rentGpu(s: GameState): boolean {
-  if (s.stage >= 2 || !s.revealed['compute']) return false;
+  if (s.stage >= 2 || !s.revealed['compute'] || atRentQuota(s)) return false;
   const cost = gpuCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.gpus += 1;
+  if (atRentQuota(s) && !s.flags[`quotaSaid${s.gpus}`]) {
+    s.flags[`quotaSaid${s.gpus}`] = true;
+    say(s, 'The provider has no more GPUs to rent. Owning compute is the way past this.');
+  }
   return true;
 }
 
-function notePriceMove(s: GameState): void {
-  if (typeof s.flags['firstPriceMoveAt'] !== 'number') s.flags['firstPriceMoveAt'] = s.stats.timePlayed;
+/** Below $0.20 the price moves a cent at a time; above, 5 % (critic round 2 §6.4). */
+export const PRICE_STEP_FROM = 0.2;
+export const PRICE_STEP = 0.05;
+
+export function priceUp(p: number): number {
+  if (p < PRICE_STEP_FROM - 1e-9) return Math.round((p + 0.01) * 100) / 100;
+  return Math.max(Math.round((p + 0.01) * 100) / 100, Math.round(p * (1 + PRICE_STEP) * 100) / 100);
+}
+
+export function priceDown(p: number): number {
+  if (p <= PRICE_STEP_FROM + 1e-9) return Math.max(MIN_PRICE, Math.round((p - 0.01) * 100) / 100);
+  return Math.max(PRICE_STEP_FROM, Math.min(Math.round((p - 0.01) * 100) / 100, Math.round((p / (1 + PRICE_STEP)) * 100) / 100));
+}
+
+/** Stage 1 only, and only by hand (Dynamic pricing hands the price to finance; Stage 2 prices itself). */
+/** The price buttons arrive with beat 6 (owner feedback 1): before it, every task sells at $0.25. */
+function priceMove(s: GameState): void {
+  if (counter(s, 'priceMoves') === 0) s.flags['firstPriceMoveAt'] = s.stats.timePlayed;
+  bump(s, 'priceMoves');
 }
 
 export function lowerPrice(s: GameState): boolean {
-  if (!s.revealed['pricing'] || s.price <= MIN_PRICE + 1e-9) return false;
-  s.price = Math.max(MIN_PRICE, Math.round((s.price - 0.01) * 100) / 100);
-  notePriceMove(s);
+  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
+  if (s.price <= MIN_PRICE + 1e-9) return false;
+  s.price = priceDown(s.price);
+  priceMove(s);
   return true;
 }
 
 export function raisePrice(s: GameState): boolean {
-  if (!s.revealed['pricing']) return false;
-  s.price = Math.round((s.price + 0.01) * 100) / 100;
+  if (!s.revealed['pricing'] || s.stage >= 2 || s.autoPrice) return false;
+  // Nobody pays twenty times the clearing price: the button stops there, and says so.
+  if (s.price >= priceCeiling(s)) return false;
+  s.price = priceUp(s.price);
   s.priceRaises += 1;
-  notePriceMove(s);
+  priceMove(s);
   return true;
 }
 
+/** Kept for old saves and scripts: pricing is never toggled by hand any more (AUTO is a project, then the stage). */
+export function toggleAutoPrice(_s: GameState): boolean {
+  return false;
+}
+
 export function buyMarketing(s: GameState): boolean {
-  if (!s.revealed['marketing']) return false;
+  // Stage 1's money verb; from Stage 2 the market cards widen the market (critic C4: no dead grey box).
+  if (!s.revealed['marketing'] || s.stage >= 2) return false;
   const cost = marketingCost(s);
   if (s.funds < cost) return false;
   s.funds = Math.round((s.funds - cost) * 100) / 100;
   s.hypeLevel += 1;
+  s.marketingBought = (s.marketingBought ?? 0) + 1;
+  if (s.stage >= 2) press(s, 'marketing');
   return true;
 }
 
+/**
+ * What Trust reaches at exactly this count (Stage 2): a Trust-priced card or Security level 3 that
+ * costs this much, and Expand Lab while the next run needs more than the lab holds.
+ */
+export function trustReach(s: GameState): string[] {
+  const out: string[] = [];
+  if (s.trust >= 1 && s.revealed['expandLab'] && s.trust === 1 && researchWantedOverCap(s)) out.push('Expand Lab');
+  for (const p of visibleProjects(s)) {
+    const tr = p.cost(s).trust ?? 0;
+    if (tr > 0 && tr === s.trust) out.push(p.title);
+  }
+  if (s.revealed['sl3Button'] && s.securityLevel < 3 && s.trust === 3) out.push('Security level 3');
+  return out;
+}
+
+function researchWantedOverCap(s: GameState): boolean {
+  const want = trainCost(s).research ?? 0;
+  return want > researchCap(s);
+}
+
+/** Stage 2: once the copies do nine-tenths of the research, a hire is not worth a Trust (critic C6). */
+export const HIRE_FADE_SHARE = 0.1;
+
+export function hireFadeCheck(s: GameState): void {
+  if (s.stage !== 2 || s.revealed['hireFaded'] || !s.revealed['hireResearcher'] || !isBought(s, 'p_ai_assistants')) return;
+  if (humanShare(s) >= HIRE_FADE_SHARE) return;
+  s.revealed['hireFaded'] = true;
+  say(s, `Human share of research: ${Math.max(1, Math.round(humanShare(s) * 100))}%. Hiring stops; Trust goes to the lab and the capitol.`);
+}
+
 export function hireResearcher(s: GameState): boolean {
-  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || !canPay(s, { trust: 1 })) return false;
+  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || s.revealed['hireFaded'] || !canPay(s, { trust: 1 })) return false;
   pay(s, { trust: 1 });
   s.researchers += 1;
+  if (s.stage >= 2) press(s, 'hire');
   return true;
 }
 
@@ -287,6 +762,7 @@ export function expandLab(s: GameState): boolean {
   if (!s.revealed['research'] || !s.revealed['expandLab'] || !canPay(s, { trust: 1 })) return false;
   pay(s, { trust: 1 });
   s.labSpace += 1;
+  if (s.stage >= 2) press(s, 'expand');
   return true;
 }
 
@@ -296,39 +772,57 @@ export function toggleGrid(s: GameState): boolean {
   return true;
 }
 
-export function buildDatacenter(s: GameState): boolean {
-  if (!s.revealed['infrastructure']) return false;
-  const cost = datacenterCost(s);
-  if (s.funds < cost) return false;
-  addFunds(s, -cost);
-  s.datacenters += 1;
-  say(s, `Datacenter ${s.datacenters} complete. Room for ${(gpuCapacity(s)).toLocaleString('en-US')} GPUs.`);
+/** The allocation slider: 0–50 % of copies on research, in steps of 5 (stage2.md §2.4). */
+/** The slider's floor, in percent. */
+export const RESEARCH_ALLOC_MIN = 5;
+
+export function setResearchAlloc(s: GameState, pct: number): boolean {
+  if (s.stage < 2 || !s.revealed['allocation'] || !Number.isFinite(pct)) return false;
+  // Stage 3: 5–70 %, and the sliders stop where tasks would fall under 10 % (stage3.md §2.2); at 0 % the
+  // next run never came, under a clock that said so (critic S3 round 1 §9 item 6), so 5 % is the floor.
+  // Stage 2: 5–50 %, some copies always help the researchers (at 0 % a lab past its human ceiling stalls).
+  const s3 = s.stage >= 3;
+  const max = s3 ? Math.min(RESEARCH_ALLOC_MAX_S3, 90 - Math.round((s.monitorShare ?? 0) * 100)) : 50;
+  const v = Math.min(max, Math.max(RESEARCH_ALLOC_MIN, Math.round(pct / 5) * 5)) / 100;
+  if (Math.abs(v - s.researchAlloc) < 1e-9) return false;
+  s.researchAlloc = v;
+  press(s, 'slider');
   return true;
 }
 
-export function buyGpuBatch(s: GameState): boolean {
-  if (!s.revealed['infrastructure']) return false;
-  const cost = gpuBatchCost(s);
-  if (s.funds < cost || s.gpus + GPU_BATCH > gpuCapacity(s)) return false;
-  addFunds(s, -cost);
-  s.gpus += GPU_BATCH;
-  s.gpuBatches += 1;
-  if (s.gpuBatches === 1) say(s, '1,000 Nimbus G4s racked.');
-  return true;
+/** Stage 3: research may take up to 70 % of the copies, monitors up to 40 % (stage3.md §2.2). */
+export const RESEARCH_ALLOC_MAX_S3 = 70;
+export const MONITOR_SHARE_MAX = 40;
+
+/** The Monitors slider's floor: 15 % for good once an order has been conceded. */
+export function monitorFloor(s: GameState): number {
+  // Monitors at scale holds 40 % (stage4.md §2.6); the keys handed over in an order, 25 %.
+  if (isBought(s, 'p_monitors_scale')) return 40;
+  if (s.flags['keysHanded'] === true) return 25;
+  return s.flags['conceded'] === true ? 15 : 0;
 }
 
-export function buyTurbines(s: GameState): boolean {
-  if (!s.revealed['infrastructure']) return false;
-  const cost = turbineCost(s);
-  if (s.funds < cost) return false;
-  addFunds(s, -cost);
-  s.turbines += 1;
-  s.powerCapacityMW += TURBINE_MW;
-  say(s, `Gas turbines online. +${TURBINE_MW} MW.`);
+/** The Monitors slider (Stage 3, after `Deploy Sage-2 as monitor`): 0–40 %, tasks never under 10 %. */
+export function setMonitorShare(s: GameState, pct: number): boolean {
+  if (s.stage < 3 || !s.revealed['monitors'] || !Number.isFinite(pct)) return false;
+  const max = Math.min(MONITOR_SHARE_MAX, 90 - Math.round(s.researchAlloc * 100));
+  const v = Math.min(max, Math.max(monitorFloor(s), Math.round(pct / 5) * 5)) / 100;
+  if (Math.abs(v - s.monitorShare) < 1e-9) return false;
+  s.monitorShare = v;
+  press(s, 'monitorSlider');
   return true;
 }
 
 // ---------- bookkeeping ----------
+
+/** The slow revenue figure's time constant, seconds. */
+export const REV_SLOW_SECONDS = 60;
+
+/** Revenue a second for prices that must not follow a dip: the faster of the 10-s and the 60-s figures. */
+export function pricingRevenue(s: GameState): number {
+  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : 0;
+  return Math.max(s.stats.revPerSec, slow);
+}
 
 /** One-second bookkeeping: 10 s moving averages for the readouts. */
 export function averages(s: GameState): void {
@@ -338,11 +832,18 @@ export function averages(s: GameState): void {
   push10(st.taskHist, made);
   push10(st.revHist, st.secRevenue);
   push10(st.soldHist, st.secSold);
+  push10(st.clickHist, st.secClicks);
   st.secRevenue = 0;
   st.secSold = 0;
+  st.secClicks = 0;
   st.tasksPerSec = mean(st.taskHist);
   st.revPerSec = mean(st.revHist);
+  // A minute's revenue, slowly: what Stage 3's repeatable sinks are priced off, so a Re-image's or a
+  // kill switch's empty seconds do not sell them for a five-thousandth (critic S3 round 1 §4.9).
+  const slow = typeof s.flags['revSlow'] === 'number' ? (s.flags['revSlow'] as number) : st.revPerSec;
+  s.flags['revSlow'] = slow + (st.revPerSec - slow) / REV_SLOW_SECONDS;
   st.soldPerSec = mean(st.soldHist);
+  st.clicksPerSec = mean(st.clickHist);
   if (st.tasksPerSec > st.peakTasksPerSec) st.peakTasksPerSec = st.tasksPerSec;
 }
 
@@ -372,26 +873,43 @@ export function decayEffects(s: GameState, dt: number): void {
   s.effects = s.effects.filter((e) => e.remaining > 0);
 }
 
-/** The console names the bottleneck when it bites (at most once per 90 s each). */
+/**
+ * The console names the bottleneck when it bites (each at most once per 90 s), and names the
+ * fix: an absurd price is called out with what it costs; a backlog points at the price or marketing.
+ * Stage 2 prices itself, so nothing here speaks there.
+ */
 export function bottleneckMessages(s: GameState): void {
   const now = s.stats.timePlayed;
   const ready = (key: string) => now - ((s.flags[key] as number) ?? -999) > 90;
-  const tps = s.stats.tasksPerSec;
-  const sold = Math.max(0.5, s.stats.soldPerSec);
-  if (s.revealed['pricing'] && s.unbilled > 500 && s.unbilled > 30 * sold && tps > sold * 1.5 && ready('saturatedAt')) {
-    s.flags['saturatedAt'] = now;
-    say(s, 'Demand saturated — lower the price or market.');
+  if (s.stage >= 2) return;
+  // The price advice waits for the price to be on screen (owner feedback 1, beat 6).
+  if (s.revealed['pricing'] && s.unbilled > 20 && !s.autoPrice) {
+    const made = Math.max(1, productionPerSec(s));
+    if (priceAbsurd(s)) {
+      if (ready('absurdAt')) {
+        s.flags['absurdAt'] = now;
+        // True when it prints: the line states the gap it measured (critic round 2 §4.4).
+        const sales = expectedSalesPerSec(s);
+        say(s, sales < 0.1
+          ? `Nobody buys at ${fmtMoneyShort(s.price)}: the copies make ${fmtInt(made)} a second. Lower the price.`
+          : `The copies make ${fmtInt(Math.round(made / sales))} times what the market takes at ${fmtMoneyShort(s.price)}. Lower the price.`);
+      }
+    } else if (s.unbilled < Math.max(5, made) && expectedSalesPerSec(s) > 2 * made && made >= 20 && ready('cheapAt')) {
+      // Selling out with the market wanting twice as much: say so, with the number.
+      s.flags['cheapAt'] = now;
+      say(s, `Everything sells at ${fmtMoneyShort(s.price)}; the market would take ${fmtInt(Math.round(expectedSalesPerSec(s) / made))} times as much. Raise the price.`);
+    } else if (s.unbilled > 200 && s.unbilled > 30 * made && marketState(s) === 'backlog growing' && ready('saturatedAt')) {
+      s.flags['saturatedAt'] = now;
+      say(s, `Sage makes more than customers buy at ${fmtMoneyShort(s.price)}. Lower the price${s.revealed['marketing'] ? ' or buy Marketing' : ''}.`);
+    }
   }
-  if (s.stage < 2 && s.gpus > 0 && s.power < 1 && s.funds < s.powerPrice && ready('brokeAt')) {
+  if (s.gpus > 0 && s.power < 1 && s.funds < powerBlockCost(s) && ready('brokeAt')) {
     s.flags['brokeAt'] = now;
-    say(s, 'Funds exhausted — power cannot be bought.');
+    say(s, 'No power, and no money for more. The cloud provider may extend credit.');
   }
-  if (s.revealed['research'] && !s.insightUnlocked && s.research >= researchCap(s) && ready('capAt')) {
-    s.flags['capAt'] = now;
-    say(s, 'Research at capacity. Lab space is full.');
-  }
-  if (s.stage >= 2 && s.gpus > activeGpus(s) && ready('mwAt')) {
-    s.flags['mwAt'] = now;
-    say(s, `Power-limited — ${Math.round((100 * activeGpus(s)) / s.gpus)}% of GPUs active.`);
-  }
+}
+
+/** `lab holds 216,000` — the reason line under a greyed Train. */
+export function labHolds(s: GameState): string {
+  return `lab holds ${fmtInt(researchCap(s))}`;
 }

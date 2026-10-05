@@ -1,26 +1,29 @@
 import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
-import { fmtInt, fmtMoneyShort } from './format.js';
-
-/** Visible projects at once; extra triggers wait in line (UP keeps 3–6 on screen). */
-export const MAX_VISIBLE = 6;
+import { fmtInt, fmtMoneyShort, fmtTonnes, fmtShortNum } from './format.js';
 
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
 }
 
-export function costLabel(c: Cost): string {
+/** A price in words: `$12M, 3 Trust`; Stage 4's big research prices short (`1.2B research`). */
+export function costLabel(c: Cost, short = false): string {
   const parts: string[] = [];
+  const n = (v: number) => (short ? fmtShortNum(v) : fmtInt(v));
   if (c.funds) parts.push(fmtMoneyShort(c.funds));
-  if (c.research) parts.push(`${fmtInt(c.research)} research`);
-  if (c.insight) parts.push(`${fmtInt(c.insight)} insight`);
+  if (c.research) parts.push(`${n(c.research)} research`);
+  if (c.insight) parts.push(`${n(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
+  if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
+  // The purse is named on the row (critic S3 round 1 §9 item 5).
+  if (c.build) parts.push(`${fmtMoneyShort(c.build)} from the build fund or funds`);
+  if (c.power) parts.push(`${fmtInt(c.power)} kWh`);
   return parts.length ? parts.join(', ') : 'free';
 }
 
 export function priceTag(s: GameState, def: ProjectDef): string {
   if (typeof def.priceTag === 'function') return def.priceTag(s);
-  return def.priceTag ?? `(${costLabel(def.cost(s))})`;
+  return def.priceTag ?? `(${costLabel(def.cost(s), s.stage >= 4)})`;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {
@@ -36,24 +39,6 @@ export function visibleProjects(s: GameState): ProjectDef[] {
   return PROJECTS.filter((p) => isVisible(s, p));
 }
 
-/**
- * Evaluated every tick: a project becomes visible when its trigger fires, regardless of
- * affordability, and stays visible until bought out (UP). Rescue projects skip the queue.
- */
-export function updateProjects(s: GameState): void {
-  if (!s.revealed['projects']) return;
-  let visible = visibleProjects(s).length;
-  for (const def of PROJECTS) {
-    const st = s.projects[def.id];
-    if (st?.shown || remainingUses(s, def) <= 0 || !def.stages.includes(s.stage)) continue;
-    if (visible >= MAX_VISIBLE && !def.rescue) continue;
-    if (def.trigger(s)) {
-      projectState(s, def.id).shown = true;
-      visible++;
-    }
-  }
-}
-
 export function buyProject(s: GameState, id: string): boolean {
   const def = projectById(id);
   if (!def || !isVisible(s, def) || !def.canAfford(s)) return false;
@@ -61,8 +46,12 @@ export function buyProject(s: GameState, id: string): boolean {
   const st = projectState(s, id);
   st.bought += 1;
   if (remainingUses(s, def) > 0 && def.rehide) st.shown = false;
+  // A grant's first line is its WARNING (stage3.md §4.2), so its effect runs before its message.
+  if (def.grant) def.buy(s);
   if (def.consoleMsg) say(s, def.consoleMsg);
-  if (def.logMsg) logNews(s, def.logMsg);
-  def.buy(s);
+  // Stage 2's carried cards keep their console line in Stage 3; the Developments log is Stage 3's own.
+  const carriedIntoS3 = s.stage >= 3 && def.stages.some((x) => x < 3);
+  if (def.logMsg && !carriedIntoS3) logNews(s, def.logMsg);
+  if (!def.grant) def.buy(s);
   return true;
 }

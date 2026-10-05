@@ -25,6 +25,12 @@ export function showId(id: string, on: boolean): void {
   setShown(byId(id), on);
 }
 
+/** Tooltips change with state (an absurd price, open issues); write only on change. */
+export function setTitle(id: string, title: string): void {
+  const el = byId(id);
+  if (el.title !== title) el.title = title;
+}
+
 export function setDisabled(id: string, disabled: boolean): void {
   const b = byId<HTMLButtonElement>(id);
   if (b.disabled !== disabled) b.disabled = disabled;

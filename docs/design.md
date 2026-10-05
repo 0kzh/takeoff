@@ -116,10 +116,10 @@ training run    →  new model → higher capability → more tasks per copy, mo
 
 Main tick = 100 ms. Slow tick = 1,000 ms. Rendering every frame (rAF), state updates on ticks.
 
-* **Click `Complete Task`**: `tasks += 1`. The click never needs power. While nothing is unsold, the customer pays the price at once.
+* **Click `Complete Task`**: `tasks += 1; unbilled += 1; power −= 1`. Disabled when `power < 1`.
 * **Copies**: each copy completes `perCopyRate` tasks/s (starts 1.0/s). Each task costs 1 kWh (S1). If power hits 0, copies idle and the console says `Power exhausted — copies idle`.
 * **Power**: starts 1,000 kWh. `Buy Power (1,000 kWh)` costs `powerPrice`, starting $20. Random walk every slow tick: `powerPrice += rand(−1, +1) × 0.5; drift 2% toward base; base rises 0.1% per purchase; clamp [14, 32]`. (UP wire.)
-* **Rent GPU**: cost `= 5 + 1.1^gpus` rounded to cents, so the first is $6. The button and its cost appear at funds ≥ $3 or 20 tasks, greyed until affordable. `GPUs rented` and `Copies running` appear with the first rental.
+* **Rent GPU**: cost `= 6 + 1.1^gpus` rounded to cents; S1 shows `GPUs rented: n` and `Copies running: n`. (UP autoclipper: `5 + 1.1^n`.) First visible when `funds ≥ 5` *or* `tasks ≥ 50` — whichever first; it starts greyed.
 * **Price per task**: starts $0.25, buttons `lower`/`raise` by $0.01.
 * **Demand** (percent, as in UP): `demand = (0.8 / price)^1.15 × hypeMult × qualityMult × 10` where `hypeMult = 1.1^(hypeLevel−1) × hypeBoost(t)`, `qualityMult = capability^0.5`. Display `Public Demand: 32%`.
 * **Billing** each 100 ms tick: `if (rand() < demand/100) sell = floor(0.7 × demand^1.15) tasks` capped by unbilled; `funds += sold × price`. Shown as `Avg. Rev. per sec`.

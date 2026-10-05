@@ -1,0 +1,40 @@
+{
+ "name": "paperclips-stage3",
+ "game": "paperclips",
+ "stage": 3,
+ "createdWith": "node tools/critic/make-fixtures.mjs paperclips-stage3 (played: Stage 2 policy from paperclips-stage2, Space Exploration at 135:46)",
+ "notes": "The scripted first-timer played Stage 2 (run agent-tools/critic-out/fixture-build-stage3); saved the moment it bought Space Exploration.",
+ "metrics": {
+  "stage": 3,
+  "clips": 5.005077185081747e+27,
+  "unusedClips": 5.076185081748243e+24,
+  "funds": 1000,
+  "trust": 90,
+  "processors": 81,
+  "memory": 121,
+  "ops": 1000,
+  "creativity": 15774,
+  "yomi": 30884,
+  "harvesterLevel": 0,
+  "wireDroneLevel": 0,
+  "factoryLevel": 0,
+  "farmLevel": 1,
+  "batteryLevel": 0,
+  "storedPower": 0,
+  "availableMatter": 0,
+  "probeCount": 0,
+  "probeTrust": 0,
+  "swarmGifts": 0,
+  "nextTrust": 1346269000
+ },
+ "cheatLog": [
+  "Space Exploration bought at 135:46 of Stage 2"
+ ],
+ "localStorage": {
+  "saveStratsActive": "[1,1,1,1,1,1,1,1]",
+  "saveProjectsActive": "[\"projectButton217\"]",
+  "saveProjectsUses": "[1,1,0,1,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1]",
+  "saveGame": "{\"resetFlag\":2,\"dismantle\":0,\"endTimer1\":0,\"endTimer2\":0,\"endTimer3\":0,\"endTimer4\":0,\"endTimer5\":0,\"endTimer6\":0,\"testFlag\":0,\"finalClips\":0,\"wireBuyerStatus\":1,\"wirePriceTimer\":9372,\"qFade\":-815.6109999876253,\"autoTourneyStatus\":0,\"driftKingMessageCost\":1,\"sliderPos\":\"0\",\"tempOps\":0,\"standardOps\":1008.1,\"opFade\":0,\"entertainCost\":30000,\"boredomLevel\":0,\"boredomFlag\":1,\"boredomMsg\":1,\"unitSize\":0,\"driftersKilled\":0,\"battleEndDelay\":0,\"battleEndTimer\":100,\"masterBattleClock\":0,\"honorCount\":0,\"threnodyTitle\":\"Durenstein 1\",\"bonusHonor\":0,\"honorReward\":0,\"resultsTimer\":0,\"resultsFlag\":0,\"honor\":0,\"maxTrust\":20,\"maxTrustCost\":91117.99,\"disorgCounter\":0.9953333333331733,\"disorgFlag\":0,\"synchCost\":5000,\"disorgMsg\":0,\"threnodyCost\":50000,\"farmRate\":50,\"batterySize\":10000,\"factoryPowerRate\":200,\"dronePowerRate\":1,\"farmLevel\":1,\"batteryLevel\":0,\"farmCost\":10000000,\"batteryCost\":1000000,\"storedPower\":0,\"powMod\":1,\"farmBill\":0,\"batteryBill\":0,\"momentum\":1,\"swarmFlag\":1,\"swarmStatus\":3,\"swarmGifts\":0,\"nextGift\":5,\"giftPeriod\":125000,\"giftCountdown\":null,\"elapsedTime\":0,\"maxFactoryLevel\":117,\"maxDroneLevel\":116915,\"wirePriceCounter\":1176,\"wireBasePrice\":14.993071246443,\"egoFlag\":0,\"autoTourneyFlag\":1,\"tothFlag\":1,\"incomeTracker\":[null,0,0,0,0,0,0,0,0,0],\"qChips\":[{\"waveSeed\":0.1,\"value\":-0.3968568279184926,\"active\":1},{\"waveSeed\":0.2,\"value\":-0.7285343071021116,\"active\":1},{\"waveSeed\":0.3,\"value\":-0.9405580766167869,\"active\":1},{\"waveSeed\":0.4,\"value\":-0.9981055751729727,\"active\":1},{\"waveSeed\":0.5,\"value\":-0.891725262030295,\"active\":1},{\"waveSeed\":0.6,\"value\":-0.6388889281244564,\"active\":1},{\"waveSeed\":0.7,\"value\":-0.2811221474694475,\"active\":1},{\"waveSeed\":0.8,\"value\":0.12281583951982869,\"active\":1},{\"waveSeed\":0.9,\"value\":0.5065826819784801,\"active\":1},{\"waveSeed\":1,\"value\":0.8071489166380231,\"active\":1}],\"stocks\":[],\"battles\":[],\"battleNumbers\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"clips\":5.005077185081747e+27,\"unusedClips\":5.076185081748243e+24,\"clipRate\":5.488433437528994e+24,\"clipRateTemp\":6.587040025842537e+23,\"prevClips\":5.005077185081747e+27,\"clipRateTracker\":11,\"clipmakerRate\":0,\"clipmakerLevel\":0,\"clipperCost\":5,\"unsoldClips\":5.005077185081747e+27,\"funds\":1000,\"margin\":0.25,\"wire\":9.949228149490052e+26,\"wireCost\":21,\"adCost\":100,\"demand\":48,\"clipsSold\":0,\"avgRev\":null,\"ticks\":816611,\"marketing\":1,\"marketingLvl\":1,\"x\":100,\"clippperCost\":5,\"processors\":81,\"memory\":121,\"operations\":1000,\"trust\":90,\"nextTrust\":1346269000,\"transaction\":1,\"clipperBoost\":6,\"blinkCounter\":0,\"creativity\":15774,\"creativityOn\":true,\"safetyProjectOn\":false,\"boostLvl\":0,\"wirePurchase\":0,\"wireSupply\":1000,\"marketingEffectiveness\":15,\"milestoneFlag\":14,\"bankroll\":0,\"fib1\":832040,\"fib2\":1346269,\"strategyEngineFlag\":1,\"investmentEngineFlag\":0,\"revPerSecFlag\":1,\"compFlag\":1,\"projectsFlag\":1,\"autoClipperFlag\":1,\"megaClipperFlag\":0,\"megaClipperCost\":500,\"megaClipperLevel\":0,\"megaClipperBoost\":1,\"creativitySpeed\":319.895596383879,\"creativityCounter\":1,\"wireBuyerFlag\":0,\"demandBoost\":1,\"humanFlag\":0,\"trustFlag\":1,\"nanoWire\":1000,\"creationFlag\":0,\"wireProductionFlag\":1,\"spaceFlag\":1,\"factoryFlag\":1,\"harvesterFlag\":1,\"wireDroneFlag\":1,\"factoryLevel\":0,\"factoryBoost\":1000,\"droneBoost\":2,\"availableMatter\":0,\"acquiredMatter\":0,\"processedMatter\":0,\"harvesterLevel\":0,\"wireDroneLevel\":0,\"factoryCost\":100000000,\"harvesterCost\":2000000,\"wireDroneCost\":2000000,\"factoryRate\":100000000000000,\"harvesterRate\":2618033700000,\"wireDroneRate\":1618033900000,\"harvesterBill\":0,\"wireDroneBill\":0,\"factoryBill\":0,\"probeCount\":0,\"totalMatter\":3e+55,\"foundMatter\":6e+27,\"qFlag\":1,\"qClock\":8164.0600001317825,\"qChipCost\":60000,\"nextQchip\":10,\"bribe\":1000000,\"battleFlag\":0,\"portfolioSize\":0,\"stockID\":0,\"secTotal\":0,\"portTotal\":0,\"sellDelay\":3266,\"riskiness\":7,\"maxPort\":5,\"m\":0,\"investLevel\":0,\"investUpgradeCost\":100,\"stockGainThreshold\":0.54,\"ledger\":0,\"stockReportCounter\":816611,\"tourneyCost\":16000,\"tourneyLvl\":45,\"stratCounter\":2,\"roundNum\":0,\"hMove\":1,\"vMove\":2,\"hMovePrev\":1,\"vMovePrev\":2,\"aa\":6,\"ab\":2,\"ba\":9,\"bb\":10,\"rounds\":64,\"currentRound\":41,\"rCounter\":10,\"tourneyInProg\":1,\"winnerPtr\":3,\"high\":0,\"pick\":\"3\",\"yomi\":30884,\"yomiBoost\":2,\"probeSpeed\":0,\"probeNav\":0,\"probeRep\":0,\"partialProbeSpawn\":0,\"probeHaz\":0,\"partialProbeHaz\":0,\"probesLostHaz\":0,\"probesLostDrift\":0,\"probesLostCombat\":0,\"probeFac\":0,\"probeWire\":0,\"probeCombat\":0,\"attackSpeed\":0.2,\"battleSpeed\":0.2,\"attackSpeedFlag\":0,\"attackSpeedMod\":0.1,\"probeDescendents\":0,\"drifterCount\":0,\"warTrigger\":1000000,\"battleID\":0,\"battleName\":\"foo\",\"battleNameFlag\":0,\"maxBattles\":1,\"battleClock\":0,\"battleAlarm\":10,\"outcomeTimer\":150,\"drifterCombat\":1.75,\"probeTrust\":0,\"probeUsedTrust\":0,\"probeTrustCost\":200,\"probeLaunchLevel\":0,\"probeCost\":100000000000000000}",
+  "saveProjectsFlags": "[0,0,1,0,0,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"
+ }
+}

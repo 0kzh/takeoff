@@ -8,7 +8,8 @@ import { stageDef, STAGES } from './stages.js';
 export function advanceClock(s: GameState, dt: number): void {
   const def = stageDef(s.stage);
   const before = s.date;
-  const limit = def.endMonth + 2 + 0.999;
+  // Stage 5 has no exit to wait for: its date stops at its end month, December 2030 (stage5.md).
+  const limit = def.endMonth + (s.stage >= 5 ? 0 : 2) + 0.999;
   s.date = Math.min(limit, s.date + dt / def.secondsPerMonth);
   if (Math.floor(before) !== Math.floor(s.date)) onNewMonth(s);
 }
@@ -29,7 +30,8 @@ function onNewMonth(s: GameState): void {
 
 /** December: the annual leaderboard pays Trust and hype to a model whose evaluation scored ≥ 36. */
 export function awardLeaderboard(s: GameState): void {
-  if (!s.flags['leaderboardEligible']) return;
+  // Trust is retired in Stage 3 (stage3.md §1.1).
+  if (!s.flags['leaderboardEligible'] || s.stage >= 3) return;
   const year = 2025 + Math.floor((Math.floor(s.date) + 6) / 12);
   if (s.flags['leaderboardYear'] === year) return;
   s.flags['leaderboardYear'] = year;
