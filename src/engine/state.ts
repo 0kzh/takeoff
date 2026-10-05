@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 /** Console lines kept on screen through a stage transition (the rest scroll off under the narration). */
@@ -1218,7 +1218,21 @@ function migrateV10(raw: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9, migrateV10];
+/**
+ * v11 → v12: Anthrosoft has its own flag (`revealed.rival`) and arrives as a dialog (`d_anthrosoft`).
+ * A save that has already met it (a Cadence shipped, or any stage after the first) keeps it on screen
+ * and is not shown the dialog.
+ */
+function migrateV11(raw: Record<string, unknown>): Record<string, unknown> {
+  const stage = typeof raw['stage'] === 'number' ? (raw['stage'] as number) : 1;
+  const version = typeof raw['rivalVersion'] === 'number' ? (raw['rivalVersion'] as number) : 1;
+  if (stage < 2 && version <= 1) return raw;
+  const revealed = { ...((raw['revealed'] as Record<string, boolean>) ?? {}), rival: true };
+  const developments = { ...((raw['developments'] as Record<string, boolean>) ?? {}), d_anthrosoft: true };
+  return { ...raw, revealed, developments };
+}
+
+const MIGRATIONS: Migration[] = [(raw) => raw, migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7, migrateV8, migrateV9, migrateV10, migrateV11];
 
 /** Runs migrations, then fills fields missing from older saves with new-game defaults. */
 export function migrate(raw: Record<string, unknown>): GameState {

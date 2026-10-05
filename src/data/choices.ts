@@ -6,6 +6,7 @@ import { s2, queueGulf } from '../engine/infrastructure.js';
 import { moveGov, moveLead } from '../engine/world.js';
 import { bestCapability, researchRate } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
+import { rivalRelease } from '../engine/events.js';
 
 type Ctx = Record<string, number | string>;
 
@@ -405,6 +406,35 @@ export const CHOICES: ChoiceDef[] = [
         log: (s) => (s.flags['leaderboardWon']
           ? `${s.training.deployedName} tops the year-end leaderboard. Two labs dispute the methodology.`
           : `${s.training.deployedName} places second on the year-end leaderboard. OpenMind disputes the methodology.`),
+      },
+    ],
+  },
+  // Anthrosoft's arrival (developments.ts `d_anthrosoft`): a notice with one button. Its first Cadence
+  // ships as the dialog opens, and the Training panel gains its standing row.
+  {
+    id: 'c_anthrosoft',
+    title: 'A Rival Lab',
+    onOpen: (s) => {
+      if (!s.revealed['rival']) rivalRelease(s);
+    },
+    text: (s) => {
+      const lead = s.capability / s.rivalCapability;
+      const sage = s.training.deployedName;
+      return [
+        `Another lab, Anthrosoft, releases Cadence-${s.rivalVersion}.`,
+        lead > 1.02 ? `Reviewers put it a step behind ${sage}.` : lead < 0.98 ? `Reviewers put it a step ahead of ${sage}.` : `Reviewers cannot tell it from ${sage}.`,
+        'Customers compare the two from now on. Demand follows whichever model is ahead.',
+      ];
+    },
+    timer: 60,
+    defaultOption: 0,
+    options: [
+      {
+        label: 'back to work',
+        record: 'noted',
+        tooltip: 'Where Sage stands against Anthrosoft is on the Training panel.',
+        line: 'its standing is on the Training panel',
+        effect: () => undefined,
       },
     ],
   },

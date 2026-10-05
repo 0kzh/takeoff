@@ -523,8 +523,13 @@ try {
   const gpuBeat = beats.find((b) => b.t === at('panel-training'));
   check('the first-GPU beat adds the Power panel and the Train row: one control', !!gpuBeat && gpuBeat.newButtons.length <= 1 && gpuBeat.dNumbers <= 9,
     gpuBeat ? `${clock(gpuBeat.t)}: ${gpuBeat.newButtons.join(', ')}, +${gpuBeat.dNumbers} numbers` : 'not seen');
-  // Deploying Sage-1 turns the Train row into the full panel (`Current model: Sage-1`, `Ahead of
-  // Anthrosoft`, `Train Sage-1.1  Cost: $290`, its GPU line): checked on its own as well.
+  // Anthrosoft arrives as a dialog (`A Rival Lab`), the first event, a minute after the first release:
+  // its row is not on the Training panel before then.
+  check('Anthrosoft\'s row appears with its dialog, after the Focus row, not with the Training panel',
+    at('rivalLine') !== Infinity && at('rivalLine') >= at('focusRow') + 20 && Math.abs(at('rivalLine') - at('modal:A Rival Lab')) <= STEP_MS / 1000,
+    `model lines ${clock(at('modelName'))}, focus ${clock(at('focusRow'))}, Anthrosoft ${at('rivalLine') === Infinity ? 'never' : clock(at('rivalLine'))}, dialog ${at('modal:A Rival Lab') === Infinity ? 'never' : clock(at('modal:A Rival Lab'))}`);
+  // Deploying Sage-1 turns the Train row into the full panel (`Current model: Sage-1`,
+  // `Train Sage-1.1  Cost: $290`, its GPU line): checked on its own as well.
   const deployBeat = beats.find((b) => b.t === at('modelName'));
   check('the deploy beat redraws the Training panel and adds no control', !!deployBeat && deployBeat.newButtons.length === 0 && deployBeat.dNumbers <= 6,
     deployBeat ? `${clock(deployBeat.t)}: +${deployBeat.dNumbers} numbers` : 'not seen');

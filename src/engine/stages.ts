@@ -110,7 +110,7 @@ function enterScale(s: GameState): void {
 
   // Power, its price and the grid toggle stay frozen as they were; the engine stops using them.
   hide(s, ['power', 'buyPower', 'compute', 'gridContract', 'contracts']);
-  show(s, ['infrastructure', 'stores', 'autoPrice', 'buildShare']);
+  show(s, ['infrastructure', 'stores', 'autoPrice', 'buildShare', 'rival']);
   s.autoPrice = true;
   s.datacenters = Math.max(1, s.datacenters);
   s.powerCapacityMW = Math.max(s.powerCapacityMW, GRID_MW);

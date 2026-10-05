@@ -1328,6 +1328,7 @@ function main(): void {
     console.log(`Sage-1 train / deploy   ${fmt('prologueStart')} / ${fmt('sageLive')}`);
     console.log(`first training start     ${fmt('firstTrainingStart')}`);
     console.log(`first release            ${fmt('firstRelease')}`);
+    console.log(`Anthrosoft arrives       ${fmt('reveal:rival')}   (the first event, a minute after the first release)`);
     console.log(`Series A bought          ${fmt('buy:p_series_a')}`);
     console.log(`First Datacenter shown   ${clock(sum.datacenterShown)}; bought ${sum.wallToDc === null ? 'before the wall' : `${sum.wallToDc} s after the wall`}   (bot 60–150 s, trainfirst ≤ 240 s)`);
     console.log(`TRANSITION (First Datacenter) ${clock(sum.transition)}   (target bot 20:00–26:00, naive / greedy / trainfirst 22:00–30:00)`);

@@ -188,9 +188,15 @@ export function updateScheduled(s: GameState, dt: number): void {
 
 // ---------- rival releases ----------
 
-/** Every 4–7 minutes Anthrosoft ships. Slow tick. */
+/**
+ * Anthrosoft is not in the game until its dialog opens: `A Rival Lab`, the first event of Stage 1's
+ * calendar (data/developments.ts `d_anthrosoft`), a minute after Sage's first public release. Its
+ * first Cadence ships as the dialog opens; no row, no release and no line names it before then.
+ */
+/** Every 4–7 minutes Anthrosoft ships, once it has arrived. Slow tick. */
 export function updateRival(s: GameState): void {
   if (s.stage > 2) return;
+  if (s.stage === 1 && !s.revealed['rival']) return;
   s.nextRivalIn -= 1;
   if (s.nextRivalIn > 0) return;
   if (s.stage === 2) {
@@ -210,6 +216,8 @@ export function rivalRelease(s: GameState): void {
     s.flags['rivalS2'] = true;
     return;
   }
+  // The first Cadence is Anthrosoft's arrival, whoever calls it (its dialog, or the dev overlay).
+  s.revealed['rival'] = true;
   s.rivalVersion += 1;
   const ours = s.capability;
   // A third of releases leapfrog the deployed model; the rest are an increment on the last one.
@@ -220,9 +228,6 @@ export function rivalRelease(s: GameState): void {
   const name = `Cadence-${s.rivalVersion}`;
   recordRival(s, name);
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
-  // Anthrosoft is named on the Training panel; before it, a release is news, not a console line
-  // (critic round 3 §10.9: `Cadence-2 beats Sage-1. Demand dips.` on a screen with one button).
-  if (!s.revealed['training']) return;
   const q = qualityMult(s);
   if (q < 0.995) say(s, `Anthrosoft's ${name} beats ${s.training.deployedName}. Demand ${q < 0.9 ? 'falls' : 'dips'}.`);
   else say(s, `Anthrosoft ships ${name}. ${s.training.deployedName} is still ahead.`);

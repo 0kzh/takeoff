@@ -203,7 +203,7 @@ function stage1End(seed: number): GameState {
   for (const id of [
     'console', 'task', 'business', 'compute', 'fleet', 'power', 'buyPower', 'pricing', 'marketing',
     'revPerSec', 'research', 'hireResearcher', 'projects', 'gridContract', 'log', 'insight', 'expandLab',
-    'training', 'focus', 'quota', 'contracts', 'autoPrice',
+    'training', 'focus', 'rival', 'quota', 'contracts', 'autoPrice',
   ]) {
     s.revealed[id] = true;
   }
@@ -287,7 +287,7 @@ const STAGE2_CHOICES: ChoiceRecord[] = [
 
 const STAGE2_REVEALED = [
     'console', 'task', 'business', 'fleet', 'pricing', 'marketing', 'revPerSec', 'research', 'projects',
-    'log', 'insight', 'training', 'focus', 'quota', 'autoPrice', 'infrastructure', 'stores', 'buildShare',
+    'log', 'insight', 'training', 'focus', 'rival', 'quota', 'autoPrice', 'infrastructure', 'stores', 'buildShare',
     'hireFaded', 'gasButton', 'lot5', 'copies', 'dataRow', 'releaseInternal', 'graph', 'solarButton',
     'dcButton', 'allocation', 'standingOrder', 'government', 'lot25', 'security', 'evalLine', 'public',
     'queue', 'nuclearButton', 'secondPipeline', 'jobFund', 'stats', 'sl3Button', 'shareEvals',

@@ -76,6 +76,16 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
   // at 0 tasks; two researchers leaving a lab of one). The six are a queue behind the player's
   // progress (`calendar`); one whose condition fails gives its slot to the next and comes back, and
   // any still waiting are dropped with the stage.
+  // The calendar's first event, always: Anthrosoft arrives as a dialog (`A Rival Lab`), a minute after
+  // Sage's first public release. Its first Cadence ships as the dialog opens (choices.ts `c_anthrosoft`).
+  {
+    id: 'd_anthrosoft',
+    stage: 1,
+    choice: 'c_anthrosoft',
+    calendar: true,
+    month: monthOf(2025, 9),
+    requires: (s) => s.stats.publicReleases >= 1 && s.revealed['rival'] !== true,
+  },
   {
     id: 'd_bridge',
     stage: 1,
@@ -91,8 +101,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Nimbus chip lead times reach nine months. Cloud providers ration by relationship.',
     trigger: (s) => s.gpus >= 25,
   },
-  // ---- The calendar: six choices in this order, the first a minute after the first release, then
-  // each 2:36 after the last was answered. ----
+  // ---- The calendar: after `A Rival Lab`, six choices in this order, each 2:36 after the last was
+  // answered. ----
   {
     id: 'd_rival',
     stage: 1,
@@ -120,6 +130,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     text: 'Anthrosoft finishes the most expensive training run in history. Ours is next.',
     month: monthOf(2025, 11),
+    // Not before Anthrosoft has arrived (`d_anthrosoft`).
+    requires: (s) => s.revealed['rival'] === true,
     trigger: (s) => s.training.runIndex >= 3,
   },
   {
@@ -188,8 +200,8 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     choice: 'c_leaderboard',
     calendar: true,
-    // The board ranks a lab with a record: two released models.
-    requires: (s) => s.stats.publicReleases >= 2,
+    // The board ranks a lab with a record: two released models. It names Anthrosoft, so not before it.
+    requires: (s) => s.stats.publicReleases >= 2 && s.revealed['rival'] === true,
     month: monthOf(2025, 12) + 0.45,
   },
   {
