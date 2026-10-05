@@ -405,14 +405,9 @@ function completeTasks(s: GameState, n: number): void {
 }
 
 /**
- * The first tasks bill at the expected rate, carried as a fraction, so the opening minute (and the
- * first GPU) does not depend on the luck of the roll; after that, UP's lumpy sale roll.
- */
-export const SMOOTH_SALES = 200;
-
-/**
- * Every 100 ms. Stage 1: `if rand < demand/100, bill floor(0.7 × demand^1.15)` tasks, capped by
- * unbilled (UP). Stage 2+: the deterministic market (engine/market.ts).
+ * Every 100 ms. Stage 1: UP's sale roll (`if rand < demand/100, bill floor(0.7 × demand^1.15)`) at
+ * its expected rate, carried as a fraction and capped by unbilled, so Available Funds moves every
+ * tick instead of in lumps. Stage 2+: the deterministic market (engine/market.ts).
  */
 export function sell(s: GameState, dt: number = TICK_SECONDS): void {
   if (s.stage >= 4) return;
@@ -421,20 +416,12 @@ export function sell(s: GameState, dt: number = TICK_SECONDS): void {
     return;
   }
   const d = demand(s);
-  if (s.tasksSold < SMOOTH_SALES) {
-    s.saleFrac += Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
-    const due = Math.min(s.unbilled, Math.floor(s.saleFrac));
-    if (s.unbilled <= 0) s.saleFrac = Math.min(s.saleFrac, 1);
-    if (due <= 0) return;
-    s.saleFrac -= due;
-    bill(s, due);
-    return;
-  }
-  if (rng(s) >= d / 100) return;
-  if (s.unbilled <= 0) return;
-  const n = Math.min(s.unbilled, Math.floor(0.7 * Math.pow(d, 1.15)));
-  if (n <= 0) return;
-  bill(s, n);
+  s.saleFrac += Math.min(1, d / 100) * Math.floor(0.7 * Math.pow(d, 1.15));
+  const due = Math.min(s.unbilled, Math.floor(s.saleFrac));
+  if (s.unbilled <= 0) s.saleFrac = Math.min(s.saleFrac, 1);
+  if (due <= 0) return;
+  s.saleFrac -= due;
+  bill(s, due);
 }
 
 /** Every cent is kept: fractions of a cent accumulate (UP floors per sale; 485 tasks at $0.01 paid $0.38). */

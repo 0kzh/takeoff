@@ -1,6 +1,6 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, press, inPrologue } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
-import { effGpus, S2_FUNDS_SCALE, poweredGpus, s2Scale, G5_COMPUTE, G6_COMPUTE } from './infrastructure.js';
+import { effGpus, S2_FUNDS_SCALE, poweredGpus, s2Scale, G5_COMPUTE, G6_COMPUTE, ARRIVAL_GPUS } from './infrastructure.js';
 import { researchCap, researchRate, rentQuota, atRentQuota } from './economy.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
@@ -38,12 +38,12 @@ export const RELEASE_SECONDS = 5;
 
 /**
  * Stage 1's prologue (docs/specs/early-train.md): the first run trains Sage-1 itself on the first rented
- * GPUs, for a little money and power; deployed, each GPU starts running a copy of it.
+ * GPU, for a little money and power; deployed, each GPU starts running a copy of it.
  */
-export const PROLOGUE_FUNDS = 12;
-export const PROLOGUE_GPUS = 2;
+export const PROLOGUE_FUNDS = 4;
+export const PROLOGUE_GPUS = 1;
 /** kWh the prologue run draws from the power store. */
-export const PROLOGUE_POWER = 250;
+export const PROLOGUE_POWER = 100;
 export const PROLOGUE_SECONDS = 15;
 export const PROLOGUE_NAME = 'Sage-1';
 
@@ -100,24 +100,27 @@ export function researchFor(c: number, stage = 1): number {
 }
 
 /**
- * Stage 1's run price (stage1-round3-fixes.md §1): dollars only, `$290 × c^13` to two significant
- * figures — $290 / $1,300 / $5,300 / $23,000 / $100,000 at 1.00 / 1.12 / 1.25 / 1.40 / 1.57×. Research
- * buys cards and nothing else. The exponent is the spec's knob (its 11.5 came from a paper model): at
- * 11.5 the sim's bot ended at 18:20–20:20 and the first-timer at 21:30–22:20 (seeds 1–5), the late runs
- * being paid from a revenue the paper did not foresee. Above about 13 the fifth run would cost more
- * than the Stage 2 quote at the knee. With the Series A at $5,000 and First Datacenter at 200 s of the
- * best revenue, seeds 1–10 end at 20:13–21:41 for the bot and 22:14–24:00 for the first-timers.
+ * Stage 1's run price (stage1-round3-fixes.md §1): dollars only, `$75 × c^11` to two significant
+ * figures — about $75 / $270 / $870 / $3,300 / $11,000 at 1.00 / 1.12 / 1.25 / 1.41 / 1.58×. Research
+ * buys cards and nothing else. It was `$290 × c^13` ($290 / $1,300 / $5,300 / $23,000 / $100,000),
+ * priced for a first run at 5:41; with Train on screen from the first GPU that ladder made each model a
+ * wait of about three minutes. This one keeps the waits of the old opening (owner, 2026-10-04): the bot
+ * saves 1:26 / 0:50 / 1:19 / 1:40 / 1:16 for Sage-1.1 to 1.5 (they were 0:41 / 1:08 / 1:36 / 1:23 /
+ * 1:25) and buys First Datacenter at 14:37–17:22 (seeds 1–10). The owner set the first price: at $25
+ * Sage-1.1 waited 0:39 and shipped before the Research panel, at $100 1:34. A player who rents a GPU
+ * whenever one is affordable holds no price above about $30 and waits four to six minutes for Sage-1.1
+ * whatever it costs. The Seed round pays for Sage-1.3 whatever it costs up to about $4,900.
  */
-export const S1_RUN_BASE = 290;
-export const S1_RUN_EXPONENT = 13;
+export const S1_RUN_BASE = 75;
+export const S1_RUN_EXPONENT = 11;
 
 export function fundsFor(c: number): number {
   return twoSig(S1_RUN_BASE * Math.pow(Math.max(1, c), S1_RUN_EXPONENT));
 }
 
 /**
- * A Stage 2 run's dollar price, `fundsForS2` at the arrival's scale. From the knee (the wall run) the
- * Stage 1 row quotes it, so the figure does not move when the datacenter opens.
+ * A Stage 2 run's dollar price, `fundsForS2` at the arrival's scale. The first run on owned hardware
+ * does not pay it (`trainCost`).
  */
 export function stage2RunFunds(s: GameState, c: number): number {
   return Math.round(fundsForS2(c) * S2_FUNDS_SCALE * s2Scale(s));
@@ -310,14 +313,24 @@ export function trainCost(s: GameState): Cost {
   if (s.stage >= 4) return { research: generationCost(s) };
   if (inPrologue(s)) return { funds: PROLOGUE_FUNDS, power: PROLOGUE_POWER };
   const c = startCapability(s);
-  // Stage 1: money and GPUs; research buys cards only. From the knee a run is priced as Stage 2 prices
-  // it (a fifth run that lands past 1.6× still rents; the wall run is quoted at what the click charges).
-  if (s.stage < 2) return { funds: c < COST_KNEE ? fundsFor(c) : stage2RunFunds(s, c) };
+  // Stage 1: money and GPUs; research buys cards only. Every rented run is on the Stage 1 curve (a fifth
+  // that starts past 1.6× cost four times its neighbours'); the wall run asks for the datacenter and
+  // nothing else.
+  if (s.stage < 2) return c < S1_WALL ? { funds: fundsFor(c) } : {};
   // Stage 3: a run is a research program and nothing else (stage3.md §2.5): no money, no data.
   if (s.stage >= 3) return { research: researchForS3(c, runScaleS3(s)) };
+  // The run First Datacenter was bought for costs no dollars: the building's price was its price, and
+  // the arrival brings its research, so Train is lit the moment the datacenter stands (owner,
+  // 2026-10-04: at its Stage 2 price it waited two to four minutes on arrival's empty purse).
+  if (firstOwnedRun(s)) return { research: researchFor(c) };
   const cost: Cost = { research: researchFor(c), funds: stage2RunFunds(s, c) };
   if (s.flags['dataEra'] === true) cost.data = dataFor(c);
   return cost;
+}
+
+/** Stage 2 before any run has started in it: the next run is the one the datacenter was built for. */
+export function firstOwnedRun(s: GameState): boolean {
+  return s.stage === 2 && counter(s, 'runsS2') < 1;
 }
 
 /** GPUs the next run needs: the capability curve above, a third fewer with Distributed training (Stages 1–2). */
@@ -325,9 +338,14 @@ export function gpusNeeded(s: GameState): number {
   if (s.stage >= 4) return 0;
   if (inPrologue(s)) return PROLOGUE_GPUS;
   if (s.stage === 3) return gpusForS3(startCapability(s));
-  const n = s.stage === 1 ? gpusForS1(startCapability(s)) : gpusFor(startCapability(s));
+  const c = startCapability(s);
+  const n = s.stage === 1 ? gpusForS1(c) : gpusFor(c);
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
-  return mult > 1 ? twoSig(n / mult) : n;
+  const need = mult > 1 ? twoSig(n / mult) : n;
+  // The run at the wall fits the GPUs the datacenter comes with (a lab that arrived past 1.72× without
+  // Distributed training needed 1,100 and waited for a lot the empty build fund could not buy).
+  const built = s.stage === 1 ? c >= S1_WALL : firstOwnedRun(s);
+  return built ? Math.min(need, ARRIVAL_GPUS) : need;
 }
 
 /**
@@ -450,7 +468,10 @@ export function trainGpuLine(s: GameState): string {
   const need = gpusNeeded(s);
   if (need <= 0) return '';
   const have = gpusAvailable(s);
-  if (have >= need) return `Needs ${fmtInt(s.stage >= 2 ? twoSig(need / computePerGpu(s)) : need)} GPUs for ${fmtClock(trainingDuration(s))}`;
+  if (have >= need) {
+    const n = s.stage >= 2 ? twoSig(need / computePerGpu(s)) : need;
+    return `Needs ${fmtInt(n)} ${n === 1 ? 'GPU' : 'GPUs'} for ${fmtClock(trainingDuration(s))}`;
+  }
   if (s.stage < 2) {
     if (needsDatacenter(s)) return `Needs ${fmtInt(need)} GPUs. The cloud will rent ${fmtInt(rentQuota(s))}. Build the First Datacenter.`;
     if (atRentQuota(s) || need > rentQuota(s)) {
@@ -770,7 +791,7 @@ function startPrologueRun(s: GameState, cost: Cost): boolean {
     alignShare: s.alignShare,
     prologue: true,
   };
-  say(s, `Training ${PROLOGUE_NAME} on ${fmtInt(gpus)} GPUs.`);
+  say(s, `Training ${PROLOGUE_NAME} on ${fmtInt(gpus)} ${gpus === 1 ? 'GPU' : 'GPUs'}.`);
   return true;
 }
 
@@ -1171,7 +1192,7 @@ export function releaseChecked(s: GameState, run: TrainingRun): boolean {
 }
 
 /**
- * The release itself. Stages 1–2: the rollout takes `RELEASE_SECONDS` (the pressed button fills) and the
+ * The release itself. Stages 1–2: the rollout takes `RELEASE_SECONDS` (the panel shows its bar) and the
  * model ships when it ends; the red team stops where it is. Stage 3's Approve deploys at once.
  */
 export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): boolean {

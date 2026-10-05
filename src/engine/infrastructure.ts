@@ -22,7 +22,7 @@ export const S2_FUNDS_SCALE = 2.4;
  * built, the contracts' frozen rate; `arrivalIncomeS2` in engine/stages.ts) against the median exit's.
  * A weaker lab pays in proportion; a stronger one more by the square root only, keeping part of its
  * lead (Stage 3's rule for its runs); within 0.6–1.25. Frozen at the click (`flags.s2Scale`); in Stage
- * 1, live (estimated at most once a second), so the row can quote the Stage 2 price the click charges.
+ * 1, live (estimated at most once a second) for anything that quotes a Stage 2 price before the click.
  * Stage 1's best revenue, the measure before, missed a first-timer's income by a quarter either way.
  */
 export const S2_REF_INCOME = 3500;
@@ -60,6 +60,8 @@ export function s2(s: GameState, amount: number): number {
   return Math.round(amount * S2_FUNDS_SCALE * s2Scale(s));
 }
 
+/** The GPUs First Datacenter comes with; the run it was built for never asks for more. */
+export const ARRIVAL_GPUS = 1000;
 export const KW_PER_GPU = 1;
 export const SUBSTATION_MW = 5;
 export const GAS_MW = 20;

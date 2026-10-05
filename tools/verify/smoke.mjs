@@ -9,14 +9,15 @@
  * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
- * first purchase; no yield wording; the Train row's GPU shortfall; numeric-token counts at minutes
- * 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
- * width at every fill; no horizontal overflow at 390 px. Round 3 (stage1-round3-fixes.md, the wallet
- * rule): the Train row costs money only and arms when short; each event's default listed first; no
- * `… first` hold anywhere. Owner feedback 2 (the core screen reads as it did at a2117b5): no delay
- * printed beside a purchase; First Datacenter a plain card before and at the wall; `Power [bar] 968
- * kWh` and `GPUs rented [bar] 61 / 80`; three plain Focus buttons and one note line; the Train row's
- * bar a whole bar when it shows.
+ * first purchase; no yield wording; the Train row's line at the cloud's limit; numeric-token counts at
+ * minutes 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
+ * width at every fill; no horizontal overflow at 390 px. The Train row (a plain purchase since the
+ * prologue, docs/specs/early-train.md): prices only under `Resources needed`, each named by its unit
+ * with a whole bar; grey while short of its price, never armed; no research price in Stage 1. Round 3
+ * (stage1-round3-fixes.md): each event's default listed first; no `… first` hold anywhere. Owner
+ * feedback 2 (the core screen reads as it did at a2117b5): no delay printed beside a purchase; First
+ * Datacenter a plain card before and at the wall; `Power [bar] 968 kWh` and `GPUs rented [bar] 61 / 80`;
+ * three plain Focus buttons and one note line.
  * Screenshots go to agent-tools/shots/stage1/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
@@ -119,15 +120,19 @@ const SNAPSHOT = () => {
     releases: s.stats.publicReleases,
     trainings: s.stats.trainings,
     gpus: s.gpus,
-    // Owner feedback 1: no yield anywhere; the Train row names the GPU shortfall and its fix.
+    // Owner feedback 1: no yield anywhere. A GPU shortfall is the GPUs price's bar; at the cloud's limit
+    // one line under the prices names what lifts it.
     banned: /undertrained|Train now/i.test(text),
-    trainShort: vis(document.getElementById('trainGpuMeter')) ? document.getElementById('trainGpus').innerText : '',
-    // The Train row's bar, when shown, is a bar: the width of the others, with a fill as tall as its track.
+    trainShort: vis(document.getElementById('trainGpuLine')) ? document.getElementById('trainGpus').innerText.trim() : '',
+    // The Train row's price bars, when shown, are bars: one width, each fill as tall as its track.
     trainMeter: (() => {
-      const m = document.getElementById('trainGpuMeter');
-      const fill = m.querySelector('.meterFill');
-      if (!vis(m) || !fill) return null;
-      return { w: Math.round(m.getBoundingClientRect().width), fillH: Math.round(fill.getBoundingClientRect().height), other: Math.round(document.getElementById('powerMeter').getBoundingClientRect().width) };
+      const bars = [...document.querySelectorAll('#trainCosts .costRow .progress')].filter(vis);
+      if (!bars.length) return null;
+      return {
+        widths: bars.map((b) => Math.round(b.getBoundingClientRect().width)),
+        trackH: Math.round(bars[0].clientHeight),
+        fillH: Math.min(...bars.map((b) => Math.round(b.querySelector('.progressFill').getBoundingClientRect().height))),
+      };
     })(),
     // G3 as amended: a greyed purchase on screen; in the first three minutes the next GPU or power block counts lit.
     greyed: buttons.some((b) => b.disabled && /^(btn-|proj-)/.test(b.id) && !/^btn-(task|lowerPrice|raisePrice)$/.test(b.id)),
@@ -138,10 +143,17 @@ const SNAPSHOT = () => {
     train: (() => {
       const b = document.getElementById('btn-train');
       if (!vis(b)) return null;
+      // One line a price, named by its unit (`$75`, `100 kWh`, `10 GPUs`); what the lab holds is in the hover.
+      const prices = ['funds', 'research', 'data', 'power', 'gpus']
+        .filter((k) => vis(document.getElementById(`costRow-${k}`)))
+        .map((k) => ({ key: k, text: document.getElementById(`costText-${k}`).innerText.trim(), fill: document.getElementById(`costBar-${k}`).getBoundingClientRect().width / document.getElementById(`costBar-${k}`).parentElement.clientWidth }));
+      const funds = prices.find((p) => p.key === 'funds');
       return {
         enabled: !b.disabled, armed: b.classList.contains('armed'), label: b.innerText.trim(),
-        cost: document.getElementById('trainCost').innerText, reason: document.getElementById('trainReason').innerText,
-        short: s.funds < (window.__game.state.stage === 1 ? Number(document.getElementById('trainCost').innerText.replace(/[^0-9.]/g, '')) : 0),
+        head: document.getElementById('trainCosts').innerText.trim().split('\n')[0].trim(),
+        prices,
+        cost: prices.map((p) => p.text).join(', '),
+        short: !!funds && s.funds < Number(funds.text.replace(/[^0-9.]/g, '')),
       };
     })(),
     delays: (text.match(/· (?:Sage-\d+(?:\.\d+)?|First Datacenter|next run) (?:\d+:\d\d|much) later/g) ?? []),
@@ -208,9 +220,10 @@ try {
       const want = look(run.parentElement, run);
       const fillOf = (bar, cls) => bar.querySelector(`.${cls}`) ?? bar.appendChild(Object.assign(document.createElement('span'), { className: cls, probe: true }));
       const off = [];
-      const all = [...document.querySelectorAll('.benchBar, .meter')];
+      // The Train row's price bars took the place of its GPU meter: five of them, one a price.
+      const all = [...document.querySelectorAll('.benchBar, .meter, .costRow .progress')];
       for (const bar of all) {
-        const fill = fillOf(bar, bar.classList.contains('meter') ? 'meterFill' : 'benchFill');
+        const fill = fillOf(bar, bar.classList.contains('meter') ? 'meterFill' : bar.classList.contains('progress') ? 'progressFill' : 'benchFill');
         const got = look(bar, fill);
         if (got !== want) off.push(`${bar.id || bar.parentElement.id}: ${got}`);
         if (fill.probe) fill.remove();
@@ -229,7 +242,7 @@ try {
       probe.remove();
       return { want, count: all.length, off, widths };
     });
-    check('every meter and eval bar is the training bar (border, track, height, fill)', bars.count >= 17 && bars.off.length === 0,
+    check('every meter, eval bar and price bar is the training bar (border, track, height, fill)', bars.count >= 21 && bars.off.length === 0,
       bars.off.length ? bars.off.join(' | ') : `${bars.count} bars: ${bars.want}`);
     const spread = Math.max(...bars.widths) - Math.min(...bars.widths);
     check('the meter is one width at every fill (0–100 %)', spread <= 1 && bars.widths[0] > 0, `${bars.widths.map((w) => w.toFixed(1)).join(' / ')} px`);
@@ -259,8 +272,8 @@ try {
     `1.5/s ${firstGpu[1.5] ?? '—'} s · 2/s ${firstGpu[2] ?? '—'} s · 4/s ${firstGpu[4] ?? '—'} s`);
   // A steady player for five minutes (the spec's paper player): two clicks a second; a GPU whenever
   // one is affordable and power is not about to run out; power under a third of a block; the price
-  // moved a few seconds after reading the line (down while the pile grows, up while every task
-  // sells); Marketing, researchers and project cards when affordable. Counts and a screenshot at six marks.
+  // moved a few seconds after reading the line (down while it says `backlog growing`, up while it says
+  // `selling out`); Marketing, researchers and project cards when affordable. Counts and a screenshot at six marks.
   const opening = {};
   {
     const { context, page } = await freshPage('opening');
@@ -293,8 +306,8 @@ try {
             if (k === 9) {
               // Once a second: the price, read from the line on screen.
               const line = el('billingLine').checkVisibility() ? el('billingLine').innerText : '';
-              p.grow = /pile up/.test(line) && s.unbilled > p.prev ? p.grow + 1 : 0;
-              p.sells = /Every task sells/.test(line) ? p.sells + 1 : 0;
+              p.grow = /backlog growing/.test(line) && s.unbilled > p.prev ? p.grow + 1 : 0;
+              p.sells = /selling out/.test(line) ? p.sells + 1 : 0;
               p.prev = s.unbilled;
               const now = s.stats.timePlayed;
               if (now - p.lastMove >= 5) {
@@ -323,13 +336,18 @@ try {
     await context.close();
   }
   // The prologue (docs/specs/early-train.md): the first GPU brings the Power panel and the Train row
-  // together (`Power 1,000 kWh`, `Train Sage-1  Cost: $12, 250 kWh`, `Needs 2 GPUs. 1 rented. Rent 1
-  // more.`), so from 0:30 the screen carries those seven numbers and one control more than the old
-  // opening's table (4 / 2 at 0:30); Sage-1.1 trains before 5:00, so 5:00 is a run further along.
-  const targets = { 0: [1, 1], 30: [11, 3], 60: [11, 3], 120: [13, 5], 180: [17, 7], 300: [26, 10] };
+  // together (`Power 1,000 kWh`, `Train Sage-1`, `Resources needed`: `$4`, `100 kWh`, `1 GPU`). Sage-1
+  // costs one GPU and $4, so this player is training it at 0:30 and has deployed it before 1:00; every
+  // later beat then lands sooner than in the spec's table (its player waited for two GPUs and $12): the
+  // price by 1:00, Buy Power and Marketing by 2:00, Research by 3:00, five cards by 5:00 (the Grid
+  // Contract comes later, at the tenth Buy Power). This player rents a GPU whenever it can and never
+  // saves the $75 for Sage-1.1, so 5:00 is still the idle Train row. Limits are what the built opening measures (seeds 1–6: the same to 3:00,
+  // 31–32 numbers and 14–15 controls at 5:00), not a budget the owner has set: see the reveal-order and
+  // G5 checks below for one mechanic a beat.
+  const targets = { 0: [1, 1], 30: [7, 2], 60: [13, 5], 120: [16, 7], 180: [21, 8], 300: [32, 15] };
   const slack = {};
   const openingRow = Object.entries(opening).map(([m, c]) => `${clock(Number(m))} ${c.numbers}/${c.controls}`).join(' · ');
-  check('opening: numbers ≤ 1 / 11 / 11 / 13 / 17 / 26 and controls ≤ 1 / 3 / 3 / 5 / 7 / 10 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
+  check('opening: numbers ≤ 1 / 7 / 13 / 16 / 21 / 32 and controls ≤ 1 / 2 / 5 / 7 / 8 / 15 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
     Object.entries(targets).every(([m, [n, c]]) => opening[m] && opening[m].numbers <= n + (slack[m] ?? 0) && opening[m].controls <= c), openingRow);
 
   // ===== 2. A full Stage 1 under autoplay =====
@@ -353,7 +371,7 @@ try {
   const trainMeters = [];
   const trainRows = new Set();
   // Round 3's observations (stage1-round3-fixes.md §1–§4 and the wallet rule).
-  const r3 = { armed: null, clicked: null, delay: null, dcBefore: null, dcWall: null, powerRow: null, powerOf: null, quotaRow: null, focusFirst: null, focusRows: new Set(), events: new Map(), heldAt: null };
+  const r3 = { armed: null, shortSeen: null, head: null, delay: null, dcBefore: null, dcWall: null, powerRow: null, powerOf: null, quotaRow: null, focusFirst: null, focusRows: new Set(), events: new Map(), heldAt: null };
   let firstPurchase = null;
   const goal = { ticks: 0, ok: 0, misses: [] };
   const shotsAt = { 1: '02-minute1', 3: '03-minute3', 5: '04-minute5', 10: '05-minute10', 20: '07-minute20' };
@@ -374,21 +392,11 @@ try {
     if (snap.stage === 1 && snap.trainMeter) trainMeters.push(snap.trainMeter);
     if (snap.stage === 1) {
       if (snap.train) {
-        trainRows.add(`${snap.train.cost} | ${snap.train.reason}`);
-        if (snap.train.armed && !r3.armed) r3.armed = { t: snap.t, ...snap.train };
-        // A policy that waits to afford its runs never arms: press Train once while it is lit and
-        // short, read the row, and press again to stand down (arc G34 rule 4).
-        if (!r3.armed && !r3.clicked && snap.train.enabled && snap.train.short && !snap.train.armed) {
-          r3.clicked = await page.evaluate(() => {
-            const b = document.getElementById('btn-train');
-            b.click();
-            const on = { armed: b.classList.contains('armed'), enabled: !b.disabled, reason: document.getElementById('trainReason').innerText };
-            b.click();
-            return { ...on, stoodDown: !b.classList.contains('armed') };
-          });
-          r3.clicked.t = snap.t;
-          if (r3.clicked.armed && r3.clicked.stoodDown) r3.armed = { t: snap.t, label: snap.train.label, cost: snap.train.cost, enabled: r3.clicked.enabled, reason: r3.clicked.reason };
-        }
+        trainRows.add(snap.train.cost);
+        if (snap.train.head !== 'Resources needed' && !r3.head) r3.head = { t: snap.t, head: snap.train.head };
+        // Train is a plain purchase (owner's playtest notes): grey while short of its price, never armed.
+        if (snap.train.short) r3.shortSeen ??= { t: snap.t, label: snap.train.label, cost: snap.train.cost };
+        if ((snap.train.armed || (snap.train.short && snap.train.enabled)) && !r3.armed) r3.armed = { t: snap.t, ...snap.train };
       }
       if (snap.delays.length && !r3.delay) r3.delay = { t: snap.t, text: snap.delays[0] };
       if (snap.dc && !snap.dc.wall && !r3.dcBefore) r3.dcBefore = { t: snap.t, ...snap.dc };
@@ -529,7 +537,7 @@ try {
     at('rivalLine') !== Infinity && at('rivalLine') >= at('focusRow') + 20 && Math.abs(at('rivalLine') - at('modal:A Rival Lab')) <= STEP_MS / 1000,
     `model lines ${clock(at('modelName'))}, focus ${clock(at('focusRow'))}, Anthrosoft ${at('rivalLine') === Infinity ? 'never' : clock(at('rivalLine'))}, dialog ${at('modal:A Rival Lab') === Infinity ? 'never' : clock(at('modal:A Rival Lab'))}`);
   // Deploying Sage-1 turns the Train row into the full panel (`Current model: Sage-1`,
-  // `Train Sage-1.1  Cost: $290`, its GPU line): checked on its own as well.
+  // `Train Sage-1.1  Cost: $75`, its GPU line): checked on its own as well.
   const deployBeat = beats.find((b) => b.t === at('modelName'));
   check('the deploy beat redraws the Training panel and adds no control', !!deployBeat && deployBeat.newButtons.length === 0 && deployBeat.dNumbers <= 6,
     deployBeat ? `${clock(deployBeat.t)}: +${deployBeat.dNumbers} numbers` : 'not seen');
@@ -544,31 +552,46 @@ try {
   check('no later beat adds more than 3 interactive elements', lb.newButtons.length <= 3, `max ${lb.newButtons.length} at ${clock(lb.t)} (${lb.newButtons.join(', ')})`);
   const ln = worst(late, 'd');
   check('no later beat adds more than ~8 numbers', ln.dNumbers <= 8, `max +${ln.dNumbers} at ${clock(ln.t)}`);
-  // Beats 4–8 (power, Buy Power, the price, Marketing, Research) at least 30 s apart (2-s snapshots).
+  // The opening's beats (power, Buy Power, the price, Marketing, Research) at least 30 s apart (2-s
+  // snapshots). Power comes first; the price, Marketing and Research follow in that order. Buy Power
+  // waits for the store to fall to 800 kWh and the price for the deploy (engine/stages.ts), so either
+  // may come first: the prologue run draws 100 kWh, and the price usually wins.
   const beatIds = ['panel-power', 'btn-buyPower', 'btn-lowerPrice', 'btn-marketing', 'panel-research'];
   const beatTimes = beatIds.map(at);
-  const spaced = beatTimes.every((x, i) => x !== Infinity && (i === 0 || x - beatTimes[i - 1] >= 28));
-  check('opening beats 4–8 arrive in order, ≥ 30 s apart', spaced, beatIds.map((id, i) => `${id.replace(/^(panel|btn)-/, '')} ${beatTimes[i] === Infinity ? '—' : clock(beatTimes[i])}`).join(', '));
+  const sortedBeats = [...beatTimes].sort((x, y) => x - y);
+  const chain = ['panel-power', 'btn-lowerPrice', 'btn-marketing', 'panel-research'].map(at);
+  const spaced = beatTimes.every((x) => x !== Infinity) && sortedBeats.every((x, i) => i === 0 || x - sortedBeats[i - 1] >= 28) &&
+    chain.every((x, i) => i === 0 || x > chain[i - 1]) && at('btn-buyPower') > at('panel-power');
+  check('opening beats arrive ≥ 30 s apart: power first, then the price → Marketing → Research, with Buy Power among them', spaced, beatIds.map((id, i) => `${id.replace(/^(panel|btn)-/, '')} ${beatTimes[i] === Infinity ? '—' : clock(beatTimes[i])}`).join(', '));
   check('no "undertrained" and no "Train now" anywhere on screen', bannedAt === null, bannedAt === null ? '' : `seen at ${clock(bannedAt)}`);
+  // The GPUs are a price with a bar (`10 GPUs`); the line under the prices is only for the cloud's limit,
+  // which a bar cannot explain.
   const lines = [...shortLines];
-  const okLine = (l) => /^Needs [\d,]+ GPUs\. [\d,]+ rented\. Rent [\d,]+ more\.$/.test(l) ||
-    /^Needs [\d,]+ GPUs\. The cloud rents [\d,]+\.( .+ adds 20\.)?$/.test(l) ||
-    /^Needs [\d,]+ GPUs\. The cloud will rent [\d,]+\. Build the First Datacenter\.$/.test(l);
-  // A first-timer may never come up short: it rents as it goes, and the test breaks ground before the wall.
-  check('a Train short of GPUs names the shortfall and its fix', (lines.length > 0 || POLICY !== 'bot') && lines.every(okLine),
-    lines.length ? lines.slice(0, 4).join(' | ') : 'never short in this run');
-  check('the Train row\'s bar is a whole bar when it shows (the width of the power bar, a fill as tall as its track)',
-    (trainMeters.length > 0 || POLICY !== 'bot') && trainMeters.every((m) => m.w === m.other && m.fillH >= 10),
-    trainMeters.length ? `${trainMeters[0].w} px wide (power bar ${trainMeters[0].other} px), fill ${trainMeters[0].fillH} px tall` : 'never shown');
+  const okLine = (l) => /^The cloud rents [\d,]+\.( .+ adds 20\.)?$/.test(l) ||
+    /^The cloud will rent [\d,]+\. Build the First Datacenter\.$/.test(l);
+  // A first-timer may never reach the cloud's limit: the test breaks ground before the wall.
+  check('a Train the cloud cannot rent enough GPUs for names the limit and what lifts it', (lines.length > 0 || POLICY !== 'bot') && lines.every(okLine),
+    lines.length ? lines.slice(0, 4).join(' | ') : 'never at the limit in this run');
+  const barsOk = (m) => m.widths.every((w) => w === m.widths[0]) && m.widths[0] > 0 && m.fillH >= 10 && m.fillH === m.trackH;
+  const badBar = trainMeters.find((m) => !barsOk(m));
+  check('the Train row\'s price bars are whole bars (one width, each fill as tall as its track)',
+    trainMeters.length > 0 && !badBar,
+    badBar ? `widths ${badBar.widths.join(' / ')} px, fill ${badBar.fillH} px in a ${badBar.trackH} px track`
+      : trainMeters.length ? `${trainMeters[0].widths[0]} px wide, fill ${trainMeters[0].fillH} px tall` : 'never shown');
 
-  // ----- round 3: a run costs money and GPUs; the wallet rule (stage1-round3-fixes.md §1–§4) -----
+  // ----- round 3: a run costs money and GPUs (stage1-round3-fixes.md §1–§4); Train is a plain purchase -----
   const rows = [...trainRows];
-  check('the Stage 1 Train row costs money only (no research line, no research price)', rows.length > 0 && rows.every((r) => !/research/i.test(r)),
+  check('the Stage 1 Train row has no research price', rows.length > 0 && rows.every((r) => !/research/i.test(r)),
     rows.slice(0, 3).join(' || '));
-  const a = r3.armed;
-  check('Train short of money is lit and arms: `starts when paid for — about m:ss`',
-    !!a && a.enabled && /^starts when paid for( — about \d+:\d\d)?$/.test(a.reason) && /^\$[\d,]+(, [\d,]+ kWh)?$/.test(a.cost),
-    a ? `${clock(a.t)} ${a.label}: ${a.cost} · ${a.reason}` : 'never armed');
+  const okPrices = (r) => /^\$[\d,.]+(, [\d,]+ kWh)?, (1 GPU|(?!1 )[\d,]+ GPUs)$/.test(r);
+  const badRow = rows.find((r) => !okPrices(r));
+  check('the Train row lists prices only, each named by its unit (`$75` · `100 kWh` · `10 GPUs`, one GPU as `1 GPU`), under `Resources needed`',
+    rows.length > 0 && !badRow && !r3.head,
+    badRow ? `"${badRow}"` : r3.head ? `${clock(r3.head.t)} headed "${r3.head.head}"` : rows.slice(0, 3).join(' || '));
+  check('Train is a plain purchase: grey while short of its price, never armed',
+    !r3.armed && (!!r3.shortSeen || POLICY !== 'bot'),
+    r3.armed ? `${clock(r3.armed.t)} ${r3.armed.label}: ${r3.armed.cost} lit or armed while short`
+      : r3.shortSeen ? `${clock(r3.shortSeen.t)} ${r3.shortSeen.label} grey at ${r3.shortSeen.cost}` : 'never short in this run');
   // Owner feedback 2: the core screen reads as it did at a2117b5.
   check('no purchase prints a delay beside it (no `· Sage-1.x 0:41 later` anywhere)', !r3.delay,
     r3.delay ? `${clock(r3.delay.t)} ${r3.delay.text}` : '');

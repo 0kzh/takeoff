@@ -41,8 +41,7 @@ code win).
 
 ```sh
 npm install          # TypeScript is the only dependency
-npm run dev          # build once, then serve on http://127.0.0.1:8731/
-npm run watch        # in a second terminal: recompile on save
+npm run dev          # serve on http://127.0.0.1:8731/, recompile on save and reload the page
 ```
 
 | Script | What it does |
@@ -50,7 +49,7 @@ npm run watch        # in a second terminal: recompile on save
 | `npm run build` | `tsc`: compiles `src/` to `dist/` (ES2022 modules, no bundler) |
 | `npm run watch` | `tsc --watch` |
 | `npm run serve` | zero-dependency static server (`scripts/serve.mjs`) on port 8731, `Cache-Control: no-store` |
-| `npm run dev` | build, then serve |
+| `npm run dev` | `tsc --watch` plus the server with live reload: a change under `src/` or to `index.html` reloads the page (the save survives it), a change to `styles.css` swaps the sheet in place |
 | `npm run sim -- --minutes 45 --seed 1` | build, then run the headless simulator |
 | `node tools/verify/smoke.mjs` | Stage 1 browser smoke test (after `npm run build`; needs `npm install` in `tools/`) |
 | `node tools/verify/smoke-stage2.mjs` | Stage 2 browser smoke test, from the Stage 2 preset through the Stage 3 arrival |
@@ -177,8 +176,9 @@ holds), `ignoresCap` (Stage 2's G6 pre-order), `chain` (the next step of a serie
 there is room); Stage 1 `sideline` offers drip in but never fill the cap. A card never appears
 within 4 s of a modal opening, nor a modal within 4 s of anything new (`BEAT_GAP_SECONDS`). Stage 1
 projects mostly cost research or insight, as Paperclips' cost operations; money is for compute,
-marketing, training and First Datacenter. A Stage 1 run costs dollars only (`$290 × c^13`, two
-figures: $290 / $1,300 / $5,300 / $23,000 / $100,000) and needs its GPUs; research buys cards. Train,
+marketing, training and First Datacenter. A Stage 1 run costs dollars only (`$75 × c^11`, two figures:
+about $75 / $270 / $870 / $3,300 / $11,000) and needs its GPUs; research buys
+cards. Train,
 pressed short of money, arms (`starts when paid for — about 0:44`). A card is its title, its price
 and its sentence and nothing else: what a greyed one waits on is in its hover (`needs a lab that
 holds 2,000 — Expand Lab`; on First Datacenter, the GPUs the next model needs against what the

@@ -8,7 +8,7 @@ import { GRID_MW, researchCap, potentialTasksPerSec, contractRateStage1, contrac
 import { withdrawProject } from './reveal.js';
 import { trainCost, atPlateau, nextRunName, arrivalRunScale, researchFor, MAJOR_TIERS, cardWallSeconds } from './training.js';
 import { calibrateMarket, autoTarget, wantedAt } from './market.js';
-import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES, setArrivalIncomeEstimator } from './infrastructure.js';
+import { SUBSTATION_MW, lotCostOf, arrivalScaleS2, lotSizes, LOT_SIZES, setArrivalIncomeEstimator, ARRIVAL_GPUS } from './infrastructure.js';
 import { fireCrisis, openChoice } from './events.js';
 import { buyProject, isVisible } from './projects.js';
 import { researchWanted } from './tick.js';
@@ -131,10 +131,11 @@ function enterScale(s: GameState): void {
     s.labSpace += 1;
     roomAdded = true;
   }
-  // The new site's evaluation cluster: most of the next run's research is done on arrival, so the
-  // first run on owned hardware does not wait out minutes of research (owner feedback U3).
+  // The new site's evaluation cluster: the next run's research is done on arrival, so the first run
+  // on owned hardware can start at once (owner feedback U3, and 2026-10-04: three quarters of it left
+  // half a minute of waiting, and the run's dollars two to four more).
   const firstRun = trainCost(s).research ?? 0;
-  const researchGift = Math.max(0, Math.round(0.75 * firstRun - s.research));
+  const researchGift = Math.max(0, Math.round(firstRun - s.research));
   s.research += researchGift;
 
   // The rented fleet's worth came off the card's price, so nothing is paid out here; the build fund
@@ -146,7 +147,7 @@ function enterScale(s: GameState): void {
   // size the lab; Trust buys only what names it.
   hide(s, ['hireResearcher', 'expandLab']);
   s.revealed['hireFaded'] = true;
-  s.gpus = 1000;
+  s.gpus = ARRIVAL_GPUS;
   s.gpusG5 = 0;
   const jump = Math.max(1, Math.round(potentialTasksPerSec(s) / before));
   s.cadence.lastRevealAt = now;
@@ -169,18 +170,18 @@ function enterScale(s: GameState): void {
   logNews(s, 'Marketing ends; the market cards widen the market now.');
   logNews(s, 'Hiring stops. The copies do the research; cards size the lab.');
   // What a run costs changes here, and is said once the arrival's lines have had their 10 s (arc
-  // amendments, round 3; critic S2 round 2 §8.8.9: the price changed on screen with no line).
-  const cost = trainCost(s);
+  // amendments, round 3; critic S2 round 2 §8.8.9: the price changed on screen with no line). It
+  // follows them directly: Train is lit from the first second, and its own lines queue behind this one.
   s.consoleQueue.splice(lines.length + 1, 0, {
-    delay: 18,
-    text: `Runs this size need research as well as money: ${fmtInt(cost.research ?? 0)} research and ${fmtMoneyShort(cost.funds ?? 0)} for ${nextRunName(s)}.`,
+    delay: 2,
+    text: `The datacenter's price covered ${nextRunName(s)}. Later runs this size need research as well as money.`,
   });
   if (contracts > 0) {
     logNews(s, `No new custom contracts. The ${fmtInt(contracts)} signed keep paying ${fmtMoneyShort(Math.round(s.contractIncome))} a second.`);
   }
   if (retired.length) logNews(s, `Retired with the rented fleet: ${retired.join(', ')}.`);
   if (roomAdded) logNews(s, 'The new site has room for a bigger lab.');
-  if (researchGift > 0) logNews(s, 'The new site\'s first experiments come back: most of the next run\'s research is done.');
+  if (researchGift > 0) logNews(s, 'The new site\'s first experiments come back: the next run\'s research is done.');
 }
 
 /** Projects Stage 3 grants for free when a player arrives without them (stage3.md §1.1). */

@@ -352,8 +352,6 @@ div.storeRow[data-reveal].shown { display: flex; }
 .reason { color: #555; font-size: 13px; font-style: italic; }
 #interconnectLine { display: none; margin: 2px 0 3px; }
 #interconnectLine.shown { display: block; }
-#unbilledLine { display: inline; }
-#unbilledLine.off { display: none; }
 .toggle.on { background: linear-gradient(#bbb, #fff); border: 1px solid #000; font-weight: bold; }
 .hasTip { cursor: help; }
 #allocSlider { width: 110px; vertical-align: middle; margin: 0 2px; }

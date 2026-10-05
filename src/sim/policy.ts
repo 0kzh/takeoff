@@ -318,7 +318,7 @@ function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   // The first automation is bought the moment it is affordable, reserve or not.
   if (s.gpus === 0 && s.revealed['compute'] && s.funds >= gpuCost(s)) a.rentGpu(s);
   // The prologue (docs/specs/early-train.md): every player presses Train Sage-1 once it can be pressed
-  // (it arms while short of $12), and rents the second GPU it needs; Deploy is the Release below.
+  // (it arms while short of $4), and rents any GPU it is short of; Deploy is the Release below.
   if (inPrologue(s) && s.revealed['training']) {
     if (canPressTrain(s) && !s.training.armed) a.startTraining(s);
     else if (gpusShort(s) && !s.training.run && s.funds >= gpuCost(s)) a.rentGpu(s);
