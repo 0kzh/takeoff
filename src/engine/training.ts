@@ -1177,7 +1177,8 @@ export function releaseChecked(s: GameState, run: TrainingRun): boolean {
 export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): boolean {
   const t = s.training;
   if (t.run !== run || t.releasing) return false;
-  if (s.stage >= 3) return finishRelease(s, run, isPublic);
+  // Sage-1's Deploy and Stage 3's Approve take effect at the press.
+  if (s.stage >= 3 || run.prologue) return finishRelease(s, run, isPublic);
   t.releasing = { remaining: RELEASE_SECONDS, isPublic };
   t.redTeamRemaining = 0;
   return true;
