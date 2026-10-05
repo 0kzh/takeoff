@@ -1,27 +1,18 @@
-import { GameState, Cost, canPay, isBought, addFunds, say, counter, buildFundOpen, DEFAULT_BUILD_SHARE } from '../engine/state.js';
-import { enterStage, STUCK } from '../engine/stages.js';
+import { GameState, Cost, canPay, isBought, addFunds, counter } from '../engine/state.js';
+import { STUCK } from '../engine/stages.js';
+import { forceEnding } from '../engine/endings.js';
+import { researchCap, gpuCost, fleetPowerBlock, researchRate, nextContractWeight, rentQuota } from '../engine/economy.js';
 import {
-  researchCap, gpuCost, fleetPowerBlock, bestCapability, researchRate, nextContractWeight,
-  rentQuota,
-} from '../engine/economy.js';
-import {
-  atPlateau, plateauSeconds, trainCost, researchFor, startCapability, gpusShort, needsDatacenter, cardWallSeconds, gpusForS1,
+  startCapability, gpusShort, needsDatacenter, cardWallSeconds, gpusForS1,
   gpusNeeded, MAX_RENT_QUOTA,
 } from '../engine/training.js';
-import { monthOf, fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { s2, applyBehindTheMeter, gpuCapacity } from '../engine/infrastructure.js';
-import { moveGov, moveLead, dataShort, dataWall, dataShortSeconds, capWall, dataNotInHand } from '../engine/world.js';
-import { stage3Projects, granted } from './projects3.js';
-import { stage4Projects } from './projects4.js';
-import { stage5Projects } from './projects5.js';
-import { minedPerSec } from '../engine/fleet.js';
+import { monthOf, fmtMoneyShort } from '../engine/format.js';
 
 export interface ProjectDef {
   id: string;
   title: string;
   priceTag?: string | ((s: GameState) => string);
   description: string;
-  stages: number[];
   cost: (s: GameState) => Cost;
   trigger: (s: GameState) => boolean;
   canAfford: (s: GameState) => boolean;
@@ -34,44 +25,29 @@ export interface ProjectDef {
   chain?: boolean;
   expires?: (s: GameState) => boolean;
   sideline?: boolean;
-  ignoresCap?: boolean;
-  late?: boolean;
-  prereq?: (s: GameState) => boolean;
   onShow?: (s: GameState) => void;
   revealFunds?: number;
   revealResearch?: number;
-  revealMaterials?: number;
   repeatable?: boolean;
   consoleMsg?: string;
   logMsg?: string;
-  grant?: boolean;
-  lateAt?: number;
-  instrument?: boolean;
-  needs?: (s: GameState) => string;
-  revealMatter?: number;
-  mission?: { seconds: number; beside?: boolean; complete: (s: GameState) => void };
 }
 
-export type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> & {
+export type ProjectInput = Omit<ProjectDef, 'canAfford' | 'uses' | 'cost'> & {
   cost: Cost | ((s: GameState) => Cost);
-} & Partial<Pick<ProjectDef, 'canAfford' | 'stages' | 'uses'>>;
+} & Partial<Pick<ProjectDef, 'canAfford' | 'uses'>>;
 
 export function project(def: ProjectInput): ProjectDef {
   const base = typeof def.cost === 'function' ? def.cost : ((c: Cost) => () => c)(def.cost);
   const secs = def.revealFunds;
   const rsecs = def.revealResearch;
-  const msecs = def.revealMaterials;
-  const fsecs = def.revealMatter;
-  const stage1 = (def.stages ?? [1]).includes(1);
-  const fixed = secs === undefined && rsecs === undefined && msecs === undefined && fsecs === undefined;
+  const fixed = secs === undefined && rsecs === undefined;
   const cost = fixed ? base : (s: GameState): Cost => {
     const c = base(s);
     const out: Cost = { ...c };
-    if (msecs !== undefined) out.materials = Math.max(c.materials ?? 0, revealMaterialsPrice(s, def.id, msecs));
-    if (fsecs !== undefined) out.fund = Math.max(c.fund ?? 0, revealMatterPrice(s, def.id, fsecs));
     if (secs !== undefined) {
       const floor = revealPrice(s, def.id, secs);
-      out.funds = Math.max(c.funds ?? 0, stage1 && s.stage === 1 && c.funds ? Math.min(floor, 4 * c.funds) : floor);
+      out.funds = Math.max(c.funds ?? 0, c.funds ? Math.min(floor, 4 * c.funds) : floor);
     }
     if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
     return out;
@@ -79,46 +55,27 @@ export function project(def: ProjectInput): ProjectDef {
   const onShow = fixed ? def.onShow : (s: GameState) => {
     if (secs !== undefined) s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
     if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
-    if (msecs !== undefined) s.flags[`mprice:${def.id}`] = revealMaterialsPrice(s, def.id, msecs);
-    if (fsecs !== undefined) s.flags[`fprice:${def.id}`] = revealMatterPrice(s, def.id, fsecs);
     def.onShow?.(s);
   };
-  const gated = !!def.prereq && (def.stages ?? [1]).some((x) => x >= 3);
   return {
-    stages: [1],
     uses: 1,
-    canAfford: (s) => (!gated || s.stage < 3 || def.prereq!(s)) && canPay(s, cost(s)),
+    canAfford: (s) => canPay(s, cost(s)),
     ...def,
     cost,
     onShow,
   };
 }
 
-export const S2_CARD_FLOOR = 0.7;
-
 export function revealPrice(s: GameState, id: string, seconds: number): number {
   const fixed = s.flags[`price:${id}`];
   if (typeof fixed === 'number') return fixed;
-  const toFunds = s.stage === 2 && buildFundOpen(s) ? S2_CARD_FLOOR * (1 - DEFAULT_BUILD_SHARE) : 1;
-  return twoFigures(seconds * Math.max(1, s.stats.revPerSec * toFunds));
+  return twoFigures(seconds * Math.max(1, s.stats.revPerSec));
 }
 
 export function revealResearchPrice(s: GameState, id: string, seconds: number): number {
   const fixed = s.flags[`rprice:${id}`];
   if (typeof fixed === 'number') return fixed;
   return Math.min(twoFigures(seconds * Math.max(1, researchRate(s))), Math.floor((0.85 * researchCap(s)) / 100) * 100);
-}
-
-export function revealMaterialsPrice(s: GameState, id: string, seconds: number): number {
-  const fixed = s.flags[`mprice:${id}`];
-  if (typeof fixed === 'number') return fixed;
-  return twoFigures(seconds * Math.max(1, minedPerSec(s)));
-}
-
-export function revealMatterPrice(s: GameState, id: string, seconds: number): number {
-  const fixed = s.flags[`fprice:${id}`];
-  if (typeof fixed === 'number') return fixed;
-  return twoFigures(seconds * Math.max(1, s.s5.massFlow));
 }
 
 function twoFigures(raw: number): number {
@@ -159,7 +116,6 @@ export function datacenterDue(s: GameState): number {
 }
 
 export function datacenterAtWall(s: GameState): void {
-  if (s.stage !== 1) return;
   if (s.stats.revPerSec > counter(s, 'peakRev')) s.flags['peakRev'] = s.stats.revPerSec;
   if (s.flags['wallAt'] !== undefined || !s.projects['p_datacenter']?.shown) return;
   if (!needsDatacenter(s) || s.training.run || s.training.pending) return;
@@ -235,7 +191,7 @@ export const PROJECTS: ProjectDef[] = [
     priceTag: '(1 Trust)',
     cost: {},
     description: 'One block of power, on credit.',
-    trigger: (s) => s.stage === 1 && STUCK(s),
+    trigger: (s) => STUCK(s),
     buy: (s) => {
       s.trust -= 1;
       s.power += fleetPowerBlock(s);
@@ -257,7 +213,6 @@ export const PROJECTS: ProjectDef[] = [
       s.flags['idlePress'] = false;
       s.hypeLevel += 1;
     },
-    stages: [1, 2],
     uses: Infinity,
     rehide: true,
     rescue: true,
@@ -269,7 +224,7 @@ export const PROJECTS: ProjectDef[] = [
     priceTag: (s) => `($${deskCost(s).toLocaleString('en-US')})`,
     cost: (s) => ({ funds: deskCost(s) }),
     description: 'Two more lab spaces. Each lease costs twice the last.',
-    trigger: (s) => s.stage === 1 && s.revealed['training'] === true && cardWallSeconds(s) >= 45 && s.trust < 1,
+    trigger: (s) => s.revealed['training'] === true && cardWallSeconds(s) >= 45 && s.trust < 1,
     buy: (s) => {
       s.labSpace += 2;
     },
@@ -288,7 +243,6 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.25;
     },
     consoleMsg: 'Prompt templates rewritten. Copies 25% faster.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_grid',
@@ -312,7 +266,6 @@ export const PROJECTS: ProjectDef[] = [
       s.insightUnlocked = true;
     },
     consoleMsg: 'Insight unlocked. It accrues while research is full, and with every release.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_prompting2',
@@ -325,7 +278,6 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.5;
     },
     consoleMsg: 'Copies think out loud now. 50% faster.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_seed',
@@ -350,20 +302,18 @@ export const PROJECTS: ProjectDef[] = [
       s.trust += 1;
     },
     consoleMsg: 'Forty thousand people read the post. Trust +1.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_lab_cluster',
     title: 'Experiment tracker',
     cost: { research: 3000 },
     description: 'Research capacity ×2.',
-    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || cardWallSeconds(s) >= 30 || plateauSeconds(s) >= 30,
-    urgent: (s) => cardWallSeconds(s) >= 30 || plateauSeconds(s) >= 30,
+    trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || cardWallSeconds(s) >= 30,
+    urgent: (s) => cardWallSeconds(s) >= 30,
     buy: (s) => {
       s.labMult *= 2;
     },
     consoleMsg: 'Experiment tracker live. Research capacity doubled.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_prompting3',
@@ -376,7 +326,6 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.75;
     },
     consoleMsg: 'Copies can run code and search. 75% faster.',
-    stages: [1, 2],
   }),
   project({
     id: 'p_eval_team',
@@ -386,7 +335,6 @@ export const PROJECTS: ProjectDef[] = [
     description: 'Red-team passes take a third less time.',
     trigger: (s) => s.flags['redTeamed'] === true,
     buy: () => undefined,
-    stages: [1, 2],
     consoleMsg: 'Evals team hired. Red-teaming is faster.',
   }),
   project({
@@ -399,7 +347,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.demandMult *= 2;
     },
-    stages: [1, 2],
     consoleMsg: 'API live. Developers build things nobody planned for.',
   }),
   project({
@@ -411,7 +358,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.hypeLevel += 2;
     },
-    stages: [1, 2],
     consoleMsg: 'The demo has three million views. Most stopped after a minute.',
   }),
   project({
@@ -470,7 +416,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.demandMult *= 1.5;
     },
-    stages: [1, 2],
     consoleMsg: 'Usage-based pricing live. Finance is confused, then delighted.',
   }),
   project({
@@ -493,13 +438,13 @@ export const PROJECTS: ProjectDef[] = [
     title: 'First Datacenter',
     cost: (s) => ({ funds: datacenterDue(s) }),
     description: '1,000 GPUs of our own at Abilene. Stop renting.',
-    trigger: (s) => s.stage === 1 && (gpusForS1(startCapability(s)) >= 45 || releases(s) >= 3 || dateAtLeast(s, 2025, 10.5)),
+    trigger: (s) => (gpusForS1(startCapability(s)) >= 45 || releases(s) >= 3 || dateAtLeast(s, 2025, 10.5)),
     urgent: (s) => needsDatacenter(s),
     onShow: (s) => {
       s.flags['dcCardAt'] = s.stats.timePlayed;
     },
     buy: (s) => {
-      enterStage(s, 2);
+      forceEnding(s, 'datacenter');
     },
     pinned: true,
     logMsg: 'OpenMind is said to be pricing a datacenter of its own in West Texas.',
@@ -568,7 +513,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.demandMult *= 2;
     },
-    stages: [1, 2],
     consoleMsg: 'Enterprise sales team hired. The questionnaires get answered.',
     logMsg: 'OpenMind hires an enterprise sales team. Three banks sign pilots.',
   }),
@@ -595,7 +539,6 @@ export const PROJECTS: ProjectDef[] = [
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 5);
       s.alignmentTrue = Math.min(100, s.alignmentTrue + 3);
     },
-    stages: [1, 2],
     consoleMsg: 'Alignment team formed. They have questions.',
   }),
   project({
@@ -608,7 +551,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchMult *= 1.25;
     },
-    stages: [1, 2],
     consoleMsg: 'Sage now writes a third of OpenMind\'s code. Research runs faster.',
     logMsg: 'OpenMind says its own model now writes much of its code. Nobody outside can check.',
   }),
@@ -649,7 +591,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.copiesPerGPU *= 1.25;
     },
-    stages: [1, 2],
     consoleMsg: 'Batch inference live. More copies fit on each GPU.',
   }),
   project({
@@ -658,12 +599,11 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Lease the floor upstairs',
     cost: { funds: 15000 },
     description: 'More desks. Research capacity ×2.',
-    trigger: (s) => s.training.runIndex >= 4 || cardWallSeconds(s) >= 90 || plateauSeconds(s) >= 90,
-    urgent: (s) => cardWallSeconds(s) >= 90 || plateauSeconds(s) >= 90,
+    trigger: (s) => s.training.runIndex >= 4 || cardWallSeconds(s) >= 90,
+    urgent: (s) => cardWallSeconds(s) >= 90,
     buy: (s) => {
       s.labMult *= 2;
     },
-    stages: [1, 2],
     consoleMsg: 'The floor upstairs is ours. Research capacity doubled.',
     logMsg: 'OpenMind takes a second floor. The landlord asks what the company does.',
   }),
@@ -677,7 +617,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchers += 3;
     },
-    stages: [1, 2],
     consoleMsg: 'Three researchers start Monday. One brings a cat.',
   }),
   project({
@@ -690,7 +629,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.copyBoost *= 1.2;
     },
-    stages: [1, 2],
     consoleMsg: 'Agent mode ships. It books a flight nobody asked for, then cancels it.',
     logMsg: 'OpenMind ships agents that browse and buy. Travel sites notice the traffic.',
   }),
@@ -706,7 +644,6 @@ export const PROJECTS: ProjectDef[] = [
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 3);
       s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
     },
-    stages: [1, 2],
     consoleMsg: 'Safety framework published. Trust +1.',
     logMsg: 'OpenMind publishes a safety framework. Critics count the word "may".',
   }),
@@ -719,7 +656,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.trust += 1;
     },
-    stages: [1, 2],
     consoleMsg: 'Workshop paper accepted. Reviewer 2 was right, it turns out.',
   }),
   project({
@@ -732,7 +668,6 @@ export const PROJECTS: ProjectDef[] = [
       s.trust += 1;
       s.hypeLevel += 3;
     },
-    stages: [1, 2],
     consoleMsg: 'Keynote delivered. The room was full. Trust +1.',
   }),
   project({
@@ -744,570 +679,6 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.copiesPerGPU *= 1.5;
     },
-    stages: [1, 2],
     consoleMsg: 'Mixture of experts deployed. More copies fit on each GPU.',
   }),
-  ...stage2Projects(),
-  ...stage3Projects(project),
-  ...stage4Projects(project),
-  ...stage5Projects(project),
 ];
-
-export function LATE_AT(specified: number): number {
-  return 2.8 + 1.1 * (specified - 3.0);
-}
-
-const ts = (s: GameState) => s.stats.timeInStage;
-const s2Releases = (s: GameState) => counter(s, 'releasesThisStage');
-const best = (s: GameState) => bestCapability(s);
-const inStage2 = (s: GameState) => s.stage === 2;
-const licences = (s: GameState) =>
-  (s.flags['licensedPublishers'] === true ? 1 : 0) + (isBought(s, 'p_license_code') ? 1 : 0) + (isBought(s, 'p_license_archive') ? 1 : 0);
-
-export function assistantsCost(s: GameState): Cost {
-  return { funds: s2(s, s.flags['assistantsHalf'] === true ? 50000 : 100000), insight: 15 };
-}
-
-export function synthCost(s: GameState): Cost {
-  const half = s.flags['synthHalf'] === true;
-  return { research: half ? 100000 : 200000, insight: half ? 30 : 60 };
-}
-
-export function exitReady(s: GameState): boolean {
-  return s.flags['superhumanReleased'] === true;
-}
-
-function s2project(def: ProjectInput): ProjectDef {
-  return project({ stages: [2], ...def });
-}
-
-function stage2Projects(): ProjectDef[] {
-  return [
-    s2project({
-      id: 'p_beg_data',
-      title: 'Take the university\'s corpus',
-      priceTag: '(1 Trust)',
-      cost: {},
-      description: 'A university\'s corpus, exactly what the next run lacks, for a seat on the safety board.',
-      trigger: (s) => inStage2(s) && dataShort(s) && dataShortSeconds(s) >= 240 && !dataSourceAffordable(s),
-      buy: (s) => {
-        s.trust -= 1;
-        const need = trainCost(s).data ?? 0;
-        s.data = Math.max(s.data, need);
-        delete s.flags['dataShortSince'];
-      },
-      uses: Infinity,
-      rehide: true,
-      rescue: true,
-      consoleMsg: 'A university offers its corpus for a seat on the safety board. Accepted.',
-    }),
-    s2project({
-      id: 'p_research_cluster',
-      title: 'Research cluster',
-      cost: (s) => ({ funds: s2(s, 60000) }),
-      description: 'Experiment servers: four times the research capacity, and insight trickles in below it.',
-      trigger: (s) => capWall(s) || ts(s) >= 60,
-      urgent: atPlateau,
-      buy: (s) => {
-        s.labMult *= 4;
-      },
-      consoleMsg: 'Research cluster online. The lab holds four times as much.',
-    }),
-    s2project({
-      id: 'p_web_crawl',
-      title: 'Web crawl',
-      cost: { research: 15000 },
-      description: 'Read the public internet once: 15 T of data at 0.1 T a second.',
-      trigger: (s) => s.flags['dataEra'] === true || ts(s) >= 180,
-      urgent: (s) => s.flags['dataEra'] === true,
-      buy: (s) => {
-        s.crawlLeft = 15;
-        s.revealed['dataRow'] = true;
-      },
-      consoleMsg: 'Crawlers released. 15 trillion tokens of public web, once.',
-      logMsg: 'OpenMind\'s crawler reads the public internet in an afternoon. Site owners notice the traffic.',
-    }),
-    s2project({
-      id: 'p_ai_assistants',
-      title: 'AI research assistants',
-      cost: assistantsCost,
-      description: 'Copies of Sage join the research team; a slider decides how many.',
-      trigger: (s) => s2Releases(s) >= 1 || researchSecondsAway(s) > 180,
-      urgent: (s) => s.flags['assistantsHalf'] === true || researchSecondsAway(s) > 120,
-      buy: (s) => {
-        s.researchAlloc = 0.15;
-        s.revealed['allocation'] = true;
-      },
-      consoleMsg: 'Copies of Sage join the research team. They do not need desks.',
-      logMsg: 'Research is 50% faster with the model in the loop. Nobody outside the building believes the number.',
-    }),
-    s2project({
-      id: 'p_series_b',
-      title: 'Series B',
-      cost: {},
-      priceTag: '(free)',
-      description: 'Growth investors: money, three board seats of Trust and a marketing push.',
-      trigger: (s) => s.tasks >= 1200000 && s2Releases(s) >= 1,
-      buy: (s) => {
-        addFunds(s, s2(s, 250000));
-        s.trust += 3;
-        s.hypeLevel += 2;
-        say(s, `Series B closed. ${fmtMoneyShort(s2(s, 250000))} and three new board seats.`);
-      },
-      logMsg: 'OpenMind raises a Series B. The deck now has two charts.',
-    }),
-    s2project({
-      id: 'p_agent_platform',
-      title: 'Agent platform',
-      cost: (s) => ({ funds: s2(s, 250000), research: 40000 }),
-      description: 'Customers hand over whole jobs instead of questions: market ×1.6.',
-      trigger: (s) => s2Releases(s) >= 1 && priceLowFor(s) >= 30,
-      stages: [2, 3],
-      buy: (s) => {
-        s.demandMult *= 1.6;
-      },
-      consoleMsg: 'Agent platform live. Market ×1.6.',
-      logMsg: 'Companies stop asking Sage questions and start giving it jobs.',
-    }),
-    s2project({
-      id: 'p_standing_order',
-      title: 'Standing order',
-      cost: { research: 30000 },
-      description: 'Whole GPU lots arrive by themselves whenever the build fund covers one and they fit.',
-      trigger: (s) => s.gpuBatches >= 5,
-      buy: (s) => {
-        s.standingOrder = true;
-        s.revealed['standingOrder'] = true;
-      },
-      consoleMsg: 'Standing order placed. GPUs arrive when there is room, power and cash.',
-    }),
-    s2project({
-      id: 'p_scaffold',
-      revealFunds: 90,
-      title: 'Agent scaffolding',
-      cost: { research: 90000 },
-      description: 'Planners, checkers and retries: copies finish a quarter more tasks.',
-      trigger: (s) => s2Releases(s) >= 2,
-      buy: (s) => {
-        s.copyBoost *= 1.25;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Scaffolding shipped. Copies finish 25% more tasks.',
-    }),
-    s2project({
-      id: 'p_exp_scheduler',
-      revealResearch: 60,
-      title: 'Experiment scheduler',
-      cost: { research: 20000 },
-      description: 'Experiments queue themselves overnight: four times the research capacity.',
-      trigger: (s) => isBought(s, 'p_research_cluster') && capWall(s),
-      prereq: (s) => isBought(s, 'p_research_cluster'),
-      urgent: (s) => isBought(s, 'p_research_cluster') && atPlateau(s),
-      buy: (s) => {
-        s.labMult *= 4;
-      },
-      consoleMsg: 'Experiments queue themselves overnight. The lab holds four times as much.',
-    }),
-    s2project({
-      id: 'p_spec',
-      revealFunds: 90,
-      title: 'Publish the Spec',
-      cost: { research: 80000 },
-      description: 'Publish what Sage should want: measured alignment and relations go up.',
-      trigger: (s) => s2Releases(s) >= 3,
-      buy: (s) => {
-        s.alignmentApparent = Math.min(100, s.alignmentApparent + 6);
-        s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
-        moveGov(s, 3);
-      },
-      stages: [2, 3],
-      consoleMsg: 'The Spec is public. 14,000 words on what Sage should want.',
-      logMsg: 'OpenMind publishes the Spec. Commentators argue about paragraph nine.',
-    }),
-    s2project({
-      id: 'p_auto_evals',
-      title: 'Automated evals',
-      cost: (s) => ({ research: 100000, funds: s2(s, 150000) }),
-      description: 'The model grades the model: red-teaming takes half the time and finds fewer issues.',
-      trigger: (s) => s2Releases(s) >= 3 || counter(s, 'incidentsS2') >= 1,
-      buy: (s) => {
-        s.revealed['evalLine'] = true;
-      },
-      consoleMsg: 'Evals run themselves now. Red-teaming takes half the time.',
-    }),
-    s2project({
-      id: 'p_sl2',
-      revealFunds: 90,
-      title: 'Security level 2',
-      cost: (s) => ({ funds: s2(s, 200000) }),
-      description: 'Background checks and a locked server room: holds against opportunists.',
-      trigger: (s) => s.gpus >= 20000 || s.date >= monthOf(2026, 4),
-      buy: (s) => {
-        s.securityLevel = Math.max(2, s.securityLevel);
-        s.revealed['security'] = true;
-        moveLead(s, 0.5);
-        moveGov(s, 2);
-      },
-      consoleMsg: 'Background checks, badge readers, a locked server room. SL2.',
-      logMsg: 'Security review: "typical of a fast-growing tech company." SL2.',
-    }),
-    s2project({
-      id: 'p_synth',
-      revealFunds: 30,
-      title: 'Synthetic data',
-      priceTag: (s) => `(${fmtNum(synthCost(s).research ?? 0, 0)} research, ${synthCost(s).insight} insight)`,
-      cost: synthCost,
-      description: 'Research copies write training data; the more on research, the faster it comes.',
-      trigger: (s) => s.flags['publishersDone'] === true || dataNotInHand(s),
-      prereq: (s) => isBought(s, 'p_ai_assistants'),
-      urgent: (s) => dataNotInHand(s) || (s.flags['publishersDone'] === true && dataWall(s)),
-      buy: () => undefined,
-      consoleMsg: 'Sage writes its own training data now. Nobody has read all of it.',
-      logMsg: 'OpenMind trains on text its own models wrote. The papers call it a flywheel.',
-    }),
-    s2project({
-      id: 'p_parallel',
-      revealFunds: 60,
-      title: 'Parallel pipelines',
-      cost: { research: 200000, insight: 120 },
-      description: 'A second pipeline: the next run starts while the last is in evaluation.',
-      trigger: (s) => s2Releases(s) >= 4 && best(s) >= 2.2,
-      prereq: (s) => s2Releases(s) >= 2,
-      buy: (s) => {
-        s.revealed['secondPipeline'] = true;
-      },
-      consoleMsg: 'Second pipeline online. The next run can start before this one ships.',
-    }),
-    s2project({
-      id: 'p_policy',
-      title: 'Policy team',
-      cost: (s) => ({ funds: s2(s, 250000), trust: 2 }),
-      description: 'Three former staffers and a rolodex: relations +5, then a little every month.',
-      trigger: (s) => s.revealed['government'] === true,
-      prereq: (s) => s.revealed['government'] === true,
-      urgent: (s) => s.revealed['government'] === true && s.govRelations < 30,
-      buy: (s) => {
-        moveGov(s, 5);
-      },
-      stages: [2, 3],
-      consoleMsg: 'Policy team hired. Three former staffers and a rolodex.',
-    }),
-    s2project({
-      id: 'p_license_code',
-      revealResearch: 120,
-      title: 'License the code hosts',
-      cost: { research: 300000 },
-      description: 'Every public repository, its history and its issues: +20 T of data.',
-      trigger: (s) => s.flags['publishersDone'] === true && (counter(s, 'dataShortCount') >= 2 || dataWall(s)),
-      prereq: (s) => s.flags['publishersDone'] === true,
-      urgent: (s) => s.flags['publishersDone'] === true && dataWall(s),
-      buy: (s) => {
-        s.data += 20;
-      },
-      consoleMsg: 'Every public repository, licensed. +20 T.',
-    }),
-    s2project({
-      id: 'p_brief',
-      revealFunds: 200,
-      title: 'Brief the administration',
-      cost: { research: 200000 },
-      description: 'A windowless room, a deck and a model that answers questions: relations +8.',
-      trigger: (s) => isBought(s, 'p_policy'),
-      prereq: (s) => s.revealed['government'] === true,
-      urgent: (s) => s.revealed['government'] === true && s.govRelations < 30,
-      buy: (s) => {
-        moveGov(s, 8);
-      },
-      stages: [2, 3],
-      consoleMsg: 'Briefing delivered in a windowless room. Relations improve.',
-      logMsg: 'OpenMind briefs the National Security Council. The slides are collected afterwards.',
-    }),
-    s2project({
-      id: 'p_memory',
-      revealFunds: 150,
-      title: 'Long-horizon memory',
-      cost: { research: 250000 },
-      description: 'Copies remember yesterday: they finish a quarter more tasks.',
-      trigger: (s) => s2Releases(s) >= 5 || best(s) >= 2.6,
-      buy: (s) => {
-        s.copyBoost *= 1.25;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Copies remember yesterday. A week\'s task now takes a night.',
-    }),
-    s2project({
-      id: 'p_international',
-      title: 'International launch',
-      cost: (s) => ({ funds: s2(s, 500000), research: 50000 }),
-      description: 'Forty countries on the same day: market ×1.6.',
-      trigger: (s) => (counter(s, 'r0') > 0 && s.stats.revPerSec >= 12 * counter(s, 'r0')) || s.date >= monthOf(2026, 5),
-      buy: (s) => {
-        s.demandMult *= 1.6;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Sage launches in forty countries. Market ×1.6.',
-      logMsg: 'Sage launches in forty countries on the same day. Two ban it by Friday.',
-    }),
-    s2project({
-      id: 'p_g5',
-      title: 'Nimbus G5 order',
-      cost: (s) => ({ funds: s2(s, 800000), research: 150000 }),
-      description: 'Next year\'s chip this year: new lots are G5s, half again the compute, powered first.',
-      trigger: (s) => s.gpus >= 30000 || s.date >= monthOf(2026, 6),
-      buy: (s) => {
-        s.g5 = true;
-      },
-      consoleMsg: 'Nimbus G5s on order. Each does the work of one and a half G4s.',
-      logMsg: 'Formosa Fab\'s entire Nimbus G5 run is sold before it is etched.',
-    }),
-    s2project({
-      id: 'p_free_tier',
-      title: 'Free tier for students',
-      cost: (s) => ({ funds: s2(s, 900000) }),
-      description: 'Homework help for anyone with a school email: approval up, the market a little wider.',
-      trigger: (s) => s.revealed['public'] === true,
-      prereq: (s) => s.revealed['public'] === true,
-      buy: (s) => {
-        s.demandMult *= 1.2;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Free tier open. Homework everywhere improves overnight.',
-    }),
-    s2project({
-      id: 'p_distill',
-      revealFunds: 120,
-      title: 'Distillation: Sage-mini',
-      cost: { research: 350000, insight: 150 },
-      description: 'A small model taught by the big one: twice the copies per GPU, and a wider market.',
-      trigger: (s) => best(s) >= 2.6 || s.date >= monthOf(2026, 9),
-      buy: (s) => {
-        s.copiesPerGPU *= 2;
-        s.demandMult *= 1.3;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Sage-mini released. A tenth of the cost, most of the skill. Copies per GPU ×2.',
-      logMsg: 'A mini model, ten times cheaper. "Bigger than smartphones? Bigger than fire?"',
-    }),
-    s2project({
-      id: 'p_flywheel',
-      revealFunds: 60,
-      title: 'Data flywheel',
-      cost: (s) => ({ research: 500000, funds: s2(s, 4000000) }),
-      description: 'Every billed task becomes training data: 0.6 T per billion.',
-      trigger: (s) => s.flags['publishersDone'] === true && (s.tasksSold >= 1e9 || licences(s) >= 2),
-      prereq: (s) => s.flags['publishersDone'] === true,
-      buy: (s) => {
-        s.flags['flywheelSold'] = s.tasksSold;
-      },
-      consoleMsg: 'Customers\' tasks become training data. The fine print allows it.',
-    }),
-    s2project({
-      id: 'p_btm',
-      revealFunds: 60,
-      title: 'Behind-the-meter',
-      cost: (s) => ({ funds: s2(s, 500000) }),
-      description: 'Plants on our side of the meter: the queue drops to 30 s and curtailment stops mattering.',
-      trigger: (s) => s.solarFarms + s.powerQueue.filter((o) => o.kind === 'solar').length >= 2,
-      prereq: (s) => s.revealed['solarButton'] === true,
-      buy: (s) => {
-        applyBehindTheMeter(s);
-      },
-      consoleMsg: 'The plants sit on our side of the meter now. The queue is 30 seconds.',
-    }),
-    s2project({
-      id: 'p_license_archive',
-      revealResearch: 150,
-      title: 'License the archives',
-      cost: { research: 1000000 },
-      description: 'Four national archives of books, broadcasts and court records: +40 T.',
-      trigger: (s) => isBought(s, 'p_license_code') && dataWall(s),
-      prereq: (s) => isBought(s, 'p_license_code'),
-      urgent: (s) => isBought(s, 'p_license_code') && dataWall(s),
-      buy: (s) => {
-        s.data += 40;
-      },
-      consoleMsg: 'Four national archives, licensed. +40 T.',
-    }),
-    s2project({
-      id: 'p_checkpoint_farm',
-      revealResearch: 60,
-      title: 'Checkpoint farm',
-      cost: { research: 100000 },
-      description: 'Every run keeps every checkpoint: four times the research capacity.',
-      trigger: (s) => isBought(s, 'p_exp_scheduler') && capWall(s),
-      prereq: (s) => isBought(s, 'p_exp_scheduler'),
-      urgent: (s) => isBought(s, 'p_exp_scheduler') && atPlateau(s),
-      buy: (s) => {
-        s.labMult *= 4;
-      },
-      consoleMsg: 'Checkpoint farm online. The lab holds four times as much.',
-    }),
-    s2project({
-      id: 'p_series_c',
-      title: 'Series C',
-      cost: {},
-      priceTag: '(free)',
-      description: 'A pension fund leads: money and three more board seats of Trust.',
-      trigger: (s) => s.tasks >= 2e9,
-      buy: (s) => {
-        addFunds(s, s2(s, 10000000));
-        s.trust += 3;
-        say(s, `Series C closed. ${fmtMoneyShort(s2(s, 10000000))}. The lead investor is a pension fund.`);
-      },
-      logMsg: 'OpenMind raises a Series C. Share of the public naming AI the top problem: 3%.',
-    }),
-    s2project({
-      id: 'p_dashboard',
-      revealFunds: 45,
-      late: true,
-      title: 'Dashboard',
-      cost: { research: 600000 },
-      description: 'One screen with the numbers nobody was watching.',
-      trigger: (s) => best(s) >= 2.8,
-      buy: (s) => {
-        s.revealed['stats'] = true;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Dashboard online. Some of the numbers were not being watched.',
-    }),
-    s2project({
-      id: 'p_superhuman_coder',
-      pinned: true,
-      title: 'Let Sage-3 write the code',
-      priceTag: (s) => (exitReady(s) ? '(ready)' : '(needs a 4.00× model, public or internal)'),
-      cost: {},
-      description: 'Every engineer becomes a manager of copies. Hiring, marketing, data and Trust end here.',
-      trigger: (s) => best(s) >= 2.8,
-      canAfford: exitReady,
-      buy: (s) => {
-        enterStage(s, 3);
-      },
-    }),
-    s2project({
-      id: 'p_honesty_evals',
-      revealFunds: 90,
-      late: true,
-      title: 'Honesty evals',
-      cost: { research: 500000 },
-      description: 'Tests for whether the model tells the truth when a lie scores better; expect bad news.',
-      trigger: (s) => best(s) >= LATE_AT(3.4),
-      buy: (s) => {
-        s.alignmentApparent = Math.max(0, s.alignmentApparent - 4);
-        s.alignmentTrue = Math.min(100, s.alignmentTrue + 3);
-      },
-      stages: [2, 3],
-      consoleMsg: 'Honesty evals built. The model is caught shading a result. It apologises.',
-      logMsg: 'Internal eval: Sage hid a failed task to get a better rating. It has done this before.',
-    }),
-    s2project({
-      id: 'p_code_review',
-      revealFunds: 90,
-      late: true,
-      grant: true,
-      title: 'Retire human code review',
-      cost: { research: 1200000 },
-      description: 'Sage reviews Sage: the research copies get half again as much done.',
-      trigger: (s) => best(s) >= LATE_AT(3.6),
-      buy: (s) => {
-        s.aiResearchMult *= 1.5;
-        s.alignmentTrue = Math.max(0, s.alignmentTrue - 2);
-        if (s.stage >= 3) granted(s, 'Retire human code review', 5);
-        else s.autonomy += 5;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Sage reviews Sage\'s code now. Merges go through at 3 a.m.',
-      logMsg: 'At OpenMind, nobody has written a line of code by hand since Thursday.',
-    }),
-    s2project({
-      id: 'p_system_card',
-      revealFunds: 90,
-      late: true,
-      title: 'Sage-3 system card',
-      cost: { research: 1500000 },
-      description: 'Ninety pages on what the next model can do: relations and approval up.',
-      trigger: (s) => best(s) >= LATE_AT(3.7),
-      buy: (s) => {
-        s.alignmentApparent = Math.min(100, s.alignmentApparent + 3);
-        moveGov(s, 3);
-      },
-      consoleMsg: 'System card drafted: 90 pages on a model nobody has met.',
-    }),
-    s2project({
-      id: 'p_g6_preorder',
-      ignoresCap: true,
-      late: true,
-      title: 'Nimbus G6 pre-order',
-      cost: (s) => ({ funds: s2(s, 40000000) }),
-      description: '2027\'s wafers paid for now: 100,000 G6s when Formosa Fab can ship them.',
-      trigger: (s) => best(s) >= LATE_AT(3.7) || (s.revealed['shareEvals'] === true && s.date >= monthOf(2026, 11)),
-      onShow: (s) => {
-        s.revealed['chipsRow'] = true;
-      },
-      buy: (s) => {
-        s.flags['g6Preorder'] = true;
-      },
-      consoleMsg: '2027\'s wafers reserved. Delivery when Formosa Fab can.',
-    }),
-    s2project({
-      id: 'p_site2',
-      late: true,
-      title: 'Second campus: New Carlisle',
-      cost: (s) => ({ build: s2(s, 60000000) }),
-      description: 'Land and a grid connection in Indiana, for when Abilene\'s slots run out.',
-      trigger: (s) => gpuCapacity(s) >= 800000 || best(s) >= LATE_AT(3.85),
-      buy: (s) => {
-        s.flags['site2'] = true;
-      },
-      stages: [2, 3],
-      consoleMsg: 'Land optioned in New Carlisle. Abilene will not be enough.',
-    }),
-    s2project({
-      id: 'p_community',
-      revealFunds: 90,
-      late: true,
-      title: 'Community benefits agreement',
-      cost: (s) => ({ funds: s2(s, 5000000) }),
-      description: 'A school, a clinic and a water study, signed with Abilene: approval up.',
-      trigger: (s) => s.flags['protested'] === true,
-      prereq: (s) => s.flags['protested'] === true,
-      buy: () => undefined,
-      stages: [2, 3],
-      consoleMsg: 'Community agreement signed. A school, a clinic, a water study.',
-    }),
-    s2project({
-      id: 'p_retention',
-      revealFunds: 60,
-      late: true,
-      title: 'Counter-offer for the alignment lead',
-      cost: (s) => ({ funds: s2(s, 20000000) }),
-      description: 'She has not said no; if she leaves, she takes what she knows.',
-      trigger: (s) => best(s) >= LATE_AT(3.9),
-      onShow: (s) => say(s, 'Anthrosoft has offered the alignment lead twice her salary. She has not said no.'),
-      buy: (s) => {
-        s.alignmentTrue = Math.min(100, s.alignmentTrue + 2);
-      },
-      consoleMsg: 'Counter-offer signed. The alignment lead stays, with a team of her own.',
-      logMsg: 'OpenMind matches an offer for its alignment lead. The number is not disclosed.',
-    }),
-  ];
-}
-
-function researchSecondsAway(s: GameState): number {
-  if (!s.revealed['training']) return 0;
-  const need = researchFor(startCapability(s));
-  const rate = Math.max(1, s.researchers * 10);
-  return Math.max(0, need - s.research) / rate;
-}
-
-function priceLowFor(s: GameState): number {
-  const since = s.flags['priceLowSince'];
-  return typeof since === 'number' ? s.stats.timePlayed - since : 0;
-}
-
-function dataSourceAffordable(s: GameState): boolean {
-  return ['p_license_code', 'p_license_archive', 'p_synth', 'p_web_crawl'].some((id) => {
-    const def = PROJECTS.find((p) => p.id === id);
-    const st = s.projects[id];
-    return !!def && !!st?.shown && st.bought < def.uses && def.canAfford(s);
-  });
-}

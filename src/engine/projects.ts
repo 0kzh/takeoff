@@ -1,6 +1,6 @@
 import { GameState, Cost, projectState, pay, say, logNews } from './state.js';
 import { PROJECTS, ProjectDef } from '../data/projects.js';
-import { fmtInt, fmtMoneyShort, fmtTonnes, fmtShortNum } from './format.js';
+import { fmtInt, fmtMoneyShort, fmtShortNum } from './format.js';
 
 export function projectById(id: string): ProjectDef | undefined {
   return PROJECTS.find((p) => p.id === id);
@@ -13,15 +13,13 @@ export function costLabel(c: Cost, short = false): string {
   if (c.research) parts.push(`${n(c.research)} research`);
   if (c.insight) parts.push(`${n(c.insight)} insight`);
   if (c.trust) parts.push(`${fmtInt(c.trust)} Trust`);
-  if (c.materials) parts.push(`${fmtTonnes(c.materials)}`);
-  if (c.build) parts.push(`${fmtMoneyShort(c.build)} from the build fund or funds`);
   if (c.power) parts.push(`${fmtInt(c.power)} kWh`);
   return parts.length ? parts.join(', ') : 'free';
 }
 
 export function priceTag(s: GameState, def: ProjectDef): string {
   if (typeof def.priceTag === 'function') return def.priceTag(s);
-  return def.priceTag ?? `(${costLabel(def.cost(s), s.stage >= 4)})`;
+  return def.priceTag ?? `(${costLabel(def.cost(s))})`;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {
@@ -30,7 +28,7 @@ function remainingUses(s: GameState, def: ProjectDef): number {
 
 export function isVisible(s: GameState, def: ProjectDef): boolean {
   const st = s.projects[def.id];
-  return !!st && st.shown && remainingUses(s, def) > 0 && def.stages.includes(s.stage);
+  return !!st && st.shown && remainingUses(s, def) > 0;
 }
 
 export function visibleProjects(s: GameState): ProjectDef[] {
@@ -44,10 +42,8 @@ export function buyProject(s: GameState, id: string): boolean {
   const st = projectState(s, id);
   st.bought += 1;
   if (remainingUses(s, def) > 0 && def.rehide) st.shown = false;
-  if (def.grant) def.buy(s);
   if (def.consoleMsg) say(s, def.consoleMsg);
-  const carriedIntoS3 = s.stage >= 3 && def.stages.some((x) => x < 3);
-  if (def.logMsg && !carriedIntoS3) logNews(s, def.logMsg);
-  if (!def.grant) def.buy(s);
+  if (def.logMsg) logNews(s, def.logMsg);
+  def.buy(s);
   return true;
 }

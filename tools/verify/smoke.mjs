@@ -6,11 +6,11 @@
  *
  * Starts its own static server on a free port, drives the game in system Chrome (headless) with
  * `__game.setAutoplay(true)` + `__game.tick(ms)`, and checks: no page or console errors from boot
- * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
+ * through the end screen; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
  * first purchase; no yield wording; the Train row's line at the cloud's limit; numeric-token counts at
- * minutes 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
+ * minutes 0/1/3/5/10/20/end; save → reload during a training run; the end screen; the meter's
  * width at every fill; no horizontal overflow at 390 px. The Train row (a plain purchase since the
  * prologue, docs/specs/early-train.md): prices only under `Resources needed`, each named by its unit
  * with a whole bar; grey while short of its price, never armed; no research price in Stage 1. Round 3
@@ -104,7 +104,7 @@ const SNAPSHOT = () => {
   const s = window.__game.state;
   return {
     t: s.stats.timePlayed,
-    stage: s.stage,
+    stage: 1,
     numbers: tokens.length,
     numbersOutside: outsideTokens.length,
     // The lab's capacity is half of the research pair (`837 / 1,000`): one reading, counted once in a beat.
@@ -144,7 +144,7 @@ const SNAPSHOT = () => {
       const b = document.getElementById('btn-train');
       if (!vis(b)) return null;
       // One line a price, named by its unit (`$75`, `100 kWh`, `10 GPUs`); what the lab holds is in the hover.
-      const prices = ['funds', 'research', 'data', 'power', 'gpus']
+      const prices = ['funds', 'power', 'gpus']
         .filter((k) => vis(document.getElementById(`costRow-${k}`)))
         .map((k) => ({ key: k, text: document.getElementById(`costText-${k}`).innerText.trim(), fill: document.getElementById(`costBar-${k}`).getBoundingClientRect().width / document.getElementById(`costBar-${k}`).parentElement.clientWidth }));
       const funds = prices.find((p) => p.key === 'funds');
@@ -242,7 +242,7 @@ try {
       probe.remove();
       return { want, count: all.length, off, widths };
     });
-    check('every meter, eval bar and price bar is the training bar (border, track, height, fill)', bars.count >= 21 && bars.off.length === 0,
+    check('every meter, eval bar and price bar is the training bar (border, track, height, fill)', bars.count >= 12 && bars.off.length === 0,
       bars.off.length ? bars.off.join(' | ') : `${bars.count} bars: ${bars.want}`);
     const spread = Math.max(...bars.widths) - Math.min(...bars.widths);
     check('the meter is one width at every fill (0–100 %)', spread <= 1 && bars.widths[0] > 0, `${bars.widths.map((w) => w.toFixed(1)).join(' / ')} px`);
@@ -364,7 +364,6 @@ try {
   let reloadDone = false;
   let reloadInfo = null;
   let transitionAt = null;
-  let narration = null;
   let arrival = null;
   let bannedAt = null;
   const shortLines = new Set();
@@ -471,53 +470,38 @@ try {
       await page.evaluate(() => window.__game.setAutoplay(false));
       counts['end'] = { numbers: snap.numbers, interactive: snap.interactive, words: snap.words, panels: snap.panels.length };
       await shot(page, '07b-before-break-ground');
-      const consoleBefore = snap.console;
       await page.click('#proj-p_datacenter');
       arrival = await page.evaluate(() => {
         const s = window.__game.state;
         const vis = (id) => document.getElementById(id).checkVisibility();
-        const infraEnabled = ['btn-datacenter', 'btn-gpuBatch', 'btn-turbines'].filter((id) => vis(id) && !document.getElementById(id).disabled);
-        // The wallet rule (arc G34): a lot is lit, or grey beside the build fund's row in Stores (the
-        // row itself says nothing when it is only short of money: owner feedback 2).
-        const lotReason = document.getElementById('gpuReason').innerText;
-        const lotGrey = vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund');
-        const cap = s.labSpace * 1000 * s.labMult;
-        const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
-        const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
-        const need = Math.round(raw / unit) * unit;
-        return { stage: s.stage, t: s.stats.timePlayed, infra: vis('panel-infrastructure'), compute: vis('panel-compute'), infraEnabled, lotReason, lotGrey, buildFund: Math.round(s.buildFund), trust: s.trust, cap, need };
+        return {
+          t: s.stats.timePlayed,
+          ending: s.ending,
+          screen: vis('endingScreen'),
+          title: document.getElementById('endingTitle').innerText,
+          tasks: document.getElementById('endingTasks').innerText,
+          rows: document.querySelectorAll('#endingStats tr').length,
+          newGame: vis('btn-newGame'),
+        };
       });
       transitionAt = arrival.t;
-      for (const id of await page.evaluate(() => [...document.querySelectorAll('[id]')].filter((el) => !el.closest('#dev') && el.checkVisibility()).map((el) => el.id))) {
-        if (!first.has(id)) first.set(id, transitionAt);
-      }
-      const frames = [];
-      for (let k = 0; k < 16; k++) {
-        const c = await page.evaluate(() => {
-          window.__game.tick(500);
-          return [5, 4, 3, 2, 1].map((i) => document.getElementById(`readout${i}`).innerText).filter(Boolean);
-        });
-        frames.push(c);
-        if (k === 3) await shot(page, '08-transition');
-      }
-      narration = { consoleBefore, frames };
-      await shot(page, '09-stage2-arrival');
+      await shot(page, '08-end-screen');
       break;
     }
     prev = snap;
     if (snap.t > MAX_MINUTES * 60) break;
   }
 
-  check('reached Stage 2', transitionAt !== null, transitionAt === null ? 'no transition' : `at ${clock(transitionAt)}`);
+  check('reached the end of Stage 1', transitionAt !== null, transitionAt === null ? 'First Datacenter never bought' : `at ${clock(transitionAt)}`);
   check('save → reload was exercised', reloadDone, reloadInfo ? '' : 'no training run seen');
 
   // ----- reveal order and staggering -----
   const at = (id) => (first.has(id) ? first.get(id) : Infinity);
   // The prologue (docs/specs/early-train.md): Power and Training arrive together with the first GPU.
-  const order = ['panel-business', 'panel-compute', 'panel-power', 'panel-training', 'panel-research', 'panel-projects', 'focusRow', 'panel-infrastructure'];
+  const order = ['panel-business', 'panel-compute', 'panel-power', 'panel-training', 'panel-research', 'panel-projects', 'focusRow'];
   const times = order.map(at);
   const inOrder = times.every((t, i) => t !== Infinity && (i === 0 || t >= times[i - 1])) && at('panel-power') === at('panel-training') && at('panel-research') > at('panel-training');
-  check('reveal order: Business → Compute → Power and Training together → Research → Projects → Focus → Infrastructure', inOrder, order.map((id, i) => `${id.replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
+  check('reveal order: Business → Compute → Power and Training together → Research → Projects → Focus', inOrder, order.map((id, i) => `${id.replace('panel-', '')} ${times[i] === Infinity ? '—' : clock(times[i])}`).join(', '));
   check('Research arrives with Trust and Hire Researcher only (Expand Lab later)', at('btn-expandLab') > at('panel-research') && at('btn-hireResearcher') === at('panel-research'), `research ${clock(at('panel-research'))}, expand ${clock(at('btn-expandLab'))}`);
   check('Projects arrive 30–60 s after Research', at('panel-projects') - at('panel-research') >= 30 && at('panel-projects') - at('panel-research') <= 62, `${Math.round(at('panel-projects') - at('panel-research'))} s`);
   check('Focus row hidden during the first training run', at('focusRow') > at('train-running'), `first run ${clock(at('train-running'))}, focus ${clock(at('focusRow'))}`);
@@ -660,39 +644,20 @@ try {
   const over = keys.filter((k) => counts[k] && counts[k].numbers > paperclips[k] * 1.6 + 14);
   check('numeric tokens stay near the Paperclips curve (≤ 1.6× + 14)', over.length === 0, over.length ? `over at ${over.join(', ')}` : 'Paperclips 10 / 12 / 15 / 30 / 26 / 29 / 49');
 
-  // ----- transition narration -----
-  if (narration) {
-    const f0 = narration.frames[0];
-    const kept = narration.consoleBefore.filter((l) => f0.includes(l)).length;
-    check('transition keeps earlier console lines (no wipe)', f0.length >= 4 && kept >= 3, `${kept} earlier lines kept; first frame ${f0.length} lines`);
-    check('"First Datacenter online outside Abilene." is on screen', narration.frames.some((f) => f.some((l) => l.startsWith('First Datacenter online outside Abilene.'))));
-    const all = narration.frames.flat();
-    const lost = all.find((l) => /rented GPUs go back/.test(l));
-    const replaced = all.find((l) => /[Pp]ower is bought in megawatts now/.test(l));
-    const means = all.find((l) => /Tasks per second ×/.test(l));
-    const firstIdx = (re) => narration.frames.findIndex((f) => f.some((l) => re.test(l)));
-    const i1 = firstIdx(/rented GPUs go back/);
-    const i2 = firstIdx(/[Pp]ower is bought in megawatts now/);
-    const i3 = firstIdx(/Tasks per second ×/);
-    check('three lines of consequence print over ~6 s, in order', lost && replaced && means && i1 < i2 && i2 < i3 && i3 <= 14, `${i1 * 0.5}s / ${i2 * 0.5}s / ${i3 * 0.5}s`);
-    check('Stage 2 arrival: Infrastructure replaces Compute', arrival.infra && !arrival.compute);
-    // The build fund starts empty (the rented fleet's worth came off First Datacenter's price): a first
-    // lot is lit, or it is grey beside the build fund's row in Stores.
-    check('Stage 2 arrival: an Infrastructure button is affordable, or the lot is grey beside the build fund in Stores',
-      arrival.infraEnabled.length >= 1 || (arrival.lotGrey && arrival.lotReason === ''),
-      arrival.infraEnabled.length ? arrival.infraEnabled.join(', ') : `build fund $${arrival.buildFund}; lot row grey, reason "${arrival.lotReason}"`);
-    check('Stage 2 arrival: Trust ≥ 2 and research cap ≥ next run', arrival.trust >= 2 && arrival.cap >= arrival.need, `Trust ${arrival.trust}, cap ${arrival.cap} vs ${arrival.need}`);
-    console.log(`      console during the narration: ${JSON.stringify(narration.frames[13])}`);
+  // ----- the end screen -----
+  if (arrival) {
+    check('buying First Datacenter ends the game on its end screen', arrival.ending === 'datacenter' && arrival.screen && arrival.title === 'The First Datacenter' && arrival.rows >= 5 && arrival.newGame,
+      JSON.stringify(arrival));
   } else {
-    check('transition narration observed', false, 'no transition');
+    check('end screen observed', false, 'First Datacenter never bought');
   }
 
   // ----- 390 px -----
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.__game.tick(100));
   const overflow = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
-  await shot(page, '10-mobile-390-stage2', { fullPage: true });
-  check('390 px wide (Stage 2 screen): no horizontal overflow', overflow.sw <= overflow.cw, `${overflow.sw} vs ${overflow.cw}`);
+  await shot(page, '10-mobile-390-end', { fullPage: true });
+  check('390 px wide (end screen): no horizontal overflow', overflow.sw <= overflow.cw, `${overflow.sw} vs ${overflow.cw}`);
   await context.close();
 
   {
@@ -708,7 +673,7 @@ try {
   }
 
   {
-    // The dev overlay's Stage 2 preset (rebuilt from the new end of Stage 1) loads and plays.
+    // The dev overlay's Stage 1 end preset loads, shows First Datacenter, and buying it ends the game.
     const c3 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const p3 = await c3.newPage();
     watch(p3, 'preset');
@@ -716,27 +681,17 @@ try {
     await p3.waitForFunction(() => !!window.__game);
     const pre = await p3.evaluate(() => {
       window.__game.setSpeed(0);
-      window.__game.loadPreset(2);
+      window.__game.loadPreset('end');
       window.__game.tick(8000);
       const s = window.__game.state;
-      const vis = (id) => document.getElementById(id).checkVisibility();
-      const raw = 21000 * Math.pow(Math.max(s.capability, s.training.internalCapability) / 1.6, 5);
-      const unit = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
-      return {
-        stage: s.stage, gpus: s.gpus, trust: s.trust, cap: s.labSpace * 1000 * s.labMult,
-        need: Math.round(raw / unit) * unit, infra: vis('panel-infrastructure'),
-        compute: vis('panel-compute'), batch: !document.getElementById('btn-gpuBatch').disabled,
-        lotGrey: vis('btn-gpuBatch') && document.getElementById('btn-gpuBatch').disabled && vis('row-buildFund'),
-      };
+      return { ending: s.ending, card: !!document.getElementById('proj-p_datacenter'), tasks: s.tasks };
     });
-    await shot(p3, '12-stage2-preset');
-    // As at the arrival above: a lot lit, or grey beside the build fund's row in Stores (arc G34).
-    const presetLot = pre.batch || pre.lotGrey;
-    check('Stage 2 preset loads into a playable arrival', pre.stage === 2 && pre.infra && !pre.compute && pre.gpus === 1000 && pre.trust >= 2 && pre.cap >= pre.need && presetLot, JSON.stringify(pre));
+    await shot(p3, '12-end-preset');
+    check('the Stage 1 end preset loads with First Datacenter on the board', pre.ending === '' && pre.card && pre.tasks > 200000, JSON.stringify(pre));
     await c3.close();
   }
 
-  check('no page errors or console errors from boot through Stage 2', errors.length === 0, errors.slice(0, 5).join(' | '));
+  check('no page errors or console errors from boot through the end screen', errors.length === 0, errors.slice(0, 5).join(' | '));
 } catch (e) {
   check('smoke test ran to completion', false, e && e.stack ? e.stack.split('\n').slice(0, 3).join(' ') : String(e));
 } finally {

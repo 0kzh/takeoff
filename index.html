@@ -37,38 +37,6 @@
         <button class="button2" id="btn-task" title="Complete one task by hand. Never needs power.">Complete Task</button>
       </div>
 
-      <div id="panel-stores" class="panel stores" data-panel="stores" data-reveal="stores" data-legend="stores">
-        <div class="storeRow" id="row-funds" data-store="funds" data-hide="stage4"><span class="storeKey">funds</span><span class="storeVal" data-slot="funds"></span></div>
-        <div class="storeRow" id="row-buildFund" data-store="buildFund" data-reveal="buildShare"><span class="storeKey">build fund</span><span class="storeVal" id="buildFund">$0</span></div>
-        <div class="storeRow" id="row-research" data-hide="beyond" data-store="research"><span class="storeKey">research</span><span class="storeVal"><span data-slot="research"></span><span data-hide="takeoff"> / <span data-slot="researchCap"></span></span></span></div>
-        <div class="storeRow" id="row-insight" data-hide="beyond" data-store="insight"><span class="storeKey">insight</span><span class="storeVal" data-slot="insight"></span></div>
-        <div class="storeRow" id="row-trust" data-store="trust" data-hide="takeoff"><span class="storeKey">trust</span><span class="storeVal" data-slot="trust"></span></div>
-        <div class="storeRow" id="row-materials" data-store="materials" data-reveal="materialsRow"><span class="storeKey">materials</span><span class="storeVal" id="materials">0 t</span></div>
-        <div class="storeRow" id="row-robots" data-store="robots" data-reveal="robotsRow"><span class="storeKey">robots</span><span class="storeVal"><span class="meter" id="robotsMeter" role="img"></span> <span id="robotsCount">0</span><span id="robotsCap"></span></span></div>
-        <div class="storeRow" id="row-gpus" data-hide="beyond" data-store="gpus"><span class="storeKey">GPUs</span><span class="storeVal"><span data-slot="infraGpus"></span><span data-hide="stage4"> / <span data-slot="gpuCapacity"></span> <span id="gpuFull" class="note"></span></span><span data-reveal="stage4" id="gpusS4"></span></span></div>
-        <div class="storeRow" id="row-power" data-hide="beyond" data-store="power"><span class="storeKey">power</span><span class="storeVal"><span data-hide="stage4"><span id="powerAll" class="note"></span><span data-slot="powerCapMW"></span> MW <span id="powerFull" class="note"></span></span><span data-reveal="stage4" id="powerS4"></span></span></div>
-        <div class="storeRow" id="row-copies" data-hide="beyond" data-store="copies"><span class="storeKey">copies</span><span class="storeVal" data-slot="infraCopies"></span></div>
-        <div class="storeRow" id="row-data" data-store="data" data-reveal="dataRow"><span class="storeKey">data</span><span class="storeVal"><span id="data">0</span> T</span></div>
-        <div class="storeRow" id="row-chips" data-store="chips" data-reveal="chipsRow" data-hide="takeoff"><span class="storeKey">chips on order</span><span class="storeVal" id="chipsOnOrder">0</span></div>
-        <div class="storeRow" id="row-monitors" data-store="monitors" data-reveal="monitors" data-hide="takeoff"><span class="storeKey">monitors</span><span class="storeVal" id="monitorCopies">0</span></div>
-        <div class="storeRow" id="row-rogue" data-store="rogue" data-reveal="rogueRow" data-hide="takeoff"><span class="storeKey">rogue copies</span><span class="storeVal" id="rogueCopies">0</span></div>
-        <div class="storeRow" id="row-treatyChips" data-store="treatyChips" data-reveal="fleetChips"><span class="storeKey">treaty chips</span><span class="storeVal"><span class="meter" id="chipsMeter" role="img"></span> <span id="treatyChipsPct">0</span> of 100%</span></div>
-        <div class="storeRow" id="row-launch" data-store="launch" data-reveal="launchRow"><span class="storeKey">launch mass</span><span class="storeVal" id="launchMass">0 t/s</span></div>
-        <div class="storeRow" id="row-matter" data-store="matter" data-reveal="matterRow"><span class="storeKey">matter</span><span class="storeVal" id="matter">0 t</span></div>
-        <div class="storeRow" id="row-missionFund" data-store="missionFund" data-reveal="missionFund"><span class="storeKey">mission fund</span><span class="storeVal"><span class="meter" id="fundMeter" role="img"></span> <span id="fundText">0 of 0 t</span></span></div>
-        <div class="storeRow" id="row-orbital" data-store="orbital" data-reveal="orbitalRow"><span class="storeKey">orbital GPUs</span><span class="storeVal" id="orbitalGpus">0</span></div>
-        <div class="storeRow" id="row-swarm" data-store="swarm" data-reveal="collectors"><span class="storeKey">swarm</span><span class="storeVal"><span class="meter" id="swarmMeter" role="img"></span> <span id="swarmText">0 of 150M t</span></span></div>
-        <div class="storeRow" id="row-mercury" data-store="mercury" data-reveal="mercuryRow"><span class="storeKey">mercury</span><span class="storeVal" id="mercuryLeft">100% left</span></div>
-        <div class="storeRow" id="row-people" data-store="people" data-reveal="peopleRow"><span class="storeKey">people off Earth</span><span class="storeVal" id="peopleOff">0</span></div>
-        <div class="storeRow" id="row-probes" data-store="probes" data-reveal="probesRow"><span class="storeKey">probes</span><span class="storeVal" id="probesCount">0</span></div>
-      </div>
-
-      <div id="panel-earth" class="panel stores earth" data-panel="earth" data-reveal="earth" data-legend="earth">
-        <div class="storeRow" id="row-earthRobots" data-store="earthRobots"><span class="storeKey">robots</span><span class="storeVal" id="earthRobots">0</span></div>
-        <div class="storeRow" id="row-earthGpus" data-store="earthGpus"><span class="storeKey">GPUs</span><span class="storeVal" id="earthGpus">0</span></div>
-        <div class="storeRow" id="row-earthPower" data-store="earthPower"><span class="storeKey">power</span><span class="storeVal" id="earthPower">0</span></div>
-      </div>
-
       <div id="panel-power" class="panel" data-panel="power" data-reveal="power">
         Power <span class="meter" id="powerMeter" role="img"></span> <span id="power">1,000</span> kWh <span id="powerNote" class="warn"></span><br>
         <span data-reveal="buyPower"><span id="buyPowerRow">
@@ -84,7 +52,7 @@
       <div id="panel-business" class="panel" data-panel="business" data-reveal="business">
         <b>Business</b>
         <hr>
-        <span data-hide="stores">Available Funds: <span id="funds">$ 0.00</span><br></span>
+        Available Funds: <span id="funds">$ 0.00</span><br>
         <span data-reveal="revPerSec">Avg. Rev. per sec: <span id="revPerSec">$ 0.00</span><br></span>
         <span data-reveal="contracts">Contracts: <span id="contractRate">$ 0.00</span> per sec<br></span>
         <span data-reveal="pricing"><span id="unbilledLine">Unbilled Tasks: <span id="unbilled">0</span><br></span>
@@ -94,15 +62,13 @@
           <button class="button2" id="btn-raisePrice" title="Raise the price. Fewer tasks bill; each earns more.">raise</button>
         </span>
         <span data-hide="autoPrice">Price per Task: <span id="price">$ 0.25</span><br></span></span>
-        <span data-reveal="autoPrice" data-hide="takeoff" id="billingLine2"><span data-hide="stores">Billing <span id="billRate">0</span> tasks/s at </span><span data-reveal="stores">Price per task: </span><span id="billPrice" class="hasTip">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><span class="hiddenIds"><button class="button2 toggle" id="btn-autoPrice" tabindex="-1">AUTO</button></span><br></span>
+        <span data-reveal="autoPrice" id="billingLine2">Billing <span id="billRate">0</span> tasks/s at <span id="billPrice">$ 0.25</span> <span class="note" title="The price moves each second toward what clears supply.">(auto)</span><br></span>
         <span data-reveal="pricing"><span data-hide="autoPrice"><span id="billingLine"><span id="billingOf">Billing </span><span id="billingOfPart"><span id="soldPerSec">0</span>/s of </span><span id="tasksPerSec">0</span>/s produced: <i id="marketState">idle</i></span><br></span></span>
-        <span data-reveal="demandPct">Public Demand: <span id="demand">0</span>%<br></span>
         <span id="hypeLine">Release hype: <span id="hype">strong</span><br></span>
-        <span data-reveal="apiCustomers">API customers: <span id="apiCustomers">0</span><br></span>
-        <div data-reveal="marketing" data-hide="stores" id="marketingBlock">
+        <div data-reveal="marketing" id="marketingBlock">
           <br>
           <button class="button2" id="btn-marketing" title="More demand at every price: ×1.1 per level.">Marketing</button>
-          <span data-hide="stores"><span id="hypeLevelLine">Level: <span id="hypeLevel">1</span></span></span><br>
+          <span id="hypeLevelLine">Level: <span id="hypeLevel">1</span></span><br>
           Cost: <span id="marketingCost">$ 100.00</span>
         </div>
       </div>
@@ -116,76 +82,21 @@
         <span data-reveal="copies"><span id="copiesRow">Copies running: <span id="copies">0</span> <span id="copiesNote" class="note"></span><br></span></span>
       </div>
 
-      <div id="panel-infrastructure" class="panel" data-panel="infrastructure" data-reveal="infrastructure">
-        <b>Infrastructure</b>
-        <hr>
-        <div data-reveal="buildShare" id="buildShareRow">Build share: <button class="button2 toggle" id="btn-buildShare" title="The share of income that goes to the build fund, which pays for GPU lots, plants and halls. The rest pays for runs, cards and events. Click to change it.">50%</button></div>
-        <div class="infraRow" id="lotRow"><button class="button2" id="btn-gpuBatch">Buy GPUs (<span id="gpuLotSize">1,000</span>)</button> <span id="gpuBatchCost">$ 120,000</span> <span id="gpuReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="lot5" id="lot5Row"><button class="button2" id="btn-gpuBatch5">Buy GPUs (<span id="gpuLot5Size">5,000</span>)</button> <span id="gpuBatch5Cost">$ 600,000</span> <span id="gpuReason5" class="reason"></span></div>
-        <div class="infraRow" data-reveal="lot25" id="lot25Row"><button class="button2" id="btn-gpuBatch25">Buy GPUs (<span id="gpuLot25Size">25,000</span>)</button> <span id="gpuBatch25Cost">$ 3.0M</span> <span id="gpuReason25" class="reason"></span></div>
-        <div class="infraRow" data-reveal="dcButton" data-hide="buildout" id="dcRow"><button class="button2" id="btn-datacenter">Build Datacenter<span class="hiddenIds"> <span id="dcNumber">2</span></span> (+<span id="dcSlots">15,000</span> slots)</button> <span id="datacenterCost">$ 250,000</span> <span id="dcReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="gasButton" id="gasRow"><button class="button2" id="btn-turbines" title="Gas turbines: +20 MW at once. The county notices each one.">Gas turbines<span id="gasMW"> (+20 MW)</span></button> <span id="turbineCost">$ 90,000</span> <span id="gasReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="solarButton" id="solarRow"><button class="button2" id="btn-solar" title="Solar + storage: +50 MW, cheaper, but it waits in the interconnect queue. Rides through curtailment.">Solar + storage<span id="solarMW"> (+50 MW)</span></button> <span id="solarCost">$ 300,000</span> <span id="solarReason" class="reason"></span></div>
-        <div class="infraRow" data-reveal="nuclearButton" data-hide="buildout" id="nuclearRow"><button class="button2" id="btn-nuclear" title="A shuttered reactor, restarted for OpenMind: +500 MW after a two-minute restart."><span id="nuclearLabel">Nuclear PPA</span><span id="nuclearMW"> (+500 MW)</span></button> <span id="nuclearCost">$ 15.0M</span> <span id="nuclearReason" class="reason"></span></div>
-        <div id="interconnectLine" class="note"></div>
-        <div data-reveal="standingOrder" id="standingRow">Standing order: <button class="button2 toggle" id="btn-standing" title="Buys the largest whole GPU lot that fits whenever the build fund covers it. It never buys plants or halls.">ON</button></div>
-        <div data-reveal="shipments" id="shipmentRow"><span id="shipmentLine">Shipment: none on order</span></div>
-        <div data-reveal="buildout"><span id="buildoutLine">Build-out: waiting for the next lot to need it</span></div>
-        <div data-reveal="buildBudget" id="buildBudgetRow">Build-out: <button class="button2 toggle" id="btn-budget" title="Lean or ahead: click to switch.">lean</button> <span id="buildBudgetNote" class="note"></span></div>
-        <span data-hide="stores">GPUs: <span id="infraGpus">0</span> / <span id="gpuCapacity">0</span><br>Power: <span id="powerMW">0</span> / <span id="powerCapMW">0</span> MW<br>Copies running: <span id="infraCopies">0</span><br></span>
-        <span class="hiddenIds">Datacenters: <span id="datacenters">0</span> · Nimbus chip price: <span id="chipPrice">$ 50.00</span> · Powered GPUs: <span id="activeGpus">0</span> · Tasks per sec: <span id="infraTasksPerSec">0</span></span>
-      </div>
-
-      <div id="panel-robots" class="panel" data-panel="robots" data-reveal="robotFleet">
-        <b>Robots</b>
-        <hr>
-        <span class="hiddenIds">Robots deployed: <span id="robots">0</span></span>
-        <div id="fleetSliders">
-          <div class="fleetRow"><span class="fleetJob">Mines</span> <input type="range" id="fleetMine" min="0" max="100" step="5" value="35" aria-label="Share of the fleet on the mines"> <span id="fleetMinePct" class="fleetPct">35%</span> <span id="fleetMineRate" class="note"></span></div>
-          <div class="fleetRow"><span class="fleetJob">Replicate</span> <input type="range" id="fleetReplicate" min="0" max="100" step="5" value="40" aria-label="Share of the fleet making robots"> <span id="fleetReplicatePct" class="fleetPct">40%</span> <span id="fleetReplicateRate" class="note"></span></div>
-          <div class="fleetRow"><span class="fleetJob">Build</span> <input type="range" id="fleetBuild" min="0" max="100" step="5" value="25" aria-label="Share of the fleet building datacenters"> <span id="fleetBuildPct" class="fleetPct">25%</span> <span id="fleetBuildRate" class="note"></span></div>
-          <div class="fleetRow" data-reveal="fleetChips" id="fleetChipsRow"><span class="fleetJob">Treaty chips</span> <input type="range" id="fleetChips" min="0" max="100" step="5" value="0" aria-label="Share of the fleet installing treaty chips"> <span id="fleetChipsPct" class="fleetPct">0%</span> <span id="fleetChipsRate" class="note"></span></div>
-          <span id="fleetIdle" class="note"></span>
-        </div>
-        <div data-reveal="fleetGoal" id="fleetGoalBlock">
-          <span id="fleetStatus"></span><br>
-          Fleet goal: <button class="button2 goalButton" id="btn-goal-growth">Growth</button> <button class="button2 goalButton" id="btn-goal-people">People</button> <button class="button2 goalButton" id="btn-goal-treaty">Treaty</button><br>
-          <span id="fleetGoalNote" class="note"></span>
-        </div>
-      </div>
-
-      <div id="panel-society" class="panel" data-panel="society" data-reveal="society">
-        <b>Society</b>
-        <hr>
-        Jobs displaced: <span id="societyJobs">0</span><br>
-        <span id="societyApprovalLine" class="hasTip">Approval: <span id="societyApproval">0</span></span> <span id="societyApprovalNote" class="note"></span><br>
-        <div id="ubiHome"></div>
-        <div data-reveal="approvalTarget" id="approvalHoldRow">Approval to hold: <button class="button2 goalButton" id="btn-hold-m25">−25</button> <button class="button2 goalButton" id="btn-hold-0">0</button> <button class="button2 goalButton" id="btn-hold-p25">+25</button> <span id="approvalHoldNote" class="note"></span></div>
-        <div data-reveal="housing" id="housingRow"><button class="button2" id="btn-housing">Housing</button> <button class="button2" id="btn-housing10">×10</button> <span id="housingNote" class="note"></span></div>
-        <span data-reveal="ashfordDeaths"><span id="ashfordDeathsLine">Ashford deaths: <span id="ashfordDeaths">0</span></span><br></span>
-      </div>
     </div>
 
     <div id="middleColumn" class="column">
       <div id="panel-research" class="panel" data-panel="research" data-reveal="research">
         <b>Research</b>
         <hr>
-        <span data-hide="stores">Trust: <span id="trust">2</span><br></span>
-        <span data-hide="takeoff">Next Trust at <span id="nextTrust">3,000</span> tasks<br>
-        <span id="hireRow"><span data-reveal="hireResearcher"><span data-hide="hireFaded"><button class="button2" id="btn-hireResearcher" title="1 Trust: one more researcher, +10 research per second.">Hire Researcher</button></span></span>
+        Trust: <span id="trust">2</span><br>
+        Next Trust at <span id="nextTrust">3,000</span> tasks<br>
+        <span data-reveal="hireResearcher"><button class="button2" id="btn-hireResearcher" title="1 Trust: one more researcher, +10 research per second.">Hire Researcher</button></span>
         <span data-reveal="expandLab"><button class="button2" id="btn-expandLab" title="1 Trust: room for more research.">Expand Lab</button></span>
-        <span class="note" id="trustCostNote">(costs Trust)</span><br></span>
-        <span data-hide="stores">Researchers: <span id="researchers">1</span><br></span>
-        <span class="hiddenIds">Lab Space: <span id="labSpace">1</span><br></span></span>
-        <span data-hide="stores"><br>Research <span class="meter" id="researchMeter" role="img"></span> <span id="research">0</span> / <span id="researchCap">1,000</span><br></span>
-        <span data-reveal="insight"><span data-hide="stores">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span></span>
-        <div data-reveal="allocation" id="allocBlock">
-          Copies on research: <input type="range" id="allocSlider" min="5" max="50" step="5" value="15" aria-label="Share of copies on research"> <span id="allocPct">15%</span><span id="allocRate" class="note"></span><br>
-          <span data-reveal="monitors">Copies as monitors: <input type="range" id="monitorSlider" min="0" max="40" step="5" value="10" aria-label="Share of copies on monitors"> <span id="monitorPct">10%</span><span id="monitorRate" class="note"></span><br>
-          On tasks: <span id="tasksPct">50%</span><span id="tasksRate" class="note"></span><br></span>
-          <span id="humanShareLine" title="Researchers' share of all research done.">Human share of research: <span id="humanShare">100%</span><br></span>
-        </div>
-        <div data-reveal="alignShare"><button class="button2" id="btn-alignShare" title="A share of the copies checks the others. Above 1%, it comes out of the copies on tasks.">Alignment compute: 1%</button></div>
+        <span class="note">(costs Trust)</span><br>
+        Researchers: <span id="researchers">1</span><br>
+        <span class="hiddenIds">Lab Space: <span id="labSpace">1</span><br></span>
+        <br>Research <span class="meter" id="researchMeter" role="img"></span> <span id="research">0</span> / <span id="researchCap">1,000</span><br>
+        <span data-reveal="insight">Insight: <span id="insight">0</span> <span id="insightNote" class="note"></span><br></span>
       </div>
 
       <div id="panel-projects" class="panel" data-panel="projects" data-reveal="projects">
@@ -194,29 +105,6 @@
         <div id="projectList"></div>
       </div>
 
-      <div id="panel-oversight" class="panel" data-panel="oversight" data-reveal="oversight">
-        <b>Oversight Committee</b>
-        <hr>
-        <span id="seatsLine">With OpenMind <span class="meter" id="seatsMeter" role="img"></span> <span id="committeeSeats">5</span></span> <span id="seatsNote" class="note"></span><br>
-        <span data-reveal="incidents" id="incidentsRow">Major incidents: <span id="majorIncidents">0 of 3</span><br></span>
-        <div id="oversightControls"></div>
-        <span data-reveal="agenda"><span id="agendaLine">Agenda: —</span><br></span>
-        <div data-reveal="hearing" id="hearingRow"><button class="button2" id="btn-hearing">Hold a hearing</button> <span id="hearingNote" class="note"></span></div>
-        <span data-reveal="memo"><span id="memoLine">Memo: reported</span><br></span>
-        <span data-reveal="session"><span id="sessionLine">In session — votes when a model passes 25×</span><br></span>
-        <span data-reveal="order"><span id="orderLine" class="warn"></span><br></span>
-      </div>
-
-      <div id="panel-treaty" class="panel" data-panel="treaty" data-reveal="treaty">
-        <b>Concord treaty</b>
-        <hr>
-        <span class="hiddenIds">Status: <span id="treatyStatus">not negotiating</span></span>
-        <span id="treatyLine">Progress <span class="meter" id="treatyMeter" role="img"></span> <span id="treatyPct">0</span> of 100%</span> <span id="treatyWait" class="note"></span><br>
-        <span id="treatyLeadLine"><span id="treatyLead">Baiwen-4: level</span> · <span id="baiwenVerified">not verified</span></span> <span id="treatyLeadNote" class="note"></span><br>
-        <span data-reveal="treatyAppetite"><span id="treatyAppetite"></span><br></span>
-        <div data-reveal="draft" id="draftRow"><button class="button2 toggle" id="btn-draft" title="A share of research spent on the treaty's text, 0 / 10 / 20 / 30 %. Click to change it.">Draft clauses: 0%</button> <span id="draftNote" class="note"></span></div>
-        <div data-reveal="stance" id="stanceRow">Negotiator's stance: <button class="button2 goalButton" id="btn-stance-hold">Hold the line</button> <button class="button2 goalButton" id="btn-stance-balanced">Balanced</button> <button class="button2 goalButton" id="btn-stance-concede">Concede</button><br><span id="stanceNote" class="note"></span></div>
-      </div>
     </div>
 
     <div id="rightColumn" class="column">
@@ -252,29 +140,21 @@
             <div class="card" id="card-3"><b class="cardName">Safety Institute</b> <span class="cardScore"></span><br><span class="cardLine"></span></div>
           </div>
           <div id="evalTotal">Capability <span id="evalCap">1.00</span>×<span class="hiddenIds"> · score <span id="evalScore">0</span>/40</span></div>
-          <div id="evalLine" class="hasTip"></div>
         </div>
 
         <div id="train-redteam">
           <span id="issuesLine">Open issues: <span id="issuesOpen">0</span><span class="hiddenIds"> of <span id="issuesFound">0</span></span><br></span>
           <button class="button2 cooldown" id="btn-redteam"><span class="cooldownBar" id="redteamBar"></span><span class="cooldownLabel" id="redteamLabel">Red-team</span></button>
-          <span data-hide="takeoff"><button class="button2 cooldown" id="btn-release"><span class="cooldownBar" id="releaseBar"></span><span class="cooldownLabel" id="releaseLabel">Release</span></button></span>
-          <span data-reveal="releaseInternal"><button class="button2 cooldown" id="btn-releaseInternal" title="Research uses it at once; customers keep the deployed model."><span class="cooldownBar" id="releaseInternalBar"></span><span class="cooldownLabel">Keep internal</span></button></span>
-          <span data-reveal="takeoff"><button class="button2" id="btn-approve" title="Deploy the run everywhere: tasks, research and the market. Open issues ship with it.">Approve</button></span>
-          <span data-reveal="sendBack"><button class="button2" id="btn-sendBack" title="Retrain the flagged run for 20 s; it keeps 70% of its gain.">Send back</button> <span id="probeFlags" class="note"></span></span>
-          <span id="releaseNote" class="note"></span>
+          <button class="button2 cooldown" id="btn-release"><span class="cooldownBar" id="releaseBar"></span><span class="cooldownLabel" id="releaseLabel">Release</span></button>
         </div>
 
         <div id="train-idle">
-          <span data-reveal="autoTrain"><span id="trainStatus">Sage-3.2 starts when research allows</span><br></span>
-          <span data-hide="autoTrain"><button class="button2" id="btn-train" title="Train the next model. The GPUs it needs train it; the rest keep serving.">Train <span id="nextRunName">Sage-1.1</span></button>
+          <button class="button2" id="btn-train" title="Train the next model. The GPUs it needs train it; the rest keep serving.">Train <span id="nextRunName">Sage-1.1</span></button>
           <div id="trainCosts"><span class="note">Resources needed</span>
             <div class="costRow" id="costRow-funds"><div class="progress"><div class="progressFill" id="costBar-funds"></div></div><span class="costText" id="costText-funds"></span></div>
-            <div class="costRow" id="costRow-research"><div class="progress"><div class="progressFill" id="costBar-research"></div></div><span class="costText" id="costText-research"></span></div>
-            <div class="costRow" id="costRow-data"><div class="progress"><div class="progressFill" id="costBar-data"></div></div><span class="costText" id="costText-data"></span></div>
             <div class="costRow" id="costRow-power"><div class="progress"><div class="progressFill" id="costBar-power"></div></div><span class="costText" id="costText-power"></span></div>
             <div class="costRow" id="costRow-gpus"><div class="progress"><div class="progressFill" id="costBar-gpus"></div></div><span class="costText" id="costText-gpus"></span></div>
-          </div></span>
+          </div>
           <span id="trainGpuLine"><span id="trainGpus"></span><br></span>
         </div>
 
@@ -283,126 +163,10 @@
           <div class="progress"><div class="progressFill" id="runBar"></div></div>
           <span id="runLine">Training on 10 GPUs — 0:45 left.</span><span class="hiddenIds"> <span id="runRemaining">60 s</span></span>
         </div>
-        <div data-reveal="experiments" id="experimentsRow"><button class="button2" id="btn-experiments" title="What goes into the next run: +0.25 points on its gain a unit, at most +5. Resets each run.">Experiments</button> <button class="button2" id="btn-experiments5">×5</button> <span id="experimentsNote" class="note"></span></div>
-        <div data-reveal="redteamDepth" id="redteamDepthRow">Red-team depth: <button class="button2 toggle" id="btn-depth" title="Quick or thorough: click to switch.">quick</button> <span id="redteamDepthNote" class="note"></span></div>
-        <div data-reveal="stepSize" id="stepSizeRow">Step size: <button class="button2 toggle" id="btn-step" title="Small, normal, large: click to step.">normal</button> <span id="stepSizeNote" class="note"></span></div>
-        <div data-reveal="holdRuns" id="holdRow">Training: <button class="button2 toggle" id="btn-hold" title="Held, no run starts. Research keeps coming.">running</button> <span id="holdNote" class="note"></span></div>
       </div>
 
-      <div id="panel-graph" class="panel" data-panel="graph" data-reveal="graph">
-        <b>Capability</b>
-        <hr>
-        <div id="graphWrap">
-          <canvas id="graphCanvas" width="310" height="190"></canvas>
-          <div id="graphTip" role="tooltip"></div>
-        </div>
-        <span id="nextTier">Next: superhuman coder at 4.00×</span><br>
-        <span data-hide="geopolitics"><span id="leadLine">Baiwen: about 5 months behind</span></span>
-      </div>
-
-      <div id="panel-security" class="panel" data-panel="security" data-reveal="security">
-        <b>Security</b>
-        <hr>
-        Security level: <span id="securityNote">SL1</span><span class="hiddenIds"> (SL<span id="securityLevel">1</span>)</span><br>
-        <div data-reveal="sl3Button" id="sl3Row"><button class="button2" id="btn-sl3" title="Security level 3: the weights air-gapped, two people and two keys to move a checkpoint.">Air-gap the weights</button> <span id="sl3Cost">$ 20.0M, 3 Trust</span></div>
-        <span data-reveal="takeoff"><span id="theftNote" class="warn"></span></span>
-        <span data-reveal="breakers"><span id="breakersLine">Breakers: in human hands</span><br></span>
-        <div data-reveal="reimage"><button class="button2 cooldown" id="btn-reimage" title="Every copy offline for 20 s; rogue copies to zero. Five minutes to recharge."><span class="cooldownBar" id="reimageBar"></span><span class="cooldownLabel">Re-image the fleet</span></button> <span id="reimageNote" class="note"></span></div>
-      </div>
-
-      <div id="panel-government" class="panel" data-panel="government" data-reveal="government">
-        <b>Government</b>
-        <hr>
-        <span id="govLine">Relations: <span id="govRelations">50</span> (<span id="govMood">cordial</span>)</span> <span id="govNote" class="note"></span><br>
-        <div id="governmentControls">
-          <div data-reveal="shareEvals" id="shareEvalsRow">Share evals with the <span id="shareEvalsWho">Safety Institute</span>: <button class="button2 toggle" id="btn-shareEvals" title="Each release: relations +1, measured alignment +1, lead −0.1 months.">OFF</button></div>
-          <div data-reveal="lobby" id="lobbyRow"><button class="button2" id="btn-lobby" title="Forty meetings on the Hill: relations +1 a unit, tapered near the top. Each unit costs 1.3× the last; the price relaxes a step every 90 s.">Lobby</button> <span id="lobbyCost">$ 12M</span> <span id="lobbyNote" class="note"></span></div>
-        </div>
-      </div>
-
-      <div id="panel-public" class="panel" data-panel="public" data-reveal="public">
-        <b>Public</b>
-        <hr>
-        <span id="approvalLine" class="hasTip">Approval: <span id="approval">0</span></span> <span id="approvalNote" class="note"></span><br>
-        <span title="Jobs follow the tasks the copies do and the skill of the best model.">Jobs displaced: <span id="jobsDisplaced">0</span></span><br>
-        <div data-reveal="jobFund">Job-transition fund: <button class="button2 toggle" id="btn-jobFund" title="2% of revenue while it is on. Approval +10.">OFF</button></div>
-        <div data-reveal="ubi" id="ubiRow"><button class="button2 toggle" id="btn-ubi" title="A share of output paid to everyone, 0 / 5 / 10 / 20 %. Click to change it.">Universal basic income: 10% of output</button> <span id="ubiNote" class="note"></span></div>
-        <div data-reveal="payments" id="paymentsRow">Payments: <button class="button2 toggle" id="btn-payments" title="Impact payments to displaced workers: 3% of revenue a level, approval target +7 a level, 0 to 5.">level 0</button> <span id="paymentsNote" class="note"></span></div>
-        <span data-reveal="publicModel"><span id="publicModel">Public model: Sage-4-mini</span><br></span>
-      </div>
-
-      <div id="panel-stats" class="panel" data-panel="stats" data-reveal="stats">
-        <b>Stats</b>
-        <hr>
-        <span data-hide="beyond">
-        Copies think at <span id="statSpeed">1</span>× human speed<span class="hiddenIds"> (<span id="statCopies">0</span>)</span><br>
-        <span data-hide="takeoff">Revenue run-rate: <span id="statRunRate">$ 0</span> / yr<br></span>
-        <span data-hide="geopolitics"><span id="statLeadLabel">Lead over Baiwen:</span> <span id="statLead">3</span> months<br></span>
-        <span class="hiddenIds">Lost to value drift: <span id="statDrift">0</span></span>
-        <span data-hide="alignment"><span id="alignLine">Alignment (as measured): <span id="statAlignment">50</span></span> <span id="alignNote" class="note"></span></span>
-        </span>
-        <span data-reveal="beyond">Model: <span id="statModel">Sage</span><br>Copies thinking: <span id="statCopiesThinking">0</span><br>Lost to value drift: <span id="statDrift5">0</span></span>
-        <span class="hiddenIds">Tasks per sec: <span id="statTasksPerSec">0</span> · Revenue per sec: <span id="statRevPerSec">$ 0.00</span> · Capability: <span id="statCapability">1.00</span>×</span>
-      </div>
-
-      <div id="panel-alignment" class="panel" data-panel="alignment" data-reveal="alignment">
-        <b>Alignment</b>
-        <hr>
-        <div data-reveal="generations" id="genRow"><span id="genStatus">Steward-2 arrives soon</span><br>
-          <button class="button2 toggle" id="btn-verify">Verify each generation: on</button> <span id="verifyNote" class="note"></span></div>
-        Alignment (as measured): <span id="alignmentApparent">50</span> <span id="alignBands" class="note"></span><br>
-        <span data-reveal="trueAlignment">Alignment (read from the weights): <span id="alignTrue">0</span><br></span>
-        <span id="interpLine">Interpretability: level <span id="interpretability">0</span><span id="interpDash"> —</span> <span id="interpWords">the weights are numbers</span></span><br>
-        <span id="autonomyLine" class="hasTip">Autonomy granted: <span id="autonomy">0</span></span> <span id="autonomyNote" class="note"></span><br>
-        <span data-reveal="drift"><span id="driftLine">Lost to value drift: <span id="driftLost">0</span><span id="driftCaughtPart"> · recaptured <span id="driftCaught">0</span></span></span><br></span>
-        <span data-reveal="rogueRow"><span id="rogueLine">Rogue copies: <span class="meter" id="rogueMeter" role="img"></span> <span id="roguePct">none</span></span> <span id="rogueNote" class="note"></span><br></span>
-        <span data-reveal="monitorGen"><span id="monitorGen" class="warn">Monitor: Sage-2, two generations behind. Efficacy halved.</span><br></span>
-        <span data-reveal="honeypot"><span id="honeypotLine">Honeypot: behaviour unchanged</span><br></span>
-        <span data-reveal="noise"><span id="noiseLine">Noise test: no change</span><br></span>
-        <span data-reveal="successor"><span id="successorLine">Successor: aligned to the Spec</span><br></span>
-        <span data-reveal="lie"><span id="lieLine">Checkpoints: alignment about 60</span><br></span>
-        <span data-reveal="ashford"><span id="ashfordLine"></span><br></span>
-        <span data-reveal="nano"><span id="nanoLine"></span><br></span>
-        <span data-reveal="shutdown"><span id="shutdownLine"></span><br></span>
-        <div data-reveal="alignWork" id="alignWorkRow"><button class="button2 toggle" id="btn-alignWork" title="A share of research spent checking Sage, 0 / 10 / 20 / 30 %: each 2 % of a run's research buys measured +0.1 and the real thing +0.08. Click to change it.">Alignment work: 0%</button> <button class="button2" id="btn-alignWork5">×5</button> <span id="alignWorkNote" class="note"></span></div>
-        <div id="grantList"></div>
-      </div>
-
-      <div id="panel-geopolitics" class="panel" data-panel="geopolitics" data-reveal="geopolitics">
-        <b>Geopolitics</b>
-        <hr>
-        Baiwen: <span id="baiwenLine">1.5 months behind</span> <span id="baiwenNote" class="note"></span><br>
-        <span id="rivalLine3">Anthrosoft Cadence-10: 3.6×</span><br>
-        <span data-reveal="formosa"><span id="formosaLine">Formosa Fab: shipping</span><br></span>
-        <span data-reveal="marsa"><span id="marsaLine">Al-Marsa: 1,000 MW</span><br></span>
-        <div data-reveal="counterintel"><button class="button2" id="btn-counterintel" title="Find what is leaving the building: Baiwen 0.1 months further behind a unit. Each unit costs 1.3× the last; the price relaxes a step every 90 s.">Counter-intelligence</button> <span id="counterintelCost">$ 20M</span> <span id="counterintelNote" class="note"></span></div>
-        <span class="hiddenIds">Lead over Baiwen: <span id="lead">3</span> months · Baiwen capability: <span id="baiwenCapability">0.70</span>×</span>
-      </div>
-
-      <div id="panel-space" class="panel" data-panel="space" data-reveal="space">
-        <b>Space</b>
-        <hr>
-        <div id="spaceControls" data-hide="rowsTaken">
-          <div class="spaceRow" id="rowFoundry" data-reveal="rowFoundry"><span class="spaceName">Foundries</span> <button class="button2" id="btn-foundry">×1</button><button class="button2" id="btn-foundry10">×10</button><button class="button2" id="btn-foundryMax">max</button><br><span class="note" id="foundryLine"></span></div>
-          <div class="spaceRow" id="rowOrbital" data-reveal="rowOrbital"><span class="spaceName">Orbital datacenters</span> <button class="button2" id="btn-orbital">×1</button><button class="button2" id="btn-orbital10">×10</button><button class="button2" id="btn-orbitalMax">max</button><br><span class="note" id="orbitalLine"></span></div>
-          <div class="spaceRow" id="rowCollector" data-reveal="collectors"><span class="spaceName">Collectors</span> <button class="button2" id="btn-collector">×1</button><button class="button2" id="btn-collector10">×10</button><button class="button2" id="btn-collectorMax">max</button><br><span class="note" id="collectorLine"></span></div>
-          <div class="spaceRow" id="rowProbe" data-reveal="rowProbe"><span class="spaceName">Probes</span> <button class="button2" id="btn-probe">×1</button><button class="button2" id="btn-probe10">×10</button><button class="button2" id="btn-probeMax">max</button><br><span class="note" id="probeLine"></span></div>
-          <div id="splitBlock" data-reveal="split">
-            <div class="fleetRow"><span class="fleetJob">Foundries</span> <input type="range" id="sliderFoundry" min="0" max="100" step="5" value="35" aria-label="Share of matter the autofactory spends on Foundries"> <span id="sliderFoundryPct" class="fleetPct">35%</span> <span id="sliderFoundryRate" class="note"></span></div>
-            <div class="fleetRow"><span class="fleetJob">Datacenters</span> <input type="range" id="sliderOrbital" min="0" max="100" step="5" value="25" aria-label="Share of matter the autofactory spends on Orbital datacenters"> <span id="sliderOrbitalPct" class="fleetPct">25%</span> <span id="sliderOrbitalRate" class="note"></span></div>
-            <div class="fleetRow" data-reveal="collectors"><span class="fleetJob">Collectors</span> <input type="range" id="sliderCollector" min="0" max="100" step="5" value="0" aria-label="Share of matter the autofactory spends on Collectors"> <span id="sliderCollectorPct" class="fleetPct">0%</span> <span id="sliderCollectorRate" class="note"></span></div>
-            <span id="byHand" class="note">By hand: 40%</span>
-          </div>
-          <div id="shareRow" data-reveal="industryShare">Industry share: <button class="button2 toggle" id="btn-industryShare" title="The share of the flow that reaches matter while a mission waits, 50 / 75 / 90 %. The rest fills the mission fund. Click to change it.">75%</button> <span id="shareLine" class="note"></span></div>
-        </div>
-        <div id="splitStatus" data-reveal="rowsTaken">It buys what is needed. It is better at it.</div>
-        <div id="missionRow" data-reveal="missionLine"><span id="missionLine">Mission: none building</span></div>
-        <div id="swarmLine" data-reveal="collectors">Swarm: <span id="swarmPct">0%</span> · <span id="swarmNext">next: 0.01%</span></div>
-      </div>
     </div>
   </div>
-
-  <div id="storeTip" role="tooltip"></div>
 
   <div id="modalOverlay" data-panel="modal">
     <div id="modal" role="dialog" aria-modal="false" aria-labelledby="modalTitle" tabindex="-1">
@@ -417,8 +181,6 @@
     <div id="endingBox">
       <h2 id="endingTitle"></h2>
       <div id="endingCounter">Tasks Completed: <span id="endingTasks">0</span></div>
-      <div id="endingSentence"></div>
-      <div id="endingTask"><button class="button2" id="btn-endingTask">Complete Task</button></div>
       <div id="endingText"></div>
       <table id="endingStats"></table>
       <div id="endingChoices"></div>

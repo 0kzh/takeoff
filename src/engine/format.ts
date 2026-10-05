@@ -87,29 +87,3 @@ export function fmtShortNum(n: number): string {
   if (a >= 1e6) return `${fmtNum(n / 1e6, 1)}M`;
   return fmtInt(Math.round(n));
 }
-
-const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-
-export function fmtBig(n: number): string {
-  const a = Math.abs(n);
-  if (!Number.isFinite(n)) return '0';
-  if (a < 1e15) return fmtShortNum(n);
-  let e = Math.floor(Math.log10(a));
-  let m = n / Math.pow(10, e);
-  if (Math.abs(m) >= 9.95) {
-    e += 1;
-    m /= 10;
-  }
-  return `${m.toFixed(1)} × 10${String(e).split('').map((d) => SUPERSCRIPT[Number(d)]).join('')}`;
-}
-
-export function fmtSmallPct(p: number): string {
-  if (!Number.isFinite(p) || p <= 0) return '0';
-  if (p >= 10) return fmtNum(p, 0);
-  const decimals = Math.min(6, Math.max(1, -Math.floor(Math.log10(p)) + 1));
-  return p.toFixed(decimals);
-}
-
-export function fmtTonnes(n: number): string {
-  return `${fmtShortNum(n)} t`;
-}

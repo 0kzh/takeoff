@@ -26,8 +26,8 @@ div[data-reveal].shown, .panel.shown { display: block; }
 .hiddenIds { display: none; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
-#buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart, #gasMW, #solarMW, #nuclearMW { display: none; }
-#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown, #gasMW.shown, #solarMW.shown, #nuclearMW.shown { display: inline; }
+#buyPowerRow, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart { display: none; }
+#buyPowerRow.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown { display: inline; }
 #trainCosts { margin-top: 4px; }
 .costRow { display: none; align-items: center; gap: 8px; }
 .costRow.shown { display: flex; }
@@ -100,7 +100,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .column { flex: none; }
 #middleColumn { order: 1; }
 #logColumn { order: 2; }
-body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 0; }
 #logColumn { width: 200px; }
 #leftColumn { width: 275px; }
 #middleColumn { width: 275px; }
@@ -129,7 +128,6 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
 .logMonth { font-weight: bold; margin: 2px 0 4px; }
 .logEntry { margin-bottom: 8px; }
 .logEntry.choice { font-style: italic; }
-.logDate { white-space: nowrap; }
 
 .button2 {
   border: 1px solid #1a1a1a;
@@ -187,7 +185,7 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   background: #888;
 }
 .cooldownLabel { position: relative; }
-#btn-release, #btn-releaseInternal { min-width: 0; }
+#btn-release { min-width: 0; }
 .cooldown.cooling, .cooldown.cooling:hover, .cooldown.cooling:active {
   background: #fff;
   border: 1px solid #000;
@@ -216,16 +214,10 @@ body[data-stage="4"] #middleColumn, body[data-stage="5"] #middleColumn { order: 
   cursor: pointer;
 }
 .projectButton:hover { border: 1px solid rgba(0, 0, 0, 0.25); }
-.projectButton.folded .projectDesc,
-.projectButton.folded br { display: none; }
 .projectButton:active { background: #d1d1d1; border: 1px solid #000; }
 .projectButton:disabled { opacity: 0.6; border: 1px solid #000; cursor: default; }
 .projectButton.rescue { border-style: dashed; }
 .projectButton.pinned { border-width: 2px; }
-body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent { border-left: 5px solid #000; }
-body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectTitle::after { content: ' — needed'; font-weight: normal; font-style: italic; }
-.projectReason { display: block; }
-.projectReason:empty { display: none; }
 
 #train-idle, #train-running, #train-eval, #train-redteam { display: none; margin-top: 6px; }
 #train-idle.shown, #train-running.shown, #train-eval.shown, #train-redteam.shown { display: block; }
@@ -255,89 +247,7 @@ body:not([data-stage="1"]):not([data-stage="2"]) .projectButton.urgent .projectT
 .cardLine { font-style: italic; }
 #evalTotal { font-size: 14px; margin-bottom: 4px; }
 
-.stores {
-  position: relative;
-  border: 1px solid #000;
-  padding: 10px 8px 6px;
-  margin-top: 8px;
-  font-size: 15px;
-}
-.stores::before {
-  content: attr(data-legend);
-  position: absolute;
-  top: -0.7em;
-  left: 8px;
-  padding: 0 4px;
-  background: #fff;
-  font-size: 14px;
-}
-.storeRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  line-height: 1.35;
-  cursor: default;
-}
-div.storeRow[data-reveal] { display: none; }
-div.storeRow[data-reveal].shown { display: flex; }
-.storeRow:hover .storeKey, .storeRow.tipOpen .storeKey { text-decoration: underline; }
-.storeVal { text-align: right; white-space: nowrap; }
-.storeRow { flex-wrap: wrap; }
-.storeRow .storeVal { white-space: normal; margin-left: auto; min-width: 0; }
-#gpuFull, #powerFull { display: block; white-space: normal; line-height: 1.2; }
-#storeTip {
-  display: none;
-  position: absolute;
-  z-index: 15;
-  min-width: 190px;
-  max-width: 260px;
-  background: #fff;
-  border: 1px solid #000;
-  padding: 4px 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.15);
-  pointer-events: none;
-}
-#storeTip.open { display: block; }
-.tipRow { display: flex; justify-content: space-between; gap: 10px; }
-.tipRow.total { font-weight: bold; border-top: 1px solid #888; margin-top: 2px; padding-top: 1px; }
-.tipRow.note { color: #555; }
-
-.infraRow { margin-bottom: 3px; }
-.reason { color: #555; font-size: 13px; font-style: italic; }
-#interconnectLine { display: none; margin: 2px 0 3px; }
-#interconnectLine.shown { display: block; }
-.toggle.on { background: linear-gradient(#bbb, #fff); border: 1px solid #000; font-weight: bold; }
-.hasTip { cursor: help; }
-#allocSlider { width: 110px; vertical-align: middle; margin: 0 2px; }
-#billPrice, #btn-autoPrice { white-space: nowrap; }
-#releaseNote { margin-left: 4px; }
-#evalLine { display: none; font-size: 14px; }
-#train-eval.condensed #evalHeader,
-#train-eval.condensed #benchmarks,
-#train-eval.condensed #cards,
-#train-eval.condensed #evalTotal { display: none; }
-#train-eval.condensed #evalLine { display: block; }
-
-#graphWrap { position: relative; width: 310px; max-width: 100%; }
-#graphCanvas { display: block; width: 310px; height: 190px; max-width: 100%; border: 1px solid #000; background: #fff; box-sizing: border-box; }
-#graphTip {
-  display: none;
-  position: absolute;
-  z-index: 5;
-  background: #fff;
-  border: 1px solid #000;
-  padding: 1px 5px;
-  font-size: 12px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-#graphTip.open { display: block; }
-#nextTier { font-size: 14px; }
-#leadLine { font-size: 14px; display: none; }
-#leadLine.shown { display: inline; }
-
+#billPrice { white-space: nowrap; }
 #modalOverlay {
   display: none;
   position: fixed;
@@ -451,46 +361,16 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
   .column { display: contents; }
   #columns > .column > .panel { width: 100%; box-sizing: border-box; }
   #panel-task { order: 1; }
-  #panel-stores { order: 2; }
   #panel-power { order: 3; }
-  body[data-stage="2"] #panel-infrastructure { order: 3; }
-  body[data-stage="2"] #panel-research { order: 4; }
   #panel-training { order: 4; }
   #panel-projects { order: 5; }
   #panel-business { order: 6; }
   #panel-compute { order: 7; }
-  #panel-infrastructure { order: 8; }
   #panel-research { order: 9; }
-  #panel-site { order: 10; }
-  #panel-graph { order: 11; }
-  #panel-security { order: 12; }
-  #panel-government { order: 13; }
-  #panel-public { order: 14; }
-  #panel-stats { order: 15; }
-  #panel-alignment, #panel-geopolitics, #panel-oversight { order: 16; }
-  body[data-stage="3"] #panel-training { order: 3; }
-  body[data-stage="3"] #panel-graph { order: 4; }
-  body[data-stage="3"] #panel-alignment { order: 5; }
-  body[data-stage="3"] #panel-projects { order: 6; }
-  body[data-stage="3"] #panel-research { order: 7; }
-  body[data-stage="3"] #panel-oversight, body[data-stage="3"] #panel-government { order: 8; }
-  body[data-stage="3"] #panel-geopolitics { order: 9; }
-  body[data-stage="3"] #panel-security { order: 10; }
-  body[data-stage="3"] #panel-public { order: 11; }
-  body[data-stage="3"] #panel-business { order: 12; }
-  body[data-stage="3"] #panel-infrastructure { order: 13; }
-  body[data-stage="3"] #panel-stats { order: 14; }
-  .projectButton.grant { width: 100%; }
-  #allocSlider, #monitorSlider { width: 100%; max-width: 260px; }
-  #panel-robots, #panel-society, #panel-treaty, #panel-space { order: 17; }
   #panel-log { order: 30; }
-  #panel-stores.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
-  #row-research, #row-gpus, #row-power, #row-chips, #row-rogue { grid-column: 1 / -1; }
   .projectButton { width: 100%; max-width: 100%; box-sizing: border-box; }
   .progress { width: 100%; max-width: 300px; box-sizing: border-box; }
   .benchBar { width: auto; flex: 1 1 auto; min-width: 60px; }
-  #graphWrap { width: 100%; }
-  #graphCanvas { width: 100%; height: auto; aspect-ratio: 310 / 190; }
   #modal { width: auto; left: 8px; right: 8px; transform: none; top: 60px; }
   #dev { width: auto; left: 8px; }
   .button2 { min-height: 36px; padding: 6px 10px; font-size: 13px; margin: 2px 0; }
@@ -499,19 +379,8 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 }
 
 .off { display: none !important; }
-#monitorSlider { width: 110px; vertical-align: middle; margin: 0 2px; }
-#experimentsRow, #redteamDepthRow, #stepSizeRow, #holdRow, #alignWorkRow, #buildBudgetRow, #paymentsRow { margin-top: 3px; }
-#shipmentRow, #theftNote { font-size: 14px; }
-#grantList { margin-top: 6px; }
-.projectButton.grant { width: 310px; min-height: 44px; border-style: double; border-width: 3px; }
-body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent { border: 2px solid #000; font-weight: bold; }
-body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, #btn-nuclear).urgent::after { content: ' — needed'; font-weight: normal; font-style: italic; }
 #endingBox p { margin-top: 18px; }
 #endingCounter { font-size: 28px; font-weight: bold; margin: 6px 0 2px; }
-#endingCounter.classified { color: #999; }
-#endingSentence { margin-bottom: 10px; font-style: italic; }
-#endingTask { display: none; margin-bottom: 10px; }
-#endingTask.shown { display: block; }
 #endingText p { margin: 0 0 8px; }
 #endingChoices { margin-top: 14px; font-size: 14px; }
 #endingChoices div { margin-bottom: 2px; }
@@ -520,71 +389,3 @@ body:not([data-stage="1"]):not([data-stage="2"]) :is(#btn-sl3, #btn-datacenter, 
 .meter { display: inline-block; width: 90px; vertical-align: middle; overflow: hidden; text-align: left; }
 .meterFill { display: inline-block; vertical-align: top; }
 .meter.warn .meterFill { background: #b00000; }
-
-body[data-stage="4"] #middleColumn { width: 360px; }
-body[data-stage="4"] #middleColumn .projectButton { width: 340px; }
-body[data-stage="4"] #panel-stores { font-size: 15px; }
-#robotsCap, #robotsCount { white-space: nowrap; }
-.fleetRow { white-space: nowrap; }
-.fleetJob { display: inline-block; width: 74px; }
-.fleetRow input[type="range"] { width: 80px; vertical-align: middle; margin: 0 2px; }
-.fleetPct { display: inline-block; min-width: 30px; }
-#fleetSliders .note { white-space: normal; }
-#fleetIdle:empty { display: none; }
-#fleetGoalBlock, #approvalHoldRow, #housingRow, #draftRow, #stanceRow, #hearingRow, #ubiRow, #genRow { margin-top: 3px; }
-.goalButton.selected, .goalButton.selected:hover {
-  background: linear-gradient(#bbb, #fff);
-  border: 1px solid #000;
-  font-weight: bold;
-}
-#genStatus { font-size: 14px; }
-#treatyWait:empty, #treatyLeadNote:empty, #societyApprovalNote:empty { display: none; }
-
-@media (max-width: 700px) {
-  body[data-stage="4"] #panel-stores { order: 2; }
-  body[data-stage="4"] #panel-robots { order: 3; }
-  body[data-stage="4"] #panel-projects { order: 4; }
-  body[data-stage="4"] #panel-alignment { order: 5; }
-  body[data-stage="4"] #panel-graph { order: 6; }
-  body[data-stage="4"] #panel-treaty, body[data-stage="4"] #panel-geopolitics { order: 7; }
-  body[data-stage="4"] #panel-oversight { order: 8; }
-  body[data-stage="4"] #panel-society, body[data-stage="4"] #panel-public { order: 9; }
-  body[data-stage="4"] #panel-research { order: 10; }
-  body[data-stage="4"] #panel-security { order: 11; }
-  body[data-stage="4"] #panel-stats { order: 12; }
-  #row-robots, #row-treatyChips, #row-materials { grid-column: 1 / -1; }
-  .fleetRow { white-space: normal; }
-  .fleetRow input[type="range"] { width: 45%; }
-}
-
-body[data-stage="5"] #leftColumn { width: 330px; }
-body[data-stage="5"] #middleColumn { width: 360px; }
-body[data-stage="5"] #middleColumn .projectButton { width: 340px; }
-body[data-stage="5"] #panel-stores { font-size: 15px; }
-.spaceRow { margin-bottom: 5px; }
-.spaceName { display: inline-block; min-width: 132px; }
-.spaceRow .button2 { margin: 0 2px 0 0; }
-.spaceRow .note { display: block; line-height: 1.25; }
-#splitBlock, #shareRow, #missionRow, #swarmLine { margin-top: 4px; }
-#splitBlock .fleetJob { width: 86px; }
-#splitBlock .fleetRow { white-space: normal; }
-#splitBlock .fleetRow input[type="range"] { width: 70px; }
-#byHand { display: block; }
-#splitStatus { margin: 4px 0; font-style: italic; }
-#panel-earth { color: #888; margin-top: 14px; }
-#panel-earth.stores::before { color: #888; }
-#panel-earth.quiet .storeRow { cursor: default; }
-#panel-earth.quiet .storeRow:hover .storeKey { text-decoration: none; }
-
-@media (max-width: 700px) {
-  body[data-stage="5"] #panel-stores { order: 2; }
-  body[data-stage="5"] #panel-space { order: 3; }
-  body[data-stage="5"] #panel-projects { order: 4; }
-  body[data-stage="5"] #panel-earth { order: 5; }
-  body[data-stage="5"] #panel-stats { order: 6; }
-  body[data-stage="5"] #panel-graph { order: 7; }
-  body[data-stage="5"] #panel-earth.shown { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
-  #row-launch, #row-missionFund, #row-swarm { grid-column: 1 / -1; }
-  .spaceName { min-width: 0; display: block; }
-  #splitBlock .fleetRow input[type="range"] { width: 40%; }
-}
