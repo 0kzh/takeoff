@@ -162,7 +162,7 @@ export interface GameState {
   seed: number;
   rngSeed: number;
   date: number;
-  ending: string;
+  stage: number;
 
   tasks: number;
   unbilled: number;
@@ -285,7 +285,7 @@ export function newGame(seed: number = Date.now()): GameState {
     seed: Math.floor(seed),
     rngSeed: seedFrom(seed),
     date: 0,
-    ending: '',
+    stage: 1,
 
     tasks: 0,
     unbilled: 0,
@@ -547,7 +547,6 @@ export function deserialize(text: string): GameState | null {
   try {
     const raw: unknown = JSON.parse(text);
     if (!raw || typeof raw !== 'object' || typeof (raw as Record<string, unknown>)['tasks'] !== 'number') return null;
-    if (Number((raw as Record<string, unknown>)['stage'] ?? 1) > 1) return null;
     return migrate(raw as Record<string, unknown>);
   } catch {
     return null;

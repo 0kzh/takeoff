@@ -190,7 +190,7 @@ const NAIVE_PRICE_COOLDOWN = 8;
 function stage1Step(s: GameState, a: Actions, mem: BotMemory): void {
   mem.ticks += 1;
   mem.bought = [];
-  if (s.ending) return;
+  if (s.stage !== 1) return;
   const now = s.stats.timePlayed;
 
   const careful = mem.policy === 'bot';

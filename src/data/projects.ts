@@ -1,6 +1,5 @@
 import { GameState, Cost, canPay, isBought, addFunds, counter } from '../engine/state.js';
-import { STUCK } from '../engine/stages.js';
-import { forceEnding } from '../engine/endings.js';
+import { STUCK, enterStage } from '../engine/stages.js';
 import { researchCap, gpuCost, fleetPowerBlock, researchRate, nextContractWeight, rentQuota } from '../engine/economy.js';
 import {
   startCapability, gpusShort, needsDatacenter, cardWallSeconds, gpusForS1,
@@ -444,7 +443,7 @@ export const PROJECTS: ProjectDef[] = [
       s.flags['dcCardAt'] = s.stats.timePlayed;
     },
     buy: (s) => {
-      forceEnding(s, 'datacenter');
+      enterStage(s, 2);
     },
     pinned: true,
     logMsg: 'OpenMind is said to be pricing a datacenter of its own in West Texas.',

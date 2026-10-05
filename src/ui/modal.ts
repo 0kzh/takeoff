@@ -17,7 +17,7 @@ export function renderModal(s: GameState, choose: (index: number) => void, dismi
   const active = s.activeChoice;
   const overlay = byId('modalOverlay');
   const def = active ? choiceById(active.id) : undefined;
-  setShown(overlay, !!def && !s.ending);
+  setShown(overlay, !!def);
   if (!active || !def) {
     if (lastKey) giveFocusBack();
     lastKey = '';

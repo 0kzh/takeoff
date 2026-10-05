@@ -2,7 +2,7 @@
 // generically from the DOM (any visible <button>), so new buttons/projects need no changes here.
 /** Release after red-teaming to zero open issues. */
 export const RELEASE_KEYS = ['btn-release'];
-/** The end screen's button: never pressed (a new game would wipe the run). */
+/** The New game button (shown in the blank stages): never pressed (a new game would wipe the run). */
 const END_SCREEN = ['btn-newGame'];
 
 const find = (c, k) => c.buttons.find((b) => b.k === k);
@@ -69,8 +69,7 @@ export default {
     const unitMatch = bp && /\(([0-9][0-9,]*)/.exec(bp.textContent || '');
     return {
       ready: 1,
-      stage: 1,
-      ending: s.ending || '',
+      stage: s.stage,
       gameTime: s.stats.timePlayed,
       funds: s.funds,
       backlog: s.unbilled,
@@ -107,9 +106,8 @@ export default {
       capability: s.capability,
       date: s.date,
       autoPrice: s.autoPrice ? 1 : 0,
-      // The Train row's GPU line ("Needs 18,000 GPUs. 14,200 free.") and the end screen.
+      // The Train row's GPU line ("Needs 18,000 GPUs. 14,200 free.").
       trainGpus: seen('trainGpus'),
-      endingTitle: seen('endingTitle'),
     };
   },
 
@@ -136,7 +134,7 @@ export default {
       const floor = Math.max(10000, 60 * (c.m.revPerSec || 0));
       return c.buttons.filter((b) => b.kind === 'project' && ((b.costs && b.costs.funds) || 0) >= floor).map((b) => b.k);
     },
-    /** Never clicked by the generic buy loop: red-team and release (special), and the end screen's button. */
+    /** Never clicked by the generic buy loop: red-team and release (special), and the New game button. */
     skip: ['btn-redteam', ...RELEASE_KEYS, ...END_SCREEN],
     /** Every run: red-team until 0 open issues, then Release. */
     async special(ctx) {
@@ -145,13 +143,13 @@ export default {
     },
   },
 
-  /** The stage (the whole game) ends when the First Datacenter is bought: the end screen. */
-  stageEnded(m) {
-    return !!m.ending;
+  /** Stage N ends when state.stage increases (Stage 2 onward is a blank placeholder). */
+  stageEnded(m, startStage) {
+    return (m.stage ?? startStage) > startStage;
   },
-  /** How it ended, for the record: "ending: The First Datacenter" (the end screen's title). */
-  endedHow(m) {
-    return m.ending ? `ending: ${m.endingTitle || m.ending}` : '';
+  /** How the stage ended, for the record: "Stage 2". */
+  endedHow(m, startStage) {
+    return (m.stage ?? startStage) > startStage ? `Stage ${m.stage}` : '';
   },
 
   /**
@@ -197,7 +195,7 @@ export default {
       );
       info.preset = `loadPreset(${JSON.stringify(named)}) → ${got} tasks`;
     }
-    st = await page.evaluate(() => ({ seed: window.__game.state.seed, stage: 1, version: window.__game.version }));
+    st = await page.evaluate(() => ({ seed: window.__game.state.seed, stage: window.__game.state.stage, version: window.__game.version }));
     Object.assign(info, { stateSeed: st.seed, stage: st.stage, saveVersion: st.version });
     return info;
   },

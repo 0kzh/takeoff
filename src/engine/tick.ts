@@ -15,9 +15,8 @@ import { updateProjects, noteReveals } from './reveal.js';
 import {
   updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
 } from './events.js';
-import { updateReveals } from './stages.js';
+import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
-import { forceEnding } from './endings.js';
 import { fmtInt, fmtDuration } from './format.js';
 
 export const TICK_MS = 100;
@@ -25,14 +24,12 @@ export const SLOW_TICK_EVERY = 10;
 const MAX_TICKS_PER_CALL = 36000;
 
 export function tick(s: GameState, dtMs: number): void {
-  if (s.ending) return;
   s.tickAccum += dtMs;
   let n = 0;
   while (s.tickAccum >= TICK_MS && n < MAX_TICKS_PER_CALL) {
     s.tickAccum -= TICK_MS;
     step(s);
     n++;
-    if (s.ending) break;
   }
   if (n >= MAX_TICKS_PER_CALL) s.tickAccum = 0;
 }
@@ -41,6 +38,13 @@ export function step(s: GameState): void {
   const dt = TICK_SECONDS;
   const slow = (s.tickCount + 1) % SLOW_TICK_EVERY === 0;
   s.tickCount += 1;
+
+  if (s.stage > 1) {
+    advanceClock(s, dt);
+    checkStageExit(s);
+    s.stats.timePlayed += dt;
+    return;
+  }
 
   produce(s, dt);
 
@@ -70,6 +74,7 @@ export function step(s: GameState): void {
   noteReveals(s);
 
   advanceClock(s, dt);
+  checkStageExit(s);
 
   s.stats.timePlayed += dt;
   if (slow) slowStats(s);
@@ -185,7 +190,6 @@ export const actions = {
   resolveChoice,
   takeDefault,
   fireEvent,
-  forceEnding,
 };
 
 export type Actions = typeof actions;

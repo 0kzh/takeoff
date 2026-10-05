@@ -293,21 +293,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .modalButton.twoLine:disabled .optLine { color: #999; }
 .modalButton:disabled { color: #999; border-color: #999; text-decoration: none; cursor: default; }
 
-#endingScreen {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: #fff;
-  z-index: 30;
-  overflow: auto;
-}
-#endingScreen.shown { display: block; }
-#endingBox { max-width: 520px; margin: 80px auto; }
-body.ended > *:not(#endingScreen):not(#dev) { display: none !important; }
-body.ended #endingScreen { position: static; min-height: 100vh; overflow: visible; }
-@media (max-width: 600px) { #endingBox { margin: 32px 16px; } }
-#endingStats td { padding: 2px 16px 2px 0; }
-
 #toast {
   position: fixed;
   left: 10px;
@@ -379,11 +364,6 @@ body.ended #endingScreen { position: static; min-height: 100vh; overflow: visibl
 }
 
 .off { display: none !important; }
-#endingBox p { margin-top: 18px; }
-#endingCounter { font-size: 28px; font-weight: bold; margin: 6px 0 2px; }
-#endingText p { margin: 0 0 8px; }
-#endingChoices { margin-top: 14px; font-size: 14px; }
-#endingChoices div { margin-bottom: 2px; }
 #btn-newGame { font-size: 14px; }
 
 .meter { display: inline-block; width: 90px; vertical-align: middle; overflow: hidden; text-align: left; }

@@ -290,12 +290,12 @@ export function simulate(args: Args): SimResult {
     replyLines += (s.stats.consoleLines ?? 0) - linesBefore;
     step(s);
     const t = s.stats.timePlayed;
-    if (s.ending) {
+    if (s.stage !== 1) {
       transition = t;
       capAtTransition = s.capability;
       for (const id of mem.bought) out(t, `BUY ${projectById(id)?.title ?? id}`);
-      out(t, `ENDING ${s.ending} (${dateLabel(s.date)})`);
-      mark('ending', t);
+      out(t, `STAGE 1 → ${s.stage} (${dateLabel(s.date)})`);
+      mark('stage2', t);
       break;
     }
     const why = trainBlockedBy(s);

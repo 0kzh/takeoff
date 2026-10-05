@@ -160,7 +160,7 @@ stage of a run). A `--preset` start is the stage the preset loads (`--preset 4s`
   find on other stages. The `.explore.md` note log includes Stage 2–3's notes (Train status and
   reason, release note, copies, interconnect, Experiments, Lobby, Counter-intelligence, Re-image,
   Alignment work, autonomy, rogue share, seats, session, order, memo, theft, shipment, build-out,
-  Standing order, build share, the end screen's title) and Stage 4's (generation line, Verify,
+  Standing order, build share, the blank stages) and Stage 4's (generation line, Verify,
   fleet status and goal, idle share, Housing, hearing, agenda, treaty wait and lead, basic income,
   Draft clauses, approval, the three crises' lines, the permit cap). `--tag` sets the label prefix
   (default `x`; round 2 used `r2x`).
@@ -291,7 +291,7 @@ left something open, the harness does this:
 * **Words on screen** = letter-led tokens (`[A-Za-z][A-Za-z'’-]*`) in `document.body.innerText`, the
   excluded roots (Takeoff's `#dev`/`#toast`, Paperclips' debug/save buttons) left out — the Stage 1
   round-3 and Stage 2 round-2 critics' count.
-* **Stage end**: Takeoff `state.ending` is set (buying First Datacenter); Paperclips Stage 1 ends
+* **Stage end**: Takeoff `state.stage` increases (buying First Datacenter enters the blank Stage 2); Paperclips Stage 1 ends
   when `humanFlag` drops to 0 (Release the HypnoDrones), Stage 2 when `spaceFlag` becomes 1 (Space
   Exploration), Stage 3 at "Universal Paperclips achieved" (milestone 15, the Emperor of Drift
   messages that open the endgame).

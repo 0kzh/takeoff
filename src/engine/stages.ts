@@ -3,9 +3,99 @@ import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { researchCap, rentQuota } from './economy.js';
 import { cardWallSeconds } from './training.js';
 import { researchWanted } from './tick.js';
+import { snapToStage } from './clock.js';
 
-export const END_MONTH = monthOf(2025, 12);
-export const SECONDS_PER_MONTH = 240;
+export interface StageDef {
+  id: number;
+  name: string;
+  startMonth: number;
+  endMonth: number;
+  secondsPerMonth: number;
+  enter: (s: GameState) => void;
+  exit: (s: GameState) => number;
+}
+
+/** Stages 2–5 are placeholders: entering one blanks the screen and freezes the game; the calendar still runs. */
+function blank(lines: string[]) {
+  return (s: GameState): void => {
+    for (const id of Object.keys(s.revealed)) s.revealed[id] = id === 'console';
+    s.revealed['newGame'] = true;
+    s.activeChoice = null;
+    s.choiceQueue = [];
+    s.scheduled = [];
+    s.effects = [];
+    s.training.run = null;
+    s.training.pending = null;
+    s.training.releasing = null;
+    s.cadence.queue = [];
+    for (const line of lines) say(s, line);
+  };
+}
+
+export const STAGES: StageDef[] = [
+  {
+    id: 1,
+    name: 'The Startup',
+    startMonth: monthOf(2025, 7),
+    endMonth: monthOf(2025, 12),
+    secondsPerMonth: 240,
+    enter: () => undefined,
+    exit: () => 0,
+  },
+  {
+    id: 2,
+    name: 'Scale',
+    startMonth: monthOf(2026, 1),
+    endMonth: monthOf(2026, 12),
+    secondsPerMonth: 210,
+    enter: blank(['First Datacenter online outside Abilene.']),
+    exit: () => 0,
+  },
+  {
+    id: 3,
+    name: 'Takeoff',
+    startMonth: monthOf(2027, 1),
+    endMonth: monthOf(2027, 10),
+    secondsPerMonth: 270,
+    enter: blank([]),
+    exit: () => 0,
+  },
+  {
+    id: 4,
+    name: 'Superintelligence',
+    startMonth: monthOf(2027, 11),
+    endMonth: monthOf(2028, 12),
+    secondsPerMonth: 150,
+    enter: blank([]),
+    exit: () => 0,
+  },
+  {
+    id: 5,
+    name: 'Beyond',
+    startMonth: monthOf(2029, 1),
+    endMonth: monthOf(2030, 12),
+    secondsPerMonth: 90,
+    enter: blank([]),
+    exit: () => 0,
+  },
+];
+
+export function stageDef(id: number): StageDef {
+  return STAGES[Math.min(STAGES.length, Math.max(1, id)) - 1]!;
+}
+
+export function enterStage(s: GameState, next: number): boolean {
+  if (next <= s.stage || next > STAGES.length) return false;
+  s.stage = next;
+  snapToStage(s, next);
+  stageDef(next).enter(s);
+  return true;
+}
+
+export function checkStageExit(s: GameState): void {
+  const next = stageDef(s.stage).exit(s);
+  if (next) enterStage(s, next);
+}
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;

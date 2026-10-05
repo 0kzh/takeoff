@@ -19,12 +19,12 @@ let policy: PolicyName = 'bot';
 let bot = newBotMemory(policy);
 
 function advance(dtMs: number): void {
-  if (!autoplay || state.ending) {
+  if (!autoplay) {
     tick(state, dtMs);
     return;
   }
   state.tickAccum += dtMs;
-  while (state.tickAccum >= TICK_MS && !state.ending) {
+  while (state.tickAccum >= TICK_MS) {
     state.tickAccum -= TICK_MS;
     policyStep(state, actions, bot);
     step(state);

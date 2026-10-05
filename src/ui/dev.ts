@@ -6,6 +6,7 @@ import { visibleProjects, projectById } from '../engine/projects.js';
 import { fmtDuration, fmtNum, dateLabel } from '../engine/format.js';
 import { PROJECTS } from '../data/projects.js';
 import { PRESETS, presetByKey } from '../data/presets.js';
+import { enterStage } from '../engine/stages.js';
 import { DEVELOPMENTS } from '../data/developments.js';
 import { byId, make } from './dom.js';
 import { confirmPress } from './confirm.js';
@@ -134,12 +135,12 @@ export function mountDev(host: DevHost): void {
   );
 
   const endRow = row(
-    'End ',
-    btn('dev-end-datacenter', 'datacenter', () => {
-      actions.forceEnding(host.state, 'datacenter');
+    'Stage ',
+    ...[2, 3, 4, 5].map((n) => btn(`dev-enter-${n}`, String(n), () => {
+      enterStage(host.state, n);
       host.saver.saveNow();
       host.render();
-    }),
+    })),
   );
 
   const hidden = make('div', { id: 'devHidden' });

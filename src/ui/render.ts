@@ -14,7 +14,6 @@ import {
 } from '../engine/training.js';
 import { datacenterStatus } from '../data/projects.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
-import { endScreen } from '../engine/endings.js';
 import { fmtInt, fmtNum, fmtMoney, fmtMoneyShort, fmtClock, dateLabel } from '../engine/format.js';
 import { byId, setText, setShown, showId, setDisabled, setWidth, setTitle, make } from './dom.js';
 import { renderMeter, renderCooldown } from './meter.js';
@@ -68,7 +67,6 @@ export function render(s: GameState): void {
   renderProjects(s);
   renderTraining(s);
   renderModal(s, (i) => perform('resolveChoice', i), () => perform('takeDefault'));
-  renderEnding(s);
 }
 
 function fmtRate(n: number): string {
@@ -356,33 +354,4 @@ function renderEval(s: GameState, run: TrainingRun): void {
         : `Release ${run.name} to customers. Demand and hype go up; +1 Trust.`,
     );
   }
-}
-
-let endingShown = '';
-
-function renderEnding(s: GameState): void {
-  const screen = byId('endingScreen');
-  setShown(screen, !!s.ending);
-  if (document.body.classList.contains('ended') !== !!s.ending) {
-    document.body.classList.toggle('ended', !!s.ending);
-    if (s.ending) window.scrollTo(0, 0);
-  }
-  if (!s.ending) {
-    endingShown = '';
-    return;
-  }
-  setText('endingTasks', fmtInt(s.tasks));
-  if (endingShown === s.ending) return;
-  endingShown = s.ending;
-  const end = endScreen(s);
-  setText('endingTitle', end.title);
-  byId('endingText').replaceChildren(...end.epilogue.map((line) => make('p', {}, line)));
-  byId('endingStats').replaceChildren(
-    ...end.rows.map(([k, v]) => {
-      const tr = make('tr');
-      tr.append(make('td', {}, k), make('td', {}, v));
-      return tr;
-    }),
-  );
-  byId('endingChoices').replaceChildren(make('b', {}, 'Choices'), ...end.choices.map((c) => make('div', {}, c)));
 }

@@ -6,11 +6,11 @@
  *
  * Starts its own static server on a free port, drives the game in system Chrome (headless) with
  * `__game.setAutoplay(true)` + `__game.tick(ms)`, and checks: no page or console errors from boot
- * through the end screen; the opening (owner feedback 1: one control and one number at 0:00, the
+ * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
  * first purchase; no yield wording; the Train row's line at the cloud's limit; numeric-token counts at
- * minutes 0/1/3/5/10/20/end; save → reload during a training run; the end screen; the meter's
+ * minutes 0/1/3/5/10/20/end; save → reload during a training run; the blank Stage 2; the meter's
  * width at every fill; no horizontal overflow at 390 px. The Train row (a plain purchase since the
  * prologue, docs/specs/early-train.md): prices only under `Resources needed`, each named by its unit
  * with a whole bar; grey while short of its price, never armed; no research price in Stage 1. Round 3
@@ -476,23 +476,21 @@ try {
         const vis = (id) => document.getElementById(id).checkVisibility();
         return {
           t: s.stats.timePlayed,
-          ending: s.ending,
-          screen: vis('endingScreen'),
-          title: document.getElementById('endingTitle').innerText,
-          tasks: document.getElementById('endingTasks').innerText,
-          rows: document.querySelectorAll('#endingStats tr').length,
+          stage: s.stage,
+          panels: [...document.querySelectorAll('#columns .panel')].filter((p) => p.checkVisibility()).map((p) => p.id),
+          console: [5, 4, 3, 2, 1].map((i) => document.getElementById(`readout${i}`).innerText).filter(Boolean).slice(-1)[0],
           newGame: vis('btn-newGame'),
         };
       });
       transitionAt = arrival.t;
-      await shot(page, '08-end-screen');
+      await shot(page, '08-stage2-blank');
       break;
     }
     prev = snap;
     if (snap.t > MAX_MINUTES * 60) break;
   }
 
-  check('reached the end of Stage 1', transitionAt !== null, transitionAt === null ? 'First Datacenter never bought' : `at ${clock(transitionAt)}`);
+  check('reached Stage 2', transitionAt !== null, transitionAt === null ? 'First Datacenter never bought' : `at ${clock(transitionAt)}`);
   check('save → reload was exercised', reloadDone, reloadInfo ? '' : 'no training run seen');
 
   // ----- reveal order and staggering -----
@@ -644,20 +642,20 @@ try {
   const over = keys.filter((k) => counts[k] && counts[k].numbers > paperclips[k] * 1.6 + 14);
   check('numeric tokens stay near the Paperclips curve (≤ 1.6× + 14)', over.length === 0, over.length ? `over at ${over.join(', ')}` : 'Paperclips 10 / 12 / 15 / 30 / 26 / 29 / 49');
 
-  // ----- the end screen -----
+  // ----- the blank Stage 2 -----
   if (arrival) {
-    check('buying First Datacenter ends the game on its end screen', arrival.ending === 'datacenter' && arrival.screen && arrival.title === 'The First Datacenter' && arrival.rows >= 5 && arrival.newGame,
+    check('buying First Datacenter enters a blank Stage 2: no panels, a New game button', arrival.stage === 2 && arrival.panels.length === 0 && arrival.newGame,
       JSON.stringify(arrival));
   } else {
-    check('end screen observed', false, 'First Datacenter never bought');
+    check('Stage 2 observed', false, 'First Datacenter never bought');
   }
 
   // ----- 390 px -----
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.__game.tick(100));
   const overflow = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
-  await shot(page, '10-mobile-390-end', { fullPage: true });
-  check('390 px wide (end screen): no horizontal overflow', overflow.sw <= overflow.cw, `${overflow.sw} vs ${overflow.cw}`);
+  await shot(page, '10-mobile-390-stage2', { fullPage: true });
+  check('390 px wide (blank Stage 2): no horizontal overflow', overflow.sw <= overflow.cw, `${overflow.sw} vs ${overflow.cw}`);
   await context.close();
 
   {
@@ -684,14 +682,14 @@ try {
       window.__game.loadPreset('end');
       window.__game.tick(8000);
       const s = window.__game.state;
-      return { ending: s.ending, card: !!document.getElementById('proj-p_datacenter'), tasks: s.tasks };
+      return { ending: s.stage === 1 ? '' : 'left', card: !!document.getElementById('proj-p_datacenter'), tasks: s.tasks };
     });
     await shot(p3, '12-end-preset');
     check('the Stage 1 end preset loads with First Datacenter on the board', pre.ending === '' && pre.card && pre.tasks > 200000, JSON.stringify(pre));
     await c3.close();
   }
 
-  check('no page errors or console errors from boot through the end screen', errors.length === 0, errors.slice(0, 5).join(' | '));
+  check('no page errors or console errors from boot through Stage 2', errors.length === 0, errors.slice(0, 5).join(' | '));
 } catch (e) {
   check('smoke test ran to completion', false, e && e.stack ? e.stack.split('\n').slice(0, 3).join(' ') : String(e));
 } finally {
