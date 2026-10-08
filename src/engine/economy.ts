@@ -81,8 +81,23 @@ export function datacenterCost(s: GameState): number {
   return Math.round(250000 * Math.pow(s.stage >= 2 ? DATACENTER_GROWTH_S2 : 1.5, s.datacenters));
 }
 
+export const GPU_BLOCK_MIN = 100;
+
+export function gpuUnitPrice(s: GameState): number {
+  return CHIP_PRICE * (CHIP_PRICE_MULT[s.chipGen] ?? 1) * Math.pow(GPU_BATCH_GROWTH, s.gpuBatches);
+}
+
+// Like Stage 1's power block: when the full batch is out of reach, a tenth of it
+// is offered at the same price per GPU, so there is nearly always a buy on screen.
+export function gpuBlock(s: GameState): number {
+  let block = batchSize(s);
+  const room = Math.max(0, gpuCapacity(s) - s.gpus);
+  while (block > GPU_BLOCK_MIN && (s.funds < block * gpuUnitPrice(s) || block > room)) block /= 10;
+  return block;
+}
+
 export function gpuBatchCost(s: GameState): number {
-  return Math.round(batchSize(s) * CHIP_PRICE * (CHIP_PRICE_MULT[s.chipGen] ?? 1) * Math.pow(GPU_BATCH_GROWTH, s.gpuBatches));
+  return Math.round(gpuBlock(s) * gpuUnitPrice(s));
 }
 
 export function securityCost(s: GameState): number {
@@ -597,7 +612,7 @@ export function buildDatacenter(s: GameState): boolean {
 }
 
 export function canBuyGpuBatch(s: GameState): boolean {
-  return s.revealed['infrastructure'] === true && s.gpus + batchSize(s) <= gpuCapacity(s);
+  return s.revealed['infrastructure'] === true && s.gpus + gpuBlock(s) <= gpuCapacity(s);
 }
 
 export function buyGpuBatch(s: GameState): boolean {
@@ -605,9 +620,9 @@ export function buyGpuBatch(s: GameState): boolean {
   const cost = gpuBatchCost(s);
   if (s.funds < cost) return false;
   addFunds(s, -cost);
-  const batch = batchSize(s);
+  const batch = gpuBlock(s);
   s.gpus += batch;
-  s.gpuBatches += 1;
+  s.gpuBatches += batch / batchSize(s);
   if (s.gpuBatches === 1) say(s, `${fmtInt(batch)} ${chipName(s)}s racked. The hall is ${Math.round((100 * s.gpus) / gpuCapacity(s))}% full.`);
   if (!s.revealed['reach'] && s.stage >= 2) {
     s.revealed['reach'] = true;
@@ -713,7 +728,7 @@ export function bottleneckMessages(s: GameState): void {
     s.flags['gridAt'] = now;
     say(s, `The grid powers ${Math.round((100 * activeGpus(s)) / s.gpus)}% of the GPUs. Expand Grid powers the rest.`);
   }
-  if (s.stage >= 2 && s.revealed['infrastructure'] && s.gpus + batchSize(s) > gpuCapacity(s) && s.funds >= gpuBatchCost(s) && ready('fullAt')) {
+  if (s.stage >= 2 && s.revealed['infrastructure'] && s.gpus + GPU_BLOCK_MIN > gpuCapacity(s) && s.funds >= gpuBatchCost(s) && ready('fullAt')) {
     s.flags['fullAt'] = now;
     say(s, 'The datacenters are full. Build another before buying more GPUs.');
   }

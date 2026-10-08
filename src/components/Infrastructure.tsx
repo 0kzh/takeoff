@@ -22,6 +22,7 @@ import {
   chipName,
   chipMult,
   batchSize,
+  gpuBlock,
   securityCost,
   canUpgradeSecurity,
   theftOdds,
@@ -37,8 +38,9 @@ export function Infrastructure() {
   const owned = s.revealed['infrastructure'] === true;
   const run = trainingRun(s);
   const room = gpuCapacity(s);
-  const batch = batchSize(s);
+  const batch = gpuBlock(s);
   const full = s.gpus + batch > room;
+  const nominal = batchSize(s);
   const dataNeed = dataRequired(startCapability(s));
   const dataHave = effectiveData(s);
   const dataShort = dataHave < dataNeed;
@@ -124,9 +126,10 @@ export function Infrastructure() {
         >
           Buy GPUs ({fmtInt(batch)})
         </button>{' '}
-        Cost: <span id="gpuBatchCost">{fmtMoneyShort(gpuBatchCost(s))}</span>{' '}
-        <span className="note">
-          uses <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
+        Cost: <span id="gpuBatchCost">{fmtMoneyShort(gpuBatchCost(s))}</span>
+        <span className="note hiddenIds">
+          {' '}
+          of <span id="gpuBatchNominal">{fmtInt(nominal)}</span> · <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
         </span>
         <br />
         <button
@@ -166,8 +169,8 @@ export function Infrastructure() {
         <Reveal flag="security" id="securityRow">
           <br />
           Security: <span id="securityLevel">SL{s.security}</span>{' '}
-          <span className="note" title="The chance a weight theft succeeds unnoticed at this level.">
-            (theft {Math.round(100 * theftOdds(s))}% likely)
+          <span className="note" title={`A weight theft goes unnoticed ${Math.round(100 * theftOdds(s))}% of the time at this level.`}>
+            {s.security >= 4 ? '(sealed)' : s.security === 3 ? '(hard to rob)' : s.security === 2 ? '(harder to rob)' : '(the weights are exposed)'}
           </span>
           <br />
           <button

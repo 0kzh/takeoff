@@ -36,7 +36,7 @@ export function Business() {
         <br />
       </Reveal>
       <Reveal flag="pricing">
-        <span id="unbilledLine">
+        <span id="unbilledLine" className={s.stage >= 2 && s.autoPrice ? 'off' : ''}>
           Unbilled Tasks: <span id="unbilled">{fmtInt(s.unbilled)}</span>
           <br />
         </span>
