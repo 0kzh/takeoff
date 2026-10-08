@@ -3,7 +3,7 @@ import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
   activeGpus, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec,
-  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity, labCost, hireCost } from '../engine/economy.js';
+  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
   trainSlotFree, startCapability,
@@ -306,15 +306,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     while (guard++ < 10) {
       const cap = researchCap(s);
       const walled = cheapestResearchCost(s) > cap || (s.research >= cap && largestResearchCost(s) > cap);
-      if (s.trust < 1) {
-        // Money: expand when the lab is full and a card needs more; hire when a hire is pocket change.
-        const lab = labCost(s).funds ?? 0;
-        const hire = hireCost(s).funds ?? 0;
-        if (walled && s.funds >= 2 * lab + reserve) a.expandLab(s);
-        else if (!walled && s.research < cap && s.funds >= 6 * hire + reserve) a.hireResearcher(s);
-        else break;
-        continue;
-      }
+      if (s.trust < 1) break;
       const ok = walled && s.revealed['expandLab'] ? a.expandLab(s) : a.hireResearcher(s);
       if (!ok) break;
     }

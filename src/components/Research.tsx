@@ -4,12 +4,9 @@ import {
   researchCap,
   humanResearchShare,
   researchRate,
-  hireCost,
-  labCost,
   canHireResearcher,
   canExpandLab,
 } from '../engine/economy.js';
-import { costLabel } from '../engine/projects.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import { datacenterStatus } from '../data/projects.js';
 import { labReason } from '../engine/training.js';
@@ -33,7 +30,7 @@ export function Research() {
         <button
           className="button2"
           id="btn-hireResearcher"
-          title={`${costLabel(hireCost(s))}: one more researcher, +10 research per second.`}
+          title="1 Trust: one more researcher, +10 research per second."
           disabled={!canHireResearcher(s)}
           onClick={() => perform('hireResearcher')}
         >
@@ -44,7 +41,7 @@ export function Research() {
         <button
           className="button2"
           id="btn-expandLab"
-          title={`${costLabel(labCost(s))}: room for ${fmtInt(1000 * s.labMult)} more research.`}
+          title={`1 Trust: room for ${fmtInt(1000 * s.labMult)} more research.`}
           disabled={!canExpandLab(s)}
           onClick={() => perform('expandLab')}
         >
@@ -53,7 +50,7 @@ export function Research() {
       </Reveal>{' '}
       <Reveal flag="hireResearcher">
         <span className="note" id="trustCostNote">
-          ({s.trust >= 1 ? 'costs Trust' : `${costLabel(hireCost(s))} / ${costLabel(labCost(s))}`})
+          (costs Trust)
         </span>
       </Reveal>
       <br />

@@ -1,8 +1,8 @@
 import { GameState, isBought, addFunds, counter } from '../engine/state.js';
 import { enterStage, STUCK } from '../engine/stages.js';
-import { researchCap, gpuCost, fleetPowerBlock, nextContractWeight, rentQuota } from '../engine/economy.js';
+import { researchCap, gpuCost, fleetPowerBlock, nextContractWeight, rentQuota, marketingCost } from '../engine/economy.js';
 import { startCapability, gpusShort, needsDatacenter, cardWallSeconds, gpusForS1, gpusNeeded, MAX_RENT_QUOTA } from '../engine/training.js';
-import { monthOf, fmtMoneyShort } from '../engine/format.js';
+import { monthOf, fmtMoneyShort, fmtInt } from '../engine/format.js';
 
 export type { ProjectDef, ProjectInput } from './project-def.js';
 export { project, revealPrice, revealResearchPrice } from './project-def.js';
@@ -99,6 +99,14 @@ export const AUTO_PRICING_MOVES = 20;
 export const AUTO_PRICING_TASKS = 90000;
 export const AUTO_PRICING_LATE = 400000;
 
+/** A press release is worth one Marketing level, so its insight price follows the Marketing price. */
+export const PRESS_INSIGHT_MAX = 300;
+export function pressCost(s: GameState): number {
+  const raw = marketingCost(s) / 10000;
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
+  return Math.min(PRESS_INSIGHT_MAX, Math.max(5, Math.round(raw / unit) * unit));
+}
+
 export function contractCost(s: GameState): number {
   return Math.round(3000 * Math.pow(1.35, bought(s, 'p_contract')));
 }
@@ -129,9 +137,10 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_press',
     title: 'Press release',
-    cost: { insight: 5 },
+    priceTag: (s) => `(${fmtInt(pressCost(s))} insight)`,
+    cost: (s) => ({ insight: pressCost(s) }),
     description: 'Marketing level +1.',
-    trigger: (s) => s.flags['idlePress'] === true && s.insight >= 5,
+    trigger: (s) => s.flags['idlePress'] === true && s.insight >= pressCost(s),
     buy: (s) => {
       s.flags['idlePress'] = false;
       s.hypeLevel += 1;
@@ -197,36 +206,35 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_seed',
     title: 'Seed round',
     cost: {},
-    description: '+$5,000, +2 Trust.',
+    description: '+$5,000.',
     trigger: (s) => s.tasks >= 10000,
     buy: (s) => {
       addFunds(s, 5000);
-      s.trust += 2;
     },
-    consoleMsg: 'Seed round closed. $5,000 and two board seats of Trust.',
+    consoleMsg: 'Seed round closed. $5,000 and two board seats.',
     logMsg: 'OpenMind closes a seed round. The deck has one chart on it.',
   }),
   project({
     id: 'p_blogpost',
     title: 'Research blog post',
     cost: { insight: 40 },
-    description: 'Mostly charts. +1 Trust.',
+    description: 'Mostly charts. Demand +5%.',
     trigger: (s) => s.insightUnlocked && s.insight >= 1,
     buy: (s) => {
-      s.trust += 1;
+      s.demandMult *= 1.05;
     },
-    consoleMsg: 'Forty thousand people read the post. Trust +1.',
+    consoleMsg: 'Forty thousand people read the post. A few of them sign up.',
     stages: [1, 2],
   }),
   project({
     id: 'p_lab_cluster',
     title: 'Experiment tracker',
     cost: { research: 3000 },
-    description: 'Research capacity ×2.',
+    description: 'Every experiment logged. Research +25%.',
     trigger: (s) => s.labSpace >= 3 || (s.revealed['insight'] === true && s.funds >= 300) || cardWallSeconds(s) >= 30,
     urgent: (s) => cardWallSeconds(s) >= 30,
     buy: (s) => {
-      s.labMult *= 2;
+      s.researchMult *= 1.25;
     },
     consoleMsg: 'Experiment tracker live. Research capacity doubled.',
     stages: [1],
@@ -523,11 +531,11 @@ export const PROJECTS: ProjectDef[] = [
     revealFunds: 120,
     title: 'Lease the floor upstairs',
     cost: { funds: 15000 },
-    description: 'More desks. Research capacity ×2.',
+    description: 'More desks. Research capacity +3,000.',
     trigger: (s) => s.training.runIndex >= 4 || cardWallSeconds(s) >= 90,
     urgent: (s) => cardWallSeconds(s) >= 90,
     buy: (s) => {
-      s.labMult *= 2;
+      s.labSpace += 3;
     },
     stages: [1],
     consoleMsg: 'The floor upstairs is ours. Research capacity doubled.',
@@ -550,7 +558,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_agents',
     revealResearch: 100,
     title: 'Agent mode',
-    cost: { research: 12000 },
+    cost: { research: 10000 },
     description: 'Sage gets a credit card. Copies 20% faster.',
     trigger: (s) => dateAtLeast(s, 2025, 11) || s.capability >= 1.6,
     buy: (s) => {
@@ -580,10 +588,10 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_workshop',
     title: 'Workshop paper',
     cost: { insight: 100 },
-    description: 'Eight pages, one good idea. +1 Trust.',
+    description: 'Eight pages, one good idea. Research +10%.',
     trigger: (s) => isBought(s, 'p_demo') && releases(s) >= 3,
     buy: (s) => {
-      s.trust += 1;
+      s.researchMult *= 1.1;
     },
     stages: [1],
     consoleMsg: 'Workshop paper accepted. Reviewer 2 was right, it turns out.',
@@ -592,14 +600,13 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_keynote',
     title: 'Conference keynote',
     cost: { insight: 100 },
-    description: 'The big room. Marketing level +3, +1 Trust.',
+    description: 'The big room. Marketing level +3.',
     trigger: (s) => isBought(s, 'p_workshop') && isBought(s, 'p_series_a'),
     buy: (s) => {
-      s.trust += 1;
       s.hypeLevel += 3;
     },
     stages: [1],
-    consoleMsg: 'Keynote delivered. The room was full. Trust +1.',
+    consoleMsg: 'Keynote delivered. The room was full.',
   }),
   project({
     id: 'p_moe',

@@ -498,6 +498,7 @@ await phase('checkpoints', async () => {
           } else {
             await click(page, 'dev-funds');
             await click(page, 'dev-compute');
+            await click(page, 'dev-research');
             grants++;
             await step(page, 2000);
           }

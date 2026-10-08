@@ -259,7 +259,7 @@ const REVEAL_RULES: RevealRule[] = [
       beat(s);
       show(s, ['hireResearcher', 'expandLab']);
       s.flags['researchAt'] = s.stats.timePlayed;
-      say(s, 'Hire a researcher or expand the lab. Trust, earned at task milestones, pays for one.');
+      say(s, 'Trust pays for a researcher or a lab space. Task milestones earn more.');
     },
   },
   {

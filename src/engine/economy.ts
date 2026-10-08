@@ -484,7 +484,7 @@ export function trackStuck(s: GameState, dt: number): void {
 export function trustCheck(s: GameState): void {
   while (s.tasks >= s.nextTrust) {
     s.trust += 1;
-    s.nextTrust = s.fib2 * 1000;
+    s.nextTrust = s.fib2 * TRUST_MILESTONE_STEP;
     const next = s.fib1 + s.fib2;
     s.fib1 = s.fib2;
     s.fib2 = next;
@@ -515,7 +515,7 @@ function expandLabBeat(s: GameState): boolean {
 
 export function trustRewardLine(s: GameState): string {
   if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
-  return 'Trust +1. It pays for the next researcher or lab space.';
+  return 'Trust +1. Spend it on a researcher or a lab space.';
 }
 
 export function researchTick(s: GameState, dt: number): void {
@@ -606,21 +606,15 @@ export function buyMarketing(s: GameState): boolean {
   return true;
 }
 
-export const HIRE_BASE = 40;
-export const HIRE_GROWTH = 1.5;
-export const LAB_BASE = 50;
-export const LAB_GROWTH = 1.6;
-const STARTING_RESEARCHERS = 1;
+export const TRUST_MILESTONE_STEP = 1500;
 
-/** A researcher costs money from the start; a Trust, when the lab holds one, pays instead. */
-export function hireCost(s: GameState): Cost {
-  if (s.trust >= 1) return { trust: 1 };
-  return { funds: Math.round(HIRE_BASE * Math.pow(HIRE_GROWTH, Math.max(0, s.researchers - STARTING_RESEARCHERS))) };
+/** Researchers and lab space cost Trust, which task milestones and a few deeds hand out. */
+export function hireCost(_s: GameState): Cost {
+  return { trust: 1 };
 }
 
-export function labCost(s: GameState): Cost {
-  if (s.trust >= 1) return { trust: 1 };
-  return { funds: Math.round(LAB_BASE * Math.pow(LAB_GROWTH, Math.max(0, s.labSpace - 1))) };
+export function labCost(_s: GameState): Cost {
+  return { trust: 1 };
 }
 
 export function canHireResearcher(s: GameState): boolean {

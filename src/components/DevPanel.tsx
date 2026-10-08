@@ -1,3 +1,4 @@
+import { trainCost } from '../engine/training.js';
 import { useEffect, useRef, useState } from 'react';
 import { useGame, useGameStore, useGameStoreApi, usePerform } from '../store/context.js';
 import { ConfirmButton } from './primitives.js';
@@ -42,7 +43,7 @@ export function DevPanel({ seed }: { seed: number }) {
           break;
         case 'research':
           game.revealed['research'] = true;
-          game.research = Math.max(game.research, researchCap(game));
+          game.research = Math.max(game.research, researchCap(game), trainCost(game).research ?? 0);
           break;
         case 'insight':
           game.insightUnlocked = true;

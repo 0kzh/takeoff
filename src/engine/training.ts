@@ -724,12 +724,8 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
     }
     if (s.flags['firstReleaseAt'] === undefined) s.flags['firstReleaseAt'] = s.stats.timePlayed;
     const line = pick(s, RELEASE_LINES).replace('{name}', run.name);
-    if (run.issues === 0) {
-      s.trust += 1;
-      say(s, `${line} +1 Trust.`);
-    } else {
-      say(s, `${line} No Trust: ${run.issues} open issue${run.issues === 1 ? '' : 's'} shipped.`);
-    }
+    if (run.issues === 0) say(s, line);
+    else say(s, `${line} ${run.issues} open issue${run.issues === 1 ? '' : 's'} shipped.`);
     if (s.insightUnlocked) s.insight += s.stage >= 2 ? RELEASE_INSIGHT_S2 : RELEASE_INSIGHT;
     logNews(s, `OpenMind releases ${run.name}. ${pick(s, RELEASE_HEADLINES)}`);
     if (run.issues > 0) scheduleIncidents(s, run.issues, run.name);

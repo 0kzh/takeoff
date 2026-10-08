@@ -4,6 +4,7 @@ import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
 import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
+import { pressCost } from '../data/projects.js';
 import {
   gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate,
   datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, canBuyGpuBatch, canUpgradeSecurity, securityCost,
@@ -345,7 +346,7 @@ export function idleGuard(s: GameState, dt: number): void {
   const emails = (s.flags['emailsThisStage'] as number) || 0;
   const raw = customerEmailAmount(s);
   const amount = raw < Math.max(0.25 * s.funds, 30 * s.stats.revPerSec) ? 0 : raw;
-  if (s.insightUnlocked && s.insight >= 5 && !s.flags['idlePress'] && presses < MAX_PRESS_PER_STAGE) {
+  if (s.insightUnlocked && s.insight >= pressCost(s) && !s.flags['idlePress'] && presses < MAX_PRESS_PER_STAGE) {
     s.flags['idlePress'] = true;
     s.flags['pressReleases'] = presses + 1;
   } else if (amount > 0 && emails < MAX_EMAILS_PER_STAGE && !s.choiceQueue.some((c) => c.id === 'c_customer_email')) {

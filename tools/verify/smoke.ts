@@ -998,10 +998,11 @@ try {
   // trades (5 numbers), the power and quota capacities (2), the printed delays while a run waits (2 a
   // row), the armed Train row's model name (1): 48 / 16 / 250. With Sage-1 trained in the opening
   // (docs/specs/early-train.md) minute 10 is a run further along: the Focus row and a fifth card, 18.
+  // With Trust the only way to grow the lab, more cards wait on screen at minute 10: 20 controls, 280 words.
   const m10 = counts['10'];
   check(
-    'minute 10: ≤ 48 numbers, ≤ 18 controls, ≤ 250 words',
-    !!m10 && m10.numbers <= 48 && m10.interactive <= 18 && m10.words <= 250,
+    'minute 10: ≤ 48 numbers, ≤ 20 controls, ≤ 280 words',
+    !!m10 && m10.numbers <= 48 && m10.interactive <= 20 && m10.words <= 280,
     m10 ? `${m10.numbers} numbers, ${m10.interactive} controls, ${m10.words} words` : 'no minute-10 snapshot',
   );
   const paperclips = { 0: 10, 1: 12, 3: 15, 5: 30, 10: 26, 20: 29, end: 49 };

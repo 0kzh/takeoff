@@ -76,7 +76,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     priceTag: (s) => `(${fmtMoneyShort(licenseCost(s))} · repeatable)`,
     cost: (s) => ({ funds: licenseCost(s) }),
     description: `+${LICENSE_DATA}T tokens of training data. Each deal costs twice the last.`,
-    trigger: (s) => s.revealed['data'] === true,
+    trigger: (s) => s.flags['webExhausted'] === true,
     buy: (s) => licenseData(s),
     uses: Infinity,
     repeatable: true,
@@ -125,7 +125,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     priceTag: (s) => `(${fmtInt(buildingCost(s).research ?? 0)} research · ${fmtMoneyShort(buildingCost(s).funds ?? 0)})`,
     cost: (s) => buildingCost(s),
     description: 'A lobby, and research capacity ×2. The next run and the bigger projects need the room.',
-    trigger: (s) => researchDemand(s) > 0.8 * researchCap(s) || wallSeconds(s) >= 60,
+    trigger: (s) => researchDemand(s) > researchCap(s) || wallSeconds(s) >= 60,
     urgent: (s) => researchDemand(s) > researchCap(s) || wallSeconds(s) >= 60,
     buy: (s) => {
       s.labMult *= 2;

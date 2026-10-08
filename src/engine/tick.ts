@@ -3,13 +3,13 @@ import {
   TICK_SECONDS, produce, updateAutoPrice, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity, canExpandLab, labCost } from './economy.js';
+  buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity, canExpandLab } from './economy.js';
 import { updateBaiwen, updateTempo, sampleHistory, updateTheft, updateIrrelevance } from './rivals.js';
 import { updateWorld } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
 } from './training.js';
-import { buyProject, visibleProjects, costLabel } from './projects.js';
+import { buyProject, visibleProjects } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
 import { updateProjects, noteReveals } from './reveal.js';
 import {
@@ -139,7 +139,7 @@ function capFix(s: GameState): string {
   if (shown('s2_building')) return 'A New building doubles it.';
   if (shown('p_lab_cluster')) return 'The Experiment tracker doubles it.';
   if (shown('p_floor')) return 'Lease the floor upstairs.';
-  return s.revealed['expandLab'] ? `Expand Lab when you have ${costLabel(labCost(s))}.` : 'More room comes with Trust.';
+  return 'Expand Lab with the next Trust.';
 }
 
 export const WALL_REPEAT_SECONDS = 120;
