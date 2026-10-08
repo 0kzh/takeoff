@@ -31,6 +31,8 @@ Measured with the headless bot (`npm run sim -- --seed N --minutes 60 --quiet`),
 
 Other policies, seed 1: `naive` reaches the gate in 23:27 of stage time at 11.5× (15 runs, took customer data and growth capital, approval 71); `greedy` in 20:20 at 11.6× (15 runs, theft detected and traced, approval 72). Neither shows an idle gap over 60 s.
 
+A reckless variant (`--variant reckless`: deflects the hearing, uses customer data, ships unrestricted bio, ignores the protest, buys no safety or security projects) reaches the gate in 24:45 at 10.7× with approval 34, tempo 85, security SL2 and a 61 ± 30 band over a true value of 51; the protest, the ultimatum and the emergency vote all fire within the next five minutes.
+
 Modals seen in order (seed 1, stage time): Release decision 6:49 · Mega-round 10:28 · Senate hearing 12:59 · Data wall 15:29 · Sage-mini 17:59 · Weight theft 21:31 · Bio red line 24:02 · Defense partnership 26:32 · Sage asks for compute 29:02. Protest and the ultimatum did not fire for the careful bot (approval stayed above 45); both are covered by unit tests.
 
 Panels revealed (seed 1, stage time): Infrastructure 0:00 · Data row 1:00 · Race graph 1:40 · Synthetic data 3:27 · Reach 4:46 · Research share 5:40 · Jobs 12:32 · Alignment strip 12:43 · Public + Government 12:59 · Dangerous evals 13:23 · Tempo 17:30 · Security row 18:07.

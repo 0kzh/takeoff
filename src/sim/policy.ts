@@ -115,6 +115,24 @@ function variantFocus(s: GameState, a: Actions, mem: BotMemory): boolean {
   return false;
 }
 
+// A player who races and ignores the world: the early-ending paths.
+const RECKLESS_POLICY: Record<string, Answer[]> = {
+  c_release: ['deployed'],
+  c_data_wall: ['customer data'],
+  c_hearing: ['deflected'],
+  c_funding: ['growth'],
+  c_theft: ['cut'],
+  c_mini: ['launched'],
+  c_bio: ['unrestricted'],
+  c_defense: ['accepted'],
+  c_protest: ['ignored'],
+  c_compute_request: ['granted'],
+  c_irrelevance: ['emergency round'],
+  c_ultimatum: ['refused'],
+  c_emergency_vote: ['did nothing'],
+};
+const RECKLESS_SKIPS = ['s2_commitments', 's2_spec', 's2_honesty', 's2_cot', 's2_probes', 's2_sae', 's2_redteam', 's2_evals', 's2_compute_cap', 's2_security', 's2_egress'];
+
 const CHOICE_POLICY: Record<string, Answer[]> = {
   c_release: ['deployed'],
   c_data_wall: ['respected'],
@@ -197,7 +215,8 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
 
   const careful = mem.policy === 'bot';
   if (s.activeChoice && readModal(s, mem) && !answerVariant(s, a, mem)) {
-    if (!careful) answerFirst(s, a);
+    if (mem.variant === 'reckless' && s.stage >= 2) answerChoice(s, a, { ...CHOICE_POLICY, ...RECKLESS_POLICY });
+    else if (!careful) answerFirst(s, a);
     else if (s.activeChoice.id === 'c_leaderboard') answerChoice(s, a, { c_leaderboard: [s.capability >= s.rivalCapability ? 'submitted' : 'declined'] });
     else if (!waitForCarefulAnswer(s, mem)) answerChoice(s, a, CHOICE_POLICY);
   }
@@ -260,6 +279,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   for (const p of visibleProjects(s)) {
     if (!p.canAfford(s)) continue;
     if (p.id === 's2_licensing' && !dataShort(s, startCapability(s))) continue;
+    if (mem.variant === 'reckless' && RECKLESS_SKIPS.includes(p.id)) continue;
     if (s.stage >= 2 && p.sideline && p.id !== 's2_licensing' && (p.cost(s).funds ?? 0) > 0.5 * s.funds) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
     if (p.id === TRANSITION && mem.holdTransition) continue;
