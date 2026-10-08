@@ -1,5 +1,6 @@
 agent-tools/
 node_modules/
 dist/
+dist-sim/
 public/
 .DS_Store

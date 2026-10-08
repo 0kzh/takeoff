@@ -2,9 +2,9 @@
 /**
  * Stage 1 browser smoke test.
  *
- *   npm run build && node tools/verify/smoke.mjs [--policy bot|naive] [--seed 1]
+ *   npm run build && node tools/verify/smoke.mjs [--policy bot|naive] [--seed 1] [--dir dist]
  *
- * Starts its own static server on a free port, drives the game in system Chrome (headless) with
+ * Starts its own static server for the Vite build (`dist/`, or `--dir`) on a free port, drives the game in system Chrome (headless) with
  * `__game.setAutoplay(true)` + `__game.tick(ms)`, and checks: no page or console errors from boot
  * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
@@ -35,6 +35,7 @@ const argOf = (k, d) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : d;
 };
 const POLICY = argOf('--policy', 'bot');
+const SITE = resolve(argOf('--dir', join(ROOT, 'dist')));
 const SEED = Number(argOf('--seed', '1'));
 const STEP_MS = 2000;
 const MAX_MINUTES = 45;
@@ -47,8 +48,8 @@ const MIME = {
 };
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent((req.url || '/').split('?')[0]);
-  let file = normalize(join(ROOT, path));
-  if (!file.startsWith(ROOT)) return res.writeHead(403).end();
+  let file = normalize(join(SITE, path));
+  if (!file.startsWith(SITE)) return res.writeHead(403).end();
   try {
     if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
     const body = await readFile(file);

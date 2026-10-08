@@ -151,8 +151,8 @@ export default {
 
   /**
    * New game with a fixed seed: the init script pins Date.now() to the seed until window.__game
-   * exists (main.ts: `loadSave() ?? newGame(Date.now())`, storage is empty in a fresh context).
-   * Falls back to replaceState(newGame(seed)) through the engine module. --stage N → loadPreset(N).
+   * exists (gameStore.ts: `loadSave() ?? newGame(Date.now())`, storage is empty in a fresh context).
+   * Falls back to __game.newGame(seed). --stage N → loadPreset(N).
    */
   async boot(session, { seed, stage }) {
     const { page } = session;
@@ -161,17 +161,13 @@ export default {
     let st = await page.evaluate(() => ({ seed: window.__game.state.seed, tickCount: window.__game.state.tickCount, tasks: window.__game.state.tasks }));
     if (st.seed !== seed || st.tickCount !== 0 || st.tasks !== 0) {
       const ok = await page
-        .evaluate(async (sd) => {
-          const main = document.querySelector('script[type=module][src]');
-          const mod = await import(new URL('engine/state.js', main.src).href);
+        .evaluate((sd) => {
           window.__game.setSpeed(0);
-          mod.replaceState(window.__game.state, mod.newGame(sd));
-          window.__game.save();
-          window.__game.render();
+          window.__game.newGame(sd);
           return window.__game.state.seed === sd;
         }, seed)
         .catch((e) => String(e));
-      info.seedMethod = ok === true ? 'replaceState(newGame(seed)) via dist/engine/state.js' : `FAILED (${ok}); seed ${st.seed}`;
+      info.seedMethod = ok === true ? '__game.newGame(seed)' : `FAILED (${ok}); seed ${st.seed}`;
     }
     await page.evaluate(() => window.__game.setSpeed(0));
     if (stage > 1) {
