@@ -63,6 +63,8 @@ Round 1 (build `stage2-v1`) against the Paperclips Stage 2 fixture, both capped 
 
 Biggest gap named by the numbers: the scripted player has nothing enabled 69% of the time because Stage 2 purchases are lumpy ($100k+ each) while Paperclips always has a cheap repeatable buy. Fix in round 2: the GPU buy offers a tenth of the batch (down to 100 GPUs) at the same price per GPU whenever the full batch is out of reach, like Stage 1's power block. Also trimmed numbers: the unbilled line hides under auto pricing in Stage 2, the "uses N MW" note and the theft percentage moved into tooltips.
 
+Round 2 (build `stage2-v2`, adaptive GPU block): nothing-to-do fell to 314 s / 19.2% (longest 30 s) and nothing-enabled to 20.5%; clicks per minute rose from 8.1 to 26.4; first meaningful choice 0:16; longest reveal gap 152 s; numbers on screen 41 / 70 / 76 / 87 at 0 / 5 / 10 / 20 min. The run died at 27:18 on the Weight Theft dialog crash, which that build predates; round 3 uses the fixed build.
+
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 
 ## Browser verification (`npm run test:stage2`)
