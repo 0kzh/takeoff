@@ -5,12 +5,13 @@ import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
 import { pressCost } from '../data/projects.js';
+import { effectiveData } from './data.js';
 import {
   gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate,
   datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, canBuyGpuBatch, canUpgradeSecurity, securityCost,
 } from './economy.js';
 import { canStartTraining, canRedTeam, trainCost } from './training.js';
-import { dateLabel } from './format.js';
+import { dateLabel, fmtMoneyShort, fmtInt } from './format.js';
 import { mechanic, mechanicClear } from './stages.js';
 import { BEAT_GAP_SECONDS } from './reveal.js';
 import { rand, pick, chance } from './rng.js';
@@ -245,14 +246,76 @@ export function resolveChoice(s: GameState, index: number): boolean {
   if (!choiceOptionEnabled(s, def, index)) return false;
   const opt = def.options[index]!;
   const cost = optionCost(s, opt);
+  const before = choiceSnapshot(s);
+  const lines = s.console.length;
   if (cost) pay(s, cost);
   s.activeChoice = null;
   noteAnswered(s, def.id);
   opt.effect(s, active.context);
+  reportChoice(s, opt.label, before, lines);
   s.choicesMade.push({ id: def.id, option: opt.record, date: dateLabel(s.date) });
   s.stats.choices += 1;
   if (opt.log) logNews(s, typeof opt.log === 'function' ? opt.log(s, active.context) : opt.log, 'choice');
   return true;
+}
+
+type ChoiceSnapshot = Record<string, number>;
+
+/** What a choice can move, read before and after its effect so the console can say what changed. */
+function choiceSnapshot(s: GameState): ChoiceSnapshot {
+  return {
+    funds: s.funds,
+    trust: s.trust,
+    research: s.research,
+    insight: s.insight,
+    approval: s.approval,
+    tempo: s.tempo,
+    relations: s.govRelations,
+    alignment: s.revealed['alignment'] ? s.alignmentApparent : 0,
+    data: effectiveData(s),
+    researchers: s.researchers,
+    gpus: s.gpus,
+    marketing: s.hypeLevel,
+    demand: s.demandMult,
+    security: s.security,
+    labSpace: s.labSpace,
+  };
+}
+
+function choiceDeltas(before: ChoiceSnapshot, after: ChoiceSnapshot): string[] {
+  const out: string[] = [];
+  const signed = (n: number, digits = 0) => `${n > 0 ? '+' : '−'}${digits ? Math.abs(n).toFixed(digits) : fmtInt(Math.abs(n))}`;
+  const d = (key: string) => after[key]! - before[key]!;
+  if (Math.abs(d('funds')) >= 1) out.push(`${d('funds') > 0 ? '+' : '−'}${fmtMoneyShort(Math.abs(d('funds')))}`);
+  if (d('trust') !== 0) out.push(`${signed(d('trust'))} Trust`);
+  if (Math.abs(d('research')) >= 1) out.push(`${signed(d('research'))} research`);
+  if (Math.abs(d('insight')) >= 1) out.push(`${signed(d('insight'))} insight`);
+  if (Math.abs(d('approval')) >= 0.5) out.push(`approval ${signed(d('approval'))}`);
+  if (Math.abs(d('tempo')) >= 0.5) out.push(`tempo ${signed(d('tempo'))}`);
+  if (Math.abs(d('relations')) >= 0.5) out.push(`relations ${signed(d('relations'))}`);
+  if (before['alignment'] && Math.abs(d('alignment')) >= 0.5) out.push(`alignment ${signed(d('alignment'))}`);
+  if (Math.abs(d('data')) >= 0.05) out.push(`${signed(d('data'), 1)}T data`);
+  if (d('researchers') !== 0) out.push(`${signed(d('researchers'))} researchers`);
+  if (d('gpus') !== 0) out.push(`${signed(d('gpus'))} GPUs`);
+  if (d('marketing') !== 0) out.push(`marketing ${signed(d('marketing'))}`);
+  if (d('labSpace') !== 0) out.push(`lab space ${signed(d('labSpace'))}`);
+  if (d('security') !== 0) out.push(`security ${signed(d('security'))}`);
+  const demand = after['demand']! / Math.max(1e-9, before['demand']!);
+  if (Math.abs(demand - 1) >= 0.005) out.push(`demand ×${demand.toFixed(2)}`);
+  return out;
+}
+
+/** After a choice: its own console line, if it wrote one, gains the numbers that moved; otherwise one line is written. */
+function reportChoice(s: GameState, label: string, before: ChoiceSnapshot, linesBefore: number): void {
+  const deltas = choiceDeltas(before, choiceSnapshot(s));
+  const wrote = s.console.length > linesBefore;
+  if (wrote) {
+    if (deltas.length) s.console[s.console.length - 1] += ` ${deltas.join(' · ')}`;
+    return;
+  }
+  if (!deltas.length) return;
+  const head = label.charAt(0).toUpperCase() + label.slice(1);
+  say(s, `${head}: ${deltas.join(' · ')}.`);
 }
 
 export function updateChoice(s: GameState, dt: number): void {
