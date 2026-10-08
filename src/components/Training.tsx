@@ -60,8 +60,10 @@ export function Training() {
   const lead = s.capability / s.rivalCapability;
   const focusNote = (id: Focus): string => {
     if (s.stage < 2) return FOCUSES.find((f) => f.id === id)?.note ?? '';
-    if (id === 'capability') return `The most capable next model (about +${Math.round(100 * (S2_FOCUS_BASE.capability + 0.03))}%).`;
-    if (id === 'efficiency') return `Copies per GPU ×1.25; about +${Math.round(100 * S2_FOCUS_BASE.efficiency)}% capability.`;
+    if (id === 'capability')
+      return `The most capable next model (about +${Math.round(100 * (S2_FOCUS_BASE.capability + 0.03))}%).`;
+    if (id === 'efficiency')
+      return `Copies per GPU ×1.25; about +${Math.round(100 * S2_FOCUS_BASE.efficiency)}% capability.`;
     return `About +${Math.round(100 * S2_FOCUS_BASE.safety)}%; fewer issues; alignment drifts less and the band narrows.`;
   };
   return (
@@ -153,7 +155,10 @@ function QueuedTraining() {
         <>
           Also training <span id="queuedName">{queued?.name}</span> ({queued?.focus})
           <Progress id="queuedBar" fraction={queued ? queued.elapsed / queued.duration : 0} />
-          <span className="note">{queued ? Math.max(0, Math.ceil(queued.duration - queued.elapsed)) : 0} s remaining · it waits for the model above to ship</span>
+          <span className="note">
+            {queued ? Math.max(0, Math.ceil(queued.duration - queued.elapsed)) : 0} s remaining · it waits for
+            the model above to ship
+          </span>
         </>
       ) : (
         <span className="note">
@@ -181,7 +186,11 @@ function IdleTraining() {
   const queuedNote = s.stage >= 2 && s.training.run && pipelineOpen(s) && !s.training.next;
   return (
     <div id="train-idle" className={slotFree ? 'shown' : ''}>
-      {queuedNote ? <div className="note" id="pipelineNote">The pipeline is free: the next run can start now.</div> : null}
+      {queuedNote ? (
+        <div className="note" id="pipelineNote">
+          The pipeline is free: the next run can start now.
+        </div>
+      ) : null}
       <button
         className="button2"
         id="btn-train"
@@ -204,7 +213,11 @@ function IdleTraining() {
             key={key}
             className={`costRow${need > 0 && !wall ? ' shown' : ''}${key === 'data' && have < need ? ' short' : ''}`}
             id={`costRow-${key}`}
-            title={key === 'data' ? `${fmt(have)} of ${fmt(need)}. Data is not spent; a shortfall shrinks the gain.` : `${fmt(have)} of ${fmt(need)}`}
+            title={
+              key === 'data'
+                ? `${fmt(have)} of ${fmt(need)}. Data is not spent; a shortfall shrinks the gain.`
+                : `${fmt(have)} of ${fmt(need)}`
+            }
           >
             <Progress id={`costBar-${key}`} fraction={have / need} />
             <span className="costText" id={`costText-${key}`}>
@@ -231,12 +244,12 @@ function RiskRows({ run, p }: { run: TrainingRun; p: number }) {
   return (
     <div id="evalRisk" className="note">
       <span id="riskBio" className={s.revealed['dangerEvals'] ? 'shown' : ''}>
-        Bio uplift: <b>{riskTier(run.benchmarks[4] ?? 0)}</b> · Cyber range: <b>{riskTier(run.benchmarks[5] ?? 0)}</b>
+        Bio uplift: <b>{riskTier(run.benchmarks[4] ?? 0)}</b> · Cyber range:{' '}
+        <b>{riskTier(run.benchmarks[5] ?? 0)}</b>
         <br />
       </span>
       <span id="riskHonesty" className={s.revealed['alignment'] ? 'shown' : ''}>
-        Honesty probe: {honestyProbe(s)}%
-        {tested !== null ? ` · Knows it's tested: ${tested}%` : ''}
+        Honesty probe: {honestyProbe(s)}%{tested !== null ? ` · Knows it's tested: ${tested}%` : ''}
         <br />
       </span>
       <span id="riskTested" className={tested !== null && !s.revealed['alignment'] ? 'shown' : ''}>

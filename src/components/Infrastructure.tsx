@@ -149,9 +149,11 @@ export function Infrastructure() {
             warn={dataShort}
             label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · public web ${Math.round(100 * webShare(s))}% of ${WEB_TOTAL}T read`}
           />{' '}
-          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T of <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T needed
+          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T of{' '}
+          <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T needed
           <span id="dataShortNote" className={dataShort ? 'shown warn' : ''}>
-            {' '}short: the next run gains less
+            {' '}
+            short: the next run gains less
           </span>
           <br />
           <Reveal flag="synthetic">
@@ -172,12 +174,19 @@ export function Infrastructure() {
             className="button2"
             id="btn-security"
             disabled={!canUpgradeSecurity(s) || s.funds < securityCost(s)}
-            title={s.security >= SECURITY_MAX ? 'Weights never leave the enclave.' : `Security level ${s.security + 1}: theft less likely; research 3% slower.`}
+            title={
+              s.security >= SECURITY_MAX
+                ? 'Weights never leave the enclave.'
+                : `Security level ${s.security + 1}: theft less likely; research 3% slower.`
+            }
             onClick={() => perform('upgradeSecurity')}
           >
             Upgrade security
           </button>{' '}
-          Cost: <span id="securityCost">{s.security >= SECURITY_MAX ? 'maxed' : fmtMoneyShort(securityCost(s))}</span>
+          Cost:{' '}
+          <span id="securityCost">
+            {s.security >= SECURITY_MAX ? 'maxed' : fmtMoneyShort(securityCost(s))}
+          </span>
           <br />
         </Reveal>
       </Reveal>

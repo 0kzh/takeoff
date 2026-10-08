@@ -39,7 +39,10 @@ function TruthReveal({ s }: { s: GameState }) {
   const y = (v: number) => H - (Math.min(100, Math.max(0, v)) / 100) * H;
   const shown = samples.map((p, i) => [i, p[5]!, p[6]!] as const).filter(([, a]) => a >= 0);
   const ribbon = shown.length
-    ? `${shown.map(([i, a, b]) => `${x(i).toFixed(1)},${y(a + b).toFixed(1)}`).join(' ')} ${[...shown].reverse().map(([i, a, b]) => `${x(i).toFixed(1)},${y(a - b).toFixed(1)}`).join(' ')}`
+    ? `${shown.map(([i, a, b]) => `${x(i).toFixed(1)},${y(a + b).toFixed(1)}`).join(' ')} ${[...shown]
+        .reverse()
+        .map(([i, a, b]) => `${x(i).toFixed(1)},${y(a - b).toFixed(1)}`)
+        .join(' ')}`
     : '';
   const estimate = shown.map(([i, a]) => `${x(i).toFixed(1)},${y(a).toFixed(1)}`).join(' ');
   const truth = samples.map((p, i) => `${x(i).toFixed(1)},${y(p[7]!).toFixed(1)}`).join(' ');
@@ -47,9 +50,21 @@ function TruthReveal({ s }: { s: GameState }) {
   return (
     <div id="truthReveal">
       <h3>What you saw, and what was true</h3>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Alignment estimate band over time against the hidden true value">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width={W}
+        height={H}
+        role="img"
+        aria-label="Alignment estimate band over time against the hidden true value"
+      >
         <defs>
-          <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <pattern
+            id="hatch"
+            width="6"
+            height="6"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
             <rect width="2" height="6" fill="#444" />
           </pattern>
         </defs>
@@ -61,8 +76,11 @@ function TruthReveal({ s }: { s: GameState }) {
         <polyline points={truth} className="truthLine" />
       </svg>
       <div className="note">
-        Hatched: the band you were shown. Solid red: the true value, hidden until now. It ended at {Math.round(s.alignmentTrue)}
-        {shown.length ? `; you were told ${Math.round(s.alignmentApparent)} ± ${Math.round(s.alignmentBand)}.` : '.'}
+        Hatched: the band you were shown. Solid red: the true value, hidden until now. It ended at{' '}
+        {Math.round(s.alignmentTrue)}
+        {shown.length
+          ? `; you were told ${Math.round(s.alignmentApparent)} ± ${Math.round(s.alignmentBand)}.`
+          : '.'}
       </div>
       {seeds.length ? (
         <ul id="truthLedger">

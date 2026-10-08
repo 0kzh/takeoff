@@ -109,7 +109,12 @@ export function DevPanel({ seed }: { seed: number }) {
       <div className="devRow">
         S2{' '}
         {STAGE2_CHECKPOINTS.map((cp) => (
-          <button key={cp.id} id={`dev-s2-${cp.id}`} title={cp.title} onClick={() => store.getState().replace(stage2Checkpoint(cp.id, seed))}>
+          <button
+            key={cp.id}
+            id={`dev-s2-${cp.id}`}
+            title={cp.title}
+            onClick={() => store.getState().replace(stage2Checkpoint(cp.id, seed))}
+          >
             {cp.label}
           </button>
         ))}

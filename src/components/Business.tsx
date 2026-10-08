@@ -102,7 +102,10 @@ export function Business() {
       </span>
       <Reveal flag="reach">
         Reach: ×<span id="reach">{fmtNum(adoption(s), 1)}</span>{' '}
-        <span className="note" title="Copies in the world grow the market. More GPUs serving customers: more customers.">
+        <span
+          className="note"
+          title="Copies in the world grow the market. More GPUs serving customers: more customers."
+        >
           (grows with the fleet)
         </span>
         <br />

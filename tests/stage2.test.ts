@@ -4,11 +4,25 @@ import { actions, step, tick } from '../src/engine/tick.js';
 import { presetFor, stage2Checkpoint } from '../src/data/presets.js';
 import { newBotMemory, policyStep } from '../src/sim/policy.js';
 import { dataFactor, dataRequired, effectiveData } from '../src/engine/data.js';
-import { gpusNeeded, trainSlotFree, pipelineOpen, startCapability, trainCost, S2_RUN_MAX } from '../src/engine/training.js';
+import {
+  gpusNeeded,
+  trainSlotFree,
+  pipelineOpen,
+  startCapability,
+  trainCost,
+  S2_RUN_MAX,
+} from '../src/engine/training.js';
 import { applyDrift } from '../src/engine/alignment.js';
 import { updateTheft, updateIrrelevance, enterBaiwen, IRRELEVANCE_SECONDS } from '../src/engine/rivals.js';
 import { updateWorld, ULTIMATUM_SECONDS } from '../src/engine/world.js';
-import { chipMult, gpuCapacity, batchSize, adoption, researchRate, humanResearchShare } from '../src/engine/economy.js';
+import {
+  chipMult,
+  gpuCapacity,
+  batchSize,
+  adoption,
+  researchRate,
+  humanResearchShare,
+} from '../src/engine/economy.js';
 import { projectById, buyProject, visibleProjects } from '../src/engine/projects.js';
 import { choiceById } from '../src/engine/events.js';
 
