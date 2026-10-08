@@ -24,6 +24,8 @@ export interface ProjectDef {
   repeatable?: boolean;
   consoleMsg?: string;
   logMsg?: string;
+  /** A live line under the description, e.g. progress toward a requirement. */
+  status?: (s: GameState) => { text: string; fraction?: number } | null;
 }
 
 export type ProjectInput = Omit<ProjectDef, 'canAfford' | 'stages' | 'uses' | 'cost'> & {

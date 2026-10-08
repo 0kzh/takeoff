@@ -6,7 +6,8 @@ import { revealAlignment, raiseAlignment, narrowBand, reduceBias } from '../engi
 import { moveTempo, EXPORT_CONTROL_SECONDS } from '../engine/rivals.js';
 import { moveApproval, moveRelations } from '../engine/world.js';
 import { openChoice } from '../engine/events.js';
-import { fmtMoneyShort } from '../engine/format.js';
+import { fmtMoneyShort, fmtNum } from '../engine/format.js';
+import { S2_FOCUS_BASE } from '../engine/training.js';
 import { project, type ProjectDef } from './project-def.js';
 
 const sinceFlag = (s: GameState, key: string): number => {
@@ -434,15 +435,20 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Automate the Lab',
     stages: [2],
     pinned: true,
-    priceTag: (s) => `(30,000 research, 150 insight, ${fmtMoneyShort(automateFunds(s))}${bestCapability(s) < AUTOMATE_CAPABILITY ? ` · needs ${AUTOMATE_CAPABILITY}×` : ''})`,
-    cost: (s) => ({ research: 30000, insight: 150, funds: automateFunds(s) }),
-    canAfford: (s) => bestCapability(s) >= AUTOMATE_CAPABILITY && s.research >= 30000 && s.insight >= 150 && s.funds >= automateFunds(s),
+    priceTag: (s) => `(30,000 research, 150 insight${bestCapability(s) < AUTOMATE_CAPABILITY ? ` · needs Sage at ${AUTOMATE_CAPABILITY}×` : ''})`,
+    cost: () => ({ research: 30000, insight: 150 }),
+    canAfford: (s) => bestCapability(s) >= AUTOMATE_CAPABILITY && s.research >= 30000 && s.insight >= 150,
     description: 'Sage does the research. All of it. The humans move to review.',
+    status: (s) => {
+      const c = bestCapability(s);
+      if (c >= AUTOMATE_CAPABILITY) return { text: `Sage is at ${fmtNum(c, 1)}×. Research and insight are the last of it.`, fraction: 1 };
+      const runs = Math.max(1, Math.ceil(Math.log(AUTOMATE_CAPABILITY / c) / Math.log(1 + S2_FOCUS_BASE.capability + 0.03)));
+      return { text: `Sage ${fmtNum(c, 1)}× of ${AUTOMATE_CAPABILITY}× · about ${runs} more capability run${runs === 1 ? '' : 's'}`, fraction: Math.log(c / AUTOMATE_SHOW_CAPABILITY) / Math.log(AUTOMATE_CAPABILITY / AUTOMATE_SHOW_CAPABILITY) };
+    },
     trigger: (s) => bestCapability(s) >= AUTOMATE_SHOW_CAPABILITY,
     urgent: (s) => bestCapability(s) >= AUTOMATE_CAPABILITY,
     onShow: (s) => {
       s.flags['automateAt'] = s.stats.timePlayed;
-      s.flags['price:s2_automate'] = Math.max(1000000, 180 * s.stats.revPerSec);
     },
     buy: (s) => {
       enterStage(s, 3);
@@ -450,11 +456,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     logMsg: 'Sage has asked, politely, whether it could just do the research.',
   }),
 ];
-
-export function automateFunds(s: GameState): number {
-  const fixed = s.flags['price:s2_automate'];
-  return typeof fixed === 'number' ? fixed : Math.max(1000000, 180 * s.stats.revPerSec);
-}
 
 export function automateShownFor(s: GameState): number {
   return sinceFlag(s, 'automateAt');

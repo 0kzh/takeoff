@@ -89,9 +89,13 @@ export function gpuUnitPrice(s: GameState): number {
 
 // Like Stage 1's power block: when the full batch is out of reach, a tenth of it
 // is offered at the same price per GPU, so there is nearly always a buy on screen.
+export function poweredRoom(s: GameState): number {
+  return Math.max(0, Math.min(gpuCapacity(s), Math.floor(s.gridCapacity / GRID_KW_PER_GPU)) - s.gpus);
+}
+
 export function gpuBlock(s: GameState): number {
   let block = batchSize(s);
-  const room = Math.max(0, gpuCapacity(s) - s.gpus);
+  const room = poweredRoom(s);
   while (block > GPU_BLOCK_MIN && (s.funds < block * gpuUnitPrice(s) || block > room)) block /= 10;
   return block;
 }
@@ -476,7 +480,10 @@ export function trustCheck(s: GameState): void {
       say(s, `Trust +1. Hire a researcher, or expand the lab: it is full at ${fmtInt(researchCap(s))}.`);
       continue;
     }
-    const line = s.revealed['research'] ? trustRewardLine(s) : '';
+    // From Stage 2 the milestone line only prints when Trust was spent down or every third time,
+    // so an unspent balance does not repeat the same sentence.
+    if (s.stage >= 2 && s.trust > 1 && ((s.flags['trustMilestones'] as number) || 0) % 3 !== 0) continue;
+    const line = s.revealed['research'] ? (s.stage >= 2 && s.trust > 1 ? `Trust ${fmtInt(s.trust)} unspent. Hire a researcher or expand the lab.` : trustRewardLine(s)) : '';
     if (line) say(s, line);
   }
 }
@@ -612,7 +619,13 @@ export function buildDatacenter(s: GameState): boolean {
 }
 
 export function canBuyGpuBatch(s: GameState): boolean {
-  return s.revealed['infrastructure'] === true && s.gpus + gpuBlock(s) <= gpuCapacity(s);
+  return s.revealed['infrastructure'] === true && gpuBlock(s) <= poweredRoom(s);
+}
+
+export function gpuBlockReason(s: GameState): string {
+  if (s.gpus >= gpuCapacity(s)) return 'The datacenters are full. Build another first.';
+  if (s.gpus >= Math.floor(s.gridCapacity / GRID_KW_PER_GPU)) return 'The grid is full. Expand Grid first, or the new GPUs sit dark.';
+  return '';
 }
 
 export function buyGpuBatch(s: GameState): boolean {

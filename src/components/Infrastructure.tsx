@@ -23,6 +23,8 @@ import {
   chipMult,
   batchSize,
   gpuBlock,
+  gpuBlockReason,
+  canBuyGpuBatch,
   securityCost,
   canUpgradeSecurity,
   theftOdds,
@@ -39,7 +41,8 @@ export function Infrastructure() {
   const run = trainingRun(s);
   const room = gpuCapacity(s);
   const batch = gpuBlock(s);
-  const full = s.gpus + batch > room;
+  const full = !canBuyGpuBatch(s);
+  const fullReason = gpuBlockReason(s);
   const nominal = batchSize(s);
   const dataNeed = dataRequired(startCapability(s));
   const dataHave = effectiveData(s);
@@ -119,7 +122,7 @@ export function Infrastructure() {
           disabled={s.funds < gpuBatchCost(s) || full}
           title={
             full
-              ? 'The datacenters are full. Build another first.'
+              ? fullReason || 'No room for more GPUs.'
               : `Rack ${fmtInt(batch)} more ${chipName(s)}s. Each draws ${fmtInt(GRID_KW_PER_GPU)} kW from the grid. More copies: more tasks, and more customers.`
           }
           onClick={() => perform('buyGpuBatch')}
@@ -127,9 +130,14 @@ export function Infrastructure() {
           Buy GPUs ({fmtInt(batch)})
         </button>{' '}
         Cost: <span id="gpuBatchCost">{fmtMoneyShort(gpuBatchCost(s))}</span>
+        <span id="gpuFullNote" className={full && fullReason ? 'shown warn' : ''}>
+          {' '}
+          {fullReason}
+        </span>
         <span className="note hiddenIds">
           {' '}
-          of <span id="gpuBatchNominal">{fmtInt(nominal)}</span> · <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
+          of <span id="gpuBatchNominal">{fmtInt(nominal)}</span> ·{' '}
+          <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
         </span>
         <br />
         <button
@@ -152,8 +160,10 @@ export function Infrastructure() {
             warn={dataShort}
             label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · public web ${Math.round(100 * webShare(s))}% of ${WEB_TOTAL}T read`}
           />{' '}
-          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T of{' '}
-          <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T needed
+          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T{' '}
+          <span className="note">
+            (the next run needs <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T)
+          </span>
           <span id="dataShortNote" className={dataShort ? 'shown warn' : ''}>
             {' '}
             short: the next run gains less
@@ -169,8 +179,17 @@ export function Infrastructure() {
         <Reveal flag="security" id="securityRow">
           <br />
           Security: <span id="securityLevel">SL{s.security}</span>{' '}
-          <span className="note" title={`A weight theft goes unnoticed ${Math.round(100 * theftOdds(s))}% of the time at this level.`}>
-            {s.security >= 4 ? '(sealed)' : s.security === 3 ? '(hard to rob)' : s.security === 2 ? '(harder to rob)' : '(the weights are exposed)'}
+          <span
+            className="note"
+            title={`A weight theft goes unnoticed ${Math.round(100 * theftOdds(s))}% of the time at this level.`}
+          >
+            {s.security >= 4
+              ? '(sealed)'
+              : s.security === 3
+                ? '(hard to rob)'
+                : s.security === 2
+                  ? '(harder to rob)'
+                  : '(the weights are exposed)'}
           </span>
           <br />
           <button

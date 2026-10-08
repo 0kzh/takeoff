@@ -168,6 +168,15 @@ function QueuedTraining() {
     </div>
   );
 }
+function trainShortfall(s: ReturnType<typeof useGame>): string {
+  const parts: string[] = [];
+  const cost = trainCost(s);
+  if ((cost.funds ?? 0) > s.funds) parts.push(`${fmtMoneyShort((cost.funds ?? 0) - s.funds)} more`);
+  const g = trainGpuFigures(s);
+  if (g.need > g.have) parts.push(`${fmtInt(g.need - g.have)} more idle GPUs`);
+  if (!trainSlotFree(s)) parts.push('the current model has to ship first');
+  return parts.length ? `it needs ${parts.join(' and ')}` : 'it is not ready';
+}
 function IdleTraining() {
   const s = useGame();
   const perform = usePerform();
@@ -200,7 +209,9 @@ function IdleTraining() {
             ? 'Start the run.'
             : wall
               ? 'Not yet: it needs the First Datacenter.'
-              : 'Not yet: it needs its price and its GPUs.'
+              : s.stage >= 2
+                ? `Not yet: ${trainShortfall(s)}.`
+                : 'Not yet: it needs its price and its GPUs.'
         }
         onClick={() => perform('startTraining')}
       >

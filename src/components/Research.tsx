@@ -4,7 +4,8 @@ import { researchCap, humanResearchShare, researchRate } from '../engine/economy
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import { datacenterStatus } from '../data/projects.js';
 import { labReason } from '../engine/training.js';
-import { fmtInt } from '../engine/format.js';
+import type { ProjectDef } from '../data/project-def.js';
+import { fmtInt, fmtCompact } from '../engine/format.js';
 
 export function Research() {
   const s = useGame();
@@ -14,7 +15,10 @@ export function Research() {
     <Panel name="research" title="Research">
       Trust: <span id="trust">{s.trust >= 0 ? fmtInt(s.trust) : `0 (${fmtInt(-s.trust)} owed)`}</span>
       <br />
-      Next Trust at <span id="nextTrust">{fmtInt(s.nextTrust)}</span> tasks
+      Next Trust at <span id="nextTrust">
+        {s.stage >= 2 ? fmtCompact(s.nextTrust) : fmtInt(s.nextTrust)}
+      </span>{' '}
+      tasks
       <br />
       <Reveal flag="hireResearcher">
         <button
@@ -38,9 +42,11 @@ export function Research() {
           Expand Lab
         </button>
       </Reveal>{' '}
-      <span className="note" id="trustCostNote">
-        (costs Trust)
-      </span>
+      <Reveal flag="hireResearcher">
+        <span className="note" id="trustCostNote">
+          (costs Trust)
+        </span>
+      </Reveal>
       <br />
       Researchers: <span id="researchers">{fmtInt(s.researchers)}</span>
       <br />
@@ -81,6 +87,20 @@ export function Research() {
     </Panel>
   );
 }
+function ProjectStatus({ project }: { project: ProjectDef }) {
+  const s = useGame();
+  const status = project.status?.(s);
+  if (!status) return null;
+  return (
+    <span className="projectStatus" id={`status-${project.id}`}>
+      <br />
+      {status.fraction !== undefined ? (
+        <Meter id={`statusMeter-${project.id}`} fraction={status.fraction} label={status.text} />
+      ) : null}{' '}
+      {status.text}
+    </span>
+  );
+}
 export function Projects() {
   const s = useGame();
   const perform = usePerform();
@@ -108,6 +128,7 @@ export function Projects() {
             </b>
             <br />
             <span className="projectDesc">{project.description}</span>
+            <ProjectStatus project={project} />
           </button>
         ))}
       </div>

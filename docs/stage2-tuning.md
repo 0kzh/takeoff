@@ -69,6 +69,21 @@ Round 3 (build `stage2-v3`, theft fix): the scripted player reaches Stage 3 at 3
 
 Round 4 (build `stage2-v4`): the transition capture now lists only the intended retirements (Marketing, Hire Researcher, Expand Lab) and the bought gate; no card vanishes unbought, and the Oversight and Geopolitics panels arrive with the gate line.
 
+### Fresh-context review of build v3 (`agent-tools/critic-out/stage2-v3-review.md`)
+
+| Rubric | Takeoff | Paperclips |
+|---|---|---|
+| Time to first meaningful choice | 7 | 7 |
+| Seconds with nothing to do | 4 | 7 |
+| Cognitive load and progressive disclosure | 5 | 6 |
+| Cadence of reveals | 7 | 4 |
+| Greyed-out goal always on screen | 8 | 7 |
+| Clarity of stage transitions | 3 | 6 |
+| Soft-locks found | 8 | 7 |
+| Total | 42 | 44 |
+
+Biggest gap named: minutes 27:38–37:02 (a quarter of the stage) are a wait for the gate the player cannot read: the Automate the Lab card said "needs 10×" with no progress, its dollar price was decorative (revenue outran it in seconds), and the real gate was four more training runs. Fix (round 5): the card carries a live line and bar, "Sage 5.5× of 10× · about 4 more capability runs", and the dollar price is gone (research, insight and 10× remain). Smaller issues fixed in the same round: the repeated "Trust +1" line (now every third milestone, worded as an unspent balance), Buy GPUs selling dark GPUs (the block is capped by powered room and the button says "Expand Grid first"), the data line reading as a requirement, the orphaned "(costs Trust)" note, the eleven-digit next-Trust target (compact in Stage 2), and the Stage 1 wording on the greyed Train button (it now names the shortfall).
+
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 
 ## Browser verification (`npm run test:stage2`)

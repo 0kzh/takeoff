@@ -47,6 +47,15 @@ export function fmtNum(n: number, decimals = 1): string {
   return frac ? `${sign}${body}.${frac}` : `${sign}${body}`;
 }
 
+export function fmtCompact(n: number): string {
+  if (!Number.isFinite(n)) return '0';
+  const a = Math.abs(n);
+  if (a >= 1e12) return fmtInt(n);
+  if (a >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  return fmtInt(n);
+}
+
 export function fmtMw(kw: number): string {
   const mw = kw / 1000;
   return fmtNum(mw, Number.isInteger(mw) ? 0 : 1);

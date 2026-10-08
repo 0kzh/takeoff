@@ -3,7 +3,7 @@ import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
   activeGpus, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec,
-  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost,
+  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity,
 } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
@@ -334,13 +334,17 @@ function infrastructure(s: GameState, a: Actions, mem: BotMemory): void {
   const trainNeedsGpus = trainSlotFree(s) && gpusShort(s) && !needsDatacenter(s);
   const runFunds = trainCost(s).funds ?? 0;
   const spare = (cost: number) => s.funds - cost >= (trainNeedsGpus ? 0 : Math.min(runFunds, 0.5 * s.funds));
-  if (!canBuyGpuBatch(s) && s.revealed['infrastructure'] && s.funds >= datacenterCost(s) && (trainNeedsGpus || spare(datacenterCost(s)))) {
+  // The GPU block is capped by room and by grid, so grow whichever one binds next.
+  const roomShort = s.gpus + batchSize(s) > gpuCapacity(s);
+  const gridShort = s.gpus + batchSize(s) > s.gridCapacity;
+  if (roomShort && s.revealed['infrastructure'] && s.funds >= datacenterCost(s) && (trainNeedsGpus || spare(datacenterCost(s)))) {
     a.buildDatacenter(s);
+  }
+  if (gridShort && canExpandGrid(s) && s.funds >= gridUpgradeCost(s) && (trainNeedsGpus || spare(gridUpgradeCost(s)))) {
+    a.expandGrid(s);
   }
   let guard = 0;
   while (canBuyGpuBatch(s) && s.funds >= gpuBatchCost(s) && guard++ < 5) {
-    const grid = activeGpus(s) >= s.gpus;
-    if (!grid && canExpandGrid(s)) break;
     if (trainNeedsGpus || (careful ? s.funds >= 3 * gpuBatchCost(s) + runFunds * 0.5 : s.funds >= 1.5 * gpuBatchCost(s))) {
       if (!a.buyGpuBatch(s)) break;
     } else break;
@@ -357,7 +361,6 @@ function infrastructure(s: GameState, a: Actions, mem: BotMemory): void {
   } else if (trainSlotFree(s) && canStartTraining(s) && dataShort(s, startCapability(s)) && s.funds < 2 * runFunds) {
     a.startTraining(s);
   }
-  void batchSize;
 }
 
 function harnessGoal(s: GameState): boolean {
