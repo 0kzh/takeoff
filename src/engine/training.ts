@@ -1,6 +1,10 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, inPrologue } from './state.js';
 import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
-import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS } from './economy.js';
+import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS, chipMult } from './economy.js';
+import { dataFactor, dataShort } from './data.js';
+import { applyDrift } from './alignment.js';
+import { moveTempo, distill } from './rivals.js';
+import { moveApproval, DEPLOY_APPROVAL } from './world.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
 import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { INCIDENTS } from '../data/crises.js';
@@ -13,6 +17,7 @@ const BENCH_WEIGHT = [0.9, 0.6, 0.5, 0.55, 0.3, 0.35];
 export const MAJOR_TIERS = [2, 4, 10];
 export const FRONTIER_SCORE = 32;
 export const RELEASE_INSIGHT = 6;
+export const RELEASE_INSIGHT_S2 = 12;
 export const LEADERBOARD_SCORE = 36;
 export const RED_TEAM_SECONDS = 8;
 export const RED_TEAM_SECONDS_EVALS = 5;
@@ -42,14 +47,43 @@ export function trainingRun(s: GameState): TrainingRun | null {
   return r && r.phase === 'training' ? r : null;
 }
 
+export function pipelineRun(s: GameState): TrainingRun | null {
+  return s.training.next;
+}
+
 export function runById(s: GameState, id: unknown): TrainingRun | undefined {
   const r = s.training.run;
-  return r && r.id === id ? r : undefined;
+  if (r && r.id === id) return r;
+  const n = s.training.next;
+  return n && n.id === id ? n : undefined;
 }
 
 export function startCapability(s: GameState): number {
   const waiting = evalRun(s);
-  return Math.max(s.capability, s.training.internalCapability, waiting && waiting.capAfter > 0 ? waiting.capAfter : 0);
+  const queued = s.training.next;
+  return Math.max(
+    s.capability,
+    s.training.internalCapability,
+    waiting && waiting.capAfter > 0 ? waiting.capAfter : 0,
+    queued && queued.capAfter > 0 ? queued.capAfter : 0,
+  );
+}
+
+export const S2_CAP_REF = 1.8;
+export const S2_GPU_BASE = 1000;
+export const S2_GPU_EXPONENT = 4;
+export const S2_FUNDS_BASE = 200000;
+export const S2_FUNDS_EXPONENT = 3.2;
+export const S2_RUN_MIN = 50;
+export const S2_RUN_STEP = 12;
+export const S2_RUN_MAX = 110;
+
+export function effectiveGpusFor(c: number): number {
+  return S2_GPU_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_GPU_EXPONENT);
+}
+
+export function fundsForS2(c: number): number {
+  return twoSig(S2_FUNDS_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_FUNDS_EXPONENT));
 }
 
 export const S1_RUN_BASE = 75;
@@ -84,14 +118,19 @@ function twoSig(raw: number): number {
 export function trainCost(s: GameState): Cost {
   if (inPrologue(s)) return { funds: PROLOGUE_FUNDS, power: PROLOGUE_POWER };
   const c = startCapability(s);
+  if (s.stage >= 2) return { funds: fundsForS2(c) };
   return c < S1_WALL ? { funds: fundsFor(c) } : {};
 }
 
 export function gpusNeeded(s: GameState): number {
   if (inPrologue(s)) return PROLOGUE_GPUS;
   const c = startCapability(s);
-  const n = gpusForS1(c);
   const mult = typeof s.flags['trainingCompute'] === 'number' ? (s.flags['trainingCompute'] as number) : 1;
+  if (s.stage >= 2) {
+    const raw = effectiveGpusFor(c) / chipMult(s) / mult;
+    return Math.max(100, twoSig(raw));
+  }
+  const n = gpusForS1(c);
   const need = mult > 1 ? twoSig(n / mult) : n;
   return c >= S1_WALL ? Math.min(need, ARRIVAL_GPUS) : need;
 }
@@ -102,7 +141,10 @@ export function gpusAvailable(s: GameState): number {
 
 export function busyGpus(s: GameState): number {
   const r = trainingRun(s);
-  return r && r.elapsed < r.duration ? r.gpus ?? 0 : 0;
+  let busy = r && r.elapsed < r.duration ? r.gpus ?? 0 : 0;
+  const n = s.training.next;
+  if (n && n.phase === 'training' && n.elapsed < n.duration) busy += n.gpus ?? 0;
+  return busy;
 }
 
 export function gpusShort(s: GameState): boolean {
@@ -111,6 +153,7 @@ export function gpusShort(s: GameState): boolean {
 
 export function trainingDuration(s: GameState): number {
   if (inPrologue(s)) return PROLOGUE_SECONDS;
+  if (s.stage >= 2) return Math.min(S2_RUN_MAX, Math.max(S2_RUN_MIN, S2_RUN_MIN + S2_RUN_STEP * counter(s, 'runsThisStage')));
   const n = Math.max(1, gpusNeeded(s));
   return Math.min(80, Math.max(45, 45 + 10 * Math.log2(n / 10)));
 }
@@ -147,6 +190,8 @@ export function nextRunName(s: GameState): string {
 }
 
 function nextVersion(s: GameState): { major: number; minor: number } {
+  const queued = s.training.next;
+  if (queued) return { major: queued.major, minor: queued.minor + 1 };
   const waiting = evalRun(s);
   if (waiting) return { major: waiting.major, minor: waiting.minor + 1 };
   return { major: s.training.major, minor: s.training.minor + 1 };
@@ -173,8 +218,14 @@ export const MAX_RENT_QUOTA = 140;
 
 const QUOTA_CARD_IDS = ['p_compute_deal', 'p_region', 'p_reserved'];
 
+export function pipelineOpen(s: GameState): boolean {
+  return s.stage >= 2 && isBought(s, 's2_pipeline');
+}
+
 export function trainSlotFree(s: GameState): boolean {
-  return !s.training.run;
+  const t = s.training;
+  if (!t.run) return true;
+  return pipelineOpen(s) && !t.next && t.run.phase !== 'training';
 }
 
 export function canPressTrain(s: GameState): boolean {
@@ -231,6 +282,10 @@ function startRun(s: GameState, cost: Cost): boolean {
   const capBefore = startCapability(s);
   const version = nextVersion(s);
   pay(s, cost);
+  const boost = typeof s.flags['nextRunBoost'] === 'number' ? (s.flags['nextRunBoost'] as number) : 0;
+  delete s.flags['nextRunBoost'];
+  const bonus = s.stage >= 2 ? boost + (isBought(s, 's2_rl_envs') ? 0.03 : 0) + (isBought(s, 's2_continuous') ? 0.04 : 0) : 0;
+  const factor = s.stage >= 2 ? dataFactor(s, capBefore) : 1;
   const run: TrainingRun = {
     id: t.nextRunId++,
     name: `Sage-${version.major}.${version.minor}`,
@@ -247,8 +302,8 @@ function startRun(s: GameState, cost: Cost): boolean {
     gamble: 'none',
     capBefore,
     capAfter: 0,
-    gainBonus: 0,
-    capMult: 1,
+    gainBonus: bonus,
+    capMult: factor,
     benchBonus: [0, 0, 0, 0, 0, 0],
     benchmarks: [],
     scores: [],
@@ -258,11 +313,14 @@ function startRun(s: GameState, cost: Cost): boolean {
     major: version.major,
     minor: version.minor,
   };
-  t.run = run;
+  if (t.run) t.next = run;
+  else t.run = run;
   t.runIndex += 1;
   s.stats.trainings += 1;
+  if (s.stage >= 2) bump(s, 'runsThisStage');
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.`);
+  const short = s.stage >= 2 && dataShort(s, capBefore) ? ' Data is short: the gain shrinks.' : '';
+  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.${short}`);
   return true;
 }
 
@@ -323,12 +381,29 @@ export function deployFirstModel(s: GameState): boolean {
 
 export function finishTraining(s: GameState): boolean {
   const run = s.training.run;
+  const queued = s.training.next;
+  if (queued?.phase === 'training') {
+    queued.elapsed = queued.duration;
+    return true;
+  }
   if (!run) return false;
   if (run.phase === 'training') run.elapsed = run.duration;
   else if (run.phase === 'evaluating') run.evalElapsed = EVAL_SECONDS;
   else if (s.training.releasing) s.training.releasing.remaining = 0;
   else return false;
   return true;
+}
+
+function promoteQueued(s: GameState): void {
+  const t = s.training;
+  if (t.run || !t.next) return;
+  const n = t.next;
+  t.next = null;
+  t.run = n;
+  if (n.phase === 'waiting') {
+    n.phase = 'evaluating';
+    n.evalElapsed = 0;
+  }
 }
 
 export function updateTraining(s: GameState, dt: number): void {
@@ -340,12 +415,15 @@ export function updateTraining(s: GameState, dt: number): void {
       else t.releasing = null;
     }
   }
+  promoteQueued(s);
   const run = t.run;
-  if (run?.phase === 'training') updateRunning(s, run, dt);
+  if (run?.phase === 'training') updateRunning(s, run, dt, false);
   else if (run?.phase === 'evaluating') {
     run.evalElapsed += dt;
     if (run.evalElapsed >= EVAL_SECONDS) finishEvaluation(s, run);
   }
+  const queued = t.next;
+  if (queued?.phase === 'training') updateRunning(s, queued, dt, true);
   if (t.redTeamRemaining > 0) {
     t.redTeamRemaining -= dt;
     if (t.redTeamRemaining <= 0) {
@@ -362,7 +440,7 @@ export function updateTraining(s: GameState, dt: number): void {
   }
 }
 
-function updateRunning(s: GameState, run: TrainingRun, dt: number): void {
+function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boolean): void {
   if (run.elapsed < run.duration) {
     run.elapsed += dt;
     const progress = run.elapsed / run.duration;
@@ -371,11 +449,17 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number): void {
       run.flavorShown = 1;
       if (pool.length) say(s, pick(s, pool));
     }
-    if (run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
+    if (!queued && run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
     if (run.eventAt >= 0 && !run.eventId && progress >= run.eventAt) applyTrainingEvent(s, run);
   }
   if (run.elapsed >= run.duration) {
     run.elapsed = run.duration;
+    if (queued) {
+      computeResults(s, run);
+      run.phase = 'waiting';
+      say(s, `${run.name} is trained. It waits for ${s.training.run?.name ?? 'the current model'} to ship.`);
+      return;
+    }
     if (run.prologue) {
       run.phase = 'redteam';
       run.issues = 0;
@@ -436,7 +520,10 @@ function applyTrainingEvent(s: GameState, run: TrainingRun): void {
   logNews(s, numbered[ev.id] ?? ev.line);
 }
 
+export const S2_FOCUS_BASE = { capability: 0.14, efficiency: 0.1, safety: 0.1 };
+
 function focusBase(s: GameState, run: TrainingRun): number {
+  if (s.stage >= 2) return run.focus === 'capability' ? S2_FOCUS_BASE.capability + 0.03 * (rng(s) + rng(s)) : S2_FOCUS_BASE[run.focus];
   return run.focus === 'capability' ? 0.10 + 0.02 * (rng(s) + rng(s)) : 0.05;
 }
 
@@ -448,7 +535,7 @@ function computeResults(s: GameState, run: TrainingRun): void {
     const noisy = base + rand(s, -0.4, 0.4) + run.benchBonus[i]!;
     return Math.round(Math.min(10, Math.max(0, noisy)) * 10) / 10;
   });
-  const lambda = Math.max(0.3, 2 + run.capAfter / 3 - safetyInvestment(s, run));
+  const lambda = Math.max(0.3, Math.min(s.stage >= 2 ? 4 : 99, 2 + run.capAfter / 3 - safetyInvestment(s, run)));
   run.issuesFound = poisson(s, lambda) + run.extraIssues;
   run.issues = run.issuesFound;
   run.scores = scoreCards(s, run);
@@ -483,6 +570,25 @@ function scoreCards(s: GameState, run: TrainingRun): number[] {
     clampScore(5 + focusEff + rel * 5 - run.issuesFound * 0.3 + n()),
     clampScore(8 + focusSafe - run.issuesFound * 0.8 + (s.alignmentApparent - 50) / 10 + n()),
   ];
+}
+
+export type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export function riskTier(score: number): RiskTier {
+  return score < 3 ? 'LOW' : score < 5 ? 'MEDIUM' : score < 7.5 ? 'HIGH' : 'CRITICAL';
+}
+
+export function knowsTested(s: GameState, run: TrainingRun): number | null {
+  if (s.stage < 2 || run.capAfter < 6) return null;
+  return Math.min(97, Math.round(55 + 4 * run.capAfter));
+}
+
+export function honestyProbe(s: GameState): number {
+  return Math.max(0, Math.round(100 - 4 * s.deceptionBias));
+}
+
+export function releasesOwed(s: GameState): number {
+  return counter(s, 'publicReleasesOwed');
 }
 
 export function totalScore(run: TrainingRun): number {
@@ -536,7 +642,7 @@ export function redTeam(s: GameState): boolean {
   return true;
 }
 
-const RELEASE_CHOICES = ['c_sage2', 'c_ship_issues'];
+const RELEASE_CHOICES = ['c_sage2', 'c_ship_issues', 'c_release'];
 
 export function canRelease(s: GameState): boolean {
   const run = s.training.run;
@@ -555,6 +661,10 @@ export function release(s: GameState): boolean {
 }
 
 export function releaseChecked(s: GameState, run: TrainingRun): boolean {
+  if (s.stage >= 2 && isBought(s, 's2_release_policy')) {
+    openChoice(s, 'c_release', { runId: run.id });
+    return true;
+  }
   if (!s.flags['sage2Decided'] && majorFor(run.capAfter) >= 2) {
     openChoice(s, 'c_sage2', { runId: run.id });
     return true;
@@ -592,13 +702,21 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
   s.stats.releases += 1;
   s.flags['releasedAt'] = s.stats.timePlayed;
   t.models.push({ name: run.name, capability: run.capAfter, date: s.date, public: isPublic });
+  const frontierBefore = Math.max(s.capability, t.internalCapability);
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
+  if (run.capAfter > frontierBefore) applyDrift(s, frontierBefore, run.capAfter, run.focus);
   if (run.focus === 'safety') bump(s, 'safetyReleases');
   if (isPublic) {
     t.deployedName = run.name;
     s.capability = run.capAfter;
     s.hypeBoost = Math.max(s.hypeBoost, 2.0);
     s.stats.publicReleases += 1;
+    if (s.stage >= 2) {
+      moveTempo(s, 3);
+      distill(s);
+      if (s.revealed['public']) moveApproval(s, DEPLOY_APPROVAL);
+      if (releasesOwed(s) > 0) s.flags['publicReleasesOwed'] = releasesOwed(s) - 1;
+    }
     if (s.flags['firstReleaseAt'] === undefined) s.flags['firstReleaseAt'] = s.stats.timePlayed;
     const line = pick(s, RELEASE_LINES).replace('{name}', run.name);
     if (run.issues === 0) {
@@ -607,16 +725,18 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
     } else {
       say(s, `${line} No Trust: ${run.issues} open issue${run.issues === 1 ? '' : 's'} shipped.`);
     }
-    if (s.insightUnlocked) s.insight += RELEASE_INSIGHT;
+    if (s.insightUnlocked) s.insight += s.stage >= 2 ? RELEASE_INSIGHT_S2 : RELEASE_INSIGHT;
     logNews(s, `OpenMind releases ${run.name}. ${pick(s, RELEASE_HEADLINES)}`);
     if (run.issues > 0) scheduleIncidents(s, run.issues, run.name);
   } else {
     s.researchMult *= 1.25;
     s.lead += 1;
+    if (s.stage >= 2) bump(s, 'internalReleases');
     say(s, `${run.name} stays internal. Research runs 25% faster.`);
   }
   bump(s, 'releasesThisStage');
   s.flags['lastReleaseAt'] = s.stats.timePlayed;
+  promoteQueued(s);
   return true;
 }
 

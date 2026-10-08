@@ -7,7 +7,6 @@ import {
   copies,
   copiesIdle,
   gpuCapacity,
-  GPU_BATCH,
   gpuBatchCost,
   GRID_KW_PER_GPU,
   datacenterCost,
@@ -20,9 +19,17 @@ import {
   activeGpus,
   nextGridCapacity,
   gridUpgradeCost,
+  chipName,
+  chipMult,
+  batchSize,
+  securityCost,
+  canUpgradeSecurity,
+  theftOdds,
+  SECURITY_MAX,
 } from '../engine/economy.js';
-import { trainingRun } from '../engine/training.js';
-import { fmtMoney, fmtMoneyShort, fmtInt, fmtMw, fmtClock } from '../engine/format.js';
+import { trainingRun, startCapability } from '../engine/training.js';
+import { effectiveData, dataRequired, syntheticRatePerMin, webShare, WEB_TOTAL } from '../engine/data.js';
+import { fmtMoney, fmtMoneyShort, fmtInt, fmtMw, fmtClock, fmtNum } from '../engine/format.js';
 
 export function Infrastructure() {
   const s = useGame();
@@ -30,7 +37,11 @@ export function Infrastructure() {
   const owned = s.revealed['infrastructure'] === true;
   const run = trainingRun(s);
   const room = gpuCapacity(s);
-  const full = s.gpus + GPU_BATCH > room;
+  const batch = batchSize(s);
+  const full = s.gpus + batch > room;
+  const dataNeed = dataRequired(startCapability(s));
+  const dataHave = effectiveData(s);
+  const dataShort = dataHave < dataNeed;
   const left = powerSecondsLeft(s);
   const draw =
     s.stage < 2
@@ -92,9 +103,13 @@ export function Infrastructure() {
         <Meter
           id="roomMeter"
           fraction={s.gpus / room}
-          label={`${fmtInt(s.gpus)} GPUs in ${fmtInt(s.datacenters)} datacenter${s.datacenters === 1 ? '' : 's'} with room for ${fmtInt(room)} · ${fmtInt(copies(s))} copies running`}
+          label={`${fmtInt(s.gpus)} ${chipName(s)} GPUs in ${fmtInt(s.datacenters)} datacenter${s.datacenters === 1 ? '' : 's'} with room for ${fmtInt(room)} · ${fmtInt(copies(s))} copies running${chipMult(s) > 1 ? ` · each GPU does the work of ${chipMult(s)}` : ''}`}
         />{' '}
-        <span id="infraGpus">{fmtInt(s.gpus)}</span> / <span id="gpuCapacity">{fmtInt(room)}</span>
+        <span id="infraGpus">{fmtInt(s.gpus)}</span> / <span id="gpuCapacity">{fmtInt(room)}</span>{' '}
+        <span className="note" id="chipName">
+          {chipName(s)}
+          {chipMult(s) > 1 ? ` ×${chipMult(s)}` : ''}
+        </span>
         <br />
         <button
           className="button2"
@@ -103,15 +118,15 @@ export function Infrastructure() {
           title={
             full
               ? 'The datacenters are full. Build another first.'
-              : `Rack ${fmtInt(GPU_BATCH)} more GPUs. Each draws ${fmtInt(GRID_KW_PER_GPU)} kW from the grid.`
+              : `Rack ${fmtInt(batch)} more ${chipName(s)}s. Each draws ${fmtInt(GRID_KW_PER_GPU)} kW from the grid. More copies: more tasks, and more customers.`
           }
           onClick={() => perform('buyGpuBatch')}
         >
-          Buy GPUs (1,000)
+          Buy GPUs ({fmtInt(batch)})
         </button>{' '}
         Cost: <span id="gpuBatchCost">{fmtMoneyShort(gpuBatchCost(s))}</span>{' '}
         <span className="note">
-          uses <span id="gpuBatchDraw">{fmtMw(GPU_BATCH * GRID_KW_PER_GPU)}</span> MW
+          uses <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
         </span>
         <br />
         <button
@@ -125,6 +140,46 @@ export function Infrastructure() {
         </button>{' '}
         Cost: <span id="datacenterCost">{fmtMoneyShort(datacenterCost(s))}</span>
         <br />
+        <Reveal flag="data" id="dataRow">
+          <br />
+          Data{' '}
+          <Meter
+            id="dataMeter"
+            fraction={dataHave / dataNeed}
+            warn={dataShort}
+            label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · public web ${Math.round(100 * webShare(s))}% of ${WEB_TOTAL}T read`}
+          />{' '}
+          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T of <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T needed
+          <span id="dataShortNote" className={dataShort ? 'shown warn' : ''}>
+            {' '}short: the next run gains less
+          </span>
+          <br />
+          <Reveal flag="synthetic">
+            <span className="note">
+              Idle copies write <span id="syntheticRate">{fmtNum(syntheticRatePerMin(s), 2)}</span>T a minute
+            </span>
+            <br />
+          </Reveal>
+        </Reveal>
+        <Reveal flag="security" id="securityRow">
+          <br />
+          Security: <span id="securityLevel">SL{s.security}</span>{' '}
+          <span className="note" title="The chance a weight theft succeeds unnoticed at this level.">
+            (theft {Math.round(100 * theftOdds(s))}% likely)
+          </span>
+          <br />
+          <button
+            className="button2"
+            id="btn-security"
+            disabled={!canUpgradeSecurity(s) || s.funds < securityCost(s)}
+            title={s.security >= SECURITY_MAX ? 'Weights never leave the enclave.' : `Security level ${s.security + 1}: theft less likely; research 3% slower.`}
+            onClick={() => perform('upgradeSecurity')}
+          >
+            Upgrade security
+          </button>{' '}
+          Cost: <span id="securityCost">{s.security >= SECURITY_MAX ? 'maxed' : fmtMoneyShort(securityCost(s))}</span>
+          <br />
+        </Reveal>
       </Reveal>
       <Reveal flag="power" id="powerRows">
         <br />

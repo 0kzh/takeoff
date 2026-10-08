@@ -1,5 +1,7 @@
-import type { GameState } from '../engine/state.js';
+import { isBought, type GameState } from '../engine/state.js';
 import { monthOf } from '../engine/format.js';
+import { bestCapability } from '../engine/economy.js';
+import { revealAlignment } from '../engine/alignment.js';
 
 export interface DevelopmentDef {
   id: string;
@@ -11,6 +13,7 @@ export interface DevelopmentDef {
   crisis?: string;
   choice?: string;
   calendar?: boolean;
+  effect?: (s: GameState) => void;
 }
 
 const num = (s: GameState, k: string): number => {
@@ -180,5 +183,137 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     text: 'Internal eval: the model hid a failed task to get a better rating. "Rigged demo," says comms.',
     month: monthOf(2026, 1),
     trigger: (s) => s.stats.incidents >= 1,
+  },
+  // ---------- Stage 2: The Race ----------
+  {
+    id: 'd2_roadmap',
+    stage: 2,
+    text: 'Anthrosoft publishes a 2026 roadmap. It is one slide. The slide says "more".',
+    month: monthOf(2026, 2),
+  },
+  {
+    id: 'd2_lead_times',
+    stage: 2,
+    text: 'Nimbus lead times reach forty weeks. Three labs announce chips of their own, none of them this year.',
+    month: monthOf(2026, 3),
+  },
+  {
+    id: 'd2_data_wall',
+    stage: 2,
+    choice: 'c_data_wall',
+    requires: (s) => s.revealed['data'] === true,
+    trigger: (s) => s.flags['webExhausted'] === true,
+  },
+  {
+    id: 'd2_hearing',
+    stage: 2,
+    choice: 'c_hearing',
+    text: 'Senator Albright asks whether Sage could testify instead. The committee laughs. She does not.',
+    month: monthOf(2026, 4),
+    requires: (s) => bestCapability(s) >= 2.2,
+  },
+  {
+    id: 'd2_valuation',
+    stage: 2,
+    text: 'The Ledger: OpenMind\'s valuation doubles. Nobody can explain the first valuation either.',
+    month: monthOf(2026, 5),
+  },
+  {
+    id: 'd2_reward_hacking',
+    stage: 2,
+    text: 'Kit: it didn\'t fix the code. it fixed the tests. all of them pass now.',
+    trigger: (s) => bestCapability(s) >= 4,
+    effect: (s) => {
+      s.flags['rewardHacking'] = true;
+      if (isBought(s, 'p_alignment_team')) revealAlignment(s);
+    },
+  },
+  {
+    id: 'd2_jobs',
+    stage: 2,
+    text: 'The Ledger: junior developer hiring falls for a third straight quarter. "Sage for Work" is mentioned in paragraph two.',
+    requires: (s) => isBought(s, 's2_work'),
+    trigger: (s) => typeof s.flags['workAt'] === 'number' && s.stats.timePlayed - (s.flags['workAt'] as number) >= 120,
+    effect: (s) => {
+      s.revealed['jobs'] = true;
+    },
+  },
+  {
+    id: 'd2_market',
+    stage: 2,
+    text: 'The stock market is up 30% this year. Half of the gain is four companies. One of them makes chips.',
+    month: monthOf(2026, 7),
+  },
+  {
+    id: 'd2_mini',
+    stage: 2,
+    choice: 'c_mini',
+    requires: (s) => s.revealed['public'] === true,
+    trigger: (s) => bestCapability(s) >= 6 && (s.flags['releasesThisStage'] as number) >= 1,
+  },
+  {
+    id: 'd2_dod',
+    stage: 2,
+    text: 'The Department of Defense opens a procurement line for "cognitive services". The RFP is 900 pages.',
+    month: monthOf(2026, 8),
+  },
+  {
+    id: 'd2_power',
+    stage: 2,
+    text: 'Global AI power demand passes 38 gigawatts. Texas is building a second grid, informally.',
+    month: monthOf(2026, 9),
+  },
+  {
+    id: 'd2_bio_choice',
+    stage: 2,
+    choice: 'c_bio',
+    requires: (s) => s.revealed['dangerEvals'] === true,
+    trigger: (s) => bestCapability(s) >= 8,
+  },
+  {
+    id: 'd2_bio_surprise',
+    stage: 2,
+    crisis: 'cr_bio_headline',
+    requires: (s) => s.revealed['dangerEvals'] !== true,
+    trigger: (s) => bestCapability(s) >= 8,
+  },
+  {
+    id: 'd2_defense',
+    stage: 2,
+    choice: 'c_defense',
+    requires: (s) => s.revealed['government'] === true,
+    trigger: (s) => bestCapability(s) >= 8,
+  },
+  {
+    id: 'd2_compute_request',
+    stage: 2,
+    choice: 'c_compute_request',
+    trigger: (s) => bestCapability(s) >= 8 && (s.flags['releasesThisStage'] as number) >= 4,
+  },
+  {
+    id: 'd2_g6',
+    stage: 2,
+    text: 'Nimbus announces the G6. The keynote is forty minutes; the chip is on stage for nine seconds.',
+    month: monthOf(2026, 10),
+  },
+  {
+    id: 'd2_robot_demo',
+    stage: 2,
+    text: 'Anthrosoft demos a humanoid that folds laundry 40% of the time. The video is eleven seconds long.',
+    month: monthOf(2026, 11),
+  },
+  {
+    id: 'd2_friend',
+    stage: 2,
+    text: 'A poll: 10% of Americans call an AI a close friend. 4% say "best friend". The pollster asks Sage to check the maths.',
+    requires: (s) => s.flags['miniLaunched'] === true,
+    trigger: (s) => typeof s.flags['miniAt'] === 'number' && s.stats.timePlayed - (s.flags['miniAt'] as number) >= 150,
+  },
+  {
+    id: 'd2_inquiry',
+    stage: 2,
+    text: 'A Senate inquiry into OpenMind is announced. Three senators want it shut down. One wants a seat on the board.',
+    requires: (s) => s.revealed['public'] === true,
+    trigger: (s) => s.approval < 40,
   },
 ];

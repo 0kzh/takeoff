@@ -2,11 +2,14 @@ import { GameState, inPrologue } from '../engine/state.js';
 import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
-  activeGpus, gpuCapacity, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec, GPU_BATCH,
+  activeGpus, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec,
+  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost,
 } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
+  trainSlotFree, startCapability,
 } from '../engine/training.js';
+import { dataShort } from '../engine/data.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { choiceById, choiceOptionEnabled } from '../engine/events.js';
 import type { ProjectDef } from '../data/projects.js';
@@ -113,6 +116,19 @@ function variantFocus(s: GameState, a: Actions, mem: BotMemory): boolean {
 }
 
 const CHOICE_POLICY: Record<string, Answer[]> = {
+  c_release: ['deployed'],
+  c_data_wall: ['respected'],
+  c_hearing: ['cooperated'],
+  c_funding: ['patient'],
+  c_theft: ['traced', 'cut'],
+  c_mini: ['launched'],
+  c_bio: ['delayed'],
+  c_defense: ['declined'],
+  c_protest: ['jobs programme', 'statement'],
+  c_compute_request: ['watched'],
+  c_irrelevance: ['emergency round'],
+  c_ultimatum: ['oversight'],
+  c_emergency_vote: ['conceded'],
   c_gamble: ['no gamble'],
   c_sage2: [0],
   c_rival: ['open-sourced'],
@@ -243,6 +259,8 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
 
   for (const p of visibleProjects(s)) {
     if (!p.canAfford(s)) continue;
+    if (p.id === 's2_licensing' && !dataShort(s, startCapability(s))) continue;
+    if (s.stage >= 2 && p.sideline && p.id !== 's2_licensing' && (p.cost(s).funds ?? 0) > 0.5 * s.funds) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
     if (p.id === TRANSITION && mem.holdTransition) continue;
     if (p.id === TRANSITION && careful && !needsDatacenter(s)) continue;
@@ -284,14 +302,42 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
     paying(marketingCost(s), () => a.buyMarketing(s));
   }
   if (s.stage < 2 && canExpandGrid(s) && gridOutgrown(s) && s.funds - gridUpgradeCost(s) >= reserve) a.expandGrid(s);
-  if (s.stage >= 2 && s.revealed['infrastructure']) infrastructure(s, a);
+  if (s.stage >= 2 && s.revealed['infrastructure']) infrastructure(s, a, mem);
 }
 
-function infrastructure(s: GameState, a: Actions): void {
+// Stage 2: keep the next run reachable (GPUs, data, money), grow the fleet for
+// reach, power what is bought, and raise security once Baiwen is in the race.
+function infrastructure(s: GameState, a: Actions, mem: BotMemory): void {
+  const careful = mem.policy === 'bot';
   const powered = activeGpus(s) >= s.gpus;
   if (!powered && canExpandGrid(s) && s.funds >= gridUpgradeCost(s)) a.expandGrid(s);
-  if (s.gpus + GPU_BATCH > gpuCapacity(s) && s.funds >= datacenterCost(s)) a.buildDatacenter(s);
-  if (powered && s.funds >= gpuBatchCost(s) * 1.2) a.buyGpuBatch(s);
+  const trainNeedsGpus = trainSlotFree(s) && gpusShort(s) && !needsDatacenter(s);
+  const runFunds = trainCost(s).funds ?? 0;
+  const spare = (cost: number) => s.funds - cost >= (trainNeedsGpus ? 0 : Math.min(runFunds, 0.5 * s.funds));
+  if (!canBuyGpuBatch(s) && s.revealed['infrastructure'] && s.funds >= datacenterCost(s) && (trainNeedsGpus || spare(datacenterCost(s)))) {
+    a.buildDatacenter(s);
+  }
+  let guard = 0;
+  while (canBuyGpuBatch(s) && s.funds >= gpuBatchCost(s) && guard++ < 5) {
+    const grid = activeGpus(s) >= s.gpus;
+    if (!grid && canExpandGrid(s)) break;
+    if (trainNeedsGpus || (careful ? s.funds >= 3 * gpuBatchCost(s) + runFunds * 0.5 : s.funds >= 1.5 * gpuBatchCost(s))) {
+      if (!a.buyGpuBatch(s)) break;
+    } else break;
+  }
+  if (!powered || activeGpus(s) < s.gpus) {
+    if (canExpandGrid(s) && s.funds >= gridUpgradeCost(s)) a.expandGrid(s);
+  }
+  if (canUpgradeSecurity(s) && s.baiwen.present && s.security < 3 && s.funds >= 4 * securityCost(s)) a.upgradeSecurity(s);
+  if (s.revealed['marketing'] && s.funds >= 4 * marketingCost(s) && marketingCost(s) < 40 * Math.max(1, s.stats.revPerSec)) a.buyMarketing(s);
+  if (trainSlotFree(s) && canStartTraining(s) && !dataShort(s, startCapability(s))) {
+    if (s.revealed['alignment'] && s.alignmentApparent < 55 && (s.flags['runsThisStage'] as number) % 3 === 2) a.setFocus(s, 'safety');
+    else a.setFocus(s, 'capability');
+    a.startTraining(s);
+  } else if (trainSlotFree(s) && canStartTraining(s) && dataShort(s, startCapability(s)) && s.funds < 2 * runFunds) {
+    a.startTraining(s);
+  }
+  void batchSize;
 }
 
 function harnessGoal(s: GameState): boolean {

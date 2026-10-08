@@ -6,13 +6,14 @@ import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
 import {
   gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate,
-  datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gpuCapacity, GPU_BATCH,
+  datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, canBuyGpuBatch, canUpgradeSecurity, securityCost,
 } from './economy.js';
 import { canStartTraining, canRedTeam, trainCost } from './training.js';
 import { dateLabel } from './format.js';
 import { mechanic, mechanicClear } from './stages.js';
 import { BEAT_GAP_SECONDS } from './reveal.js';
 import { rand, pick, chance } from './rng.js';
+import { labStalled } from './rivals.js';
 
 export function developmentById(id: string): DevelopmentDef | undefined {
   return DEVELOPMENTS.find((d) => d.id === id);
@@ -73,6 +74,7 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   if (d.crisis && d.choice) s.scheduled.push({ id: d.crisis, delay: 4 });
   else if (d.crisis) fireCrisis(s, d.crisis);
   if (d.text) logNews(s, d.text);
+  d.effect?.(s);
   if (d.choice) openChoice(s, d.choice, {});
   return true;
 }
@@ -140,9 +142,14 @@ export function rivalRelease(s: GameState): void {
   s.rivalVersion += 1;
   const ours = s.capability;
   const target = chance(s, 0.35) ? ours * rand(s, 1.02, 1.12) : s.rivalCapability * rand(s, 1.03, 1.1);
-  const next = Math.min(RIVAL_BAND[1] * ours, Math.max(RIVAL_BAND[0] * ours, target));
+  let next = Math.min(RIVAL_BAND[1] * ours, Math.max(RIVAL_BAND[0] * ours, target));
+  if (s.stage >= 2) {
+    const own = s.rivalCapability * rand(s, 1.08, 1.18);
+    next = Math.max(next, labStalled(s) ? own : Math.min(own, 1.3 * ours));
+  }
   s.rivalCapability = Math.max(s.rivalCapability, next);
-  s.nextRivalIn = Math.round(rand(s, 240, 420));
+  s.nextRivalIn = Math.round(rand(s, 240, 420) * (s.stage >= 2 ? 1.4 - s.tempo / 125 : 1));
+  if (s.stage >= 2) s.flags['rivalReleasesS2'] = ((s.flags['rivalReleasesS2'] as number) || 0) + 1;
   const name = `Cadence-${s.rivalVersion}`;
   logNews(s, pick(s, RIVAL_LINES).replace('{name}', name));
   const q = qualityMult(s);
@@ -151,7 +158,7 @@ export function rivalRelease(s: GameState): void {
 }
 
 export const MODAL_SPACING = 150;
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2'];
+export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_release'];
 
 export interface OpenOptions {
   onlyIfFree?: boolean;
@@ -172,7 +179,9 @@ export function modalCanOpen(s: GameState): boolean {
 
 function present(s: GameState, entry: ActiveChoice): void {
   s.activeChoice = entry;
-  s.cadence.lastModalAt = s.stats.timePlayed;
+  // Player-initiated modals (release decisions) do not reset the spacing that
+  // paces the world's own events, or those events starve behind every run.
+  if (!PLAYER_MODALS.includes(entry.id)) s.cadence.lastModalAt = s.stats.timePlayed;
   choiceById(entry.id)?.onOpen?.(s, entry.context);
 }
 
@@ -302,7 +311,8 @@ export function noveltyKeys(s: GameState): string[] {
   }
   if (s.revealed['infrastructure']) {
     if (s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
-    if (s.funds >= gpuBatchCost(s) && s.gpus + GPU_BATCH <= gpuCapacity(s)) keys.push(`aff:gpubatch:${s.gpuBatches}`);
+    if (s.funds >= gpuBatchCost(s) && canBuyGpuBatch(s)) keys.push(`aff:gpubatch:${s.gpuBatches}`);
+    if (canUpgradeSecurity(s) && s.funds >= securityCost(s)) keys.push(`aff:security:${s.security}`);
   }
   if (canExpandGrid(s) && s.funds >= gridUpgradeCost(s)) keys.push(`aff:grid:${s.gridCapacity}`);
   if (s.activeChoice) keys.push(`choice:${s.activeChoice.id}`);
@@ -373,6 +383,10 @@ function unaffordableFundsCosts(s: GameState): number[] {
   if (s.revealed['buyPower'] && !s.gridAuto) add(powerBlockCost(s));
   if (canExpandGrid(s)) add(gridUpgradeCost(s));
   if (s.stage < 2 && s.revealed['compute']) add(gpuCost(s));
+  if (s.stage >= 2 && s.revealed['infrastructure']) {
+    add(datacenterCost(s));
+    if (canBuyGpuBatch(s)) add(gpuBatchCost(s));
+  }
   if (s.revealed['marketing']) add(marketingCost(s));
   if (s.revealed['training'] && !s.training.run) add(trainCost(s).funds);
   if (s.revealed['projects']) for (const p of visibleProjects(s)) add(p.cost(s).funds);

@@ -1,5 +1,7 @@
 import { GameState, newGame, ModelRecord, ChoiceRecord } from '../engine/state.js';
 import { enterStage } from '../engine/stages.js';
+import { actions, step } from '../engine/tick.js';
+import { newBotMemory, policyStep } from '../sim/policy.js';
 import { DEVELOPMENTS } from './developments.js';
 
 export interface Preset {
@@ -188,6 +190,38 @@ function stage1End(seed: number): GameState {
 function stage2(seed: number): GameState {
   const s = stage1End(seed);
   enterStage(s, 2);
+  return s;
+}
+
+export interface Stage2Checkpoint {
+  id: string;
+  label: string;
+  title: string;
+  minutes: number;
+}
+
+// Checkpoints are produced by letting the bot play from the Stage 2 arrival for
+// a fixed number of minutes with the given seed, so they stay honest as the
+// balance changes. They are cheats for review, not balance evidence.
+export const STAGE2_CHECKPOINTS: Stage2Checkpoint[] = [
+  { id: 'arrival', label: 'arrival', title: 'Stage 2 arrival: the first datacenter', minutes: 0 },
+  { id: 'datawall', label: 'data', title: 'About 7 minutes in: the data wall', minutes: 7 },
+  { id: 'baiwen', label: 'baiwen', title: 'About 18 minutes in: Baiwen and security', minutes: 18 },
+  { id: 'alignment', label: 'align', title: 'About 24 minutes in: the alignment strip', minutes: 24 },
+  { id: 'final', label: 'final', title: 'About 36 minutes in: the final runs', minutes: 36 },
+];
+
+export function stage2Checkpoint(id: string, seed: number): GameState {
+  const cp = STAGE2_CHECKPOINTS.find((c) => c.id === id) ?? STAGE2_CHECKPOINTS[0]!;
+  const s = stage2(seed);
+  const mem = newBotMemory('bot');
+  const ticks = Math.round(cp.minutes * 600);
+  for (let i = 0; i < ticks && s.stage === 2 && !s.ending; i++) {
+    policyStep(s, actions, mem);
+    step(s);
+  }
+  s.activeChoice = null;
+  s.choiceQueue = [];
   return s;
 }
 

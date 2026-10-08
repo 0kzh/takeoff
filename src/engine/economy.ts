@@ -1,5 +1,5 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, bump, counter, addFunds, inPrologue } from './state.js';
+import { GameState, say, canPay, pay, bump, counter, addFunds, inPrologue, isBought } from './state.js';
 import { busyGpus } from './training.js';
 import { fmtMoneyShort, fmtInt, fmtMw } from './format.js';
 import { mechanicClear } from './stages.js';
@@ -18,7 +18,36 @@ export const GRID_OFFER_SECONDS = 15;
 export const DATACENTER_GPUS = 10000;
 export const ARRIVAL_GPUS = 1000;
 export const GPU_BATCH = 1000;
-export const CHIP_PRICE = 40;
+export const CHIP_PRICE = 100;
+export const GPU_BATCH_GROWTH = 1.05;
+export const CHIP_MULT = [0, 1, 4, 16];
+export const CHIP_PRICE_MULT = [0, 1, 3, 10];
+export const CHIP_NAMES = ['', 'Nimbus G4', 'Nimbus G5', 'Nimbus G6'];
+export const DATACENTER_GROWTH_S2 = 2.2;
+export const GRID_COST_PER_KW_S2 = 100;
+export const SECURITY_BASE_COST = 5000000;
+export const SECURITY_COST_GROWTH = 8;
+export const SECURITY_RESEARCH_TAX = 0.03;
+export const SECURITY_MAX = 4;
+export const ADOPTION_EXPONENT = 0.35;
+export const AI_RESEARCH_BASE = 2;
+export const AI_INSIGHT_SHARE = 0.01;
+
+export function chipMult(s: GameState): number {
+  return CHIP_MULT[s.chipGen] ?? 1;
+}
+
+export function chipName(s: GameState): string {
+  return CHIP_NAMES[s.chipGen] ?? CHIP_NAMES[1]!;
+}
+
+export function dcRoom(s: GameState): number {
+  return DATACENTER_GPUS * Math.pow(10, Math.max(0, s.dcTier - 1));
+}
+
+export function batchSize(s: GameState): number {
+  return GPU_BATCH * Math.pow(10, Math.max(0, s.dcTier - 1));
+}
 
 export const MARKET_START = 3;
 export const MARKET_FULL = 3;
@@ -49,11 +78,23 @@ export function marketingCost(s: GameState): number {
 }
 
 export function datacenterCost(s: GameState): number {
-  return 250000 * Math.pow(1.5, s.datacenters);
+  return Math.round(250000 * Math.pow(s.stage >= 2 ? DATACENTER_GROWTH_S2 : 1.5, s.datacenters));
 }
 
 export function gpuBatchCost(s: GameState): number {
-  return Math.round(GPU_BATCH * CHIP_PRICE * Math.pow(1.04, s.gpuBatches));
+  return Math.round(batchSize(s) * CHIP_PRICE * (CHIP_PRICE_MULT[s.chipGen] ?? 1) * Math.pow(GPU_BATCH_GROWTH, s.gpuBatches));
+}
+
+export function securityCost(s: GameState): number {
+  return SECURITY_BASE_COST * Math.pow(SECURITY_COST_GROWTH, Math.max(0, s.security - 1));
+}
+
+export function securityTax(s: GameState): number {
+  return 1 - SECURITY_RESEARCH_TAX * Math.max(0, s.security - 1);
+}
+
+export function theftOdds(s: GameState): number {
+  return [0.9, 0.9, 0.5, 0.25, 0.1][Math.min(SECURITY_MAX, Math.max(1, s.security))] ?? 0.1;
 }
 
 export function nextGridCapacity(s: GameState): number {
@@ -62,6 +103,7 @@ export function nextGridCapacity(s: GameState): number {
 
 export function gridUpgradeCost(s: GameState): number {
   const next = nextGridCapacity(s);
+  if (s.stage >= 2) return Math.round(GRID_COST_PER_KW_S2 * next * (s.flags['ppa'] ? 0.7 : 1));
   return next <= GRID_FIRST_TIER ? GRID_FIRST_COST : GRID_COST_PER_KW * next;
 }
 
@@ -122,25 +164,65 @@ export function humanEfficiency(s: GameState): number {
   return Math.min(1, 3 / Math.max(1, bestCapability(s)));
 }
 
+export function humanResearchRate(s: GameState): number {
+  return s.researchers * 10 * humanEfficiency(s) * s.researchMult * securityTax(s);
+}
+
+export function aiResearchRate(s: GameState): number {
+  if (s.stage < 2 || !isBought(s, 's2_ai_rd')) return 0;
+  const c = bestCapability(s);
+  return AI_RESEARCH_BASE * Math.pow(c, 1.5) * (1 + Math.log10(Math.max(1, copies(s) / 1000))) * s.researchMult;
+}
+
 export function researchRate(s: GameState): number {
-  return s.researchers * 10 * humanEfficiency(s) * s.researchMult;
+  return humanResearchRate(s) + aiResearchRate(s);
+}
+
+export function humanResearchShare(s: GameState): number {
+  const total = researchRate(s);
+  return total > 0 ? humanResearchRate(s) / total : 1;
 }
 
 export function insightRate(s: GameState): number {
-  return (Math.sqrt(researchRate(s)) / 10) * s.insightMult;
+  return (Math.sqrt(humanResearchRate(s)) / 10) * s.insightMult;
+}
+
+export function aiInsightRate(s: GameState): number {
+  return aiResearchRate(s) * AI_INSIGHT_SHARE * s.insightMult;
 }
 
 export function gpuCapacity(s: GameState): number {
-  return s.datacenters * DATACENTER_GPUS;
+  return s.datacenters * dcRoom(s);
 }
 
 export function activeGpus(s: GameState): number {
   return Math.min(s.gpus, Math.floor(s.gridCapacity / GRID_KW_PER_GPU));
 }
 
+export function servingGpus(s: GameState): number {
+  return Math.max(0, activeGpus(s) - busyGpus(s));
+}
+
+export function servingCompute(s: GameState): number {
+  return servingGpus(s) * chipMult(s);
+}
+
 export function copies(s: GameState): number {
   if (inPrologue(s)) return 0;
-  return Math.floor(Math.max(0, activeGpus(s) - busyGpus(s)) * s.copiesPerGPU);
+  return Math.floor(servingCompute(s) * s.copiesPerGPU);
+}
+
+export function adoption(s: GameState): number {
+  if (s.stage < 2) return 1;
+  return Math.max(1, Math.pow(servingCompute(s) / 1000, ADOPTION_EXPONENT));
+}
+
+export function idleCopies(s: GameState): number {
+  const all = copies(s);
+  if (all <= 0) return 0;
+  const rate = perCopyRate(s);
+  const needed = rate > 0 ? expectedSalesPerSec(s) / rate : all;
+  return Math.max(0, Math.floor(all - needed));
 }
 
 export function perCopyRate(s: GameState): number {
@@ -185,7 +267,7 @@ export function demand(s: GameState): number {
 }
 
 export function demandAt(s: GameState, p: number): number {
-  return (0.8 / p) * marketingMult(s) * qualityMult(s) * s.hypeBoost * marketSize(s) * s.demandMult * effectsDemandMult(s) * (1 + contractDemand(s));
+  return (0.8 / p) * marketingMult(s) * qualityMult(s) * s.hypeBoost * marketSize(s) * s.demandMult * effectsDemandMult(s) * (1 + contractDemand(s)) * adoption(s);
 }
 
 export function demandPercent(s: GameState): number {
@@ -299,8 +381,14 @@ export function sell(s: GameState): void {
   bill(s, due);
 }
 
+export function revenueShareActive(s: GameState): boolean {
+  const until = s.flags['revenueShareUntil'];
+  return typeof until === 'number' && s.stats.timePlayed < until;
+}
+
 function bill(s: GameState, n: number): void {
-  const revenue = n * s.price;
+  const gross = n * s.price;
+  const revenue = revenueShareActive(s) ? gross * 0.8 : gross;
   s.unbilled -= n;
   s.tasksSold += n;
   s.funds += revenue;
@@ -406,6 +494,7 @@ export function researchTick(s: GameState, dt: number): void {
   } else {
     s.flags['atCap'] = false;
   }
+  if (s.insightUnlocked && s.stage >= 2) s.insight += aiInsightRate(s) * dt;
 }
 
 export function clickTask(s: GameState): boolean {
@@ -502,18 +591,43 @@ export function buildDatacenter(s: GameState): boolean {
   if (s.funds < cost) return false;
   addFunds(s, -cost);
   s.datacenters += 1;
+  bump(s, 'datacentersBuilt');
   say(s, `Datacenter ${s.datacenters} complete. Room for ${fmtInt(gpuCapacity(s))} GPUs.`);
   return true;
 }
 
+export function canBuyGpuBatch(s: GameState): boolean {
+  return s.revealed['infrastructure'] === true && s.gpus + batchSize(s) <= gpuCapacity(s);
+}
+
 export function buyGpuBatch(s: GameState): boolean {
-  if (!s.revealed['infrastructure']) return false;
+  if (!canBuyGpuBatch(s)) return false;
   const cost = gpuBatchCost(s);
-  if (s.funds < cost || s.gpus + GPU_BATCH > gpuCapacity(s)) return false;
+  if (s.funds < cost) return false;
   addFunds(s, -cost);
-  s.gpus += GPU_BATCH;
+  const batch = batchSize(s);
+  s.gpus += batch;
   s.gpuBatches += 1;
-  if (s.gpuBatches === 1) say(s, '1,000 Nimbus G4s racked.');
+  if (s.gpuBatches === 1) say(s, `${fmtInt(batch)} ${chipName(s)}s racked. The hall is ${Math.round((100 * s.gpus) / gpuCapacity(s))}% full.`);
+  if (!s.revealed['reach'] && s.stage >= 2) {
+    s.revealed['reach'] = true;
+    say(s, 'More copies in the world: more customers find Sage. Reach grows with the fleet.');
+  }
+  return true;
+}
+
+export function canUpgradeSecurity(s: GameState): boolean {
+  return s.revealed['security'] === true && s.security < SECURITY_MAX;
+}
+
+export function upgradeSecurity(s: GameState): boolean {
+  if (!canUpgradeSecurity(s)) return false;
+  const cost = securityCost(s);
+  if (s.funds < cost) return false;
+  addFunds(s, -cost);
+  s.security += 1;
+  const lines = ['', '', 'Badges, logs, and a locked server room. SL2.', 'Air-gapped training clusters and two-person rules. SL3.', 'Weights never leave the enclave. Mo sleeps at the office. SL4.'];
+  say(s, lines[s.security] ?? `Security level ${s.security}.`);
   return true;
 }
 
@@ -598,6 +712,10 @@ export function bottleneckMessages(s: GameState): void {
   if (s.gpus > activeGpus(s) && ready('gridAt')) {
     s.flags['gridAt'] = now;
     say(s, `The grid powers ${Math.round((100 * activeGpus(s)) / s.gpus)}% of the GPUs. Expand Grid powers the rest.`);
+  }
+  if (s.stage >= 2 && s.revealed['infrastructure'] && s.gpus + batchSize(s) > gpuCapacity(s) && s.funds >= gpuBatchCost(s) && ready('fullAt')) {
+    s.flags['fullAt'] = now;
+    say(s, 'The datacenters are full. Build another before buying more GPUs.');
   }
 }
 

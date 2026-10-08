@@ -18,7 +18,16 @@ import {
   EVAL_SECONDS,
   BENCHMARKS,
   needsDatacenter,
+  pipelineRun,
+  pipelineOpen,
+  trainSlotFree,
+  riskTier,
+  knowsTested,
+  honestyProbe,
+  startCapability,
+  S2_FOCUS_BASE,
 } from '../engine/training.js';
+import { effectiveData, dataRequired } from '../engine/data.js';
 import { fmtInt, fmtNum, fmtMoneyShort } from '../engine/format.js';
 
 const FOCUSES: { id: Focus; label: string; title: string; note: string }[] = [
@@ -49,6 +58,12 @@ export function Training() {
   const running = trainingRun(s);
   const evaluating = evalRun(s);
   const lead = s.capability / s.rivalCapability;
+  const focusNote = (id: Focus): string => {
+    if (s.stage < 2) return FOCUSES.find((f) => f.id === id)?.note ?? '';
+    if (id === 'capability') return `The most capable next model (about +${Math.round(100 * (S2_FOCUS_BASE.capability + 0.03))}%).`;
+    if (id === 'efficiency') return `Copies per GPU ×1.25; about +${Math.round(100 * S2_FOCUS_BASE.efficiency)}% capability.`;
+    return `About +${Math.round(100 * S2_FOCUS_BASE.safety)}%; fewer issues; alignment drifts less and the band narrows.`;
+  };
   return (
     <Panel name="training" title="Training">
       <div id="modelLines" className={inPrologue(s) ? 'off' : ''}>
@@ -95,12 +110,13 @@ export function Training() {
           </Fragment>
         ))}
         <div id="focusNote" className="note">
-          {FOCUSES.find((focus) => focus.id === t.focus)?.note}
+          {focusNote(t.focus)}
         </div>
       </div>
       <Evaluation run={evaluating} />
       <RedTeam run={evaluating} />
       <IdleTraining />
+      <QueuedTraining />
       <div id="train-running" className={running ? 'shown' : ''}>
         Training <span id="runName">{running?.name}</span> (<span id="runFocus">{running?.focus}</span>)
         <span className="hiddenIds">
@@ -127,6 +143,26 @@ export function Training() {
     </Panel>
   );
 }
+function QueuedTraining() {
+  const s = useGame();
+  const queued = pipelineRun(s);
+  const training = queued?.phase === 'training';
+  return (
+    <div id="train-queued" className={queued ? 'shown' : ''}>
+      {training ? (
+        <>
+          Also training <span id="queuedName">{queued?.name}</span> ({queued?.focus})
+          <Progress id="queuedBar" fraction={queued ? queued.elapsed / queued.duration : 0} />
+          <span className="note">{queued ? Math.max(0, Math.ceil(queued.duration - queued.elapsed)) : 0} s remaining · it waits for the model above to ship</span>
+        </>
+      ) : (
+        <span className="note">
+          <span id="queuedName">{queued?.name}</span> is trained and waiting for the model above to ship.
+        </span>
+      )}
+    </div>
+  );
+}
 function IdleTraining() {
   const s = useGame();
   const perform = usePerform();
@@ -134,13 +170,18 @@ function IdleTraining() {
   const gpus = trainGpuFigures(s);
   const wall = needsDatacenter(s);
   const fix = wall ? '' : trainGpuFix(s);
+  const dataNeed = s.stage >= 2 ? dataRequired(startCapability(s)) : 0;
   const rows: [string, (n: number) => string, number, number][] = [
     ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
     ['power', (n) => `${fmtInt(n)} kWh`, s.power, cost.power ?? 0],
     ['gpus', (n) => `${fmtInt(n)} GPU${n === 1 ? '' : 's'}`, gpus.have, gpus.need],
+    ['data', (n) => `${fmtNum(n, 1)}T data`, effectiveData(s), dataNeed],
   ];
+  const slotFree = trainSlotFree(s);
+  const queuedNote = s.stage >= 2 && s.training.run && pipelineOpen(s) && !s.training.next;
   return (
-    <div id="train-idle" className={!s.training.run ? 'shown' : ''}>
+    <div id="train-idle" className={slotFree ? 'shown' : ''}>
+      {queuedNote ? <div className="note" id="pipelineNote">The pipeline is free: the next run can start now.</div> : null}
       <button
         className="button2"
         id="btn-train"
@@ -161,9 +202,9 @@ function IdleTraining() {
         {rows.map(([key, fmt, have, need]) => (
           <div
             key={key}
-            className={`costRow${need > 0 && !wall ? ' shown' : ''}`}
+            className={`costRow${need > 0 && !wall ? ' shown' : ''}${key === 'data' && have < need ? ' short' : ''}`}
             id={`costRow-${key}`}
-            title={`${fmt(have)} of ${fmt(need)}`}
+            title={key === 'data' ? `${fmt(have)} of ${fmt(need)}. Data is not spent; a shortfall shrinks the gain.` : `${fmt(have)} of ${fmt(need)}`}
           >
             <Progress id={`costBar-${key}`} fraction={have / need} />
             <span className="costText" id={`costText-${key}`}>
@@ -178,6 +219,28 @@ function IdleTraining() {
       </div>
       <span id="trainGpuLine" className={fix ? 'shown' : ''}>
         <span id="trainGpus">{fix}</span>
+        <br />
+      </span>
+    </div>
+  );
+}
+function RiskRows({ run, p }: { run: TrainingRun; p: number }) {
+  const s = useGame();
+  if (s.stage < 2 || p < 1) return null;
+  const tested = knowsTested(s, run);
+  return (
+    <div id="evalRisk" className="note">
+      <span id="riskBio" className={s.revealed['dangerEvals'] ? 'shown' : ''}>
+        Bio uplift: <b>{riskTier(run.benchmarks[4] ?? 0)}</b> · Cyber range: <b>{riskTier(run.benchmarks[5] ?? 0)}</b>
+        <br />
+      </span>
+      <span id="riskHonesty" className={s.revealed['alignment'] ? 'shown' : ''}>
+        Honesty probe: {honestyProbe(s)}%
+        {tested !== null ? ` · Knows it's tested: ${tested}%` : ''}
+        <br />
+      </span>
+      <span id="riskTested" className={tested !== null && !s.revealed['alignment'] ? 'shown' : ''}>
+        Knows it's tested: {tested ?? 0}%
         <br />
       </span>
     </div>
@@ -221,6 +284,7 @@ function Evaluation({ run }: { run: TrainingRun | null | undefined }) {
           );
         })}
       </div>
+      {run ? <RiskRows run={run} p={p} /> : null}
       <div id="evalTotal" title={run && p >= 1 ? `Reviewers' score: ${totalScore(run)}/40.` : ''}>
         Capability <span id="evalCap">{run && p >= 1 ? fmtNum(run.capAfter, 2) : '…'}</span>×
         <span className="hiddenIds">

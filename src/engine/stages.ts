@@ -1,9 +1,11 @@
-import { GameState, say, logNews, counter, inPrologue } from './state.js';
+import { GameState, say, logNews, inPrologue } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
 import { ARRIVAL_GPUS, GRID_FIRST_TIER, gridOutgrown, researchCap, rentQuota } from './economy.js';
-import { cardWallSeconds } from './training.js';
+import { cardWallSeconds, startCapability } from './training.js';
 import { researchWanted } from './tick.js';
+import { WEB_TOTAL, webShare, dataShort } from './data.js';
+import { APPROVAL_START } from './world.js';
 
 export interface StageDef {
   id: number;
@@ -15,7 +17,6 @@ export interface StageDef {
   exit: (s: GameState) => number;
 }
 
-export const STAGE2_MIN_SECONDS = 25 * 60;
 
 function show(s: GameState, ids: string[]): void {
   for (const id of ids) s.revealed[id] = true;
@@ -40,19 +41,31 @@ export const STAGES: StageDef[] = [
   },
   {
     id: 2,
-    name: 'Scale',
+    name: 'The Race',
     startMonth: monthOf(2026, 1),
     endMonth: monthOf(2026, 12),
     secondsPerMonth: 210,
     enter: (s) => {
-      say(s, 'First Datacenter online outside Abilene.');
-      show(s, ['infrastructure', 'power', 'buyPower', 'gridCapacity']);
+      say(s, 'First Datacenter online outside Abilene. Nobody at OpenMind completes tasks by hand anymore.');
+      hide(s, ['task', 'buyPower']);
+      show(s, ['infrastructure', 'power', 'gridCapacity', 'gridContract', 'capabilityHeader', 'revPerSec']);
+      s.gridAuto = true;
+      s.flags['powerOut'] = false;
       s.datacenters = Math.max(1, s.datacenters);
       s.gridCapacity = Math.max(GRID_FIRST_TIER, s.gridCapacity);
       s.gpus = ARRIVAL_GPUS;
-      logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud.');
+      s.chipGen = Math.max(1, s.chipGen);
+      s.dcTier = Math.max(1, s.dcTier);
+      s.approval = Math.min(100, Math.max(0, APPROVAL_START + s.approval));
+      s.tempo = 50;
+      s.data = { stock: 8, webRemaining: WEB_TOTAL - 8, synthetic: 0, licensed: 0 };
+      s.history = s.training.models.map((m) => [0, Math.round(m.date * 1000) / 1000, m.capability, Math.round(m.capability * 0.92 * 1000) / 1000, 0]);
+      s.flags['stage2At'] = s.stats.timePlayed;
+      s.flags['runsThisStage'] = 0;
+      logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud. These are ours.');
+      s.consoleQueue.push({ delay: 20, text: 'Each GPU here runs a copy. Buy GPUs fills the hall; Build Datacenter adds another.' });
     },
-    exit: (s) => (s.capability >= 4 && counter(s, 'releasesThisStage') > 0 && s.stats.timeInStage >= STAGE2_MIN_SECONDS ? 3 : 0),
+    exit: () => 0,
   },
   {
     id: 3,
@@ -276,6 +289,26 @@ const REVEAL_RULES: RevealRule[] = [
     },
   },
   { id: 'insight', stages: [1, 2], when: (s) => s.insightUnlocked && s.insight >= 1 },
+  {
+    id: 'race',
+    stages: [2],
+    when: (s) => sinceFlag(s, 'stage2At') >= 100 && spaced(s),
+    then: (s) => {
+      beat(s);
+      say(s, 'Anthrosoft publishes a capability chart. Everyone has one now. The Race panel keeps ours.');
+      logNews(s, 'Every frontier lab now publishes a capability chart. The y axes do not agree.');
+    },
+  },
+  {
+    id: 'data',
+    stages: [2],
+    when: (s) => sinceFlag(s, 'stage2At') >= 60 && (webShare(s) >= 0.6 || dataShort(s, startCapability(s))) && spaced(s),
+    then: (s) => {
+      beat(s);
+      say(s, 'Sage has read most of the public web. Each run needs more data than the last.');
+      logNews(s, 'Sage-2 has read every public sentence in English. It would like more.');
+    },
+  },
 ];
 
 export function updateReveals(s: GameState): void {

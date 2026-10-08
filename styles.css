@@ -26,8 +26,67 @@ div[data-reveal].shown, .panel.shown { display: block; }
 .hiddenIds { display: none; }
 #hypeLine { display: none; }
 #hypeLine.shown { display: inline; }
-#buyPowerRow, #gridRows, #gridNoteRow, #billGap, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart { display: none; }
-#buyPowerRow.shown, #gridRows.shown, #gridNoteRow.shown, #billGap.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown { display: inline; }
+#buyPowerRow, #gridRows, #gridNoteRow, #billGap, #billingOfPart, #copiesRow, #hypeLevelLine, #trainGpuLine, #capabilityPart, #tempoRow, #behindRow, #dataShortNote, #approvalWarn, #riskBio, #riskHonesty, #riskTested { display: none; }
+#buyPowerRow.shown, #gridRows.shown, #gridNoteRow.shown, #billGap.shown, #billingOfPart.shown, #copiesRow.shown, #hypeLevelLine.shown, #trainGpuLine.shown, #capabilityPart.shown, #tempoRow.shown, #behindRow.shown, #dataShortNote.shown, #approvalWarn.shown, #riskBio.shown, #riskHonesty.shown, #riskTested.shown { display: inline; }
+#train-queued { display: none; margin-top: 6px; }
+#train-queued.shown { display: block; }
+#evalRisk { margin: 2px 0 4px; }
+#pipelineNote { margin-bottom: 4px; }
+.costRow.short .progressFill { background: #b00000; }
+#headerRight { font-size: 16px; padding-right: 4px; display: flex; gap: 0; align-items: baseline; }
+#capabilityHeader.shown { display: inline; white-space: nowrap; }
+#gameDate { display: none; }
+#gameDate.shown { display: inline; }
+
+#alignmentStrip { display: none; }
+#alignmentStrip.shown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 1110px;
+  max-width: 100%;
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.stripLabel { font-weight: bold; }
+.stripTrack {
+  position: relative;
+  display: inline-block;
+  width: 420px;
+  max-width: 50%;
+  height: 14px;
+  border: 1px solid #000;
+  background: #fff;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.stripZone { position: absolute; top: 0; bottom: 0; }
+.stripZone.low { background: #f1dede; }
+.stripZone.mid { background: #f3efdb; }
+.stripZone.high { background: #dcefd9; }
+.stripBand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(45deg, #666 0 2px, transparent 2px 5px);
+  opacity: 0.75;
+}
+.stripMarker { position: absolute; top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: #000; }
+.stripValue { white-space: nowrap; }
+.stripValue.low { color: #b00000; }
+.stripNote { white-space: nowrap; }
+
+#raceGraph { display: block; border: 1px solid #000; background: #fff; margin: 2px 0 4px; max-width: 100%; height: auto; }
+.tierLine { stroke: #999; stroke-width: 0.6; stroke-dasharray: 2 3; }
+.tierLine.faint { stroke: #ddd; }
+.tierLabel { font-size: 7px; fill: #555; font-family: helvetica, sans-serif; }
+.axisLabel { font-size: 8px; fill: #333; font-family: helvetica, sans-serif; }
+.ourLine { fill: none; stroke: #000; stroke-width: 1.8; }
+.ourLine.behind { stroke: #b00000; }
+.rivalLine { fill: none; stroke: #333; stroke-width: 1; stroke-dasharray: 5 3; }
+.baiwenLine { fill: none; stroke: #333; stroke-width: 1; stroke-dasharray: 1.5 3; }
+.projection { fill: none; stroke: #000; stroke-width: 0.8; stroke-dasharray: 1 3; opacity: 0.6; }
+#raceLegend { font-size: 12px; }
 #trainCosts { margin-top: 4px; }
 .costRow { display: none; align-items: center; gap: 8px; }
 .costRow.shown { display: flex; }
@@ -364,9 +423,13 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   #panel-task { order: 1; }
   #panel-infrastructure { order: 3; }
   #panel-training { order: 4; }
-  #panel-projects { order: 5; }
-  #panel-business { order: 6; }
+  #panel-race { order: 5; }
+  #panel-projects { order: 6; }
+  #panel-business { order: 7; }
   #panel-research { order: 9; }
+  #alignmentStrip.shown { width: 100%; flex-wrap: wrap; }
+  .stripTrack { flex: 1 1 160px; max-width: none; }
+  #headerRight { flex-wrap: wrap; }
   #panel-security { order: 12; }
   #panel-government { order: 13; }
   #panel-public { order: 14; }

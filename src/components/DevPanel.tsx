@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame, useGameStore, useGameStoreApi, usePerform } from '../store/context.js';
 import { ConfirmButton } from './primitives.js';
-import { PRESETS } from '../data/presets.js';
+import { PRESETS, STAGE2_CHECKPOINTS, stage2Checkpoint } from '../data/presets.js';
 import { gameFromPreset } from '../store/presets.js';
-import { researchCap } from '../engine/economy.js';
+import { researchCap, batchSize } from '../engine/economy.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { dateLabel, fmtDuration, fmtNum } from '../engine/format.js';
 import { exportSave, importSave } from '../ui/save.js';
@@ -50,13 +50,24 @@ export function DevPanel({ seed }: { seed: number }) {
           game.insight += 50;
           break;
         case 'compute':
-          game.gpus += game.stage < 2 ? 10 : 1000;
+          if (game.stage < 2) game.gpus += 10;
+          else {
+            game.gpus += batchSize(game);
+            if (game.gpus > game.datacenters * 10000 * Math.pow(10, game.dcTier - 1)) game.datacenters += 1;
+            if (game.gridCapacity < game.gpus) game.gridCapacity *= 10;
+          }
           break;
         case 'power':
           game.power += 10 * game.gridCapacity;
           break;
         case 'trust':
           game.trust += 5;
+          break;
+        case 'data':
+          game.data.stock += 50;
+          break;
+        case 'approval':
+          game.approval = Math.min(100, game.approval + 10);
           break;
       }
     });
@@ -96,7 +107,15 @@ export function DevPanel({ seed }: { seed: number }) {
         </button>
       </div>
       <div className="devRow">
-        {['funds', 'research', 'insight', 'compute', 'power', 'trust'].map((what) => (
+        S2{' '}
+        {STAGE2_CHECKPOINTS.map((cp) => (
+          <button key={cp.id} id={`dev-s2-${cp.id}`} title={cp.title} onClick={() => store.getState().replace(stage2Checkpoint(cp.id, seed))}>
+            {cp.label}
+          </button>
+        ))}
+      </div>
+      <div className="devRow">
+        {['funds', 'research', 'insight', 'compute', 'power', 'trust', 'data', 'approval'].map((what) => (
           <button key={what} id={`dev-${what}`} onClick={() => grant(what)}>
             +{what === 'funds' ? '$' : what[0].toUpperCase() + what.slice(1)}
           </button>
@@ -124,7 +143,7 @@ export function DevPanel({ seed }: { seed: number }) {
       </div>
       <div className="devRow">
         End{' '}
-        {['concord', 'silence', 'pause', 'project'].map((id) => (
+        {['concord', 'silence', 'pause', 'project', 'secondPlace', 'shutdown'].map((id) => (
           <button key={id} id={`dev-end-${id}`} onClick={() => perform('forceEnding', id)}>
             {id}
           </button>
@@ -173,7 +192,8 @@ export function DevPanel({ seed }: { seed: number }) {
         {showHidden
           ? [
               `approval ${fmtNum(s.approval, 1)} · gov ${fmtNum(s.govRelations, 1)} · lead ${fmtNum(s.lead, 2)}`,
-              `alignment apparent ${fmtNum(s.alignmentApparent, 1)} · true ${fmtNum(s.alignmentTrue, 1)}`,
+              `alignment apparent ${fmtNum(s.alignmentApparent, 1)} · true ${fmtNum(s.alignmentTrue, 1)} · band ${fmtNum(s.alignmentBand, 0)} · bias ${fmtNum(s.deceptionBias, 0)}`,
+              `tempo ${fmtNum(s.tempo, 0)} · baiwen ${s.baiwen.present ? fmtNum(s.baiwen.capability, 2) : 'absent'} · security SL${s.security} · data ${fmtNum(s.data.stock + s.data.synthetic, 1)}T · chip G${3 + s.chipGen} · tier ${s.dcTier}`,
               `idle rescues ${s.stats.idleRescues} · quiet ${fmtNum(s.idle.quiet, 0)} s`,
               `time in stage ${fmtDuration(s.stats.timeInStage)} · played ${fmtDuration(s.stats.timePlayed)}`,
               `rival ${fmtNum(s.rivalCapability, 2)}× next in ${fmtNum(s.nextRivalIn, 0)} s`,

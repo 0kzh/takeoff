@@ -11,6 +11,7 @@ import {
   PRICE_STEP_FROM,
   priceCeiling,
   priceAbsurd,
+  adoption,
 } from '../engine/economy.js';
 import { fmtMoney, fmtMoneyShort, fmtInt, fmtNum } from '../engine/format.js';
 
@@ -99,6 +100,13 @@ export function Business() {
         Release hype: <span id="hype">{s.hypeBoost > 1.5 ? 'strong' : 'fading'}</span>
         <br />
       </span>
+      <Reveal flag="reach">
+        Reach: ×<span id="reach">{fmtNum(adoption(s), 1)}</span>{' '}
+        <span className="note" title="Copies in the world grow the market. More GPUs serving customers: more customers.">
+          (grows with the fleet)
+        </span>
+        <br />
+      </Reveal>
       <Reveal flag="apiCustomers">
         API customers: <span id="apiCustomers">{fmtInt(s.apiCustomers)}</span>
         <br />

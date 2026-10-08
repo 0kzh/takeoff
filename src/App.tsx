@@ -7,8 +7,11 @@ import { Research, Projects } from './components/Research.js';
 import { Training } from './components/Training.js';
 import { Console, Developments, ChoiceDialog, Ending } from './components/Narrative.js';
 import { DevPanel } from './components/DevPanel.js';
+import { Race } from './components/Race.js';
+import { AlignmentStrip } from './components/AlignmentStrip.js';
+import { Public, Government } from './components/World.js';
 import { TICK_MS } from './engine/tick.js';
-import { dateLabel, fmtInt } from './engine/format.js';
+import { dateLabel, fmtInt, fmtNum, fmtMoney } from './engine/format.js';
 import { startPersistence } from './ui/save.js';
 import { installDebugApi } from './ui/debug.js';
 
@@ -16,13 +19,22 @@ function Header() {
   const tasks = useGameStore((state) => fmtInt(state.game.tasks));
   const date = useGameStore((state) => dateLabel(state.game.date));
   const shown = useGameStore((state) => state.game.revealed['log']);
+  const capShown = useGameStore((state) => state.game.revealed['capabilityHeader'] === true);
+  const model = useGameStore((state) => state.game.training.deployedName);
+  const cap = useGameStore((state) => fmtNum(state.game.capability, 2));
+  const rev = useGameStore((state) => fmtMoney(state.game.stats.revPerSec));
   return (
     <div id="topDiv">
       <h2 id="tasksHeader">
         Tasks Completed: <span id="tasks">{tasks}</span>
       </h2>
-      <div id="gameDate" data-reveal="log" className={shown ? 'shown' : ''}>
-        {date}
+      <div id="headerRight">
+        <span id="capabilityHeader" data-reveal="capabilityHeader" className={capShown ? 'shown' : ''}>
+          {model} · <span id="headerCapability">{cap}</span>× · <span id="headerRevenue">{rev}</span>/s ·{' '}
+        </span>
+        <span id="gameDate" data-reveal="log" className={shown ? 'shown' : ''}>
+          {date}
+        </span>
       </div>
     </div>
   );
@@ -32,14 +44,8 @@ function LaterPanels({ column }: { column: 'left' | 'middle' | 'right' }) {
   if (column === 'left')
     return (
       <>
-        <Panel name="government" title="Government">
-          Relations: <span id="govRelations">{fmtInt(s.govRelations)}</span>
-        </Panel>
-        <Panel name="public" title="Public">
-          Approval: <span id="approval">{fmtInt(s.approval)}</span>
-          <br />
-          Jobs displaced: 0
-        </Panel>
+        <Public />
+        <Government />
         <Panel name="robots" title="Robots">
           Robots deployed: 0
         </Panel>
@@ -53,9 +59,6 @@ function LaterPanels({ column }: { column: 'left' | 'middle' | 'right' }) {
   if (column === 'middle')
     return (
       <>
-        <Panel name="security" title="Security">
-          Security level: SL1
-        </Panel>
         <Panel name="oversight" title="Oversight">
           Committee decision:{' '}
           <span id="oversightStatus">
@@ -69,15 +72,9 @@ function LaterPanels({ column }: { column: 'left' | 'middle' | 'right' }) {
     );
   return (
     <>
-      <Panel name="alignment" title="Alignment">
-        Apparent alignment: <span id="alignmentApparent">{fmtInt(s.alignmentApparent)}</span>
-        <br />
-        Interpretability: 0
-      </Panel>
+      <Race />
       <Panel name="geopolitics" title="Geopolitics">
-        Lead over Baiwen: <span id="lead">{fmtInt(s.lead)}</span> months
-        <br />
-        Baiwen capability: 0.70×
+        Baiwen capability: <span id="baiwenCapability">{fmtNum(s.baiwen.capability, 2)}</span>×
       </Panel>
       <Panel name="monitors" title="Monitors">
         Monitor coverage: 0%
@@ -131,6 +128,7 @@ export function App({ seed }: { seed: number }) {
   return (
     <>
       <Console />
+      <AlignmentStrip />
       <Header />
       <div id="columns">
         <div id="logColumn" className="column">

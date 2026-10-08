@@ -3,8 +3,11 @@ import {
   TICK_SECONDS, produce, updateAutoPrice, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  buildDatacenter, buyGpuBatch, expandGrid, rentQuota,
+  buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity,
 } from './economy.js';
+import { dataTick } from './data.js';
+import { updateBaiwen, updateTempo, sampleHistory, updateTheft, updateIrrelevance } from './rivals.js';
+import { updateWorld } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
 } from './training.js';
@@ -53,6 +56,7 @@ export function step(s: GameState): void {
 
   researchTick(s, dt);
   trustCheck(s);
+  dataTick(s, dt);
 
   updateTraining(s, dt);
 
@@ -62,7 +66,15 @@ export function step(s: GameState): void {
   updateScheduled(s, dt);
   updateChoice(s, dt);
   updateDevelopments(s);
-  if (slow) updateRival(s);
+  if (slow) {
+    updateRival(s);
+    updateBaiwen(s);
+    updateTempo(s);
+    updateWorld(s);
+    updateTheft(s);
+    updateIrrelevance(s);
+    sampleHistory(s);
+  }
   drainChoiceQueue(s);
   idleGuard(s, dt);
   noteReveals(s);
@@ -190,6 +202,7 @@ export const actions = {
   buildDatacenter,
   buyGpuBatch,
   expandGrid,
+  upgradeSecurity,
   startTraining,
   setFocus,
   redTeam,

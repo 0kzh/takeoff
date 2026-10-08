@@ -1,4 +1,4 @@
-import { newGame, GameState } from '../engine/state.js';
+import { newGame, GameState, serialize } from '../engine/state.js';
 import { step, actions } from '../engine/tick.js';
 import { policyStep, newBotMemory, PolicyName } from './policy.js';
 import { noveltyKeys, isRescueKey, PLAYER_MODALS, choiceById, optionCost } from '../engine/events.js';
@@ -123,6 +123,7 @@ export interface SimResult {
   idleGaps: [number, number][];
   lines: string[];
   summary: Summary;
+  stage2Lines: string[];
 }
 
 function median(xs: number[]): number {
@@ -189,6 +190,12 @@ export function simulate(args: Args): SimResult {
   let prevRunIds = new Set<number>();
   let transition: number | null = null;
   let capAtTransition: number | null = null;
+  const s2Reveals: [number, string][] = [];
+  const s2Starts: number[] = [];
+  const s2Modals: [number, string][] = [];
+  const s2Buys: [number, string][] = [];
+  let stage3At: number | null = null;
+  let s2EndState: GameState | null = null;
 
   const s1ShownAt = new Map<string, number>();
   const s1BoughtSeen = new Set<string>();
@@ -330,12 +337,14 @@ export function simulate(args: Args): SimResult {
       out(t, `BUY ${projectById(id)?.title ?? id}`);
       mark(`buy:${id}`, t);
       noveltyTimes.push(t);
+      if (s.stage >= 2) s2Buys.push([t, id]);
     }
     for (const [id, on] of Object.entries(s.revealed)) {
       if (on && !seenFlags.has(id)) {
         seenFlags.add(id);
         reveal(t, `REVEAL ${id}`);
         mark(`reveal:${id}`, t);
+        if (s.stage >= 2) s2Reveals.push([t, id]);
       }
     }
     const visible = visibleProjects(s);
@@ -347,6 +356,7 @@ export function simulate(args: Args): SimResult {
           seenProjects.add(p.id);
           revealTimes.push(t);
           noveltyTimes.push(t);
+          if (s.stage >= 2) s2Reveals.push([t, `proj:${p.id}`]);
         }
       }
     }
@@ -360,14 +370,20 @@ export function simulate(args: Args): SimResult {
     }
     prevChoice = s.activeChoice;
     const run = s.training.run;
-    if (run && !prevRunIds.has(run.id)) {
-      prevRunIds.add(run.id);
-      if (run.prologue) mark('prologueStart', t);
-      else if (s.stage === 1) {
-        runs++;
-        runGpus1.push(run.gpus);
-        s1Starts.push(t);
-        dollarBuys.push(t);
+    const queued = s.training.next;
+    for (const r of [run, queued]) {
+      if (r && !prevRunIds.has(r.id)) {
+        prevRunIds.add(r.id);
+        if (r.prologue) mark('prologueStart', t);
+        else if (s.stage === 1) {
+          runs++;
+          runGpus1.push(r.gpus);
+          s1Starts.push(t);
+          dollarBuys.push(t);
+        } else {
+          s2Starts.push(t);
+          out(t, `TRAIN ${r.name} started (${r.focus}, ${r.duration}s, ${fmtInt(r.gpus)} GPUs, cap ${r.capBefore.toFixed(2)}${queued && r === queued ? ', queued' : ''})`);
+        }
       }
     }
     if (prevRunIds.size > 50) prevRunIds = new Set([...prevRunIds].slice(-10));
@@ -376,6 +392,7 @@ export function simulate(args: Args): SimResult {
       seenChoices.add(choice);
       if (!RESCUE_CHOICES.includes(choice)) reveal(t, `MODAL ${choice}`);
       else out(t, `MODAL ${choice}`);
+      if (s.stage >= 2) s2Modals.push([t, choice]);
     }
     if (s.gpus >= 1) mark('firstGpu', t);
     if (typeof s.flags['sageLiveAt'] === 'number') mark('sageLive', t);
@@ -407,6 +424,10 @@ export function simulate(args: Args): SimResult {
       if (s.stage === 2) {
         transition = t;
         capAtTransition = s.capability;
+      }
+      if (s.stage === 3) {
+        stage3At = t;
+        s2EndState = JSON.parse(serialize(s)) as GameState;
       }
       prevStage = s.stage;
       if (args.stopAtStage && s.stage >= args.stopAtStage) break;
@@ -583,7 +604,42 @@ export function simulate(args: Args): SimResult {
     exitState1: s1Snap,
     choices1: s1Choices,
   };
-  return { state: s, milestones, idleGaps, lines, summary };
+  const s2 = transition !== null ? stage2Report(s2EndState ?? s, transition, stage3At ?? end, s2Reveals, s2Starts, s2Modals, s2Buys, idleGaps, args.policy) : [];
+  return { state: s, milestones, idleGaps, lines, summary, stage2Lines: s2 };
+}
+
+function stage2Report(
+  s: GameState,
+  from: number,
+  to: number,
+  reveals: [number, string][],
+  starts: number[],
+  modals: [number, string][],
+  buys: [number, string][],
+  idleGaps: [number, number][],
+  policy: PolicyName,
+): string[] {
+  const out: string[] = [];
+  const stageClock = (t: number) => fmtClock(t - from);
+  out.push(`\n== Stage 2 (policy ${policy}, seed ${s.seed}) ==`);
+  out.push(`arrival ${fmtClock(from)}; ${s.stage >= 3 ? `Automate the Lab at ${fmtClock(to)} (stage time ${stageClock(to)})` : `still in Stage ${s.stage} at ${fmtClock(to)} (stage time ${stageClock(to)})`}   (target 38:00–48:00 of stage time)`);
+  out.push(`end state: capability ${s.capability.toFixed(2)} / internal ${s.training.internalCapability.toFixed(2)}, rev/s ${fmtMoney(s.stats.revPerSec)}, gpus ${fmtInt(s.gpus)} (G${3 + s.chipGen}, ${s.datacenters} dc, tier ${s.dcTier}), grid ${fmtMw(s.gridCapacity)} MW, data ${(s.data.stock + s.data.synthetic).toFixed(1)}T, approval ${s.approval.toFixed(0)}, tempo ${s.tempo.toFixed(0)}, align ${s.alignmentTrue.toFixed(0)} true / ${s.alignmentApparent.toFixed(0)} ± ${s.alignmentBand.toFixed(0)}, baiwen ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}, anthrosoft ${s.rivalCapability.toFixed(2)}, security SL${s.security}`);
+  out.push(`runs: ${starts.length}; starts at ${starts.map(stageClock).join(' ')}`);
+  const gaps = starts.slice(1).map((x, i) => x - starts[i]!);
+  out.push(`run start gaps: longest ${gaps.length ? fmtClock(Math.max(...gaps)) : '—'} (target ≤ 5:00)`);
+  out.push(`reveals (${reveals.length}): ${reveals.map(([t, id]) => `${stageClock(t)} ${id}`).join(', ')}`);
+  const rt = reveals.map(([t]) => t);
+  const rg = longestGap([...rt, ...modals.map(([t]) => t)], from, to);
+  out.push(`longest reveal/modal gap in stage 2: ${fmtClock(rg.gap)} (${stageClock(rg.at[0])}–${stageClock(rg.at[1])})   (target ≤ 4:00)`);
+  out.push(`modals (${modals.length}): ${modals.map(([t, id]) => `${stageClock(t)} ${id}`).join(', ')}`);
+  const mt = modals.map(([t]) => t);
+  const spacing = mt.slice(1).map((x, i) => x - mt[i]!);
+  out.push(`modal spacing: min ${spacing.length ? fmtClock(Math.min(...spacing)) : '—'}`);
+  out.push(`buys (${buys.length}): ${buys.map(([t, id]) => `${stageClock(t)} ${id}`).join(', ')}`);
+  const s2Idle = idleGaps.filter(([a, b]) => b > from && a < to);
+  out.push(`idle gaps > 60 s in stage 2: ${s2Idle.length ? s2Idle.map(([a, b]) => `${stageClock(Math.max(a, from))}–${stageClock(Math.min(b, to))}`).join(', ') : 'none'}`);
+  out.push(`choices: ${s.choicesMade.filter((c) => c.id.startsWith('c_') && !['c_gamble', 'c_ship_issues', 'c_sage2', 'c_customer_email'].includes(c.id)).slice(-20).map((c) => `${c.id}:${c.option}`).join(', ')}`);
+  return out;
 }
 
 function minuteLine(s: GameState, minute: number): string {
@@ -592,7 +648,7 @@ function minuteLine(s: GameState, minute: number): string {
     .join(', ');
   const run = s.training.run;
   const training = run ? ` | ${run.name} ${run.phase}` : '';
-  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | grid ${fmtMw(s.gridCapacity)} MW` : '';
+  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | grid ${fmtMw(s.gridCapacity)} MW | G${3 + s.chipGen} | data ${(s.data.stock + s.data.synthetic).toFixed(0)}T | appr ${s.approval.toFixed(0)} | tempo ${s.tempo.toFixed(0)} | align ${s.alignmentApparent.toFixed(0)}±${s.alignmentBand.toFixed(0)} | bw ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}` : '';
   return (
     `m${minute} | S${s.stage} ${dateLabel(s.date)} | tasks ${fmtInt(s.tasks)} | ${fmtMoney(s.funds)} | rev/s ${fmtInt(s.stats.revPerSec)}` +
     ` | price ${s.price < 0.1 ? s.price.toFixed(4) : s.price.toFixed(2)} | gpus ${fmtInt(s.gpus)} | copies ${fmtInt(copies(s))} | tps ${fmtInt(s.stats.tasksPerSec)}` +
@@ -655,6 +711,7 @@ function main(): void {
   if (x) console.log(`exit state               capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, Trust ${x.trust}, ${x.researchers} researchers, lab ${x.labSpace}, marketing ${x.hypeLevel}, ${x.contracts} contracts ($${x.contractRate}/s of $${x.revPerSec}/s), price $${x.price}, ${x.gpus} GPUs, ${x.incidents} incidents`);
   if (sum.choices1.length) console.log(`modal answers            ${sum.choices1.join(', ')}`);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
+  for (const line of result.stage2Lines) console.log(line);
 }
 
-if (process.argv[1] && /bot\.js$/.test(process.argv[1])) main();
+if (process.argv[1] && /bot\.[tj]s$/.test(process.argv[1])) main();

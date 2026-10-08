@@ -1,13 +1,13 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 export const LOG_LIMIT = 60;
 
 export type Focus = 'capability' | 'efficiency' | 'safety';
-export type RunPhase = 'training' | 'evaluating' | 'redteam';
+export type RunPhase = 'training' | 'waiting' | 'evaluating' | 'redteam';
 export type LogKind = 'world' | 'choice';
 export type FlagValue = boolean | number | string;
 
@@ -70,6 +70,7 @@ export interface TrainingState {
   focus: Focus;
   runIndex: number;
   run: TrainingRun | null;
+  next: TrainingRun | null;
   nextRunId: number;
   redTeamRemaining: number;
   redTeamDuration: number;
@@ -82,6 +83,20 @@ export interface TrainingState {
   models: ModelRecord[];
   releasing: { remaining: number; isPublic: boolean } | null;
   armed?: boolean;
+}
+
+export interface DataState {
+  stock: number;
+  webRemaining: number;
+  synthetic: number;
+  licensed: number;
+}
+
+export interface BaiwenState {
+  present: boolean;
+  capability: number;
+  version: number;
+  nextIn: number;
 }
 
 export interface TimedEffect {
@@ -223,6 +238,17 @@ export interface GameState {
   approval: number;
   lead: number;
 
+  chipGen: number;
+  dcTier: number;
+  data: DataState;
+  baiwen: BaiwenState;
+  tempo: number;
+  security: number;
+  alignmentBand: number;
+  deceptionBias: number;
+  jobsDisplaced: number;
+  history: number[][];
+
   training: TrainingState;
   effects: TimedEffect[];
   scheduled: ScheduledEvent[];
@@ -249,6 +275,7 @@ export function newTraining(): TrainingState {
     focus: 'capability',
     runIndex: 0,
     run: null,
+    next: null,
     nextRunId: 1,
     redTeamRemaining: 0,
     redTeamDuration: 12,
@@ -361,6 +388,17 @@ export function newGame(seed: number = Date.now()): GameState {
     approval: 0,
     lead: 3,
 
+    chipGen: 1,
+    dcTier: 1,
+    data: { stock: 0, webRemaining: 0, synthetic: 0, licensed: 0 },
+    baiwen: { present: false, capability: 0, version: 0, nextIn: 0 },
+    tempo: 50,
+    security: 1,
+    alignmentBand: 30,
+    deceptionBias: 0,
+    jobsDisplaced: 0,
+    history: [],
+
     training: newTraining(),
     effects: [],
     scheduled: [],
@@ -459,10 +497,12 @@ function keep(base: object, data: unknown): Record<string, unknown> {
 }
 
 export function migrate(raw: Record<string, unknown>): GameState | null {
-  if (raw['version'] !== SAVE_VERSION && !(raw['version'] === SAVE_VERSION - 1 && raw['stage'] === 1)) return null;
+  const version = raw['version'];
+  const legacy = (version === 14 || version === 13) && raw['stage'] === 1;
+  if (version !== SAVE_VERSION && !legacy) return null;
   const base = newGame(typeof raw['seed'] === 'number' ? (raw['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged = keep(base, raw);
-  for (const key of ['training', 'stats', 'idle', 'cadence'] as const) merged[key] = keep(base[key] as object, raw[key]);
+  for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen'] as const) merged[key] = keep(base[key] as object, raw[key]);
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
   if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags']) delete run[key];
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;

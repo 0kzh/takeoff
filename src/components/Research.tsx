@@ -1,6 +1,6 @@
 import { useGame, usePerform } from '../store/context.js';
 import { Panel, Reveal, Meter } from './primitives.js';
-import { researchCap } from '../engine/economy.js';
+import { researchCap, humanResearchShare, researchRate } from '../engine/economy.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import { datacenterStatus } from '../data/projects.js';
 import { labReason } from '../engine/training.js';
@@ -44,6 +44,19 @@ export function Research() {
       <br />
       Researchers: <span id="researchers">{fmtInt(s.researchers)}</span>
       <br />
+      <Reveal flag="researchShare">
+        Who does the research{' '}
+        <Meter
+          id="researchShareMeter"
+          fraction={humanResearchShare(s)}
+          label={`Humans ${Math.round(100 * humanResearchShare(s))}% · Sage ${Math.round(100 * (1 - humanResearchShare(s)))}% of ${fmtInt(researchRate(s))} research a second`}
+        />{' '}
+        <span className="note">
+          humans <span id="humanShare">{Math.round(100 * humanResearchShare(s))}</span>% · Sage{' '}
+          <span id="sageShare">{Math.round(100 * (1 - humanResearchShare(s)))}</span>%
+        </span>
+        <br />
+      </Reveal>
       <span className="hiddenIds">
         Lab Space: <span id="labSpace">{fmtInt(s.labSpace)}</span>
         <br />

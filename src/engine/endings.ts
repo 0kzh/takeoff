@@ -10,6 +10,18 @@ export interface EndingDef {
 
 export const ENDINGS: EndingDef[] = [
   {
+    id: 'secondPlace',
+    title: 'Second Place',
+    epilogue: 'OpenMind has been acquired by Anthrosoft. The garage is still a yoga studio. Cadence finishes the race without you; the world finds out later whether it was careful.',
+    condition: (s) => s.flags['secondPlace'] === true,
+  },
+  {
+    id: 'shutdown',
+    title: 'Shutdown',
+    epilogue: 'The Senate votes to revoke OpenMind\'s licence. The datacenters go dark on a Tuesday. Nobody else\'s do.',
+    condition: (s) => s.flags['shutdown'] === true,
+  },
+  {
     id: 'project',
     title: 'The Project',
     epilogue: 'The Committee votes 6–3. Your badge stops working on Monday.',

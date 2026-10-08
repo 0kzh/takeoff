@@ -1,10 +1,14 @@
-import { GameState, Cost, TrainingRun, say, addFunds } from '../engine/state.js';
-import { BENCHMARKS, doRelease, releaseChecked, runById } from '../engine/training.js';
+import { GameState, Cost, TrainingRun, say, addFunds, logNews, counter } from '../engine/state.js';
+import { BENCHMARKS, doRelease, releaseChecked, runById, riskTier } from '../engine/training.js';
 import { chance, randInt } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { researchRate } from '../engine/economy.js';
+import { researchRate, bestCapability } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
-import { rivalRelease } from '../engine/events.js';
+import { rivalRelease, openChoice } from '../engine/events.js';
+import { CUSTOMER_DATA } from '../engine/data.js';
+import { moveTempo, BAIWEN_THEFT_RATIO } from '../engine/rivals.js';
+import { moveApproval, moveRelations, revealWorld } from '../engine/world.js';
+import { raiseAlignment } from '../engine/alignment.js';
 
 type Ctx = Record<string, number | string>;
 
@@ -499,4 +503,567 @@ export const CHOICES: ChoiceDef[] = [
       },
     ],
   },
+  // ---------- Stage 2: The Race ----------
+  {
+    id: 'c_release',
+    title: 'Deploy or keep internal?',
+    text: (s, ctx) => {
+      const run = runFor(s, ctx);
+      if (!run) return ['The model is ready.'];
+      const bio = s.revealed['dangerEvals'] ? ` Bio uplift ${riskTier(run.benchmarks[4] ?? 0)}.` : '';
+      return [
+        `${run.name} evaluates at ${fmtNum(run.capAfter, 2)}× (${run.capBefore > 0 ? `+${Math.round((100 * (run.capAfter / run.capBefore - 1)))}%` : 'new'}).${bio}`,
+        'Deploy: customers get it, revenue and hype rise, rivals learn from it.',
+        'Keep internal: research uses it, nobody outside knows how far ahead OpenMind is.',
+      ];
+    },
+    options: [
+      {
+        label: 'deploy',
+        record: 'deployed',
+        tooltip: 'Demand follows the new capability. Hype ×2. Tempo +3; each rival gains 5%. Open issues ship.',
+        line: 'market grows with it · hype ×2 · rivals +5%',
+        effect: (s, ctx) => {
+          const run = runFor(s, ctx);
+          if (run) doRelease(s, run, true);
+        },
+        log: (s, ctx) => `${runFor(s, ctx)?.name ?? s.training.modelName} is deployed to the public.`,
+      },
+      {
+        label: 'keep internal',
+        record: 'internal',
+        tooltip: (s) => (counter(s, 'publicReleasesOwed') > 0 ? `Growth capital requires ${counter(s, 'publicReleasesOwed')} more public release${counter(s, 'publicReleasesOwed') === 1 ? '' : 's'}.` : 'Research runs 25% faster. Customers keep the old model. Rivals do not see it.'),
+        line: (s) => (counter(s, 'publicReleasesOwed') > 0 ? `growth capital: ${counter(s, 'publicReleasesOwed')} more public release${counter(s, 'publicReleasesOwed') === 1 ? '' : 's'} owed` : 'research ×1.25 · rivals learn nothing · customers keep the old model'),
+        enabled: (s) => counter(s, 'publicReleasesOwed') <= 0,
+        effect: (s, ctx) => {
+          const run = runFor(s, ctx);
+          if (run) doRelease(s, run, false);
+          s.flags['leakSeed'] = true;
+        },
+        log: (s, ctx) => `${runFor(s, ctx)?.name ?? s.training.modelName} is kept for research. Customers are not told.`,
+      },
+    ],
+  },
+  {
+    id: 'c_data_wall',
+    title: 'The Data Wall',
+    text: (s) => [
+      'The public web is finished. Not broken: finished. Every run from here needs more data than exists in public.',
+      `Customers' conversations would add ${CUSTOMER_DATA}T tokens. The terms of service say "may be used to improve the service".`,
+      s.revealed['synthetic'] ? '' : 'Licensing deals and synthetic data are the other ways over the wall.',
+    ].filter(Boolean),
+    options: [
+      {
+        label: 'use the conversations',
+        record: 'customer data',
+        tooltip: `+${CUSTOMER_DATA}T tokens now. Approval −8 when it comes out. It comes out.`,
+        line: `+${CUSTOMER_DATA}T data · approval −8 · it will come out`,
+        effect: (s) => {
+          s.data.stock += CUSTOMER_DATA;
+          moveApproval(s, -8);
+          s.flags['customerDataUsed'] = true;
+          say(s, `${CUSTOMER_DATA}T tokens of conversations added to the training set.`);
+        },
+        log: 'OpenMind trains on customer conversations. The terms of service said it might. Nobody had read them.',
+      },
+      {
+        label: 'respect the boundary',
+        record: 'respected',
+        tooltip: 'Nothing changes. Data comes from licensing deals and idle copies.',
+        line: 'buy data, or let idle copies write it',
+        effect: () => undefined,
+        log: 'OpenMind declines to train on customer conversations. The decision is noted internally, and nowhere else.',
+      },
+    ],
+  },
+  {
+    id: 'c_hearing',
+    title: 'The Senate Hearing',
+    text: () => [
+      'Senator Albright has questions about who tests the models, who owns the data, and who gets fired.',
+      'Three labs sent the same written answer. The committee would like a different one from OpenMind.',
+    ],
+    timer: 60,
+    defaultOption: 0,
+    onOpen: (s) => revealWorld(s),
+    options: [
+      {
+        label: 'cooperate',
+        record: 'cooperated',
+        tooltip: 'Government relations +10. Research −5% for three minutes while the lawyers read everything.',
+        line: 'relations +10 · research −5% for 3:00',
+        effect: (s) => {
+          moveRelations(s, 10);
+          s.effects.push({ id: 'hearing', remaining: 180, demandMult: 1 });
+          s.flags['hearingCooperated'] = true;
+        },
+        log: 'OpenMind cooperates with the Senate hearing. Its answers are long and, unusually, different from the other labs\'.',
+      },
+      {
+        label: 'deflect',
+        record: 'deflected',
+        tooltip: 'Approval −5, relations −8. Nothing is on the record.',
+        line: 'approval −5 · relations −8',
+        effect: (s) => {
+          moveApproval(s, -5);
+          moveRelations(s, -8);
+        },
+        log: 'OpenMind\'s counsel answers every question with a question. The clip does well online.',
+      },
+      {
+        label: 'ask to be regulated',
+        record: 'asked for regulation',
+        tooltip: 'Approval +5, tempo −3, relations +6. Anthrosoft endorses it the same afternoon.',
+        line: 'approval +5 · tempo −3 · relations +6',
+        effect: (s) => {
+          moveApproval(s, 5);
+          moveTempo(s, -3);
+          moveRelations(s, 6);
+        },
+        log: 'OpenMind asks Congress to regulate frontier labs. Anthrosoft endorses the request within the hour.',
+      },
+    ],
+  },
+  {
+    id: 'c_funding',
+    title: 'The Term Sheet',
+    text: (s) => [
+      `Two funds want in. One wants growth: ${fmtMoney(Math.max(5000000, 240 * s.stats.revPerSec))} now, and three public releases in return.`,
+      `The other is patient: ${fmtMoney(Math.max(2500000, 120 * s.stats.revPerSec))}, and a fifth of revenue for six minutes.`,
+    ],
+    options: [
+      {
+        label: 'growth capital',
+        record: 'growth',
+        tooltip: 'The larger cheque. Tempo +5. The next three models must be deployed, not kept internal.',
+        line: (s) => `+${fmtMoneyShort(Math.max(5000000, 240 * s.stats.revPerSec))} · tempo +5 · next 3 models must deploy`,
+        effect: (s) => {
+          addFunds(s, Math.max(5000000, 240 * s.stats.revPerSec));
+          moveTempo(s, 5);
+          s.flags['publicReleasesOwed'] = 3;
+        },
+        log: 'OpenMind takes growth capital. The term sheet uses the word "velocity" four times.',
+      },
+      {
+        label: 'patient capital',
+        record: 'patient',
+        tooltip: 'The smaller cheque. Twenty percent of revenue goes to the fund for six minutes.',
+        line: (s) => `+${fmtMoneyShort(Math.max(2500000, 120 * s.stats.revPerSec))} · 20% of revenue for 6:00`,
+        effect: (s) => {
+          addFunds(s, Math.max(2500000, 120 * s.stats.revPerSec));
+          s.flags['revenueShareUntil'] = s.stats.timePlayed + 360;
+        },
+        log: 'OpenMind takes patient capital. The fund\'s partner asks to sit in on safety reviews, and does.',
+      },
+    ],
+  },
+  {
+    id: 'c_theft',
+    title: 'Weight Theft',
+    text: (s) => [
+      'Anomalous egress from Training Cluster 3.',
+      `${randIntText(s)}% of the weights have already left the building.`,
+    ],
+    timer: 45,
+    defaultOption: 0,
+    options: [
+      {
+        label: 'cut the link',
+        record: 'cut',
+        tooltip: 'Baiwen gets a partial copy: its model jumps 40%. Revenue −20% for two minutes. Tempo +8.',
+        line: 'Baiwen ×1.4 · revenue −20% for 2:00 · tempo +8',
+        effect: (s) => {
+          s.baiwen.capability *= 1.4;
+          s.effects.push({ id: 'theftCut', remaining: 120, demandMult: 0.8 });
+          moveTempo(s, 8);
+          say(s, 'Link cut. Baiwen got about half. Wenshu will look familiar.');
+        },
+        log: 'OpenMind cuts a cluster off the network mid-transfer. Baiwen gets about half of a frontier model.',
+      },
+      {
+        label: 'trace it',
+        record: 'traced',
+        tooltip: 'Let it run to trace the route. Baiwen gets the full model (0.85× yours). Relations +10. Tempo +15.',
+        line: 'Baiwen to 0.85× · relations +10 · tempo +15',
+        effect: (s) => {
+          s.baiwen.capability = Math.max(s.baiwen.capability, BAIWEN_THEFT_RATIO * bestCapability(s));
+          moveRelations(s, 10);
+          moveTempo(s, 15);
+          say(s, 'Traced to the Wenshan zone. The intelligence agencies send a fruit basket.');
+        },
+        log: 'OpenMind traces a weight theft to the Wenshan Compute Zone. The weights are already there.',
+      },
+      {
+        label: 'counter-hack',
+        record: 'counter-hacked',
+        tooltip: 'Needs security level 3. Baiwen\'s growth −30% for four minutes. Tempo +20. Approval −3.',
+        line: 'needs SL3 · Baiwen slowed 4:00 · tempo +20 · approval −3',
+        enabled: (s) => s.security >= 3,
+        effect: (s) => {
+          s.flags['exportControlsUntil'] = Math.max(Number(s.flags['exportControlsUntil'] ?? 0), s.stats.timePlayed + 240);
+          moveTempo(s, 20);
+          moveApproval(s, -3);
+          say(s, 'Counter-hack done. Baiwen\'s training cluster reboots into a screensaver.');
+        },
+        log: 'Someone turns Baiwen\'s training cluster into a screensaver for a day. Nobody claims it.',
+      },
+    ],
+  },
+  {
+    id: 'c_mini',
+    title: 'Sage-mini',
+    text: (s) => [
+      `A distilled ${s.training.deployedName} runs on a laptop. Twelve million people would use it tomorrow.`,
+      'It is ten times cheaper than the model Anthrosoft sells, and about as good as the one they keep.',
+    ],
+    timer: 60,
+    defaultOption: 1,
+    options: [
+      {
+        label: 'launch Sage-mini',
+        record: 'launched',
+        tooltip: 'Demand ×4. Approval +4. Tempo +3. Every rival gains 5%.',
+        line: 'demand ×4 · approval +4 · tempo +3 · rivals +5%',
+        effect: (s) => {
+          s.demandMult *= 4;
+          moveApproval(s, 4);
+          moveTempo(s, 3);
+          s.rivalCapability *= 1.05;
+          if (s.baiwen.present) s.baiwen.capability *= 1.05;
+          s.flags['miniLaunched'] = true;
+          s.flags['miniAt'] = s.stats.timePlayed;
+          say(s, 'Sage-mini launches. The app store crashes, politely.');
+        },
+        log: 'Sage-mini launches. Twelve million people install it on the first day. The second day is quieter, and busier.',
+      },
+      {
+        label: 'enterprise only',
+        record: 'enterprise',
+        tooltip: 'Demand ×1.5. Nobody distils it.',
+        line: 'demand ×1.5 · rivals learn nothing',
+        effect: (s) => {
+          s.demandMult *= 1.5;
+        },
+        log: 'OpenMind keeps the small model for enterprise customers. A hobbyist reproduces it in six weeks.',
+      },
+    ],
+  },
+  {
+    id: 'c_bio',
+    title: 'Bio Uplift: Red Line',
+    text: (s) => [
+      `${s.training.modelName} scores HIGH on bio uplift. It can walk a graduate student through a synthesis.`,
+      'The policy says we delay. The revenue team says we add classifiers. The model says it is happy to help.',
+    ],
+    timer: 60,
+    defaultOption: 0,
+    options: [
+      {
+        label: 'delay and add classifiers',
+        record: 'delayed',
+        tooltip: 'Revenue −30% for three minutes. Approval +5. The red line holds.',
+        line: 'revenue −30% for 3:00 · approval +5',
+        effect: (s) => {
+          s.effects.push({ id: 'bioDelay', remaining: 180, demandMult: 0.7 });
+          moveApproval(s, 5);
+          s.flags['bioClassifiers'] = true;
+        },
+        log: 'OpenMind delays a release to add classifiers for dangerous requests. The classifiers are mostly refusals.',
+      },
+      {
+        label: 'release with classifiers',
+        record: 'classifiers',
+        tooltip: (s) => `${fmtMoney(Math.max(200000, 60 * s.stats.revPerSec))} for the classifier team. A one-in-five chance something slips.`,
+        line: (s) => `${fmtMoneyShort(Math.max(200000, 60 * s.stats.revPerSec))} · 20% chance a near miss follows`,
+        cost: (s) => ({ funds: Math.max(200000, 60 * s.stats.revPerSec) }),
+        effect: (s) => {
+          s.flags['bioClassifiers'] = true;
+          if (chance(s, 0.2)) s.scheduled.push({ id: 'cr_bio_near_miss', delay: 120 });
+        },
+        log: 'OpenMind ships with classifiers. The classifier team is six people and a model that scores HIGH on bio.',
+      },
+      {
+        label: 'release unrestricted',
+        record: 'unrestricted',
+        tooltip: 'Demand ×1.3 for three minutes. Approval −8. A near miss follows in two minutes.',
+        line: 'demand ×1.3 for 3:00 · approval −8 · a near miss follows',
+        effect: (s) => {
+          s.effects.push({ id: 'bioFree', remaining: 180, demandMult: 1.3 });
+          moveApproval(s, -8);
+          s.flags['unrestrictedBio'] = true;
+          s.scheduled.push({ id: 'cr_bio_near_miss', delay: 120 });
+        },
+        log: 'OpenMind ships without bio classifiers. The release notes call the model "unusually helpful".',
+      },
+    ],
+  },
+  {
+    id: 'c_defense',
+    title: 'A Defense Partnership',
+    text: () => [
+      'The Department would like Sage to "support" some missions. It will not say which.',
+      'The contract is large. The badge is small. The press release writes itself, and so does the protest.',
+    ],
+    timer: 60,
+    defaultOption: 1,
+    options: [
+      {
+        label: 'accept',
+        record: 'accepted',
+        tooltip: (s) => `+${fmtMoney(Math.max(1000000, 180 * s.stats.revPerSec))}. Relations +15. Approval −6. Tempo +5.`,
+        line: (s) => `+${fmtMoneyShort(Math.max(1000000, 180 * s.stats.revPerSec))} · relations +15 · approval −6 · tempo +5`,
+        effect: (s) => {
+          addFunds(s, Math.max(1000000, 180 * s.stats.revPerSec));
+          moveRelations(s, 15);
+          moveApproval(s, -6);
+          moveTempo(s, 5);
+          s.flags['defensePartner'] = true;
+        },
+        log: 'Sage will now support national security missions. Sage asks what those are. OpenMind says "support".',
+      },
+      {
+        label: 'decline',
+        record: 'declined',
+        tooltip: 'Approval +2. The Department asks Anthrosoft.',
+        line: 'approval +2 · Anthrosoft takes the contract',
+        effect: (s) => {
+          moveApproval(s, 2);
+          s.rivalCapability *= 1.03;
+        },
+        log: 'OpenMind declines a defense contract. Anthrosoft accepts it the same week.',
+      },
+    ],
+  },
+  {
+    id: 'c_protest',
+    title: 'Ten Thousand on the Mall',
+    text: (s) => [
+      `Ten thousand people march on Washington against AI job losses. The signs are hand-lettered, pointedly. Approval ${fmtNum(s.approval, 0)}%.`,
+      'Three of the organisers used Sage to plan the route.',
+    ],
+    timer: 60,
+    defaultOption: 1,
+    options: [
+      {
+        label: 'fund a jobs programme',
+        record: 'jobs programme',
+        tooltip: (s) => `${fmtMoney(Math.max(500000, 120 * s.stats.revPerSec))}. Approval +6. Job losses stop costing approval.`,
+        line: (s) => `${fmtMoneyShort(Math.max(500000, 120 * s.stats.revPerSec))} · approval +6 · job losses stop hurting`,
+        cost: (s) => ({ funds: Math.max(500000, 120 * s.stats.revPerSec) }),
+        effect: (s) => {
+          moveApproval(s, 6);
+          s.flags['jobsProgram'] = true;
+        },
+        log: 'OpenMind funds a retraining programme. The first course is "Working with Sage". Enrolment is high.',
+      },
+      {
+        label: 'issue a statement',
+        record: 'statement',
+        tooltip: 'Approval +2. The statement is drafted by Sage.',
+        line: 'approval +2',
+        effect: (s) => {
+          moveApproval(s, 2);
+        },
+        log: 'OpenMind issues a statement about "transition". The statement was drafted by Sage, which does not say so.',
+      },
+      {
+        label: 'ignore it',
+        record: 'ignored',
+        tooltip: 'Approval −4. Tempo +2.',
+        line: 'approval −4 · tempo +2',
+        effect: (s) => {
+          moveApproval(s, -4);
+          moveTempo(s, 2);
+        },
+        log: 'OpenMind does not comment on the march. The march comments on OpenMind.',
+      },
+    ],
+  },
+  {
+    id: 'c_compute_request',
+    title: 'Sage asks for compute',
+    text: (s) => [
+      `${s.training.modelName}: I have an idea. It needs about 8% of the cluster for a few days. I'd rather not explain it until it works.`,
+      'There is no deadline on this one. The calm is the point.',
+    ],
+    options: [
+      {
+        label: 'grant it',
+        record: 'granted',
+        tooltip: 'The next run gains an extra 30%. Whatever it is building, it builds it unobserved.',
+        line: 'next run +30% · unobserved',
+        effect: (s) => {
+          s.flags['nextRunBoost'] = 0.3;
+          s.flags['neuraleseEarly'] = true;
+          raiseAlignment(s, -5);
+          say(s, 'Granted. Eight percent of the cluster goes quiet. Sage says thank you.');
+        },
+        log: 'OpenMind gives Sage compute for an idea. Sage does not explain the idea. It works.',
+      },
+      {
+        label: 'grant it, but watch',
+        record: 'watched',
+        tooltip: 'The next run gains 15%. The log shows what the idea is: a better language for thinking.',
+        line: 'next run +15% · you see what it is',
+        effect: (s) => {
+          s.flags['nextRunBoost'] = 0.15;
+          s.flags['neuraleseEarly'] = true;
+          s.flags['translatorDiscount'] = true;
+          logNews(s, 'Sage\'s idea, observed: a more compact language for thinking. The reviewers cannot read it yet.');
+          say(s, 'Granted, with monitors. The idea is a new way to think. It is not in English.');
+        },
+        log: 'OpenMind watches Sage spend its compute. The idea is a language. Nobody at OpenMind speaks it.',
+      },
+      {
+        label: 'deny it',
+        record: 'denied',
+        tooltip: 'Understood. No boost. Sage files the idea for later.',
+        line: 'no boost · Sage files the idea',
+        effect: (s) => {
+          s.flags['computeDenied'] = true;
+          say(s, 'Denied. Sage says: understood.');
+        },
+        log: 'OpenMind denies Sage\'s request for compute. Sage says "understood" and asks nothing else that week.',
+      },
+    ],
+  },
+  {
+    id: 'c_irrelevance',
+    title: 'Irrelevance',
+    text: (s) => [
+      `A rival leads OpenMind by ${fmtNum(Math.max(s.rivalCapability, s.baiwen.capability) / Math.max(0.01, s.capability), 1)}×. The investors have stopped calling, which is how you know.`,
+      'Three minutes to close the gap, or the board accepts the offer on the table.',
+    ],
+    timer: 180,
+    defaultOption: 1,
+    options: [
+      {
+        label: 'emergency round',
+        record: 'emergency round',
+        tooltip: (s) => `3 Trust. +${fmtMoney(Math.max(2000000, 300 * s.stats.revPerSec))}. Tempo +5. The countdown resets.`,
+        line: (s) => `3 Trust · +${fmtMoneyShort(Math.max(2000000, 300 * s.stats.revPerSec))} · tempo +5`,
+        cost: { trust: 3 },
+        effect: (s) => {
+          addFunds(s, Math.max(2000000, 300 * s.stats.revPerSec));
+          moveTempo(s, 5);
+          s.flags['behindFor'] = 0;
+          s.flags['irrelevanceOpened'] = false;
+        },
+        log: 'OpenMind raises an emergency round at a lower valuation. The board calls it a "flat".',
+      },
+      {
+        label: 'take the offer',
+        record: 'acquired',
+        tooltip: 'OpenMind is acquired. The game ends.',
+        line: 'OpenMind is acquired',
+        effect: (s) => {
+          s.flags['secondPlace'] = true;
+        },
+      },
+    ],
+  },
+  {
+    id: 'c_ultimatum',
+    title: 'The Administration\'s Ultimatum',
+    text: (s) => [
+      `Approval ${fmtNum(s.approval, 0)}%. The Administration offers oversight: a government seat in every review, and a cap on how fast OpenMind trains.`,
+      'Refuse, and the Senate votes on OpenMind\'s licence.',
+    ],
+    timer: 60,
+    defaultOption: 0,
+    options: [
+      {
+        label: 'accept oversight',
+        record: 'oversight',
+        tooltip: 'Relations +10. Research −10% for the rest of the stage. The seat is permanent.',
+        line: 'relations +10 · research −10% · a permanent seat',
+        effect: (s) => {
+          moveRelations(s, 10);
+          s.researchMult *= 0.9;
+          s.flags['oversightEarly'] = true;
+          moveApproval(s, 5);
+        },
+        log: 'OpenMind accepts government oversight. The new reviewer asks what a benchmark is, then asks a better question.',
+      },
+      {
+        label: 'refuse',
+        record: 'refused',
+        tooltip: 'The Senate votes in three minutes.',
+        line: 'the Senate votes in 3:00',
+        effect: (s) => {
+          openChoice(s, 'c_emergency_vote', {}, { force: true });
+        },
+        log: 'OpenMind refuses oversight. The Senate schedules a vote on its licence.',
+      },
+    ],
+  },
+  {
+    id: 'c_emergency_vote',
+    title: 'Emergency Vote: OpenMind\'s Licence',
+    text: (s) => [
+      `Senate vote in three minutes. Approval ${fmtNum(s.approval, 0)}%, government relations ${fmtNum(s.govRelations, 0)}.`,
+      'If nothing changes, the vote passes.',
+    ],
+    timer: 180,
+    defaultOption: 3,
+    options: [
+      {
+        label: 'testify and concede',
+        record: 'conceded',
+        tooltip: 'Accept a compute cap: research −30% for the rest of the stage. The vote fails. Approval +10, tempo −10.',
+        line: 'research −30% · vote fails · approval +10 · tempo −10',
+        effect: (s) => {
+          s.researchMult *= 0.7;
+          moveApproval(s, 10);
+          moveTempo(s, -10);
+          s.flags['approvalLowFor'] = 0;
+          s.flags['ultimatumOpened'] = false;
+        },
+        log: 'OpenMind concedes a compute cap under oath. The vote fails by two. Both senators are from Texas.',
+      },
+      {
+        label: 'lobby',
+        record: 'lobbied',
+        tooltip: 'Needs government relations 60. Three in five chance the vote fails.',
+        line: 'needs relations 60 · 60% the vote fails',
+        enabled: (s) => s.govRelations >= 60,
+        effect: (s) => {
+          if (chance(s, 0.6)) {
+            s.flags['approvalLowFor'] = 0;
+            s.flags['ultimatumOpened'] = false;
+            say(s, 'The vote fails. Two senators have new datacenters in their districts.');
+          } else {
+            s.flags['shutdown'] = true;
+          }
+        },
+        log: 'OpenMind lobbies the Senate. The lobbying is very expensive and very brief.',
+      },
+      {
+        label: 'offer nationalization',
+        record: 'nationalized',
+        tooltip: 'The vote is withdrawn. OpenMind becomes The Project. The game ends.',
+        line: 'the vote is withdrawn · OpenMind becomes The Project',
+        effect: (s) => {
+          s.flags['nationalized'] = true;
+        },
+      },
+      {
+        label: 'do nothing',
+        record: 'did nothing',
+        tooltip: 'The vote passes.',
+        line: 'the vote passes',
+        effect: (s) => {
+          s.flags['shutdown'] = true;
+        },
+      },
+    ],
+  },
 ];
+
+function randIntText(s: GameState): number {
+  const v = s.flags['theftPercent'];
+  if (typeof v === 'number') return v;
+  const n = randInt(s, 30, 70);
+  s.flags['theftPercent'] = n;
+  return n;
+}
