@@ -42,6 +42,16 @@ Application, engine and unit tests use strict TypeScript. All authored JavaScrip
 
 The original engine's `.js` import specifiers resolve to TypeScript source through Vite/TypeScript/tsx; they do not imply separate JavaScript source files. Browser tooling runs with Node's native TypeScript erasure so serialized in-page functions do not pick up transpiler helper dependencies.
 
+## Stage 2: The Race
+
+Stage 2 (Jan–Dec 2026) is the Stage 1 economy scaled up. Tasks Completed stays the headline number. The player owns the fleet now (Buy GPUs, Build Datacenter, Expand Grid, chip generations, datacenter tiers), each training run needs idle GPUs, money and enough training data, and the world arrives in layers: the data wall, the race graph with Anthrosoft and Baiwen, Sage taking over research, the Senate hearing with the Public and Government panels, the training pipeline for overlapping runs, security and weight theft, products, the alignment strip (an estimate with a band; the true value is hidden), funding, the bio red line, and Sage asking for compute. The stage ends when the player buys **Automate the Lab** (visible at 5×, buyable at 10×). Two early endings exist: Second Place (a rival leads 4× for three minutes) and Shutdown (approval collapses, the ultimatum is refused, the vote passes).
+
+- Design: `docs/stage2-plan.md`; sources: `docs/reference-analysis.md`; balance log: `docs/stage2-tuning.md`.
+- Engine modules: `src/engine/data.ts` (data cap, synthetic data), `rivals.ts` (Baiwen, tempo, theft, irrelevance), `world.ts` (approval, relations, protest, ultimatum), `alignment.ts` (drift, band, bias). Content: `src/data/projects-stage2.ts`, plus the Stage 2 entries in `developments.ts`, `choices.ts`, `crises.ts`.
+- Dev panel: the `S2` row rewinds to bot-built checkpoints (arrival, data wall, Baiwen, alignment strip, final runs); grants add GPUs, data and approval; the End row can force Second Place and Shutdown.
+- Sim: `npm run sim -- --seed 1 --minutes 60 --quiet` prints a `== Stage 2 ==` block (stage length, end state at the gate, run cadence, reveals, modals, idle gaps).
+- Tests: `tests/stage2.test.ts` (engine) and `npm run test:stage2` (browser, after `npm run build`).
+
 ## Saves and developer controls
 
 Existing local saves and exported saves remain compatible. Add `?seed=1&speed=0` for a reproducible, paused game. Press backtick, or add `&dev=1`, to open developer controls. Stages 1 and 2 have real presets; later preset buttons retain their existing Stage 2 fallback notice.
