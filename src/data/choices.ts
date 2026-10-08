@@ -2,7 +2,7 @@ import { GameState, Cost, TrainingRun, say, addFunds, logNews, counter } from '.
 import { BENCHMARKS, doRelease, releaseChecked, runById, riskTier } from '../engine/training.js';
 import { chance, randInt } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { researchRate, bestCapability } from '../engine/economy.js';
+import { researchRate, bestCapability, researchCap } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
 import { rivalRelease, openChoice } from '../engine/events.js';
 import { moveTempo, BAIWEN_THEFT_RATIO } from '../engine/rivals.js';
@@ -18,6 +18,8 @@ export interface ChoiceOption {
   line?: string | ((s: GameState, ctx: Ctx) => string);
   cost?: Cost | ((s: GameState, ctx: Ctx) => Cost);
   enabled?: (s: GameState, ctx: Ctx) => boolean;
+  /** Why the option is greyed when `enabled` says no (a price shortfall needs no text). */
+  needs?: string | ((s: GameState, ctx: Ctx) => string);
   effect: (s: GameState, ctx: Ctx) => void;
   log?: string | ((s: GameState, ctx: Ctx) => string);
 }
@@ -38,7 +40,8 @@ function runFor(s: GameState, ctx: Ctx): TrainingRun | undefined {
 }
 
 function gambleCost(s: GameState): number {
-  return Math.max(500, twoFigures(60 * researchRate(s)));
+  // A minute of research, but never more than the lab can hold.
+  return Math.max(500, Math.min(twoFigures(60 * researchRate(s)), Math.floor((0.8 * researchCap(s)) / 100) * 100));
 }
 
 function twoFigures(raw: number): number {
@@ -533,6 +536,7 @@ export const CHOICES: ChoiceDef[] = [
         tooltip: (s) => (counter(s, 'publicReleasesOwed') > 0 ? `Growth capital requires ${counter(s, 'publicReleasesOwed')} more public release${counter(s, 'publicReleasesOwed') === 1 ? '' : 's'}.` : 'Research runs 25% faster. Customers keep the old model. Rivals do not see it.'),
         line: (s) => (counter(s, 'publicReleasesOwed') > 0 ? `growth capital: ${counter(s, 'publicReleasesOwed')} more public release${counter(s, 'publicReleasesOwed') === 1 ? '' : 's'} owed` : 'research ×1.25 · rivals learn nothing · customers keep the old model'),
         enabled: (s) => counter(s, 'publicReleasesOwed') <= 0,
+        needs: (s) => `growth capital: ${counter(s, 'publicReleasesOwed')} more public release${counter(s, 'publicReleasesOwed') === 1 ? '' : 's'} owed`,
         effect: (s, ctx) => {
           const run = runFor(s, ctx);
           if (run) doRelease(s, run, false);

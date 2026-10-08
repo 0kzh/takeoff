@@ -129,14 +129,14 @@ export function Infrastructure() {
           Buy GPUs ({fmtInt(batch)})
         </button>{' '}
         Cost: <span id="gpuBatchCost">{fmtMoneyShort(gpuBatchCost(s))}</span>
-        <span id="gpuFullNote" className={full && fullReason ? 'shown warn' : ''}>
-          {' '}
-          {fullReason}
-        </span>
         <span className="note hiddenIds">
           {' '}
           of <span id="gpuBatchNominal">{fmtInt(nominal)}</span> ·{' '}
           <span id="gpuBatchDraw">{fmtMw(batch * GRID_KW_PER_GPU)}</span> MW
+        </span>
+        <span id="gpuFullNote" className={full && fullReason ? 'shown warn' : ''}>
+          <br />
+          {fullReason}
         </span>
         <br />
         <button
@@ -150,29 +150,6 @@ export function Infrastructure() {
         </button>{' '}
         Cost: <span id="datacenterCost">{fmtMoneyShort(datacenterCost(s))}</span>
         <br />
-        <Reveal flag="data" id="dataRow">
-          <br />
-          Data{' '}
-          <Meter
-            id="dataMeter"
-            fraction={dataHave / dataNeed}
-            warn={dataShort}
-            label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · ${fmtNum(taskData(s), 1)}T from customers · ${scrapesLeft(s)} web scrapes left`}
-          />{' '}
-          <span id="dataStock">{fmtNum(dataHave, 1)}</span>T{' '}
-          <span className="note">
-            (the next run needs <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T)
-          </span>
-          <span id="dataShortNote" className={dataShort ? 'shown warn' : ''}>
-            {' '}
-            short: the next run gains less
-          </span>
-          <br />
-          <span className="note">
-            <span id="taskData">{fmtNum(taskData(s), 1)}</span>T from customers so far
-          </span>
-          <br />
-        </Reveal>
         <Reveal flag="security" id="securityRow">
           <br />
           Security: <span id="securityLevel">SL{s.security}</span>{' '}
@@ -208,6 +185,26 @@ export function Infrastructure() {
           </span>
           <br />
         </Reveal>
+      </Reveal>
+      <Reveal flag="data" id="dataRow">
+        <br />
+        Data{' '}
+        <Meter
+          id="dataMeter"
+          fraction={dataHave / dataNeed}
+          warn={dataShort}
+          label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · ${fmtNum(taskData(s), 1)}T from customers · ${scrapesLeft(s)} web scrapes left`}
+        />{' '}
+        <span id="dataStock">{fmtNum(dataHave, 1)}</span>T / <span id="dataNeed">{fmtNum(dataNeed, 1)}</span>T
+        <br />
+        <span className="note">
+          <span id="taskData">{fmtNum(taskData(s), 1)}</span>T from customers
+          <span id="dataShortNote" className={dataShort ? 'shown warn' : ''}>
+            {' '}
+            · short: the next run gains less
+          </span>
+        </span>
+        <br />
       </Reveal>
       <Reveal flag="power" id="powerRows">
         <br />

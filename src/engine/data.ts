@@ -19,8 +19,12 @@ export const LICENSE_GROWTH = 2;
 export const LICENSE_DATA = 15;
 export const RL_DATA_MULT = 1.5;
 
+/** Below the Stage 2 reference the requirement climbs steeply from under 1T, so Stage 1's runs want a little data each. */
+export const S1_DATA_EXPONENT = 4.5;
+
 export function dataRequired(c: number): number {
-  return DATA_BASE * Math.pow(Math.max(DATA_REF, c) / DATA_REF, DATA_EXPONENT);
+  const exponent = c < DATA_REF ? S1_DATA_EXPONENT : DATA_EXPONENT;
+  return DATA_BASE * Math.pow(Math.max(0.5, c) / DATA_REF, exponent);
 }
 
 export function dataMultiplier(s: GameState): number {
@@ -38,7 +42,7 @@ export function effectiveData(s: GameState): number {
 }
 
 export function dataCoverage(s: GameState, c: number): number {
-  if (s.stage < 2) return 1;
+  if (!s.revealed['data']) return 1;
   return Math.min(1, effectiveData(s) / dataRequired(c));
 }
 
@@ -47,7 +51,7 @@ export function dataFactor(s: GameState, c: number): number {
 }
 
 export function dataShort(s: GameState, c: number): boolean {
-  return s.stage >= 2 && dataCoverage(s, c) < 0.999;
+  return s.revealed['data'] === true && dataCoverage(s, c) < 0.999;
 }
 
 export function licenseCost(s: GameState): number {

@@ -355,7 +355,8 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .modalButton:hover { text-decoration: underline; }
 .modalButton.twoLine { display: block; width: 100%; text-align: left; margin: 0 0 8px; }
 .modalButton.twoLine .optLabel { display: block; }
-.modalButton.twoLine .optLine { display: block; font-size: 13px; color: #444; margin-top: 2px; }
+/* inline-block: the button's underline does not reach the second line */
+.modalButton.twoLine .optLine { display: inline-block; width: 100%; font-size: 13px; color: #444; margin-top: 2px; text-decoration: none; }
 .modalButton.twoLine:disabled .optLine { color: #999; }
 .modalButton:disabled { color: #999; border-color: #999; text-decoration: none; cursor: default; }
 

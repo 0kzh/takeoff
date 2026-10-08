@@ -4,7 +4,6 @@ import { snapToStage } from './clock.js';
 import { ARRIVAL_GPUS, GRID_FIRST_TIER, gridOutgrown, researchCap, rentQuota } from './economy.js';
 import { cardWallSeconds } from './training.js';
 import { researchWanted } from './tick.js';
-import { WEB_TOTAL } from './data.js';
 import { APPROVAL_START } from './world.js';
 
 export interface StageDef {
@@ -58,7 +57,6 @@ export const STAGES: StageDef[] = [
       s.dcTier = Math.max(1, s.dcTier);
       s.approval = Math.min(100, Math.max(0, APPROVAL_START + s.approval));
       s.tempo = 50;
-      s.data = { stock: 0, webRemaining: WEB_TOTAL, synthetic: 0, licensed: 0 };
       s.history = s.training.models.map((m) => [0, Math.round(m.date * 1000) / 1000, m.capability, Math.round(m.capability * 0.92 * 1000) / 1000, 0]);
       s.flags['stage2At'] = s.stats.timePlayed;
       s.flags['runsThisStage'] = 0;
@@ -287,6 +285,12 @@ const REVEAL_RULES: RevealRule[] = [
       s.flags['projectsAt'] = s.stats.timePlayed;
       if (s.revealed['research']) say(s, 'Research buys projects.');
     },
+  },
+  {
+    id: 'data',
+    stages: [1],
+    when: (s) => s.revealed['research'] === true && sinceFlag(s, 'researchAt') >= 20 && spaced(s),
+    then: (s) => say(s, 'Training data: every task completed teaches the next model a little. The public web can be scraped for more.'),
   },
   { id: 'insight', stages: [1, 2], when: (s) => s.insightUnlocked && s.insight >= 1 },
   {

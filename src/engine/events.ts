@@ -291,7 +291,9 @@ export function optionLine(s: GameState, opt: ChoiceOption): string {
 
 export function optionNeeds(s: GameState, opt: ChoiceOption): string {
   const cost = optionCost(s, opt);
-  return cost && !canPay(s, cost) ? `needs ${costLabel(cost)}` : 'not available';
+  if (cost && !canPay(s, cost)) return `needs ${costLabel(cost)}`;
+  const needs = typeof opt.needs === 'function' ? opt.needs(s, s.activeChoice?.context ?? {}) : opt.needs;
+  return needs || 'not available';
 }
 
 export function noveltyKeys(s: GameState): string[] {

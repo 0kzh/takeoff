@@ -9,7 +9,7 @@
  * through the Stage 2 arrival; the opening (owner feedback 1: one control and one number at 0:00, the
  * first GPU at 1.5 / 2 / 4 clicks a second, numbers and controls at 0:00 / 0:30 / 1:00 / 2:00 / 3:00
  * / 5:00 with a screenshot each); reveal order and the staggered beats; the greyed goal from the
- * first purchase; no yield wording; the Train row's line at the cloud's limit and `1 Datacenter`
+ * first purchase; no yield wording; the Train row's prices at the cloud's limit plus `1 Datacenter`
  * past it; numeric-token counts at
  * minutes 0/1/3/5/10/20/end; save → reload during a training run; the transition narration; the meter's
  * width at every fill; no horizontal overflow at 390 px. The Train row (a plain purchase since the
@@ -147,7 +147,7 @@ const SNAPSHOT = () => {
     trainShort: vis(document.getElementById('trainGpuLine'))
       ? document.getElementById('trainGpus').innerText.trim()
       : '',
-    // Past what the cloud will rent the prices give way to one price, `1 Datacenter`, its bar empty.
+    // Past what the cloud will rent the prices stay, and `1 Datacenter` joins them last, its bar empty.
     trainWall: vis(document.getElementById('costRow-datacenter'))
       ? {
           text: document
@@ -159,12 +159,9 @@ const SNAPSHOT = () => {
             .join(' | '),
           bars: [...document.querySelectorAll<HTMLElement>('#trainCosts .costRow .progress')].filter(vis)
             .length,
-          fill: Math.max(
-            0,
-            ...[...document.querySelectorAll<HTMLElement>('#trainCosts .costRow .progressFill')]
-              .filter((el) => vis(el.parentElement))
-              .map((el) => el.getBoundingClientRect().width),
-          ),
+          fill:
+            document.querySelector<HTMLElement>('#costRow-datacenter .progressFill')?.getBoundingClientRect()
+              .width ?? 0,
         }
       : null,
     // The Train row's price bars, when shown, are bars: one width, each fill as tall as its track.
@@ -193,7 +190,7 @@ const SNAPSHOT = () => {
       const b = document.getElementById('btn-train') as HTMLButtonElement;
       if (!vis(b)) return null;
       // One line a price, named by its unit (`$75`, `100 kWh`, `10 GPUs`); what the lab holds is in the hover.
-      const prices = ['funds', 'power', 'gpus']
+      const prices = ['funds', 'power', 'gpus', 'research', 'data']
         .filter((k) => vis(document.getElementById(`costRow-${k}`)))
         .map((k) => ({
           key: k,
@@ -288,7 +285,7 @@ try {
     const text = await page.evaluate(() => document.body.innerText);
     check(
       '0:00: no power, no funds, no date on screen',
-      !/kWh|Funds|Jul 2025/.test(text) && /Welcome to OpenMind\. Customers are waiting\./.test(text),
+      !/kWh|Funds|Jul 2025|2025\b/.test(text) && /Welcome to OpenMind\. Customers are waiting\./.test(text),
     );
     await shot(page, '00-opening-0m00');
     // Every bar is the training bar: its border, track, height and fill, at one width for every fill.
@@ -456,13 +453,14 @@ try {
   // 31–32 numbers and 14–15 controls at 5:00), not a budget the owner has set: see the reveal-order and
   // G5 checks below for one mechanic a beat.
   // 3:00 allows one more number and control since Expand Lab and its price arrive with the Research panel.
-  const targets = { 0: [1, 1], 30: [7, 2], 60: [13, 5], 120: [16, 7], 180: [22, 9], 300: [32, 15] };
+  // The Data row (two numbers and a note) and the Scrape card arrive by 3:00: 25 / 9 there, 36 / 13 at 5:00.
+  const targets = { 0: [1, 1], 30: [7, 2], 60: [13, 5], 120: [16, 7], 180: [25, 9], 300: [36, 15] };
   const slack = {};
   const openingRow = Object.entries(opening)
     .map(([m, c]) => `${clock(Number(m))} ${c.numbers}/${c.controls}`)
     .join(' · ');
   check(
-    'opening: numbers ≤ 1 / 7 / 13 / 16 / 22 / 32 and controls ≤ 1 / 2 / 5 / 7 / 9 / 15 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
+    'opening: numbers ≤ 1 / 7 / 13 / 16 / 25 / 36 and controls ≤ 1 / 2 / 5 / 7 / 9 / 15 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
     Object.entries(targets).every(
       ([m, [n, c]]) => opening[m] && opening[m].numbers <= n + (slack[m] ?? 0) && opening[m].controls <= c,
     ),
@@ -842,10 +840,15 @@ try {
   );
   // A first-timer may never reach the wall: the test breaks ground before it.
   const badWall = trainWalls.find(
-    (w) => w.text !== 'Resources needed | 1 Datacenter' || w.bars !== 1 || w.fill > 0 || w.short,
+    (w) =>
+      !w.text.startsWith('Resources needed | ') ||
+      !w.text.endsWith(' | 1 Datacenter') ||
+      w.bars < 2 ||
+      w.fill > 0 ||
+      w.short,
   );
   check(
-    'a Train past what the cloud will ever rent reads `1 Datacenter` under `Resources needed`: one empty bar, no other line',
+    'a Train past what the cloud will ever rent keeps its prices and adds `1 Datacenter` last, its bar empty',
     (trainWalls.length > 0 || POLICY !== 'bot') && !badWall,
     badWall
       ? `${clock(badWall.t)} "${badWall.text}", ${badWall.bars} bars, fill ${badWall.fill} px${badWall.short ? `, "${badWall.short}"` : ''}`
@@ -868,15 +871,20 @@ try {
 
   // ----- round 3: a run costs money and GPUs (stage1-round3-fixes.md §1–§4); Train is a plain purchase -----
   const rows = [...trainRows];
+  // Once Research is on screen every run prices money, GPUs, research and data, and keeps all four.
+  // Data arrives a beat after Research, so the first research row may lack it; from the first data row on, all four stay.
+  const fullRows = rows.filter((r) => /research/.test(r));
+  const firstData = fullRows.findIndex((r) => /T data$/.test(r));
   check(
-    'the Stage 1 Train row has no research price',
-    rows.length > 0 && rows.every((r) => !/research/i.test(r)),
-    rows.slice(0, 3).join(' || '),
+    'the Stage 1 Train row prices research and data together once both are on screen',
+    firstData >= 0 && fullRows.slice(firstData).every((r) => /T data$/.test(r)),
+    fullRows.length ? fullRows.slice(0, 3).join(' || ') : rows.slice(0, 3).join(' || '),
   );
-  const okPrices = (r) => /^\$[\d,.]+(, [\d,]+ kWh)?, (1 GPU|(?!1 )[\d,]+ GPUs)$/.test(r);
+  const okPrices = (r) =>
+    /^\$[\d,.]+(, [\d,]+ kWh)?, (1 GPU|(?!1 )[\d,]+ GPUs)(, [\d,]+ research)?(, [\d.]+T data)?$/.test(r);
   const badRow = rows.find((r) => !okPrices(r));
   check(
-    'the Train row lists prices only, each named by its unit (`$75` · `100 kWh` · `10 GPUs`, one GPU as `1 GPU`), under `Resources needed`',
+    'the Train row lists prices only, each named by its unit (`$75` · `100 kWh` · `10 GPUs` · `700 research` · `1.2T data`), under `Resources needed`',
     rows.length > 0 && !badRow && !r3.head,
     badRow
       ? `"${badRow}"`
@@ -999,10 +1007,11 @@ try {
   // row), the armed Train row's model name (1): 48 / 16 / 250. With Sage-1 trained in the opening
   // (docs/specs/early-train.md) minute 10 is a run further along: the Focus row and a fifth card, 18.
   // With Trust the only way to grow the lab, more cards wait on screen at minute 10: 20 controls, 280 words.
+  // The date ticks by day, the Data row and its note and the Scrape card: 54 numbers, 300 words.
   const m10 = counts['10'];
   check(
-    'minute 10: ≤ 48 numbers, ≤ 20 controls, ≤ 280 words',
-    !!m10 && m10.numbers <= 48 && m10.interactive <= 20 && m10.words <= 280,
+    'minute 10: ≤ 54 numbers, ≤ 20 controls, ≤ 300 words',
+    !!m10 && m10.numbers <= 54 && m10.interactive <= 20 && m10.words <= 300,
     m10 ? `${m10.numbers} numbers, ${m10.interactive} controls, ${m10.words} words` : 'no minute-10 snapshot',
   );
   const paperclips = { 0: 10, 1: 12, 3: 15, 5: 30, 10: 26, 20: 29, end: 49 };

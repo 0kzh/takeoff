@@ -17,14 +17,15 @@ export function Public() {
       />{' '}
       <span id="approval">{fmtNum(s.approval, 0)}</span>%
       <span id="approvalWarn" className={low ? 'shown warn' : ''}>
-        {' '}
+        <br />
         calls to shut OpenMind down
       </span>
       <br />
       <Reveal flag="jobs">
-        Jobs displaced: <span id="jobsDisplaced">{fmtNum(s.jobsDisplaced, 1)}M</span>{' '}
+        Jobs displaced: <span id="jobsDisplaced">{fmtNum(s.jobsDisplaced, 1)}M</span>
+        <br />
         <span className="note">
-          {jobsMitigated(s) ? '(covered: approval falls slowly)' : '(approval falls while unaddressed)'}
+          {jobsMitigated(s) ? 'covered: approval falls slowly' : 'approval falls while unaddressed'}
         </span>
         <br />
       </Reveal>

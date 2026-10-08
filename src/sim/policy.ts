@@ -277,11 +277,22 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
 
   for (const p of visibleProjects(s)) {
     if (!p.canAfford(s)) continue;
-    if (p.id === 's2_licensing' && !dataShort(s, startCapability(s))) continue;
-    // Keep the next run's research while the slot is free: start the run first, then spend the rest.
+    if ((p.id === 's2_licensing' || p.id === 's2_scrape') && !dataShort(s, startCapability(s))) continue;
+    // Keep the next run's research while the slot is free and its money is nearly there: start the run
+    // first, then spend the rest. While the run waits on money, research is spent on cards and refills.
     const research = p.cost(s).research ?? 0;
-    if (s.stage >= 2 && research > 0 && trainSlotFree(s) && !p.pinned && !p.rescue && !p.urgent?.(s) && p.id !== TRANSITION
-      && s.research - research < (trainCost(s).research ?? 0)) continue;
+    const moneyReady = s.funds >= 0.8 * (trainCost(s).funds ?? 0);
+    if (
+      research > 0 &&
+      trainSlotFree(s) &&
+      moneyReady &&
+      !p.pinned &&
+      !p.rescue &&
+      !p.urgent?.(s) &&
+      p.id !== TRANSITION &&
+      s.research - research < (trainCost(s).research ?? 0)
+    )
+      continue;
     if (mem.variant === 'reckless' && RECKLESS_SKIPS.includes(p.id)) continue;
     if (s.stage >= 2 && p.sideline && p.id !== 's2_licensing' && (p.cost(s).funds ?? 0) > 0.5 * s.funds) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;

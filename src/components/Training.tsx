@@ -186,7 +186,7 @@ function IdleTraining() {
   const gpus = trainGpuFigures(s);
   const wall = needsDatacenter(s);
   const fix = wall ? '' : trainGpuFix(s);
-  const dataNeed = s.stage >= 2 ? dataRequired(startCapability(s)) : 0;
+  const dataNeed = s.revealed['data'] ? dataRequired(startCapability(s)) : 0;
   const rows: [string, (n: number) => string, number, number][] = [
     ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
     ['power', (n) => `${fmtInt(n)} kWh`, s.power, cost.power ?? 0],
@@ -212,9 +212,7 @@ function IdleTraining() {
             ? 'Start the run.'
             : wall
               ? 'Not yet: it needs the First Datacenter.'
-              : s.stage >= 2
-                ? `Not yet: ${trainShortfall(s)}.`
-                : 'Not yet: it needs its price and its GPUs.'
+              : `Not yet: ${trainShortfall(s)}.`
         }
         onClick={() => perform('startTraining')}
       >
@@ -225,7 +223,7 @@ function IdleTraining() {
         {rows.map(([key, fmt, have, need]) => (
           <div
             key={key}
-            className={`costRow${need > 0 && !wall ? ' shown' : ''}${key === 'data' && have < need ? ' short' : ''}`}
+            className={`costRow${need > 0 ? ' shown' : ''}${key === 'data' && have < need ? ' short' : ''}`}
             id={`costRow-${key}`}
             title={
               key === 'data'

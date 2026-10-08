@@ -6,6 +6,18 @@ export function dateLabel(months: number): string {
   return `${MONTHS[((index % 12) + 12) % 12]} ${year}`;
 }
 
+const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** The date to the day: "14 Jul 2025". The month's fraction maps onto its days. */
+export function dayLabel(months: number): string {
+  const index = Math.floor(months) + 6;
+  const month = ((index % 12) + 12) % 12;
+  const year = 2025 + Math.floor(index / 12);
+  const days = DAYS[month]! + (month === 1 && year % 4 === 0 ? 1 : 0);
+  const day = Math.min(days, Math.floor((months - Math.floor(months)) * days) + 1);
+  return `${day} ${MONTHS[month]} ${year}`;
+}
+
 export function monthOf(year: number, month: number): number {
   return (year - 2025) * 12 + (month - 1) - 6;
 }

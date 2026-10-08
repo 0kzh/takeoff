@@ -11,27 +11,20 @@ import { Race } from './components/Race.js';
 import { AlignmentStrip } from './components/AlignmentStrip.js';
 import { Public, Government } from './components/World.js';
 import { TICK_MS } from './engine/tick.js';
-import { dateLabel, fmtInt, fmtNum, fmtMoney } from './engine/format.js';
+import { fmtInt, fmtNum, dayLabel } from './engine/format.js';
 import { startPersistence } from './ui/save.js';
 import { installDebugApi } from './ui/debug.js';
 
 function Header() {
   const tasks = useGameStore((state) => fmtInt(state.game.tasks));
-  const date = useGameStore((state) => dateLabel(state.game.date));
+  const date = useGameStore((state) => dayLabel(state.game.date));
   const shown = useGameStore((state) => state.game.revealed['log']);
-  const capShown = useGameStore((state) => state.game.revealed['capabilityHeader'] === true);
-  const model = useGameStore((state) => state.game.training.deployedName);
-  const cap = useGameStore((state) => fmtNum(state.game.capability, 2));
-  const rev = useGameStore((state) => fmtMoney(state.game.stats.revPerSec));
   return (
     <div id="topDiv">
       <h2 id="tasksHeader">
         Tasks Completed: <span id="tasks">{tasks}</span>
       </h2>
       <div id="headerRight">
-        <span id="capabilityHeader" data-reveal="capabilityHeader" className={capShown ? 'shown' : ''}>
-          {model} · <span id="headerCapability">{cap}</span>× · <span id="headerRevenue">{rev}</span>/s
-        </span>
         <span id="gameDate" data-reveal="log" className={shown ? 'shown' : ''}>
           {date}
         </span>

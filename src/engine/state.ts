@@ -390,7 +390,8 @@ export function newGame(seed: number = Date.now()): GameState {
 
     chipGen: 1,
     dcTier: 1,
-    data: { stock: 0, webRemaining: 0, synthetic: 0, licensed: 0 },
+    // 20T of public web to scrape (WEB_TOTAL in data.ts), from the first day.
+    data: { stock: 0, webRemaining: 20, synthetic: 0, licensed: 0 },
     baiwen: { present: false, capability: 0, version: 0, nextIn: 0 },
     tempo: 50,
     security: 1,
@@ -508,7 +509,10 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;
   if ((merged['revealed'] as Record<string, boolean>)['gridContract']) merged['gridAuto'] = true;
   merged['version'] = SAVE_VERSION;
-  return merged as unknown as GameState;
+  const out = merged as unknown as GameState;
+  // Saves from before the web could be scraped in Stage 1 start with nothing left to scrape.
+  if (out.stage === 1 && out.data.webRemaining === 0 && !(out.projects['s2_scrape']?.bought ?? 0)) out.data.webRemaining = 20;
+  return out;
 }
 
 export function deserialize(text: string): GameState | null {

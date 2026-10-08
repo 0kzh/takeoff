@@ -88,6 +88,13 @@ export function fundsForS2(c: number): number {
   return twoSig(S2_FUNDS_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_FUNDS_EXPONENT));
 }
 
+/** Stage 1 runs: the same curve as Stage 2, continued down from 1.8× (6,000 there, about 180 at 1×). */
+export const S1_RESEARCH_EXPONENT = 6;
+
+export function researchForS1(c: number): number {
+  return twoSig(S2_RESEARCH_BASE * Math.pow(Math.min(S2_CAP_REF, c) / S2_CAP_REF, S1_RESEARCH_EXPONENT));
+}
+
 export function researchForS2(c: number): number {
   return twoSig(S2_RESEARCH_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_RESEARCH_EXPONENT));
 }
@@ -125,7 +132,9 @@ export function trainCost(s: GameState): Cost {
   if (inPrologue(s)) return { funds: PROLOGUE_FUNDS, power: PROLOGUE_POWER };
   const c = startCapability(s);
   if (s.stage >= 2) return { funds: fundsForS2(c), research: researchForS2(c) };
-  return c < S1_WALL ? { funds: fundsFor(c) } : {};
+  // Past the wall the run still has its price; the datacenter is required on top of it.
+  // Research joins the price once the Research panel is on screen, and stays for every run after.
+  return s.revealed['research'] ? { funds: fundsFor(c), research: researchForS1(c) } : { funds: fundsFor(c) };
 }
 
 export function gpusNeeded(s: GameState): number {
@@ -290,7 +299,7 @@ function startRun(s: GameState, cost: Cost): boolean {
   const boost = typeof s.flags['nextRunBoost'] === 'number' ? (s.flags['nextRunBoost'] as number) : 0;
   delete s.flags['nextRunBoost'];
   const bonus = s.stage >= 2 ? boost + (isBought(s, 's2_rl_envs') ? 0.03 : 0) : 0;
-  const factor = s.stage >= 2 ? dataFactor(s, capBefore) : 1;
+  const factor = dataFactor(s, capBefore);
   const run: TrainingRun = {
     id: t.nextRunId++,
     name: `Sage-${version.major}.${version.minor}`,
@@ -324,7 +333,7 @@ function startRun(s: GameState, cost: Cost): boolean {
   s.stats.trainings += 1;
   if (s.stage >= 2) bump(s, 'runsThisStage');
   if (run.focus === 'safety') bump(s, 'safetyRuns');
-  const short = s.stage >= 2 && dataShort(s, capBefore) ? ' Data is short: the gain shrinks.' : '';
+  const short = dataShort(s, capBefore) ? ' Data is short: the gain shrinks.' : '';
   say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs.${short}`);
   return true;
 }

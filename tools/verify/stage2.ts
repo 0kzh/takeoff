@@ -128,7 +128,6 @@ const WATCH = [
   'btn-gpuBatch',
   'btn-datacenter',
   'btn-expandGrid',
-  'capabilityHeader',
   'btn-train',
   'btn-release',
   'raceGraph',
@@ -252,7 +251,6 @@ await phase('arrival', async () => {
     a.visible['panel-infrastructure'] && buttons.length === 3,
     `panel ${a.visible['panel-infrastructure'] ? 'shown' : 'hidden'}; buttons ${buttons.join(', ') || 'none'}`,
   );
-  check('arrival: the capability header is shown', a.visible['capabilityHeader']);
   check('arrival: no alignment strip yet', !a.visible['alignmentStrip']);
   check('arrival: no Race panel yet', !a.visible['panel-race']);
   await shot(page, '00-arrival');
@@ -435,10 +433,11 @@ await phase('reveal', async () => {
     `${(share * 100).toFixed(1)} % of ${goal.ticks} samples from ${firstProjectAt === null ? '—' : clock(firstProjectAt)}${goal.misses.length ? `; none at ${goal.misses.join(', ')}` : ''}`,
   );
   const titles = new Set(modals.map((m) => m.title));
-  const want = ['Deploy or keep internal?', 'The Senate Hearing', 'The Data Wall'];
+  // The Data Wall comes only when the player scrapes the whole web, which the bot does only when short.
+  const want = ['Deploy or keep internal?', 'The Senate Hearing'];
   const missing = want.filter((w) => !titles.has(w));
   check(
-    'reveal: the Deploy, Senate Hearing and Data Wall dialogs appear',
+    'reveal: the Deploy and Senate Hearing dialogs appear',
     missing.length === 0,
     missing.length ? `missing ${missing.join(', ')}` : `${modals.length} dialogs seen`,
   );

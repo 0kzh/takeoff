@@ -200,20 +200,23 @@ export function ChoiceDialog() {
           {def?.options.map((option, i) => {
             const cost = optionCost(s, option);
             const disabled = !choiceOptionEnabled(s, def, i);
+            // The price is shown under the label; what the option does is not.
+            const line = disabled ? optionNeeds(s, option) : cost ? costLabel(cost) : '';
+            const twoLine = def.options.some((o, j) => !choiceOptionEnabled(s, def, j) || optionCost(s, o));
             return (
               <button
                 key={`${def.id}-${i}`}
                 id={`choice-${def.id}-${i}`}
                 data-option={i}
-                className={`modalButton${disabled ? ' twoLine' : ''}`}
+                className={`modalButton${twoLine ? ' twoLine' : ''}`}
                 disabled={disabled}
                 title={cost ? `Costs ${costLabel(cost)}.` : ''}
                 onClick={() => perform('resolveChoice', i)}
               >
-                {disabled ? (
+                {twoLine ? (
                   <>
                     <span className="optLabel">{option.label}</span>
-                    <span className="optLine">{optionNeeds(s, option)}</span>
+                    <span className="optLine">{line || '\u00a0'}</span>
                   </>
                 ) : (
                   option.label

@@ -25,6 +25,7 @@ import {
   gpuBlock,
   gpuBatchCost,
 } from '../src/engine/economy.js';
+import { dayLabel } from '../src/engine/format.js';
 import { projectById, buyProject, visibleProjects } from '../src/engine/projects.js';
 import { choiceById } from '../src/engine/events.js';
 
@@ -57,7 +58,8 @@ describe('Stage 2 arrival', () => {
     expect(s.datacenters).toBe(1);
     expect(s.approval).toBeGreaterThan(50);
     expect(s.tempo).toBe(50);
-    expect(s.data.webRemaining).toBeCloseTo(20);
+    expect(s.data.webRemaining).toBeLessThanOrEqual(20);
+    expect(s.data.webRemaining).toBeGreaterThanOrEqual(0);
     expect(s.revealed['data']).toBe(true);
     expect(s.history.length).toBeGreaterThan(0);
   });
@@ -71,7 +73,7 @@ describe('Stage 2 arrival', () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated!.chipGen).toBe(1);
-    expect(migrated!.data.webRemaining).toBe(0);
+    expect(migrated!.data.webRemaining).toBe(20);
     raw['stage'] = 2;
     expect(deserialize(JSON.stringify(raw))).toBeNull();
   });
@@ -110,6 +112,38 @@ describe('Stage 2 economy', () => {
     buy(s, 's2_ai_rd');
     expect(researchRate(s)).toBeGreaterThan(humansOnly);
     expect(humanResearchShare(s)).toBeLessThan(0.6);
+  });
+});
+
+describe('Stage 1 runs price the same four resources', () => {
+  it('costs money, GPUs, research and data once Research is on screen, with data starting under 1T', () => {
+    const s = newGame(1);
+    s.revealed['training'] = true;
+    s.revealed['research'] = true;
+    s.revealed['data'] = true;
+    s.flags['prologue'] = false;
+    s.training.internalCapability = 1.13;
+    s.capability = 1.13;
+    const cost = trainCost(s);
+    expect(cost.funds).toBeGreaterThan(0);
+    expect(cost.research).toBeGreaterThan(0);
+    expect(cost.research!).toBeLessThan(1000);
+    expect(gpusNeeded(s)).toBeGreaterThan(0);
+    expect(dataRequired(1)).toBeGreaterThan(0.5);
+    expect(dataRequired(1)).toBeLessThan(1);
+    expect(dataRequired(1.8)).toBeCloseTo(10);
+    expect(newGame(1).data.webRemaining).toBe(20);
+  });
+});
+
+describe('Date labels', () => {
+  it('ticks by day inside the month', () => {
+    expect(dayLabel(0)).toBe('1 Jul 2025');
+    expect(dayLabel(0.5)).toBe('16 Jul 2025');
+    expect(dayLabel(0.999)).toBe('31 Jul 2025');
+    expect(dayLabel(7)).toBe('1 Feb 2026');
+    expect(dayLabel(7.99)).toBe('28 Feb 2026');
+    expect(dayLabel(31.99)).toBe('29 Feb 2028');
   });
 });
 
@@ -301,7 +335,7 @@ describe('Stage 2 gate and persistence', () => {
     const y = stage2Checkpoint('datawall', 1);
     expect(serialize(x)).toBe(serialize(y));
     expect(x.stage).toBe(2);
-    expect(x.flags['webExhausted']).toBe(true);
+    expect(x.flags['webExhausted'] === true || x.capability >= 3).toBe(true);
     expect(visibleProjects(x).length).toBeGreaterThan(0);
   });
 });

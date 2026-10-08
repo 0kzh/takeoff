@@ -207,7 +207,7 @@ export interface Stage2Checkpoint {
 // They are cheats for review, not balance evidence.
 export const STAGE2_CHECKPOINTS: Stage2Checkpoint[] = [
   { id: 'arrival', label: 'arrival', title: 'Stage 2 arrival: the first datacenter', reached: () => true, graceSeconds: 0 },
-  { id: 'datawall', label: 'data', title: 'The data wall: the public web is exhausted', reached: (s) => s.flags['webExhausted'] === true, graceSeconds: 30 },
+  { id: 'datawall', label: 'data', title: 'The data wall: the public web is running out', reached: (s) => s.flags['webExhausted'] === true || s.capability >= 3, graceSeconds: 30 },
   { id: 'baiwen', label: 'baiwen', title: 'Baiwen joins the race; the Security Office is on screen', reached: (s) => s.baiwen.present, graceSeconds: 45 },
   { id: 'alignment', label: 'align', title: 'The alignment strip has just appeared', reached: (s) => s.revealed['alignment'] === true, graceSeconds: 20 },
   { id: 'final', label: 'final', title: 'Automate the Lab is on screen, greyed until 10×', reached: (s) => s.projects['s2_automate']?.shown === true, graceSeconds: 60 },

@@ -193,7 +193,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_prompting2',
     chain: true,
     title: 'Chain-of-thought',
-    cost: { research: 2500 },
+    cost: { research: 2000 },
     description: 'Copies think before they answer. 50% faster.',
     trigger: (s) => isBought(s, 'p_prompting') && s.revealed['training'] === true,
     buy: (s) => {
@@ -243,7 +243,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_prompting3',
     chain: true,
     title: 'Tool use',
-    cost: { research: 5000 },
+    cost: { research: 4000 },
     description: 'A terminal and a browser. Copies 75% faster.',
     trigger: (s) => isBought(s, 'p_prompting2'),
     buy: (s) => {
@@ -517,7 +517,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_batch',
     revealResearch: 100,
     title: 'Batch inference',
-    cost: { research: 8000 },
+    cost: { research: 6000 },
     description: 'Run requests together. Copies per GPU ×1.25.',
     trigger: (s) => s.gpus >= 100 || dateAtLeast(s, 2025, 10),
     buy: (s) => {
@@ -558,7 +558,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_agents',
     revealResearch: 100,
     title: 'Agent mode',
-    cost: { research: 10000 },
+    cost: { research: 8000 },
     description: 'Sage gets a credit card. Copies 20% faster.',
     trigger: (s) => dateAtLeast(s, 2025, 11) || s.capability >= 1.6,
     buy: (s) => {
