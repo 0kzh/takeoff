@@ -31,7 +31,7 @@ import {
   SECURITY_MAX,
 } from '../engine/economy.js';
 import { startCapability } from '../engine/training.js';
-import { effectiveData, dataRequired, syntheticRatePerMin, webShare, WEB_TOTAL } from '../engine/data.js';
+import { effectiveData, dataRequired, taskData, scrapesLeft } from '../engine/data.js';
 import { fmtMoney, fmtMoneyShort, fmtInt, fmtMw, fmtClock, fmtNum } from '../engine/format.js';
 
 export function Infrastructure() {
@@ -157,7 +157,7 @@ export function Infrastructure() {
             id="dataMeter"
             fraction={dataHave / dataNeed}
             warn={dataShort}
-            label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · public web ${Math.round(100 * webShare(s))}% of ${WEB_TOTAL}T read`}
+            label={`${fmtNum(dataHave, 1)}T tokens of the ${fmtNum(dataNeed, 1)}T the next run needs · ${fmtNum(taskData(s), 1)}T from customers · ${scrapesLeft(s)} web scrapes left`}
           />{' '}
           <span id="dataStock">{fmtNum(dataHave, 1)}</span>T{' '}
           <span className="note">
@@ -168,12 +168,10 @@ export function Infrastructure() {
             short: the next run gains less
           </span>
           <br />
-          <Reveal flag="synthetic">
-            <span className="note">
-              Idle copies write <span id="syntheticRate">{fmtNum(syntheticRatePerMin(s), 2)}</span>T a minute
-            </span>
-            <br />
-          </Reveal>
+          <span className="note">
+            <span id="taskData">{fmtNum(taskData(s), 1)}</span>T from customers so far
+          </span>
+          <br />
         </Reveal>
         <Reveal flag="security" id="securityRow">
           <br />

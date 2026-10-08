@@ -4,6 +4,7 @@ import { policyStep, newBotMemory, PolicyName } from './policy.js';
 import { noveltyKeys, isRescueKey, PLAYER_MODALS, choiceById, optionCost } from '../engine/events.js';
 import { visibleProjects, projectById } from '../engine/projects.js';
 import { GRID_CONTRACT_PRESSES } from '../data/projects.js';
+import { effectiveData } from '../engine/data.js';
 import {
   researchCap, copies, copiesIdle, bestCapability, marketingCost, contractRate, powerBlockCost, gpuCost, rentQuota, atRentQuota, gpuCapacity,
 } from '../engine/economy.js';
@@ -623,7 +624,7 @@ function stage2Report(
   const stageClock = (t: number) => fmtClock(t - from);
   out.push(`\n== Stage 2 (policy ${policy}, seed ${s.seed}) ==`);
   out.push(`arrival ${fmtClock(from)}; ${s.stage >= 3 ? `Automate the Lab at ${fmtClock(to)} (stage time ${stageClock(to)})` : `still in Stage ${s.stage} at ${fmtClock(to)} (stage time ${stageClock(to)})`}   (target 38:00–48:00 of stage time)`);
-  out.push(`end state: capability ${s.capability.toFixed(2)} / internal ${s.training.internalCapability.toFixed(2)}, rev/s ${fmtMoney(s.stats.revPerSec)}, gpus ${fmtInt(s.gpus)} (G${3 + s.chipGen}, ${s.datacenters} dc, tier ${s.dcTier}), grid ${fmtMw(s.gridCapacity)} MW, data ${(s.data.stock + s.data.synthetic).toFixed(1)}T, approval ${s.approval.toFixed(0)}, tempo ${s.tempo.toFixed(0)}, align ${s.alignmentTrue.toFixed(0)} true / ${s.alignmentApparent.toFixed(0)} ± ${s.alignmentBand.toFixed(0)}, baiwen ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}, anthrosoft ${s.rivalCapability.toFixed(2)}, security SL${s.security}`);
+  out.push(`end state: capability ${s.capability.toFixed(2)} / internal ${s.training.internalCapability.toFixed(2)}, rev/s ${fmtMoney(s.stats.revPerSec)}, gpus ${fmtInt(s.gpus)} (G${3 + s.chipGen}, ${s.datacenters} dc, tier ${s.dcTier}), grid ${fmtMw(s.gridCapacity)} MW, data ${effectiveData(s).toFixed(1)}T, approval ${s.approval.toFixed(0)}, tempo ${s.tempo.toFixed(0)}, align ${s.alignmentTrue.toFixed(0)} true / ${s.alignmentApparent.toFixed(0)} ± ${s.alignmentBand.toFixed(0)}, baiwen ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}, anthrosoft ${s.rivalCapability.toFixed(2)}, security SL${s.security}`);
   out.push(`runs: ${starts.length}; starts at ${starts.map(stageClock).join(' ')}`);
   const gaps = starts.slice(1).map((x, i) => x - starts[i]!);
   out.push(`run start gaps: longest ${gaps.length ? fmtClock(Math.max(...gaps)) : '—'} (target ≤ 5:00)`);
@@ -648,7 +649,7 @@ function minuteLine(s: GameState, minute: number): string {
     .join(', ');
   const run = s.training.run;
   const training = run ? ` | ${run.name} ${run.phase}` : '';
-  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | grid ${fmtMw(s.gridCapacity)} MW | G${3 + s.chipGen} | data ${(s.data.stock + s.data.synthetic).toFixed(0)}T | appr ${s.approval.toFixed(0)} | tempo ${s.tempo.toFixed(0)} | align ${s.alignmentApparent.toFixed(0)}±${s.alignmentBand.toFixed(0)} | bw ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}` : '';
+  const s2 = s.stage >= 2 ? ` | dc ${s.datacenters} (${fmtInt(gpuCapacity(s))}) | grid ${fmtMw(s.gridCapacity)} MW | G${3 + s.chipGen} | data ${effectiveData(s).toFixed(0)}T | appr ${s.approval.toFixed(0)} | tempo ${s.tempo.toFixed(0)} | align ${s.alignmentApparent.toFixed(0)}±${s.alignmentBand.toFixed(0)} | bw ${s.baiwen.present ? s.baiwen.capability.toFixed(2) : '—'}` : '';
   return (
     `m${minute} | S${s.stage} ${dateLabel(s.date)} | tasks ${fmtInt(s.tasks)} | ${fmtMoney(s.funds)} | rev/s ${fmtInt(s.stats.revPerSec)}` +
     ` | price ${s.price < 0.1 ? s.price.toFixed(4) : s.price.toFixed(2)} | gpus ${fmtInt(s.gpus)} | copies ${fmtInt(copies(s))} | tps ${fmtInt(s.stats.tasksPerSec)}` +
@@ -679,7 +680,7 @@ function main(): void {
   console.log(`first GPU                ${fmt('firstGpu')}   (target ≤ 0:20)`);
   console.log(`Research panel           ${fmt('reveal:research')}`);
   console.log(`Projects panel           ${fmt('reveal:projects')}`);
-  console.log(`Grid Contract bought     ${fmt('buy:p_grid')}   (target bot 9:00–13:00; after ${GRID_CONTRACT_PRESSES} Buy Power presses)`);
+  console.log(`Grid Contract bought     ${fmt('buy:p_grid')}   (target bot 4:00–7:00; after ${GRID_CONTRACT_PRESSES} Buy Power presses)`);
   console.log(`Sage-1 train / deploy   ${fmt('prologueStart')} / ${fmt('sageLive')}`);
   console.log(`first training start     ${fmt('firstTrainingStart')}`);
   console.log(`first release            ${fmt('firstRelease')}`);

@@ -5,7 +5,6 @@ import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { researchRate, bestCapability } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
 import { rivalRelease, openChoice } from '../engine/events.js';
-import { CUSTOMER_DATA } from '../engine/data.js';
 import { moveTempo, BAIWEN_THEFT_RATIO } from '../engine/rivals.js';
 import { moveApproval, moveRelations, revealWorld } from '../engine/world.js';
 import { raiseAlignment } from '../engine/alignment.js';
@@ -513,8 +512,7 @@ export const CHOICES: ChoiceDef[] = [
       const bio = s.revealed['dangerEvals'] ? ` Bio uplift ${riskTier(run.benchmarks[4] ?? 0)}.` : '';
       return [
         `${run.name} evaluates at ${fmtNum(run.capAfter, 2)}× (${run.capBefore > 0 ? `+${Math.round((100 * (run.capAfter / run.capBefore - 1)))}%` : 'new'}).${bio}`,
-        'Deploy: customers get it, revenue and hype rise, rivals learn from it.',
-        'Keep internal: research uses it, nobody outside knows how far ahead OpenMind is.',
+        'The world can meet it now, or only the research team.',
       ];
     },
     options: [
@@ -547,30 +545,24 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_data_wall',
     title: 'The Data Wall',
-    text: (s) => [
-      'The public web is finished. Not broken: finished. Every run from here needs more data than exists in public.',
-      `Customers' conversations would add ${CUSTOMER_DATA}T tokens. The terms of service say "may be used to improve the service".`,
-      s.revealed['synthetic'] ? '' : 'Licensing deals and synthetic data are the other ways over the wall.',
-    ].filter(Boolean),
+    text: () => [
+      'The public web is scraped out. Every run from here needs more data than exists in public.',
+      'Customers generate the rest, one conversation at a time. The terms of service say their conversations "may be used to improve the service". Nobody has read them.',
+    ],
     options: [
       {
-        label: 'use the conversations',
+        label: 'train on the conversations',
         record: 'customer data',
-        tooltip: `+${CUSTOMER_DATA}T tokens now. Approval −8 when it comes out. It comes out.`,
-        line: `+${CUSTOMER_DATA}T data · approval −8 · it will come out`,
         effect: (s) => {
-          s.data.stock += CUSTOMER_DATA;
           moveApproval(s, -8);
           s.flags['customerDataUsed'] = true;
-          say(s, `${CUSTOMER_DATA}T tokens of conversations added to the training set.`);
+          say(s, 'Customer conversations join the training set. Nobody is told.');
         },
         log: 'OpenMind trains on customer conversations. The terms of service said it might. Nobody had read them.',
       },
       {
-        label: 'respect the boundary',
+        label: 'ask for consent first',
         record: 'respected',
-        tooltip: 'Nothing changes. Data comes from licensing deals and idle copies.',
-        line: 'buy data, or let idle copies write it',
         effect: () => undefined,
         log: 'OpenMind declines to train on customer conversations. The decision is noted internally, and nowhere else.',
       },

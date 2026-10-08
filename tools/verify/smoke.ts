@@ -243,10 +243,12 @@ const SNAPSHOT = () => {
     event:
       modal && modal.classList.contains('shown')
         ? {
-            first: (
-              document.querySelector<HTMLButtonElement>('#modalButtons button .optLabel') ??
-              document.querySelector<HTMLButtonElement>('#modalButtons button')
-            )?.innerText.trim(),
+            // Only a disabled option carries an .optLabel span (its label over what it needs); read the first button either way.
+            first: (() => {
+              const b = document.querySelector<HTMLButtonElement>('#modalButtons button');
+              if (!b) return undefined;
+              return (b.querySelector<HTMLElement>('.optLabel') ?? b).innerText.trim();
+            })(),
             then: (document.getElementById('modalTimer').innerText.split('then: ')[1] ?? '').trim(),
           }
         : null,
@@ -453,13 +455,14 @@ try {
   // saves the $75 for Sage-1.1, so 5:00 is still the idle Train row. Limits are what the built opening measures (seeds 1–6: the same to 3:00,
   // 31–32 numbers and 14–15 controls at 5:00), not a budget the owner has set: see the reveal-order and
   // G5 checks below for one mechanic a beat.
-  const targets = { 0: [1, 1], 30: [7, 2], 60: [13, 5], 120: [16, 7], 180: [21, 8], 300: [32, 15] };
+  // 3:00 allows one more number and control since Expand Lab and its price arrive with the Research panel.
+  const targets = { 0: [1, 1], 30: [7, 2], 60: [13, 5], 120: [16, 7], 180: [22, 9], 300: [32, 15] };
   const slack = {};
   const openingRow = Object.entries(opening)
     .map(([m, c]) => `${clock(Number(m))} ${c.numbers}/${c.controls}`)
     .join(' · ');
   check(
-    'opening: numbers ≤ 1 / 7 / 13 / 16 / 21 / 32 and controls ≤ 1 / 2 / 5 / 7 / 8 / 15 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
+    'opening: numbers ≤ 1 / 7 / 13 / 16 / 22 / 32 and controls ≤ 1 / 2 / 5 / 7 / 9 / 15 at 0:00 / 0:30 / 1:00 / 2:00 / 3:00 / 5:00',
     Object.entries(targets).every(
       ([m, [n, c]]) => opening[m] && opening[m].numbers <= n + (slack[m] ?? 0) && opening[m].controls <= c,
     ),
@@ -726,8 +729,8 @@ try {
       .join(', '),
   );
   check(
-    'Research arrives with Trust and Hire Researcher only (Expand Lab later)',
-    at('btn-expandLab') > at('panel-research') && at('btn-hireResearcher') === at('panel-research'),
+    'Research arrives with Hire Researcher and Expand Lab together',
+    at('btn-expandLab') === at('panel-research') && at('btn-hireResearcher') === at('panel-research'),
     `research ${clock(at('panel-research'))}, expand ${clock(at('btn-expandLab'))}`,
   );
   check(

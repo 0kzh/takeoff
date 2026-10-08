@@ -4,30 +4,30 @@ Measured with the headless bot (`npm run sim -- --seed N --minutes 60 --quiet`),
 
 ## Current constants (initial values, see stage2-plan.md §11)
 
-| Knob | Value | Where |
-|---|---|---|
-| Compute needed per run | `1,000 × (c/1.8)^4.0` effective GPUs, ÷ chip multiplier (G4 1×, G5 4×, G6 16×) | `training.ts` `S2_GPU_EXPONENT` |
-| Funds per run | `$200k × (c/1.8)^3.2` | `S2_FUNDS_EXPONENT` |
-| Run duration | `clamp(50 + 12 × runsThisStage, 50, 110)` s | `S2_RUN_*` |
-| Gain per run | capability 0.14 + 0.03·(rng+rng); efficiency 0.10; safety 0.10; +0.03 RL envs, +0.04 continuous, +0.15/+0.30 compute request; × √(data coverage) | `S2_FOCUS_BASE`, `startRun` |
-| Reach (demand grows with the fleet) | `max(1, (servingCompute/1000)^0.35)` | `economy.ts` `ADOPTION_EXPONENT` |
-| GPU price | $100 per G4 (×3 G5, ×10 G6), ×1.05 per batch bought; batch 1,000 (10,000 after Hyperscale) | `CHIP_PRICE`, `GPU_BATCH_GROWTH` |
-| Datacenter | $250k × 2.2^n; room 10k (×10 after Hyperscale) | `datacenterCost`, `dcRoom` |
-| Grid tier | $100 per kW of the next tier (×0.7 with the PPA) | `GRID_COST_PER_KW_S2` |
-| Security | $5M × 8^(level−1); theft odds 90/50/25/10%; research −3% per level | `securityCost`, `theftOdds` |
-| Data | 20T on the public web at 1T/min; need `10T × (c/1.8)^1.4`; licensing $500k doubling for +15T; synthetic `√(idle copies / 10,000)` T/min | `data.ts` |
-| Insight in Stage 2 | +12 per public release; Sage research × 0.01 per second once Sage writes the code; human research as before only at the cap | `economy.ts`, `training.ts` |
-| Alignment drift | `−6 × log10(c_new/c_old) × (0.5 + tempo/100) × (1 − coverage)`; bias jump 30% × race factor per doubling | `alignment.ts` |
-| Rivals | Anthrosoft rubber band 0.85–1.15× ours, own growth ×1.08–1.18 per release, capped at 1.3× ours unless the lab has not released for 10 min; Baiwen enters Jun 2026 at 0.35×, target 0.6×, theft → 0.85×; distillation +3% to rivals still behind | `rivals.ts`, `events.ts` |
-| Gate | Automate the Lab: shown at 5×, buyable at 10× for 30k research, 150 insight, 180 s of revenue | `projects-stage2.ts` |
+| Knob                                | Value                                                                                                                                                                                                                                           | Where                            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Compute needed per run              | `1,000 × (c/1.8)^4.0` effective GPUs, ÷ chip multiplier (G4 1×, G5 4×, G6 16×)                                                                                                                                                                  | `training.ts` `S2_GPU_EXPONENT`  |
+| Funds per run                       | `$200k × (c/1.8)^3.2`                                                                                                                                                                                                                           | `S2_FUNDS_EXPONENT`              |
+| Run duration                        | `clamp(50 + 12 × runsThisStage, 50, 110)` s                                                                                                                                                                                                     | `S2_RUN_*`                       |
+| Gain per run                        | capability 0.14 + 0.03·(rng+rng); efficiency 0.10; safety 0.10; +0.03 RL envs, +0.04 continuous, +0.15/+0.30 compute request; × √(data coverage)                                                                                                | `S2_FOCUS_BASE`, `startRun`      |
+| Reach (demand grows with the fleet) | `max(1, (servingCompute/1000)^0.35)`                                                                                                                                                                                                            | `economy.ts` `ADOPTION_EXPONENT` |
+| GPU price                           | $100 per G4 (×3 G5, ×10 G6), ×1.05 per batch bought; batch 1,000 (10,000 after Hyperscale)                                                                                                                                                      | `CHIP_PRICE`, `GPU_BATCH_GROWTH` |
+| Datacenter                          | $250k × 2.2^n; room 10k (×10 after Hyperscale)                                                                                                                                                                                                  | `datacenterCost`, `dcRoom`       |
+| Grid tier                           | $100 per kW of the next tier (×0.7 with the PPA)                                                                                                                                                                                                | `GRID_COST_PER_KW_S2`            |
+| Security                            | $5M × 8^(level−1); theft odds 90/50/25/10%; research −3% per level                                                                                                                                                                              | `securityCost`, `theftOdds`      |
+| Data                                | 20T on the public web at 1T/min; need `10T × (c/1.8)^1.4`; licensing $500k doubling for +15T; synthetic `√(idle copies / 10,000)` T/min                                                                                                         | `data.ts`                        |
+| Insight in Stage 2                  | +12 per public release; Sage research × 0.01 per second once Sage writes the code; human research as before only at the cap                                                                                                                     | `economy.ts`, `training.ts`      |
+| Alignment drift                     | `−6 × log10(c_new/c_old) × (0.5 + tempo/100) × (1 − coverage)`; bias jump 30% × race factor per doubling                                                                                                                                        | `alignment.ts`                   |
+| Rivals                              | Anthrosoft rubber band 0.85–1.15× ours, own growth ×1.08–1.18 per release, capped at 1.3× ours unless the lab has not released for 10 min; Baiwen enters Jun 2026 at 0.35×, target 0.6×, theft → 0.85×; distillation +3% to rivals still behind | `rivals.ts`, `events.ts`         |
+| Gate                                | Automate the Lab: shown at 5×, buyable at 10× for 30k research, 150 insight, 180 s of revenue                                                                                                                                                   | `projects-stage2.ts`             |
 
 ## Results (2026-10-08, bot policy)
 
-| Seed | Stage 1 end | Stage 2 length | Runs | Longest run gap | Longest reveal/modal gap | Idle gaps > 60 s | End: capability / rivals / approval / alignment |
-|---|---|---|---|---|---|---|---|
-| 1 | 15:31 | 23:15 | 14 | 2:33 | 1:57 | none | 10.6× / Anthrosoft 6.2, Baiwen 8.3 / 69 / 59 ± 21 |
-| 2 | 16:56 | 30:26 | 13 | 7:39 (the last run before the gate) | 2:30 | none | 10.0× / 7.8, 7.5 / 83 / 64 ± 9 |
-| 3 | 19:04 | 21:02 | 14 | 2:29 | — | none | 10× class / behind / 73 / 57 ± 27 |
+| Seed | Stage 1 end | Stage 2 length | Runs | Longest run gap                     | Longest reveal/modal gap | Idle gaps > 60 s | End: capability / rivals / approval / alignment   |
+| ---- | ----------- | -------------- | ---- | ----------------------------------- | ------------------------ | ---------------- | ------------------------------------------------- |
+| 1    | 15:31       | 23:15          | 14   | 2:33                                | 1:57                     | none             | 10.6× / Anthrosoft 6.2, Baiwen 8.3 / 69 / 59 ± 21 |
+| 2    | 16:56       | 30:26          | 13   | 7:39 (the last run before the gate) | 2:30                     | none             | 10.0× / 7.8, 7.5 / 83 / 64 ± 9                    |
+| 3    | 19:04       | 21:02          | 14   | 2:29                                | —                        | none             | 10× class / behind / 73 / 57 ± 27                 |
 
 Other policies, seed 1: `naive` reaches the gate in 23:27 of stage time at 11.5× (15 runs, took customer data and growth capital, approval 71); `greedy` in 20:20 at 11.6× (15 runs, theft detected and traced, approval 72). Neither shows an idle gap over 60 s.
 
@@ -48,18 +48,18 @@ Panels revealed (seed 1, stage time): Infrastructure 0:00 · Data row 1:00 · Ra
 
 Round 1 (build `stage2-v1`) against the Paperclips Stage 2 fixture, both capped at 50 min of game time:
 
-| metric | Takeoff Stage 2 | Paperclips Stage 2 |
-|---|---|---|
-| start → stage end | 33:38 (Stage 3) | not reached in 50:00 |
-| first meaningful choice | 0:20 | 0:38 |
-| nothing-to-do (loose), stage | 1306 s / 64.7%, longest 62 s | 0 s |
-| hands: nothing enabled / two or more enabled | 68.9% / 10.2% | 3.0% / 90.6% |
-| longest reveal gap | 146 s | 850 s |
-| longest novelty gap | 80 s | 390 s |
-| greyed-out goal on screen | 100% | 100% |
-| numbers on screen at 0/5/10/20/end | 40 / 68 / 80 / 93 / 84 | 26 / 32 / 60 / 66 / 74 |
-| interactive elements at 0/10/20 | 11 / 16 / 17 | 11 / 21 / 32 |
-| panels, modals | 9, 18 | 8, 0 |
+| metric                                       | Takeoff Stage 2              | Paperclips Stage 2     |
+| -------------------------------------------- | ---------------------------- | ---------------------- |
+| start → stage end                            | 33:38 (Stage 3)              | not reached in 50:00   |
+| first meaningful choice                      | 0:20                         | 0:38                   |
+| nothing-to-do (loose), stage                 | 1306 s / 64.7%, longest 62 s | 0 s                    |
+| hands: nothing enabled / two or more enabled | 68.9% / 10.2%                | 3.0% / 90.6%           |
+| longest reveal gap                           | 146 s                        | 850 s                  |
+| longest novelty gap                          | 80 s                         | 390 s                  |
+| greyed-out goal on screen                    | 100%                         | 100%                   |
+| numbers on screen at 0/5/10/20/end           | 40 / 68 / 80 / 93 / 84       | 26 / 32 / 60 / 66 / 74 |
+| interactive elements at 0/10/20              | 11 / 16 / 17                 | 11 / 21 / 32           |
+| panels, modals                               | 9, 18                        | 8, 0                   |
 
 Biggest gap named by the numbers: the scripted player has nothing enabled 69% of the time because Stage 2 purchases are lumpy ($100k+ each) while Paperclips always has a cheap repeatable buy. Fix in round 2: the GPU buy offers a tenth of the batch (down to 100 GPUs) at the same price per GPU whenever the full batch is out of reach, like Stage 1's power block. Also trimmed numbers: the unbilled line hides under auto pricing in Stage 2, the "uses N MW" note and the theft percentage moved into tooltips.
 
@@ -71,22 +71,30 @@ Round 4 (build `stage2-v4`): the transition capture now lists only the intended 
 
 ### Fresh-context review of build v3 (`agent-tools/critic-out/stage2-v3-review.md`)
 
-| Rubric | Takeoff | Paperclips |
-|---|---|---|
-| Time to first meaningful choice | 7 | 7 |
-| Seconds with nothing to do | 4 | 7 |
-| Cognitive load and progressive disclosure | 5 | 6 |
-| Cadence of reveals | 7 | 4 |
-| Greyed-out goal always on screen | 8 | 7 |
-| Clarity of stage transitions | 3 | 6 |
-| Soft-locks found | 8 | 7 |
-| Total | 42 | 44 |
+| Rubric                                    | Takeoff | Paperclips |
+| ----------------------------------------- | ------- | ---------- |
+| Time to first meaningful choice           | 7       | 7          |
+| Seconds with nothing to do                | 4       | 7          |
+| Cognitive load and progressive disclosure | 5       | 6          |
+| Cadence of reveals                        | 7       | 4          |
+| Greyed-out goal always on screen          | 8       | 7          |
+| Clarity of stage transitions              | 3       | 6          |
+| Soft-locks found                          | 8       | 7          |
+| Total                                     | 42      | 44         |
 
 Biggest gap named: minutes 27:38–37:02 (a quarter of the stage) are a wait for the gate the player cannot read: the Automate the Lab card said "needs 10×" with no progress, its dollar price was decorative (revenue outran it in seconds), and the real gate was four more training runs. Fix (round 5): the card carries a live line and bar, "Sage 5.5× of 10× · about 4 more capability runs", and the dollar price is gone (research, insight and 10× remain). Smaller issues fixed in the same round: the repeated "Trust +1" line (now every third milestone, worded as an unspent balance), Buy GPUs selling dark GPUs (the block is capped by powered room and the button says "Expand Grid first"), the data line reading as a requirement, the orphaned "(costs Trust)" note, the eleven-digit next-Trust target (compact in Stage 2), and the Stage 1 wording on the greyed Train button (it now names the shortfall).
 
 Round 5 (build `stage2-v5`, readable gate, no dollar price, dark-GPU buys blocked): the scripted player reaches Stage 3 at 24:50 and the longest reveal gap falls to 86 s, but nothing-to-do rises to 33.5% because the grid's ×10 tier ($7M) blocks GPU buys for minutes.
 
 Round 6 (build `stage2-v6`, grid grows in +10 MW steps, a quarter of capacity later): Stage 3 at 36:02; nothing-to-do 248 s / 11.5% (longest 22 s); nothing-enabled 12.2%; first meaningful choice 0:16; longest reveal gap 162 s (four over 120 s); greyed goal 100%; numbers on screen 41 / 68 / 72 / 85 / 87 at 0 / 5 / 10 / 20 / 30 min. Browser verification 33/33 (Stage 3 at 24:43 under autoplay).
+
+Round 7 (build `stage2-v7`, the owner's review: research spent on runs, task-fed data, label-only dialogs): the scripted player reaches Stage 3 at 30:34; nothing-to-do 74 s / 4.0% (longest 12 s); nothing-enabled 4.2%; two or more things enabled 24.8% of checks; 34.4 clicks per minute; first meaningful choice 0:08; longest reveal gap 154 s (four over 120 s); greyed goal 100%. Browser verification 33/33.
+
+What changed and why. Research used to pile up at the cap because Stage 2 cards were priced at reveal (85% of the cap, all alike) and nothing else consumed it; now every run costs `6k × (c/1.8)^1.1` research (6k at arrival, 44k at the gate), cards cost what they print, and the lab cap (14k–28k at arrival) binds: runs and the bigger cards cost 40–100% of it, so New building (×2, re-hidden until something needs more than 80% of the cap) is bought twice across the stage instead of four doublers at once. Data used to arrive from a timer and from idle copies; now it is `0.12 × tasks^0.25` T from Tasks Completed (3T at arrival, ~60T by the gate), the public web is five research-priced scrapes (+4T each) whose last one brings the data wall, the customer-conversations option multiplies task data ×1.5, and licensing fills the late gap (+15T for doubling money). The bot scrapes whenever it can and keeps the next run's research in hand while the slot is free, which is what a player does.
+
+Sim after the rework (seeds 1–3, bot policy): stage time 26:52, 30:16 and 31:51 with 13–15 runs and the longest gap between run starts 3:28–6:51 (the 6:51 is seed 2 saving $6M for a run at 5.2× while buying Sage for Work, the Security office and GPUs); before the rework the same seeds took 22:49 and 23:36 with 15 runs. The first Stage 2 run still waits 2–8 minutes for $200k on seeds 2 and 3, as it did before.
+
+Stage 1 opening, same review: the first Projects screen showed two cards above the 1,000 cap with nothing to do about it until the first Trust (5,000 tasks) or a $1,000 desk lease 45 s later. Now Hire Researcher and Expand Lab arrive with the Research panel and cost money from the start ($40 and $50, ×1.5 and ×1.6 per purchase); a Trust, when the lab holds one, pays for the next one instead. The desk card is gone and the Experiment tracker says what it does to the cap. Two bot fixes came out of the retest: the bot kept buying 100-GPU blocks with the money the first Stage 2 run needed (it now keeps the full run price while the slot is free), and the first run's price is `100k × (c/1.8)^3.6` (was `200k × (c/1.8)^3.2`), so the first Stage 2 run starts 1:25–1:45 after arrival on seeds 1–3 instead of 6–7 minutes; the stage then runs 25–26 minutes with 14–15 runs and no gap over 4:00.
 
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 

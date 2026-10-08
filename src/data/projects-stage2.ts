@@ -1,18 +1,24 @@
-import { GameState, isBought, addFunds, counter } from '../engine/state.js';
+import { GameState, Cost, isBought, addFunds, counter } from '../engine/state.js';
 import { enterStage } from '../engine/stages.js';
-import { bestCapability } from '../engine/economy.js';
-import { licenseCost, licenseData, LICENSE_DATA } from '../engine/data.js';
+import { bestCapability, researchCap } from '../engine/economy.js';
+import { visibleProjects } from '../engine/projects.js';
+import { licenseCost, licenseData, LICENSE_DATA, scrapeCost, scrapeData, SCRAPE_DATA, WEB_TOTAL } from '../engine/data.js';
 import { revealAlignment, raiseAlignment, narrowBand, reduceBias } from '../engine/alignment.js';
 import { moveTempo, EXPORT_CONTROL_SECONDS } from '../engine/rivals.js';
 import { moveApproval, moveRelations } from '../engine/world.js';
 import { openChoice } from '../engine/events.js';
-import { fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { S2_FOCUS_BASE } from '../engine/training.js';
+import { fmtMoneyShort, fmtNum, fmtInt } from '../engine/format.js';
+import { S2_FOCUS_BASE, trainCost } from '../engine/training.js';
 import { project, type ProjectDef } from './project-def.js';
 
 const sinceFlag = (s: GameState, key: string): number => {
   const at = s.flags[key];
   return typeof at === 'number' ? s.stats.timePlayed - at : -1;
+};
+
+const scrapesLeftText = (s: GameState): string => {
+  const n = Math.round(s.data.webRemaining / SCRAPE_DATA);
+  return `${n} left`;
 };
 
 const wallSeconds = (s: GameState): number => {
@@ -30,7 +36,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2],
     cost: { research: 8000, funds: 200000 },
     revealFunds: 60,
-    revealResearch: 60,
     description: 'Nimbus swaps every GPU in the fleet. Four times the compute per GPU.',
     trigger: (s) => s.stage === 2,
     urgent: (s) => s.stage === 2 && s.chipGen < 2,
@@ -52,6 +57,19 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     logMsg: 'OpenMind adopts a release policy. The policy is one page. The page is mostly "it depends".',
   }),
   project({
+    id: 's2_scrape',
+    title: 'Scrape the web',
+    stages: [2, 3],
+    priceTag: (s) => `(${fmtInt(scrapeCost(s))} research · ${scrapesLeftText(s)})`,
+    cost: (s) => ({ research: scrapeCost(s) }),
+    description: `+${SCRAPE_DATA}T tokens of training data. The public web holds ${WEB_TOTAL}T, and it does not grow.`,
+    trigger: (s) => s.revealed['data'] === true && s.data.webRemaining > 0,
+    buy: (s) => scrapeData(s),
+    uses: WEB_TOTAL / SCRAPE_DATA,
+    repeatable: true,
+    sideline: true,
+  }),
+  project({
     id: 's2_licensing',
     title: 'Data licensing deal',
     stages: [2, 3],
@@ -66,25 +84,10 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     logMsg: 'OpenMind buys the archives of three newspapers, a forum about bass fishing, and a dictionary.',
   }),
   project({
-    id: 's2_synthetic',
-    title: 'Synthetic Data Engine',
-    stages: [2, 3],
-    cost: { research: 10000, insight: 40 },
-    revealResearch: 90,
-    description: 'Idle copies write training data instead of waiting for customers.',
-    trigger: (s) => s.revealed['data'] === true,
-    buy: (s) => {
-      s.revealed['synthetic'] = true;
-    },
-    consoleMsg: 'Synthetic Data Engine live. Idle copies now write textbooks.',
-    logMsg: 'Sage writes its own textbooks. They are good, and a little smug.',
-  }),
-  project({
     id: 's2_ai_rd',
     title: 'Sage writes our code',
     stages: [2],
     cost: { research: 8000, insight: 40 },
-    revealResearch: 80,
     description: 'Copies join the research team. Research speeds up with capability.',
     trigger: (s) => bestCapability(s) >= 2,
     buy: (s) => {
@@ -98,9 +101,8 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'RL environments',
     stages: [2, 3],
     cost: { research: 14000, insight: 60 },
-    revealResearch: 110,
     description: 'Ten thousand small worlds to practise in. Data goes 50% further; runs gain a little more.',
-    trigger: (s) => bestCapability(s) >= 2 && s.revealed['data'] === true,
+    trigger: (s) => bestCapability(s) >= 2,
     buy: () => undefined,
     consoleMsg: 'RL environments built. Sage has beaten all of them. We are building more.',
   }),
@@ -110,7 +112,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2],
     chain: true,
     cost: { research: 12000 },
-    revealResearch: 100,
     description: 'Two clusters. The next run can train while the last model is still being evaluated.',
     trigger: (s) => counter(s, 'runsThisStage') >= 3 && s.datacenters >= 2,
     buy: () => undefined,
@@ -121,15 +122,17 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     id: 's2_building',
     title: 'New building',
     stages: [2, 3],
-    cost: { research: 10000, funds: 500000 },
-    revealFunds: 60,
-    revealResearch: 60,
-    description: 'A lobby, and research capacity ×2.',
-    trigger: (s) => s.labSpace >= 10 || wallSeconds(s) >= 60,
-    urgent: (s) => wallSeconds(s) >= 60,
+    priceTag: (s) => `(${fmtInt(buildingCost(s).research ?? 0)} research · ${fmtMoneyShort(buildingCost(s).funds ?? 0)})`,
+    cost: (s) => buildingCost(s),
+    description: 'A lobby, and research capacity ×2. The next run and the bigger projects need the room.',
+    trigger: (s) => researchDemand(s) > 0.8 * researchCap(s) || wallSeconds(s) >= 60,
+    urgent: (s) => researchDemand(s) > researchCap(s) || wallSeconds(s) >= 60,
     buy: (s) => {
       s.labMult *= 2;
     },
+    uses: 3,
+    repeatable: true,
+    rehide: true,
     consoleMsg: 'The new building opens. The lobby has a sculpture of a brain. Research capacity doubled.',
     logMsg: 'OpenMind moves into a building with a lobby. The lobby has a sculpture of a brain. It is open-source.',
   }),
@@ -139,7 +142,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 12000, funds: 1000000 },
     revealFunds: 90,
-    revealResearch: 80,
     description: 'Every datacenter holds ten times the GPUs. GPUs come in batches of 10,000.',
     trigger: (s) => s.datacenters >= 3,
     buy: (s) => {
@@ -154,7 +156,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 25000, funds: 20000000 },
     revealFunds: 120,
-    revealResearch: 120,
     description: 'Liquid cooling, a substation, and sixteen times the compute per GPU.',
     trigger: (s) => s.chipGen >= 2 && s.gpus >= 20000,
     buy: (s) => {
@@ -164,25 +165,11 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     logMsg: 'The Nimbus G6 needs liquid cooling, a dedicated substation, and a moment of silence.',
   }),
   project({
-    id: 's2_campus',
-    title: 'Research campus',
-    stages: [2, 3],
-    cost: { research: 24000 },
-    revealResearch: 150,
-    description: 'Most of it is server halls. Research capacity ×2.',
-    trigger: (s) => isBought(s, 's2_building') && bestCapability(s) >= 6,
-    buy: (s) => {
-      s.labMult *= 2;
-    },
-    consoleMsg: 'Research campus open. The humans have a nice corner.',
-  }),
-  project({
     id: 's2_work',
     title: 'Sage for Work',
     stages: [2],
     cost: { research: 16000, funds: 2000000 },
     revealFunds: 60,
-    revealResearch: 100,
     description: 'Sage attends the meetings. Demand ×3. People start to notice who is not in the room.',
     trigger: (s) => bestCapability(s) >= 3,
     buy: (s) => {
@@ -198,7 +185,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Government contracts',
     stages: [2, 3],
     cost: { research: 12000 },
-    revealResearch: 100,
     description: 'Four hundred seats and a classified version. A lump of revenue; contracts pay half again as much.',
     trigger: (s) => s.revealed['government'] === true && s.govRelations >= 55,
     buy: (s) => {
@@ -228,7 +214,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 8000, funds: 1000000 },
     revealFunds: 45,
-    revealResearch: 60,
     description: 'A head of security, and a security level to raise. Baiwen is interested in the weights.',
     trigger: (s) => s.baiwen.present,
     urgent: (s) => s.baiwen.present && !s.revealed['security'],
@@ -245,7 +230,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     chain: true,
     cost: { research: 10000, funds: 500000 },
     revealFunds: 30,
-    revealResearch: 60,
     description: 'Every byte leaving the building is counted. A theft is always noticed.',
     trigger: (s) => isBought(s, 's2_security'),
     buy: (s) => {
@@ -258,7 +242,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Export controls lobbying',
     stages: [2, 3],
     cost: { research: 15000 },
-    revealResearch: 100,
     description: 'Chips stop flowing to Baiwen for six minutes. Tempo rises.',
     trigger: (s) => s.baiwen.present && s.revealed['government'] === true && s.govRelations >= 60,
     buy: (s) => {
@@ -274,7 +257,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 14000, funds: 500000 },
     revealFunds: 45,
-    revealResearch: 100,
     description: 'Bio and cyber rows on every eval card. Red lines arrive with warning instead of by surprise.',
     trigger: (s) => bestCapability(s) >= 4,
     buy: (s) => {
@@ -288,7 +270,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Alignment team',
     stages: [2],
     cost: { research: 10000, insight: 50 },
-    revealResearch: 100,
     description: 'They have questions. The first answer is an estimate with a wide band.',
     trigger: (s) => s.flags['rewardHacking'] === true && !isBought(s, 'p_alignment_team'),
     urgent: (s) => s.flags['rewardHacking'] === true,
@@ -302,7 +283,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Model Spec',
     stages: [2, 3],
     cost: { research: 12000, insight: 80 },
-    revealResearch: 90,
     description: 'A written constitution for Sage. Alignment +4, band −3.',
     trigger: (s) => s.revealed['alignment'] === true,
     buy: (s) => {
@@ -316,7 +296,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Chain-of-thought monitoring',
     stages: [2, 3],
     cost: { research: 11000 },
-    revealResearch: 90,
     description: 'Read the scratchpad. Band −6.',
     trigger: (s) => s.revealed['alignment'] === true,
     buy: (s) => {
@@ -331,7 +310,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     chain: true,
     cost: { research: 16000, insight: 120 },
-    revealResearch: 110,
     description: 'The direction in Sage\'s activations that means "lying". Band −5.',
     trigger: (s) => isBought(s, 's2_cot'),
     buy: (s) => {
@@ -346,7 +324,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 12000, funds: 400000 },
     revealFunds: 45,
-    revealResearch: 90,
     description: 'People paid to trick Sage. The estimate gets more honest.',
     trigger: (s) => isBought(s, 's2_evals'),
     buy: (s) => {
@@ -360,7 +337,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     chain: true,
     cost: { research: 20000, insight: 150 },
-    revealResearch: 120,
     description: 'Sage says when the code is bad. Alignment +3; the estimate gets more honest.',
     trigger: (s) => isBought(s, 's2_spec'),
     buy: (s) => {
@@ -375,7 +351,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     chain: true,
     cost: { research: 24000, insight: 200 },
-    revealResearch: 150,
     description: 'Sage\'s mind, flattened into sixteen million features. Band −7.',
     trigger: (s) => isBought(s, 's2_probes'),
     buy: (s) => {
@@ -391,7 +366,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     sideline: true,
     cost: { research: 10000, funds: 300000 },
     revealFunds: 30,
-    revealResearch: 60,
     description: 'A list of things we promise not to do. Approval +8, tempo −3. Job losses stop costing approval.',
     trigger: (s) => s.revealed['public'] === true,
     buy: (s) => {
@@ -415,20 +389,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     },
     consoleMsg: 'Compute cap proposed. To everyone\'s surprise, people are listening.',
     logMsg: 'Someone in the policy team drafted a proposal to slow everything down. It is very short.',
-  }),
-  project({
-    id: 's2_continuous',
-    title: 'Continuous learning',
-    stages: [2, 3],
-    cost: { research: 18000, insight: 100 },
-    revealResearch: 120,
-    description: 'Sage learns on the job. Every run gains a little more. Seeds the next stage.',
-    trigger: (s) => bestCapability(s) >= 6,
-    buy: (s) => {
-      s.flags['continuous'] = true;
-    },
-    consoleMsg: 'Continuous learning on. Sage has not stopped working since Tuesday.',
-    logMsg: 'Sage-3.5 learns on the job now. It has not stopped working since Tuesday.',
   }),
   project({
     id: 's2_automate',
@@ -459,4 +419,22 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
 
 export function automateShownFor(s: GameState): number {
   return sinceFlag(s, 'automateAt');
+}
+
+export const BUILDING_RESEARCH = 6000;
+export const BUILDING_FUNDS = 500000;
+
+export function buildingCost(s: GameState): Cost {
+  const n = s.projects['s2_building']?.bought ?? 0;
+  return { research: BUILDING_RESEARCH * Math.pow(1.5, n), funds: BUILDING_FUNDS * Math.pow(3, n) };
+}
+
+/** The most research anything on screen, or the next run, asks for. */
+export function researchDemand(s: GameState): number {
+  let most = trainCost(s).research ?? 0;
+  for (const p of visibleProjects(s)) {
+    if (p.id === 's2_building') continue;
+    most = Math.max(most, p.cost(s).research ?? 0);
+  }
+  return most;
 }

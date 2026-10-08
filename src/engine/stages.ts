@@ -2,9 +2,9 @@ import { GameState, say, logNews, inPrologue } from './state.js';
 import { monthOf, fmtInt, fmtMoneyShort } from './format.js';
 import { snapToStage } from './clock.js';
 import { ARRIVAL_GPUS, GRID_FIRST_TIER, gridOutgrown, researchCap, rentQuota } from './economy.js';
-import { cardWallSeconds, startCapability } from './training.js';
+import { cardWallSeconds } from './training.js';
 import { researchWanted } from './tick.js';
-import { WEB_TOTAL, webShare, dataShort } from './data.js';
+import { WEB_TOTAL } from './data.js';
 import { APPROVAL_START } from './world.js';
 
 export interface StageDef {
@@ -48,7 +48,7 @@ export const STAGES: StageDef[] = [
     enter: (s) => {
       say(s, 'First Datacenter online outside Abilene. Nobody at OpenMind completes tasks by hand anymore.');
       hide(s, ['task', 'buyPower']);
-      show(s, ['infrastructure', 'power', 'gridCapacity', 'gridContract', 'capabilityHeader', 'revPerSec']);
+      show(s, ['infrastructure', 'power', 'gridCapacity', 'gridContract', 'capabilityHeader', 'revPerSec', 'data']);
       s.gridAuto = true;
       s.flags['powerOut'] = false;
       s.datacenters = Math.max(1, s.datacenters);
@@ -58,7 +58,7 @@ export const STAGES: StageDef[] = [
       s.dcTier = Math.max(1, s.dcTier);
       s.approval = Math.min(100, Math.max(0, APPROVAL_START + s.approval));
       s.tempo = 50;
-      s.data = { stock: 8, webRemaining: WEB_TOTAL - 8, synthetic: 0, licensed: 0 };
+      s.data = { stock: 0, webRemaining: WEB_TOTAL, synthetic: 0, licensed: 0 };
       s.history = s.training.models.map((m) => [0, Math.round(m.date * 1000) / 1000, m.capability, Math.round(m.capability * 0.92 * 1000) / 1000, 0]);
       s.flags['stage2At'] = s.stats.timePlayed;
       s.flags['runsThisStage'] = 0;
@@ -257,15 +257,15 @@ const REVEAL_RULES: RevealRule[] = [
     when: (s) => ((s.flags['trustMilestones'] as number) || 0) >= 1 && spaced(s) && (!s.revealed['pricing'] || s.revealed['marketing'] === true) && s.revealed['training'] === true,
     then: (s) => {
       beat(s);
-      show(s, ['hireResearcher']);
+      show(s, ['hireResearcher', 'expandLab']);
       s.flags['researchAt'] = s.stats.timePlayed;
-      say(s, `Trust earned: ${fmtInt(s.trust)}. Each one hires a researcher.`);
+      say(s, 'Hire a researcher or expand the lab. Trust, earned at task milestones, pays for one.');
     },
   },
   {
     id: 'expandLab',
     stages: [1],
-    when: (s) => s.revealed['projects'] === true && sinceFlag(s, 'projectsAt') >= 40 && s.trust >= 1
+    when: (s) => s.revealed['projects'] === true && sinceFlag(s, 'projectsAt') >= 40
       && s.research >= researchCap(s) - 0.5 && researchWanted(s).amount > researchCap(s) && cardWallSeconds(s) >= 30 && mechanicClear(s),
     then: (s) => say(s, `The lab is full at ${fmtInt(researchCap(s))}. Expand Lab makes room for more research.`),
   },
@@ -297,16 +297,6 @@ const REVEAL_RULES: RevealRule[] = [
       beat(s);
       say(s, 'Anthrosoft publishes a capability chart. Everyone has one now. The Race panel keeps ours.');
       logNews(s, 'Every frontier lab now publishes a capability chart. The y axes do not agree.');
-    },
-  },
-  {
-    id: 'data',
-    stages: [2],
-    when: (s) => sinceFlag(s, 'stage2At') >= 60 && (webShare(s) >= 0.6 || dataShort(s, startCapability(s))) && spaced(s),
-    then: (s) => {
-      beat(s);
-      say(s, 'Sage has read most of the public web. Each run needs more data than the last.');
-      logNews(s, 'Sage-2 has read every public sentence in English. It would like more.');
     },
   },
 ];

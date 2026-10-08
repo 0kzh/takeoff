@@ -3,8 +3,7 @@ import type { Actions } from '../engine/tick.js';
 import {
   gpuCost, marketingCost, demandPercent, expectedSalesPerSec, researchCap, potentialTasksPerSec, powerBlockCost,
   activeGpus, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec,
-  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity,
-} from '../engine/economy.js';
+  canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity, labCost, hireCost } from '../engine/economy.js';
 import {
   trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
   trainSlotFree, startCapability,
@@ -279,6 +278,10 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   for (const p of visibleProjects(s)) {
     if (!p.canAfford(s)) continue;
     if (p.id === 's2_licensing' && !dataShort(s, startCapability(s))) continue;
+    // Keep the next run's research while the slot is free: start the run first, then spend the rest.
+    const research = p.cost(s).research ?? 0;
+    if (s.stage >= 2 && research > 0 && trainSlotFree(s) && !p.pinned && !p.rescue && !p.urgent?.(s) && p.id !== TRANSITION
+      && s.research - research < (trainCost(s).research ?? 0)) continue;
     if (mem.variant === 'reckless' && RECKLESS_SKIPS.includes(p.id)) continue;
     if (s.stage >= 2 && p.sideline && p.id !== 's2_licensing' && (p.cost(s).funds ?? 0) > 0.5 * s.funds) continue;
     if (p.id !== 'p_beg_power' && !keepsReserve(p.cost(s).funds)) continue;
@@ -300,9 +303,18 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   }
   if (s.revealed['research'] && !(careful && s.activeChoice?.id === 'c_poach')) {
     let guard = 0;
-    while (s.trust >= 1 && guard++ < 10) {
+    while (guard++ < 10) {
       const cap = researchCap(s);
       const walled = cheapestResearchCost(s) > cap || (s.research >= cap && largestResearchCost(s) > cap);
+      if (s.trust < 1) {
+        // Money: expand when the lab is full and a card needs more; hire when a hire is pocket change.
+        const lab = labCost(s).funds ?? 0;
+        const hire = hireCost(s).funds ?? 0;
+        if (walled && s.funds >= 2 * lab + reserve) a.expandLab(s);
+        else if (!walled && s.research < cap && s.funds >= 6 * hire + reserve) a.hireResearcher(s);
+        else break;
+        continue;
+      }
       const ok = walled && s.revealed['expandLab'] ? a.expandLab(s) : a.hireResearcher(s);
       if (!ok) break;
     }
@@ -345,7 +357,7 @@ function infrastructure(s: GameState, a: Actions, mem: BotMemory): void {
   }
   let guard = 0;
   while (canBuyGpuBatch(s) && s.funds >= gpuBatchCost(s) && guard++ < 5) {
-    if (trainNeedsGpus || (careful ? s.funds >= 3 * gpuBatchCost(s) + runFunds * 0.5 : s.funds >= 1.5 * gpuBatchCost(s))) {
+    if (trainNeedsGpus || (careful ? s.funds >= 3 * gpuBatchCost(s) + runFunds * (trainSlotFree(s) ? 1 : 0.5) : s.funds >= 1.5 * gpuBatchCost(s))) {
       if (!a.buyGpuBatch(s)) break;
     } else break;
   }

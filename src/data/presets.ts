@@ -14,10 +14,10 @@ export interface Preset {
 const STAGE1_BOUGHT = [
   'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
   'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
-  'p_desks', 'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
+  'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
   'p_abatement', 'p_reserved',
 ];
-const STAGE1_REPEATS: Record<string, number> = { p_desks: 2, p_contract: 7 };
+const STAGE1_REPEATS: Record<string, number> = { p_contract: 7 };
 
 const STAGE1_MODELS: ModelRecord[] = [
   { name: 'Sage-1', capability: 1, date: 0, public: true },

@@ -22,6 +22,8 @@ import {
   adoption,
   researchRate,
   humanResearchShare,
+  gpuBlock,
+  gpuBatchCost,
 } from '../src/engine/economy.js';
 import { projectById, buyProject, visibleProjects } from '../src/engine/projects.js';
 import { choiceById } from '../src/engine/events.js';
@@ -55,7 +57,8 @@ describe('Stage 2 arrival', () => {
     expect(s.datacenters).toBe(1);
     expect(s.approval).toBeGreaterThan(50);
     expect(s.tempo).toBe(50);
-    expect(s.data.stock + s.data.webRemaining).toBeCloseTo(20);
+    expect(s.data.webRemaining).toBeCloseTo(20);
+    expect(s.revealed['data']).toBe(true);
     expect(s.history.length).toBeGreaterThan(0);
   });
 
@@ -91,8 +94,8 @@ describe('Stage 2 economy', () => {
   it('shrinks a run by the square root of its data coverage', () => {
     const s = arrival();
     const c = startCapability(s);
+    s.tasks = 0;
     s.data.stock = dataRequired(c) / 4;
-    s.data.synthetic = 0;
     expect(effectiveData(s)).toBeCloseTo(dataRequired(c) / 4);
     expect(dataFactor(s, c)).toBeCloseTo(0.5);
     s.data.stock = dataRequired(c) * 3;
@@ -110,6 +113,22 @@ describe('Stage 2 economy', () => {
   });
 });
 
+describe('Stage 2 GPU purchases', () => {
+  it('delivers the block the button named even when the money only just covers it', () => {
+    const s = arrival();
+    s.gridCapacity = 1e9;
+    s.datacenters = 100;
+    s.funds = 1e12;
+    const full = gpuBatchCost(s);
+    s.funds = full + 1;
+    const block = gpuBlock(s);
+    expect(block).toBe(batchSize(s));
+    const before = s.gpus;
+    expect(actions.buyGpuBatch(s)).toBe(true);
+    expect(s.gpus - before).toBe(block);
+  });
+});
+
 describe('Stage 2 training', () => {
   it('needs more GPUs and money at higher capability and never runs longer than the cap', () => {
     const s = arrival();
@@ -123,6 +142,7 @@ describe('Stage 2 training', () => {
     s.gridCapacity = s.gpus;
     s.datacenters = 100;
     s.funds = trainCost(s).funds!;
+    s.research = trainCost(s).research!;
     expect(actions.startTraining(s)).toBe(true);
     expect(s.training.run!.duration).toBeLessThanOrEqual(S2_RUN_MAX);
   });
@@ -130,6 +150,7 @@ describe('Stage 2 training', () => {
   it('allows a queued run only after the pipeline, and promotes it when the front model ships', () => {
     const s = arrival();
     s.funds = 1e9;
+    s.research = 1e6;
     expect(actions.startTraining(s)).toBe(true);
     actions.finishTraining(s);
     runTicks(s, 6);

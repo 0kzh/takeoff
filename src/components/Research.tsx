@@ -1,6 +1,15 @@
 import { useGame, usePerform } from '../store/context.js';
 import { Panel, Reveal, Meter } from './primitives.js';
-import { researchCap, humanResearchShare, researchRate } from '../engine/economy.js';
+import {
+  researchCap,
+  humanResearchShare,
+  researchRate,
+  hireCost,
+  labCost,
+  canHireResearcher,
+  canExpandLab,
+} from '../engine/economy.js';
+import { costLabel } from '../engine/projects.js';
 import { visibleProjects, priceTag } from '../engine/projects.js';
 import { datacenterStatus } from '../data/projects.js';
 import { labReason } from '../engine/training.js';
@@ -24,8 +33,8 @@ export function Research() {
         <button
           className="button2"
           id="btn-hireResearcher"
-          title="1 Trust: one more researcher, +10 research per second."
-          disabled={s.trust < 1}
+          title={`${costLabel(hireCost(s))}: one more researcher, +10 research per second.`}
+          disabled={!canHireResearcher(s)}
           onClick={() => perform('hireResearcher')}
         >
           Hire Researcher
@@ -35,8 +44,8 @@ export function Research() {
         <button
           className="button2"
           id="btn-expandLab"
-          title={`1 Trust: room for ${fmtInt(1000 * s.labMult)} more research.`}
-          disabled={s.trust < 1}
+          title={`${costLabel(labCost(s))}: room for ${fmtInt(1000 * s.labMult)} more research.`}
+          disabled={!canExpandLab(s)}
           onClick={() => perform('expandLab')}
         >
           Expand Lab
@@ -44,7 +53,7 @@ export function Research() {
       </Reveal>{' '}
       <Reveal flag="hireResearcher">
         <span className="note" id="trustCostNote">
-          (costs Trust)
+          ({s.trust >= 1 ? 'costs Trust' : `${costLabel(hireCost(s))} / ${costLabel(labCost(s))}`})
         </span>
       </Reveal>
       <br />
@@ -127,7 +136,9 @@ export function Projects() {
               {project.title} {priceTag(s, project)}
             </b>
             <br />
-            <span className="projectDesc">{project.description}</span>
+            <span className="projectDesc">
+              {typeof project.description === 'function' ? project.description(s) : project.description}
+            </span>
             <ProjectStatus project={project} />
           </button>
         ))}

@@ -3,15 +3,13 @@ import {
   TICK_SECONDS, produce, updateAutoPrice, sell, researchTick, trustCheck, decayHype, decayEffects,
   powerPriceWalk, averages, bottleneckMessages, researchCap, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
-  buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity,
-} from './economy.js';
-import { dataTick } from './data.js';
+  buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity, canExpandLab, labCost } from './economy.js';
 import { updateBaiwen, updateTempo, sampleHistory, updateTheft, updateIrrelevance } from './rivals.js';
 import { updateWorld } from './world.js';
 import {
   updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
 } from './training.js';
-import { buyProject, visibleProjects } from './projects.js';
+import { buyProject, visibleProjects, costLabel } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
 import { updateProjects, noteReveals } from './reveal.js';
 import {
@@ -56,7 +54,6 @@ export function step(s: GameState): void {
 
   researchTick(s, dt);
   trustCheck(s);
-  dataTick(s, dt);
 
   updateTraining(s, dt);
 
@@ -138,11 +135,11 @@ export function researchWanted(s: GameState): { amount: number; what: string } {
 function capFix(s: GameState): string {
   const cap = researchCap(s);
   const shown = (id: string) => visibleProjects(s).some((p) => p.id === id && (p.cost(s).research ?? 0) <= cap);
-  if (s.revealed['expandLab'] && s.trust >= 1) return 'Expand Lab to hold more.';
+  if (canExpandLab(s)) return 'Expand Lab to hold more.';
+  if (shown('s2_building')) return 'A New building doubles it.';
   if (shown('p_lab_cluster')) return 'The Experiment tracker doubles it.';
   if (shown('p_floor')) return 'Lease the floor upstairs.';
-  if (shown('p_desks')) return 'Rent desks across the street.';
-  return s.revealed['expandLab'] ? 'Expand Lab with the next Trust.' : 'More room comes with Trust.';
+  return s.revealed['expandLab'] ? `Expand Lab when you have ${costLabel(labCost(s))}.` : 'More room comes with Trust.';
 }
 
 export const WALL_REPEAT_SECONDS = 120;

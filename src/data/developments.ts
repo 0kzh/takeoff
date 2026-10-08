@@ -201,7 +201,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd2_data_wall',
     stage: 2,
     choice: 'c_data_wall',
-    requires: (s) => s.revealed['data'] === true,
     trigger: (s) => s.flags['webExhausted'] === true,
   },
   {

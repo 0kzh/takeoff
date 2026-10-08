@@ -72,8 +72,10 @@ export function startCapability(s: GameState): number {
 export const S2_CAP_REF = 1.8;
 export const S2_GPU_BASE = 1000;
 export const S2_GPU_EXPONENT = 4;
-export const S2_FUNDS_BASE = 200000;
-export const S2_FUNDS_EXPONENT = 3.2;
+export const S2_FUNDS_BASE = 100000;
+export const S2_FUNDS_EXPONENT = 3.6;
+export const S2_RESEARCH_BASE = 6000;
+export const S2_RESEARCH_EXPONENT = 1.1;
 export const S2_RUN_MIN = 50;
 export const S2_RUN_STEP = 12;
 export const S2_RUN_MAX = 110;
@@ -84,6 +86,10 @@ export function effectiveGpusFor(c: number): number {
 
 export function fundsForS2(c: number): number {
   return twoSig(S2_FUNDS_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_FUNDS_EXPONENT));
+}
+
+export function researchForS2(c: number): number {
+  return twoSig(S2_RESEARCH_BASE * Math.pow(Math.max(S2_CAP_REF, c) / S2_CAP_REF, S2_RESEARCH_EXPONENT));
 }
 
 export const S1_RUN_BASE = 75;
@@ -118,7 +124,7 @@ function twoSig(raw: number): number {
 export function trainCost(s: GameState): Cost {
   if (inPrologue(s)) return { funds: PROLOGUE_FUNDS, power: PROLOGUE_POWER };
   const c = startCapability(s);
-  if (s.stage >= 2) return { funds: fundsForS2(c) };
+  if (s.stage >= 2) return { funds: fundsForS2(c), research: researchForS2(c) };
   return c < S1_WALL ? { funds: fundsFor(c) } : {};
 }
 
@@ -169,7 +175,7 @@ export function cardWallSeconds(s: GameState): number {
   return typeof at === 'number' ? s.stats.timePlayed - at : 0;
 }
 
-const LAB_CARDS = ['p_lab_cluster', 'p_floor', 'p_desks'];
+const LAB_CARDS = ['p_lab_cluster', 'p_floor', 's2_building'];
 
 export function labReason(s: GameState, research: number): string {
   if (research <= researchCap(s)) return '';
@@ -283,7 +289,7 @@ function startRun(s: GameState, cost: Cost): boolean {
   pay(s, cost);
   const boost = typeof s.flags['nextRunBoost'] === 'number' ? (s.flags['nextRunBoost'] as number) : 0;
   delete s.flags['nextRunBoost'];
-  const bonus = s.stage >= 2 ? boost + (isBought(s, 's2_rl_envs') ? 0.03 : 0) + (isBought(s, 's2_continuous') ? 0.04 : 0) : 0;
+  const bonus = s.stage >= 2 ? boost + (isBought(s, 's2_rl_envs') ? 0.03 : 0) : 0;
   const factor = s.stage >= 2 ? dataFactor(s, capBefore) : 1;
   const run: TrainingRun = {
     id: t.nextRunId++,

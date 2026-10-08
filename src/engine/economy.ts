@@ -1,5 +1,5 @@
 import { rng } from './rng.js';
-import { GameState, say, canPay, pay, bump, counter, addFunds, inPrologue, isBought } from './state.js';
+import { GameState, Cost, say, canPay, pay, bump, counter, addFunds, inPrologue, isBought } from './state.js';
 import { fmtMoneyShort, fmtInt, fmtMw } from './format.js';
 import { mechanicClear } from './stages.js';
 
@@ -515,7 +515,7 @@ function expandLabBeat(s: GameState): boolean {
 
 export function trustRewardLine(s: GameState): string {
   if (s.trust < 1) return `Trust +1, back to ${s.trust}. Nothing to spend yet.`;
-  return s.revealed['expandLab'] ? 'Trust +1. Hire a researcher or expand the lab.' : 'Trust +1. Hire a researcher.';
+  return 'Trust +1. It pays for the next researcher or lab space.';
 }
 
 export function researchTick(s: GameState, dt: number): void {
@@ -606,16 +606,41 @@ export function buyMarketing(s: GameState): boolean {
   return true;
 }
 
+export const HIRE_BASE = 40;
+export const HIRE_GROWTH = 1.5;
+export const LAB_BASE = 50;
+export const LAB_GROWTH = 1.6;
+const STARTING_RESEARCHERS = 1;
+
+/** A researcher costs money from the start; a Trust, when the lab holds one, pays instead. */
+export function hireCost(s: GameState): Cost {
+  if (s.trust >= 1) return { trust: 1 };
+  return { funds: Math.round(HIRE_BASE * Math.pow(HIRE_GROWTH, Math.max(0, s.researchers - STARTING_RESEARCHERS))) };
+}
+
+export function labCost(s: GameState): Cost {
+  if (s.trust >= 1) return { trust: 1 };
+  return { funds: Math.round(LAB_BASE * Math.pow(LAB_GROWTH, Math.max(0, s.labSpace - 1))) };
+}
+
+export function canHireResearcher(s: GameState): boolean {
+  return s.revealed['research'] === true && s.revealed['hireResearcher'] === true && canPay(s, hireCost(s));
+}
+
+export function canExpandLab(s: GameState): boolean {
+  return s.revealed['research'] === true && s.revealed['expandLab'] === true && canPay(s, labCost(s));
+}
+
 export function hireResearcher(s: GameState): boolean {
-  if (!s.revealed['research'] || !s.revealed['hireResearcher'] || !canPay(s, { trust: 1 })) return false;
-  pay(s, { trust: 1 });
+  if (!canHireResearcher(s)) return false;
+  pay(s, hireCost(s));
   s.researchers += 1;
   return true;
 }
 
 export function expandLab(s: GameState): boolean {
-  if (!s.revealed['research'] || !s.revealed['expandLab'] || !canPay(s, { trust: 1 })) return false;
-  pay(s, { trust: 1 });
+  if (!canExpandLab(s)) return false;
+  pay(s, labCost(s));
   s.labSpace += 1;
   return true;
 }
@@ -643,10 +668,11 @@ export function gpuBlockReason(s: GameState): string {
 
 export function buyGpuBatch(s: GameState): boolean {
   if (!canBuyGpuBatch(s)) return false;
+  // Size the block before paying: gpuBlock reads funds, and paying would shrink it tenfold.
+  const batch = gpuBlock(s);
   const cost = gpuBatchCost(s);
   if (s.funds < cost) return false;
   addFunds(s, -cost);
-  const batch = gpuBlock(s);
   s.gpus += batch;
   s.gpuBatches += batch / batchSize(s);
   if (s.gpuBatches === 1) say(s, `${fmtInt(batch)} ${chipName(s)}s racked. The hall is ${Math.round((100 * s.gpus) / gpuCapacity(s))}% full.`);

@@ -89,7 +89,7 @@ export function datacenterStatus(s: GameState): DatacenterStatus {
 
 export const SERIES_A = 5000;
 
-export const GRID_CONTRACT_PRESSES = 10;
+export const GRID_CONTRACT_PRESSES = 6;
 
 export function seriesABonus(s: GameState): number {
   return typeof s.flags['seriesABonus'] === 'number' ? (s.flags['seriesABonus'] as number) : 0;
@@ -98,10 +98,6 @@ export function seriesABonus(s: GameState): number {
 export const AUTO_PRICING_MOVES = 20;
 export const AUTO_PRICING_TASKS = 90000;
 export const AUTO_PRICING_LATE = 400000;
-
-export function deskCost(s: GameState): number {
-  return 1000 * Math.pow(2, bought(s, 'p_desks'));
-}
 
 export function contractCost(s: GameState): number {
   return Math.round(3000 * Math.pow(1.35, bought(s, 'p_contract')));
@@ -147,21 +143,6 @@ export const PROJECTS: ProjectDef[] = [
     consoleMsg: 'Press release out. Three outlets run it verbatim.',
   }),
   project({
-    id: 'p_desks',
-    title: 'Rent desks across the street',
-    priceTag: (s) => `($${deskCost(s).toLocaleString('en-US')})`,
-    cost: (s) => ({ funds: deskCost(s) }),
-    description: 'Two more lab spaces. Each lease costs twice the last.',
-    trigger: (s) => s.stage === 1 && s.revealed['training'] === true && cardWallSeconds(s) >= 45 && s.trust < 1,
-    buy: (s) => {
-      s.labSpace += 2;
-    },
-    uses: Infinity,
-    rehide: true,
-    rescue: true,
-    consoleMsg: 'Desks rented across the street. The lab holds more.',
-  }),
-  project({
     id: 'p_prompting',
     title: 'Better Prompting',
     cost: { research: 750 },
@@ -171,7 +152,7 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.25;
     },
     consoleMsg: 'Prompt templates rewritten. Copies 25% faster.',
-    stages: [1, 2],
+    stages: [1],
   }),
   project({
     id: 'p_grid',
@@ -184,7 +165,7 @@ export const PROJECTS: ProjectDef[] = [
       s.revealed['gridContract'] = true;
       s.flags['powerOut'] = false;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Grid contract signed. Power is billed as it is used.',
   }),
   project({
@@ -197,7 +178,7 @@ export const PROJECTS: ProjectDef[] = [
       s.insightUnlocked = true;
     },
     consoleMsg: 'Insight unlocked. It accrues while research is full, and with every release.',
-    stages: [1, 2],
+    stages: [1],
   }),
   project({
     id: 'p_prompting2',
@@ -210,7 +191,7 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.5;
     },
     consoleMsg: 'Copies think out loud now. 50% faster.',
-    stages: [1, 2],
+    stages: [1],
   }),
   project({
     id: 'p_seed',
@@ -248,7 +229,7 @@ export const PROJECTS: ProjectDef[] = [
       s.labMult *= 2;
     },
     consoleMsg: 'Experiment tracker live. Research capacity doubled.',
-    stages: [1, 2],
+    stages: [1],
   }),
   project({
     id: 'p_prompting3',
@@ -261,7 +242,7 @@ export const PROJECTS: ProjectDef[] = [
       s.copyBoost += 0.75;
     },
     consoleMsg: 'Copies can run code and search. 75% faster.',
-    stages: [1, 2],
+    stages: [1],
   }),
   project({
     id: 'p_eval_team',
@@ -271,7 +252,7 @@ export const PROJECTS: ProjectDef[] = [
     description: 'Fixes take a third less time.',
     trigger: (s) => s.flags['redTeamed'] === true,
     buy: () => undefined,
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Evals team hired. Fixes are faster.',
   }),
   project({
@@ -296,7 +277,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.hypeLevel += 2;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'The demo has three million views. Most stopped after a minute.',
   }),
   project({
@@ -493,7 +474,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchMult *= 1.25;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Sage now writes a third of OpenMind\'s code. Research runs faster.',
     logMsg: 'OpenMind says its own model now writes much of its code. Nobody outside can check.',
   }),
@@ -548,7 +529,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.labMult *= 2;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'The floor upstairs is ours. Research capacity doubled.',
     logMsg: 'OpenMind takes a second floor. The landlord asks what the company does.',
   }),
@@ -562,7 +543,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.researchers += 3;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Three researchers start Monday. One brings a cat.',
   }),
   project({
@@ -604,7 +585,7 @@ export const PROJECTS: ProjectDef[] = [
     buy: (s) => {
       s.trust += 1;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Workshop paper accepted. Reviewer 2 was right, it turns out.',
   }),
   project({
@@ -617,7 +598,7 @@ export const PROJECTS: ProjectDef[] = [
       s.trust += 1;
       s.hypeLevel += 3;
     },
-    stages: [1, 2],
+    stages: [1],
     consoleMsg: 'Keynote delivered. The room was full. Trust +1.',
   }),
   project({

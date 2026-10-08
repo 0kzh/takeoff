@@ -5,7 +5,7 @@ export interface ProjectDef {
   id: string;
   title: string;
   priceTag?: string | ((s: GameState) => string);
-  description: string;
+  description: string | ((s: GameState) => string);
   stages: number[];
   cost: (s: GameState) => Cost;
   trigger: (s: GameState) => boolean;
@@ -44,12 +44,13 @@ export function project(def: ProjectInput): ProjectDef {
       const floor = revealPrice(s, def.id, secs);
       out.funds = Math.max(c.funds ?? 0, c.funds ? Math.min(floor, 4 * c.funds) : floor);
     }
-    if (rsecs !== undefined) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
+    // Research prices scale with the lab's rate only in Stage 1; from Stage 2 a card costs what it says.
+    if (rsecs !== undefined && s.stage < 2) out.research = Math.max(c.research ?? 0, revealResearchPrice(s, def.id, rsecs));
     return out;
   };
   const onShow = fixed ? def.onShow : (s: GameState) => {
     if (secs !== undefined) s.flags[`price:${def.id}`] = revealPrice(s, def.id, secs);
-    if (rsecs !== undefined) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
+    if (rsecs !== undefined && s.stage < 2) s.flags[`rprice:${def.id}`] = revealResearchPrice(s, def.id, rsecs);
     def.onShow?.(s);
   };
   return {

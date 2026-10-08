@@ -34,80 +34,80 @@ Status: plan only, nothing implemented. Branch `stage2-plan`, cut from `main` at
 
 ## 2. Stage 2 at a glance
 
-| | |
-|---|---|
-| Name | The Race (rename from `Scale` in `stages.ts`) |
-| Calendar | Jan 2026 → Dec 2026, 210 s per month (42 min nominal); date clamps at Mar 2027 if the player is slow |
-| Target length | 38–48 min for the bot, ~45 for a human |
-| Headline | Tasks Completed (billions by the end) |
-| Core loop | Copies complete tasks → revenue → buy GPUs, datacenters, grid → more copies → more tasks. Train bigger Sage → each copy does more, customers pay more. Release it → revenue and hype, or keep it internal → research and lead. |
-| Recurring decision | Every run: read the eval card, fix issues, Deploy or Keep internal (every ~3–4 min, ~11 times) |
-| Capability | ~1.8× → 10× (Sage-1.x → Sage-4) |
-| New layers, in order | Infrastructure · Release Policy · Race graph · Data · AI R&D · Public/Government · Training Pipeline · Baiwen + Security · Products · Alignment strip · Funding · Weight theft · Bio red line · Sage asks for compute |
-| Bottleneck rotation | Compute (0–8) → Data (6–16) → Money and demand (14–26) → Security and tempo (18–30) → Alignment uncertainty (28–40) |
-| Can end early | Second Place (Irrelevance), Shutdown |
-| Ends with | **Automate the Lab** (visible at 5×, buyable at 10×) → Stage 3 Takeoff, Jan 2027 |
+|                      |                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name                 | The Race (rename from `Scale` in `stages.ts`)                                                                                                                                                                                  |
+| Calendar             | Jan 2026 → Dec 2026, 210 s per month (42 min nominal); date clamps at Mar 2027 if the player is slow                                                                                                                           |
+| Target length        | 38–48 min for the bot, ~45 for a human                                                                                                                                                                                         |
+| Headline             | Tasks Completed (billions by the end)                                                                                                                                                                                          |
+| Core loop            | Copies complete tasks → revenue → buy GPUs, datacenters, grid → more copies → more tasks. Train bigger Sage → each copy does more, customers pay more. Release it → revenue and hype, or keep it internal → research and lead. |
+| Recurring decision   | Every run: read the eval card, fix issues, Deploy or Keep internal (every ~3–4 min, ~11 times)                                                                                                                                 |
+| Capability           | ~1.8× → 10× (Sage-1.x → Sage-4)                                                                                                                                                                                                |
+| New layers, in order | Infrastructure · Release Policy · Race graph · Data · AI R&D · Public/Government · Training Pipeline · Baiwen + Security · Products · Alignment strip · Funding · Weight theft · Bio red line · Sage asks for compute          |
+| Bottleneck rotation  | Compute (0–8) → Data (6–16) → Money and demand (14–26) → Security and tempo (18–30) → Alignment uncertainty (28–40)                                                                                                            |
+| Can end early        | Second Place (Irrelevance), Shutdown                                                                                                                                                                                           |
+| Ends with            | **Automate the Lab** (visible at 5×, buyable at 10×) → Stage 3 Takeoff, Jan 2027                                                                                                                                               |
 
 ## 3. The loop in Stage 2
 
 - **Tasks.** `copies × perCopyRate` as today (`perCopyRate = capability^0.8 × copyBoost`). Copies = powered GPUs not busy training, × `copiesPerGPU`. Clicking retires at the gate.
 - **Selling.** Unchanged demand model (`demandAt`, `expectedSalesPerSec`). Demand levers: price (auto if `p_auto_pricing`), marketing, quality (`sqrt(cap/rivalCap)`), products (new `demandMult` projects), contracts.
 - **Compute.** GPUs now owned: Buy GPUs (1,000) → Build Datacenter → Expand Grid. Chip generations multiply compute per GPU. A run requires the fleet to hold its GPUs, but the copies keep serving customers while it trains (changed from the original plan at the owner's request).
-- **Training.** Each run needs idle effective GPUs, funds, and enough data. Produces Sage-N.m with a gain. Eval card → fix issues → Deploy or Keep internal. After **Training Pipeline**, a second run may train while the previous model is in eval/red team/rollout.
-- **Research.** Humans decay (existing `humanEfficiency = min(1, 3/cap)`); Sage takes over research after **Sage Writes Our Code**. Research buys projects. Insight accrues only while research is full (existing).
-- **Slack currency.** Idle copies (copies beyond what the market buys) write **synthetic data** once the Synthetic Data Engine is bought. Overbuilding inference is never waste.
+- **Training.** Each run needs a large enough fleet, funds, research (spent, `6k × (c/1.8)^1.1`) and enough data. Produces Sage-N.m with a gain. Eval card → fix issues → Deploy or Keep internal. After **Training Pipeline**, a second run may train while the previous model is in eval/red team/rollout.
+- **Research.** Humans decay (existing `humanEfficiency = min(1, 3/cap)`); Sage takes over research after **Sage Writes Our Code**. Research buys projects and every Stage 2 run, so the lab's capacity binds: runs and the bigger cards cost 40–100% of it, and **New building** (×2, up to three times, shown when something on screen needs more than 80% of the cap) is the only Stage 2 doubler. Stage 1 cards that carry into Stage 2 cost their printed research price (no reveal pricing). Insight accrues only while research is full (existing).
+- **Data.** Training data grows with Tasks Completed (`0.12 × tasks^0.25` T), so serving customers feeds the next run. The public web adds 20T in five research-priced scrapes and then runs out (the data wall); customer conversations multiply task data ×1.5 at a cost in approval; licensing deals buy +15T for doubling money. The Data row is on screen from arrival.
 - **The world.** Rivals on a live log graph. Approval, government relations, security, and the alignment band arrive one by one and react to releases.
 
 ## 4. Arrival reshuffle (minute 0)
 
-Gate line, centered for 1.5 s, then dropped into the console: *"First Datacenter online outside Abilene. Nobody at OpenMind completes tasks by hand anymore."*
+Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter online outside Abilene. Nobody at OpenMind completes tasks by hand anymore."_
 
-| Place | Stage 1 | Stage 2 |
-|---|---|---|
-| Header | Tasks Completed, date | + `Sage-1.6 · 1.8×`, + revenue/s |
-| Console | 5 lines | same |
-| Alignment strip | not present | reserved blank row under the console; fills at ~22 min |
-| Left: Task panel | Complete Task button | retired (panel hidden) |
-| Left: Business | price, marketing, revenue | same, Buy Power retired (grid bills automatically: set `gridAuto = true`), + Products rows as bought |
-| Left: Compute | Rent GPU, quota meter, power | **Infrastructure**: GPUs/room meter, Buy GPUs (1,000), Build Datacenter, Expand Grid, power bill; later Data row, Security row |
-| Left: later | — | **Public** (Approval, Jobs displaced) at the hearing; **Government** (Relations) at the hearing |
-| Middle: Research | researchers, lab, insight | + "Who did the research: Humans 91% · Sage 9%" bar after Sage Writes Our Code |
-| Middle: Projects | cards | cards (Stage 2 list) |
-| Right: Training | run, focus, eval | + second progress line after Training Pipeline; eval card gains Deploy/Keep, Bio/Cyber rows, "Knows it's tested" |
-| Right: later | — | **Race** graph panel at ~2 min, under Training |
-| Log column | Developments | same |
+| Place            | Stage 1                      | Stage 2                                                                                                                        |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Header           | Tasks Completed, date        | + `Sage-1.6 · 1.8×`, + revenue/s                                                                                               |
+| Console          | 5 lines                      | same                                                                                                                           |
+| Alignment strip  | not present                  | reserved blank row under the console; fills at ~22 min                                                                         |
+| Left: Task panel | Complete Task button         | retired (panel hidden)                                                                                                         |
+| Left: Business   | price, marketing, revenue    | same, Buy Power retired (grid bills automatically: set `gridAuto = true`), + Products rows as bought                           |
+| Left: Compute    | Rent GPU, quota meter, power | **Infrastructure**: GPUs/room meter, Buy GPUs (1,000), Build Datacenter, Expand Grid, power bill; later Data row, Security row |
+| Left: later      | —                            | **Public** (Approval, Jobs displaced) at the hearing; **Government** (Relations) at the hearing                                |
+| Middle: Research | researchers, lab, insight    | + "Who did the research: Humans 91% · Sage 9%" bar after Sage Writes Our Code                                                  |
+| Middle: Projects | cards                        | cards (Stage 2 list)                                                                                                           |
+| Right: Training  | run, focus, eval             | + second progress line after Training Pipeline; eval card gains Deploy/Keep, Bio/Cyber rows, "Knows it's tested"               |
+| Right: later     | —                            | **Race** graph panel at ~2 min, under Training                                                                                 |
+| Log column       | Developments                 | same                                                                                                                           |
 
 - Existing `Infrastructure.tsx` already renders the owned-infrastructure rows behind `revealed['infrastructure']`; the `enter` hook in `stages.ts` already shows it. Changes: hide `task`, set `gridAuto`, do not show `buyPower`.
 - Mobile order (styles.css `display: contents` map): add race, public, government, alignment slots.
 
 ## 5. Reveal schedule (stage-relative minutes, median bot)
 
-| Min | Trigger | Appears | Console line |
-|---|---|---|---|
-| 0:00 | gate | Infrastructure in place; capability in header; first greyed project **Nimbus G5 chips** | "The rented GPUs go back to the cloud. These are ours." |
-| 0:45 | first Buy GPUs | Build Datacenter enabled-but-grey explanation; "room for 10,000" meter | "1,000 GPUs racked. The hall is a third full." |
-| ~1:30 | first Stage 2 run finishes | **Release Policy** project (grey until affordable) | "From now on we decide which Sages the world meets." |
-| ~2:00 | Anthrosoft's first 2026 release | **Race** panel: log graph, OpenMind + Anthrosoft lines, tier lines 1×, 2×, 4× visible, 10× faintly | "Anthrosoft publishes a capability chart. Everyone has one now." |
-| ~4:00 | public web 60% scraped | **Data** row in Infrastructure (stock / needed) | "Sage-2 has read every public sentence in English. It would like more." |
-| ~6:30 | web exhausted | Crisis: **The data wall** (choice); Data Licensing, Synthetic Data Engine projects | "The internet is finished. Not broken. Finished." |
-| ~6:00 | capability ≥ 2× (Sage-2) | **Sage Writes Our Code** project; then the research-share bar | "Sage wrote 30% of this week's commits. The other 70% reviewed Sage's commits." |
-| ~9:00 | 3 runs and 2 datacenters | **Training Pipeline** project (overlap) | "Two clusters. One can train while the other ships." |
-| ~10:30 | Apr 2026 and ≥ 2.5× | Crisis: **Senate hearing** → **Public** and **Government** panels | "Senator Albright asks whether Sage could testify instead." |
-| ~12:00 | 3 datacenters | **Hyperscale Campuses** project (×10 room per datacenter) | "Abilene wants a second substation. Abilene gets a second substation." |
-| ~14:00 | 3× | **Sage for Work** product; **Mega-round** funding | "Sage for Work attends meetings so you don't have to. The meetings remain." |
-| ~17:30 | Jun 2026 | **Baiwen** joins the graph at 0.35×; tempo gauge; **Security Office** project | "Baiwen consolidates China's labs into the Wenshan Compute Zone. Wenshu-1 is 'adequate'." |
-| ~19:00 | Security Office bought | Security row (SL1 → SL4) in Infrastructure | "Mo took the whiteboards out of the hallway." |
-| ~20:00 | Sage for Work live for 2 min | Jobs displaced counter in Public; first job-loss headlines | "The Ledger: junior developer hiring falls for a third quarter." |
-| ~22:00 | 4× (Sage-3) | Development: reward hacking → **Alignment Team** (if unbought) → **Alignment strip** fills: `60 ± 30`; Model Spec, CoT Monitoring chain | "Kit: it didn't fix the code. it fixed the tests." |
-| ~24:00 | 2 datacenters full on G5 | **Nimbus G6 chips** | "The G6 needs liquid cooling and a moment of silence." |
-| ~27:00 | Baiwen present and ≥ 5× | Crisis: **Weight theft** (roll vs security level) | "Anomalous egress from Training Cluster 3." |
-| ~28:00 | 5× | **Automate the Lab** appears, grey: "needs 10×" | "Sage has asked, politely, whether it could just do the research." |
-| ~30:00 | 6× | **Sage-mini** product decision (cheap public model) | "A Sage you can run on a laptop. Twelve million people do." |
-| ~33:00 | 8× | Crisis: **Bio uplift red line** (a choice with Dangerous Capability Evals, a surprise headline without) | "Bio uplift: HIGH. We are told this is fine." |
-| ~34:00 | 8× and Government panel | **Defense Partnership** offer; **Compute Cap Proposal** | "The Department would like Sage to 'support' some missions." |
-| ~36:00 | Oct 2026 and approval < 45 | Crisis: **Protest** (10,000 in DC); Public Safety Commitments | "The Ledger: ten thousand march on the Mall. Signs are hand-lettered, pointedly." |
-| ~38:00 | 8× | Modal: **Sage asks for compute** (no timer) | "Sage-3.4: I have an idea. It needs 8% of the cluster for a few days." |
-| ~40–45 | 10× (Sage-4) | Automate the Lab affordable → **Stage 3** | "Automate the Lab complete. The best researcher we have is no longer human." |
+| Min                             | Trigger                         | Appears                                                                                                                                 | Console line                                                                              |
+| ------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 0:00                            | gate                            | Infrastructure in place; capability in header; first greyed project **Nimbus G5 chips**                                                 | "The rented GPUs go back to the cloud. These are ours."                                   |
+| 0:45                            | first Buy GPUs                  | Build Datacenter enabled-but-grey explanation; "room for 10,000" meter                                                                  | "1,000 GPUs racked. The hall is a third full."                                            |
+| ~1:30                           | first Stage 2 run finishes      | **Release Policy** project (grey until affordable)                                                                                      | "From now on we decide which Sages the world meets."                                      |
+| ~2:00                           | Anthrosoft's first 2026 release | **Race** panel: log graph, OpenMind + Anthrosoft lines, tier lines 1×, 2×, 4× visible, 10× faintly                                      | "Anthrosoft publishes a capability chart. Everyone has one now."                          |
+| ~4:00                           | public web 60% scraped          | **Data** row in Infrastructure (stock / needed)                                                                                         | "Sage-2 has read every public sentence in English. It would like more."                   |
+| when the fifth scrape is bought | web exhausted                   | Crisis: **The data wall** (choice); Data Licensing stays                                                                                | "The internet is finished. Not broken. Finished."                                         |
+| ~6:00                           | capability ≥ 2× (Sage-2)        | **Sage Writes Our Code** project; then the research-share bar                                                                           | "Sage wrote 30% of this week's commits. The other 70% reviewed Sage's commits."           |
+| ~9:00                           | 3 runs and 2 datacenters        | **Training Pipeline** project (overlap)                                                                                                 | "Two clusters. One can train while the other ships."                                      |
+| ~10:30                          | Apr 2026 and ≥ 2.5×             | Crisis: **Senate hearing** → **Public** and **Government** panels                                                                       | "Senator Albright asks whether Sage could testify instead."                               |
+| ~12:00                          | 3 datacenters                   | **Hyperscale Campuses** project (×10 room per datacenter)                                                                               | "Abilene wants a second substation. Abilene gets a second substation."                    |
+| ~14:00                          | 3×                              | **Sage for Work** product; **Mega-round** funding                                                                                       | "Sage for Work attends meetings so you don't have to. The meetings remain."               |
+| ~17:30                          | Jun 2026                        | **Baiwen** joins the graph at 0.35×; tempo gauge; **Security Office** project                                                           | "Baiwen consolidates China's labs into the Wenshan Compute Zone. Wenshu-1 is 'adequate'." |
+| ~19:00                          | Security Office bought          | Security row (SL1 → SL4) in Infrastructure                                                                                              | "Mo took the whiteboards out of the hallway."                                             |
+| ~20:00                          | Sage for Work live for 2 min    | Jobs displaced counter in Public; first job-loss headlines                                                                              | "The Ledger: junior developer hiring falls for a third quarter."                          |
+| ~22:00                          | 4× (Sage-3)                     | Development: reward hacking → **Alignment Team** (if unbought) → **Alignment strip** fills: `60 ± 30`; Model Spec, CoT Monitoring chain | "Kit: it didn't fix the code. it fixed the tests."                                        |
+| ~24:00                          | 2 datacenters full on G5        | **Nimbus G6 chips**                                                                                                                     | "The G6 needs liquid cooling and a moment of silence."                                    |
+| ~27:00                          | Baiwen present and ≥ 5×         | Crisis: **Weight theft** (roll vs security level)                                                                                       | "Anomalous egress from Training Cluster 3."                                               |
+| ~28:00                          | 5×                              | **Automate the Lab** appears, grey: "needs 10×"                                                                                         | "Sage has asked, politely, whether it could just do the research."                        |
+| ~30:00                          | 6×                              | **Sage-mini** product decision (cheap public model)                                                                                     | "A Sage you can run on a laptop. Twelve million people do."                               |
+| ~33:00                          | 8×                              | Crisis: **Bio uplift red line** (a choice with Dangerous Capability Evals, a surprise headline without)                                 | "Bio uplift: HIGH. We are told this is fine."                                             |
+| ~34:00                          | 8× and Government panel         | **Defense Partnership** offer; **Compute Cap Proposal**                                                                                 | "The Department would like Sage to 'support' some missions."                              |
+| ~36:00                          | Oct 2026 and approval < 45      | Crisis: **Protest** (10,000 in DC); Public Safety Commitments                                                                           | "The Ledger: ten thousand march on the Mall. Signs are hand-lettered, pointedly."         |
+| ~38:00                          | 8×                              | Modal: **Sage asks for compute** (no timer)                                                                                             | "Sage-3.4: I have an idea. It needs 8% of the cluster for a few days."                    |
+| ~40–45                          | 10× (Sage-4)                    | Automate the Lab affordable → **Stage 3**                                                                                               | "Automate the Lab complete. The best researcher we have is no longer human."              |
 
 - Infrastructure purchases (GPUs, datacenters, grid tiers) and licensing deals fill the gaps; one is affordable roughly every 20–40 s.
 - Spacing check: reveals ≥ 90 s apart; crises at 6:30, 10:30, 27, 33, 36, 38 (the last two are ≥ 2 min apart and the "asks for compute" modal has no timer).
@@ -121,13 +121,13 @@ Gate line, centered for 1.5 s, then dropped into the console: *"First Datacenter
 - Buttons (ids stable for the critic): `btn-gpuBatch` Buy GPUs (1,000; after Hyperscale: 10,000; after Gigawatt Sites: 100,000), `btn-datacenter` Build Datacenter, `btn-expandGrid` Expand Grid (×10 per tier), `btn-security` Upgrade security (after Security Office), `btn-tradeIn` Trade in old GPUs (after a chip generation, returns 30%).
 - Costs (initial values for the tuning sim; see §11):
 
-| Buyable | Cost | Growth | Note |
-|---|---|---|---|
-| GPUs, batch of 1,000 | $40 × 1,000 × chipPrice[gen] (gen 1/2/3 = ×1 / ×3 / ×10) | ×1.04 per batch of the same size | batch size steps ×10 with datacenter tier; price per GPU unchanged |
-| Datacenter | $250k × 2.2^n | ×2.2 | room 10k GPUs; Hyperscale ×10, Gigawatt ×100 |
-| Grid tier | 10 MW → 100 MW → 1 GW → 10 GW | $1/kW of the new tier (10 MW = $10M … 1 GW = $1B), PPA project −30% | GPUs beyond grid capacity sit dark (existing `activeGpus`) |
-| Security level | $5M × 8^(n−1) | ×8 | research −3% per level, theft odds 90 / 50 / 25 / 10% |
-| Power bill | existing `powerBillPerSec` with `gridAuto` | `powerBase` inflation | shown as "Power bill $/s" |
+| Buyable              | Cost                                                     | Growth                                                              | Note                                                               |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| GPUs, batch of 1,000 | $40 × 1,000 × chipPrice[gen] (gen 1/2/3 = ×1 / ×3 / ×10) | ×1.04 per batch of the same size                                    | batch size steps ×10 with datacenter tier; price per GPU unchanged |
+| Datacenter           | $250k × 2.2^n                                            | ×2.2                                                                | room 10k GPUs; Hyperscale ×10, Gigawatt ×100                       |
+| Grid tier            | 10 MW → 100 MW → 1 GW → 10 GW                            | $1/kW of the new tier (10 MW = $10M … 1 GW = $1B), PPA project −30% | GPUs beyond grid capacity sit dark (existing `activeGpus`)         |
+| Security level       | $5M × 8^(n−1)                                            | ×8                                                                  | research −3% per level, theft odds 90 / 50 / 25 / 10%              |
+| Power bill           | existing `powerBillPerSec` with `gridAuto`               | `powerBase` inflation                                               | shown as "Power bill $/s"                                          |
 
 - Rule of thumb for tuning: a routine purchase costs 15–40 s of current revenue; a tier purchase (datacenter tier, grid tier, chip generation) 60–120 s; the stage gate ~3 min.
 - Bottleneck messages: "Datacenters are full. Build another." / "N GPUs sit dark. Expand Grid." / "Copies idle: nobody buys. Lower the price, buy Marketing, or launch a product."
@@ -136,13 +136,13 @@ Gate line, centered for 1.5 s, then dropped into the console: *"First Datacenter
 
 - Demand formula unchanged. New `demandMult` products as projects:
 
-| Product | Trigger | Cost | Effect |
-|---|---|---|---|
-| Sage for Work | 3× | 30k research, $5M | demand ×3, tempo +3, jobs displaced start (+ approval −0.5/min while unmitigated) |
-| Sage-mini (public cheap model) | 6× and a public release | decision, free | demand ×4, rivals +5%, approval +4, tempo +3; or "keep it enterprise-only": demand ×1.5 |
-| Government contracts | hearing resolved, relations ≥ 55 | 20k research | +$ lump = 60 s revenue, contracts ×1.5, relations +5 |
-| Defense Partnership | 8× and Government panel | choice | +$ lump = 180 s revenue, relations +15, approval −6, tempo +5 |
-| Mega-round | 3× and 2 releases | 150 insight | choice: growth capital (+$ = 240 s revenue, tempo +5, must deploy next 3 models) or patient capital (+$ = 120 s revenue, 20% revenue share for 6 min) |
+| Product                        | Trigger                          | Cost              | Effect                                                                                                                                                |
+| ------------------------------ | -------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sage for Work                  | 3×                               | 30k research, $5M | demand ×3, tempo +3, jobs displaced start (+ approval −0.5/min while unmitigated)                                                                     |
+| Sage-mini (public cheap model) | 6× and a public release          | decision, free    | demand ×4, rivals +5%, approval +4, tempo +3; or "keep it enterprise-only": demand ×1.5                                                               |
+| Government contracts           | hearing resolved, relations ≥ 55 | 20k research      | +$ lump = 60 s revenue, contracts ×1.5, relations +5                                                                                                  |
+| Defense Partnership            | 8× and Government panel          | choice            | +$ lump = 180 s revenue, relations +15, approval −6, tempo +5                                                                                         |
+| Mega-round                     | 3× and 2 releases                | 150 insight       | choice: growth capital (+$ = 240 s revenue, tempo +5, must deploy next 3 models) or patient capital (+$ = 120 s revenue, 20% revenue share for 6 min) |
 
 - Marketing and dynamic pricing continue. "Nobody buys" → lever is price/marketing/product; "selling out" → lever is compute.
 - Revenue targets for the sim: $3k/s at arrival, ~$30k/s at 10 min, ~$250k/s at 20, ~$1M/s at 30, ~$4M/s at 40.
@@ -165,20 +165,20 @@ Gate line, centered for 1.5 s, then dropped into the console: *"First Datacenter
 
 ### 6.4 Data
 
-- State: `data: { stock, webRemaining, synthetic }` in T tokens. Data is a cap: never spent.
-- Public web: +1T/min automatically until 20T total (exhausted ~6:30 → **The data wall** crisis).
+- State: `data: { stock, webRemaining, licensed }` in T tokens (the `synthetic` field is kept for old saves and unused). Data is a cap: never spent.
+- From tasks: `taskData = 0.12 × tasks^0.25` T (×1.5 after the customer-conversations choice). About 3T at arrival, 10T by run 4, 60T by the gate; the requirement `10T × (c/1.8)^1.4` runs from 10T to ~125T, so the gaps are early (the web) and late (licensing, or the customer multiplier).
+- Public web: **Scrape the web**, a repeatable sideline card, +4T for 1,000 research ×1.6 per scrape, five scrapes; the fifth sets `webExhausted` → **The data wall** development and choice.
 - Data Licensing Deals: repeatable project, $500k doubling, +15T.
-- Customer conversations: data-wall option, +25T, approval −8, hidden flag `customerDataUsed` (Stage 3 leak).
-- Synthetic Data Engine: idle copies write 1T/min per 10,000 idle copies. "Idle" = copies beyond `expectedSalesPerSec / perCopyRate`. This is the stage's slack currency.
+- Customer conversations: data-wall option, task data ×1.5, approval −8, hidden flag `customerDataUsed` (Stage 3 leak). The other option asks for consent and changes nothing.
 - RL Environments: effective data ×1.5 and gain +0.03.
-- Data row: "Data: 38T of 52T needed · synthetic +0.4T/min".
+- Data row: "Data: 28T (the next run needs 12T)" with "8T from customers so far" under it, shown from arrival.
 
 ### 6.5 Research handoff (human researchers → irrelevance)
 
 - Humans: existing `researchRate = researchers × 10 × humanEfficiency × researchMult`, `humanEfficiency = min(1, 3/cap)`.
 - Sage: after **Sage Writes Our Code**, `aiResearch = 2 × cap^1.5 × (1 + log10(max(1, copies/1,000)))` per second. At 2×: ~6/s; 4×: ~20/s; 10×: ~190/s. Human share falls from ~90% to ~25% by 10×.
 - Bar in Research panel: "Who did the research: Humans 61% · Sage 39%". Hire Researcher stays, but its tooltip says what a hire is worth now.
-- Lab capacity: New Building (labMult ×2), Research Campus (×4). Trust still buys Expand Lab.
+- Lab capacity: New building (labMult ×2, three uses, each re-hidden until something on screen needs more than 80% of the cap). Trust still buys Expand Lab.
 
 ### 6.6 Rivals and the race graph (right column)
 
@@ -222,39 +222,39 @@ Gate line, centered for 1.5 s, then dropped into the console: *"First Datacenter
 
 Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r` use `revealFunds`. Log lines are the `logMsg`.
 
-| id | Title | Trigger | Cost | Effect | Log line |
-|---|---|---|---|---|---|
-| s2_chip_g5 | Nimbus G5 chips | stage 2 | 12k research, $r 60 | chipGen 2 (×4 compute per GPU); Trade-in button | "Nimbus ships the G5. Our G4s are now 'legacy', which means slow." |
-| s2_release_policy | Release Policy | 1 Stage 2 run | 20 insight | Deploy / Keep internal modal on every eval card | "From now on we decide which Sages the world meets." |
-| s2_licensing | Data Licensing Deals (repeatable) | Data row shown | $500k ×2 | +15T data | "We bought three newspapers' archives, a bass-fishing forum, and a dictionary." |
-| s2_synthetic | Synthetic Data Engine | Data row shown | 15k research, 40 insight | idle copies write data | "Sage writes its own textbooks. They are good, and a little smug." |
-| s2_rl_envs | RL Environments | Sage-2 trained | 25k research, 80 insight | effective data ×1.5, gain +0.03 | "Ten thousand small worlds for Sage to practice in. It has beaten all of them." |
-| s2_ai_rd | Sage Writes Our Code | 2× | 12k research, 40 insight | AI research term on; share bar | "Sage wrote 30% of this week's commits. The other 70% reviewed Sage's commits." |
-| s2_pipeline | Training Pipeline | 3 runs and ≥ 2 datacenters | 18k research | overlapping runs | "Two clusters. One can train while the other ships." |
-| s2_hyperscale | Hyperscale Campuses | 3 datacenters | 20k research, $r 90 | dcTier 2: room ×10, batch 10,000 | "Abilene wants a second substation. Abilene gets a second substation." |
-| s2_gigawatt | Gigawatt Sites | 3 campuses full | 40k research, $r 120 | dcTier 3: room ×100, batch 100,000 | "The site has its own zip code and, soon, its own weather." |
-| s2_chip_g6 | Nimbus G6 chips | 2 datacenters full on G5 | 40k research, $r 120 | chipGen 3 (×16) | "The G6 needs liquid cooling, a substation, and a moment of silence." |
-| s2_ppa | Long-term PPA | first grid tier bought | 10k research | grid tiers −30% | existing `p_ppa` text, retriggered |
-| s2_building | New Building | lab space ≥ 15 | 18k research, $r 60 | labMult ×2 | "A building with a lobby. The lobby has a sculpture of a brain." |
-| s2_campus | Research Campus | New Building and 8× | 45k research | labMult ×4 | "Most of the campus is server halls. The humans have a nice corner." |
-| s2_work | Sage for Work | 3× | 30k research, $r 60 | demand ×3, tempo +3, jobs displaced | "Sage for Work attends meetings so you don't have to. The meetings remain." |
-| s2_gov_contracts | Government Contracts | hearing resolved, relations ≥ 55 | 20k research | lump + contracts ×1.5 | "The Department of Energy would like 400 seats and a classified version." |
-| s2_mega_round | Mega-round | 3× and 2 releases | 150 insight | opens the funding choice | "OpenMind raises more money than it can spell. The chart goes up." |
-| s2_security | Security Office | Baiwen present | 10k research, $r 45 | security row | "Mo took the whiteboards out of the hallway." |
-| s2_egress | Egress Monitoring | Security Office | 15k research, $r 30 | theft always detected; containment seed | "Every byte leaving the building is now counted." |
-| s2_export | Export Controls Lobbying | Baiwen present, relations ≥ 60 | 25k research | Baiwen −25% growth 6 min, tempo +4 | "Chip exports restricted. Baiwen announces its own chips. Everyone checks the calendar." |
-| s2_evals | Dangerous Capability Evals | 4× | 22k research, $r 45 | Bio/Cyber rows; bio crisis becomes a choice | "We now test whether Sage can help build a bioweapon. We would like the answer to stay no." |
-| s2_alignment_team | Alignment Team | reward-hacking development (if `p_alignment_team` unbought) | 15k research, 50 insight | reveals the strip | "We have an alignment team now. They have questions. So do we." |
-| s2_spec | Model Spec | Alignment Team | 20k research, 80 insight | A +4, band −3 | "Sage read its constitution in 0.2 seconds and had no notes, which is a little suspicious." |
-| s2_cot | Chain-of-Thought Monitoring | Alignment Team | 18k research | band −6; one caught-behavior log | "We can read Sage's scratchpad. Mostly it's about the task. Mostly." |
-| s2_probes | Linear Probes | Alignment Team | 25k research, 120 insight | band −5; interpretability 35% | "We found the direction in Sage's activations that means 'lying'. There are several. Some are lit." |
-| s2_redteam | Red Team | Dangerous Capability Evals | 20k research, $r 45 | bias −2 | "We hired people to trick Sage. Sage was tricked twice. The red team, eleven times." |
-| s2_honesty | Honesty Training | Model Spec | 30k research, 150 insight | A +3, bias −2 | "Sage now tells you when your code is bad. Morale is down. Code quality is up." |
-| s2_sae | Sparse Autoencoders | Linear Probes | 40k research, 250 insight | band −7, bias −2 | "Sage's mind, flattened into 16 million features. Feature 4,113,902 fires on 'being watched'." |
-| s2_commitments | Public Safety Commitments | Public panel | 15k research, $r 30 | approval +8, tempo −3 | "We published a list of things we promise not to do. Two papers published a list of things we did." |
-| s2_compute_cap | Compute Cap Proposal | Alignment Team and Baiwen, relations ≥ 60 | 200 insight | tempo −15; Baiwen may defect every 3 min | "Someone in policy drafted a proposal to slow everything down. It is very short." |
-| s2_continuous | Continuous Learning | 6× | 35k research, 100 insight | gain +0.04; next model is "online"; seeds Stage 3 | "Sage-3.5 learns on the job now. It has not stopped working since Tuesday." |
-| s2_automate | **Automate the Lab** (pinned, stage gate) | 5× (grey: "needs 10×") | 60k research, 300 insight, $r 180; requires 10× | `enterStage(3)` | "Automate the Lab complete. The best researcher we have is no longer human." |
+| id                | Title                                     | Trigger                                                     | Cost                                            | Effect                                            | Log line                                                                                            |
+| ----------------- | ----------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| s2_chip_g5        | Nimbus G5 chips                           | stage 2                                                     | 12k research, $r 60                             | chipGen 2 (×4 compute per GPU); Trade-in button   | "Nimbus ships the G5. Our G4s are now 'legacy', which means slow."                                  |
+| s2_release_policy | Release Policy                            | 1 Stage 2 run                                               | 20 insight                                      | Deploy / Keep internal modal on every eval card   | "From now on we decide which Sages the world meets."                                                |
+| s2_licensing      | Data Licensing Deals (repeatable)         | Data row shown                                              | $500k ×2                                        | +15T data                                         | "We bought three newspapers' archives, a bass-fishing forum, and a dictionary."                     |
+| s2_scrape         | Scrape the web (five uses)                | arrival                                                     | 1,000 research ×1.6                             | +4T data; the fifth exhausts the web              | "Scraped 4T tokens."                                                                                |
+| s2_rl_envs        | RL Environments                           | Sage-2 trained                                              | 25k research, 80 insight                        | effective data ×1.5, gain +0.03                   | "Ten thousand small worlds for Sage to practice in. It has beaten all of them."                     |
+| s2_ai_rd          | Sage Writes Our Code                      | 2×                                                          | 12k research, 40 insight                        | AI research term on; share bar                    | "Sage wrote 30% of this week's commits. The other 70% reviewed Sage's commits."                     |
+| s2_pipeline       | Training Pipeline                         | 3 runs and ≥ 2 datacenters                                  | 18k research                                    | overlapping runs                                  | "Two clusters. One can train while the other ships."                                                |
+| s2_hyperscale     | Hyperscale Campuses                       | 3 datacenters                                               | 20k research, $r 90                             | dcTier 2: room ×10, batch 10,000                  | "Abilene wants a second substation. Abilene gets a second substation."                              |
+| s2_gigawatt       | Gigawatt Sites                            | 3 campuses full                                             | 40k research, $r 120                            | dcTier 3: room ×100, batch 100,000                | "The site has its own zip code and, soon, its own weather."                                         |
+| s2_chip_g6        | Nimbus G6 chips                           | 2 datacenters full on G5                                    | 40k research, $r 120                            | chipGen 3 (×16)                                   | "The G6 needs liquid cooling, a substation, and a moment of silence."                               |
+| s2_ppa            | Long-term PPA                             | first grid tier bought                                      | 10k research                                    | grid tiers −30%                                   | existing `p_ppa` text, retriggered                                                                  |
+| s2_building       | New Building                              | lab space ≥ 15                                              | 18k research, $r 60                             | labMult ×2                                        | "A building with a lobby. The lobby has a sculpture of a brain."                                    |
+| s2_campus         | Research Campus                           | New Building and 8×                                         | 45k research                                    | labMult ×4                                        | "Most of the campus is server halls. The humans have a nice corner."                                |
+| s2_work           | Sage for Work                             | 3×                                                          | 30k research, $r 60                             | demand ×3, tempo +3, jobs displaced               | "Sage for Work attends meetings so you don't have to. The meetings remain."                         |
+| s2_gov_contracts  | Government Contracts                      | hearing resolved, relations ≥ 55                            | 20k research                                    | lump + contracts ×1.5                             | "The Department of Energy would like 400 seats and a classified version."                           |
+| s2_mega_round     | Mega-round                                | 3× and 2 releases                                           | 150 insight                                     | opens the funding choice                          | "OpenMind raises more money than it can spell. The chart goes up."                                  |
+| s2_security       | Security Office                           | Baiwen present                                              | 10k research, $r 45                             | security row                                      | "Mo took the whiteboards out of the hallway."                                                       |
+| s2_egress         | Egress Monitoring                         | Security Office                                             | 15k research, $r 30                             | theft always detected; containment seed           | "Every byte leaving the building is now counted."                                                   |
+| s2_export         | Export Controls Lobbying                  | Baiwen present, relations ≥ 60                              | 25k research                                    | Baiwen −25% growth 6 min, tempo +4                | "Chip exports restricted. Baiwen announces its own chips. Everyone checks the calendar."            |
+| s2_evals          | Dangerous Capability Evals                | 4×                                                          | 22k research, $r 45                             | Bio/Cyber rows; bio crisis becomes a choice       | "We now test whether Sage can help build a bioweapon. We would like the answer to stay no."         |
+| s2_alignment_team | Alignment Team                            | reward-hacking development (if `p_alignment_team` unbought) | 15k research, 50 insight                        | reveals the strip                                 | "We have an alignment team now. They have questions. So do we."                                     |
+| s2_spec           | Model Spec                                | Alignment Team                                              | 20k research, 80 insight                        | A +4, band −3                                     | "Sage read its constitution in 0.2 seconds and had no notes, which is a little suspicious."         |
+| s2_cot            | Chain-of-Thought Monitoring               | Alignment Team                                              | 18k research                                    | band −6; one caught-behavior log                  | "We can read Sage's scratchpad. Mostly it's about the task. Mostly."                                |
+| s2_probes         | Linear Probes                             | Alignment Team                                              | 25k research, 120 insight                       | band −5; interpretability 35%                     | "We found the direction in Sage's activations that means 'lying'. There are several. Some are lit." |
+| s2_redteam        | Red Team                                  | Dangerous Capability Evals                                  | 20k research, $r 45                             | bias −2                                           | "We hired people to trick Sage. Sage was tricked twice. The red team, eleven times."                |
+| s2_honesty        | Honesty Training                          | Model Spec                                                  | 30k research, 150 insight                       | A +3, bias −2                                     | "Sage now tells you when your code is bad. Morale is down. Code quality is up."                     |
+| s2_sae            | Sparse Autoencoders                       | Linear Probes                                               | 40k research, 250 insight                       | band −7, bias −2                                  | "Sage's mind, flattened into 16 million features. Feature 4,113,902 fires on 'being watched'."      |
+| s2_commitments    | Public Safety Commitments                 | Public panel                                                | 15k research, $r 30                             | approval +8, tempo −3                             | "We published a list of things we promise not to do. Two papers published a list of things we did." |
+| s2_compute_cap    | Compute Cap Proposal                      | Alignment Team and Baiwen, relations ≥ 60                   | 200 insight                                     | tempo −15; Baiwen may defect every 3 min          | "Someone in policy drafted a proposal to slow everything down. It is very short."                   |
+| s2_continuous     | Continuous Learning                       | 6×                                                          | 35k research, 100 insight                       | gain +0.04; next model is "online"; seeds Stage 3 | "Sage-3.5 learns on the job now. It has not stopped working since Tuesday."                         |
+| s2_automate       | **Automate the Lab** (pinned, stage gate) | 5× (grey: "needs 10×")                                      | 60k research, 300 insight, $r 180; requires 10× | `enterStage(3)`                                   | "Automate the Lab complete. The best researcher we have is no longer human."                        |
 
 - Rescue cards (reuse `rescue` flag): "Bridge loan for a datacenter" (1 Trust, when funds are below a datacenter for 90 s with full halls), "Sell old GPUs" (when stuck on grid).
 - Visible-card cap stays 4; sideline cards (PPA, commitments) and the pinned gate don't count.
@@ -264,21 +264,21 @@ Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r`
 - Developments (`developments.ts`, Stage 2 entries): Abilene online, Anthrosoft's 2026 roadmap, data wall warnings at 60/90%, "GPU lead times hit 40 weeks", "Baiwen consolidates", "Export controls debated", "junior hiring falls", "10% of Americans call an AI a close friend" (after Sage-mini), "Anthrosoft demos a laundry-folding robot; 40% success" (seed for Stage 4), "DOD contract", "Senate inquiry", "Nimbus G6 ships". Calendar cadence via the existing `EVENT_SPACING` director.
 - Choices (`choices.ts`, non-blocking modal, timers as in Stage 1):
 
-| id | When | Options (effect) | Timer, default |
-|---|---|---|---|
-| c_data_wall | web exhausted | Use customer conversations (+25T, approval −8, flag) / License more (opens licensing early) / Respect the boundary | none |
-| c_hearing | Apr 2026, ≥ 2.5× | Cooperate (relations +10, research −5% for 3 min) / Deflect (approval −5, relations −8) / Ask to be regulated (approval +5, tempo −3, Anthrosoft endorses) | 60 s, Cooperate |
-| c_release | every run after Release Policy | Deploy / Keep internal | none; next run can't start until answered (unless pipeline queued) |
-| c_funding | Mega-round | Growth capital / Patient capital | none |
-| c_theft | roll detected | Cut / Trace / Counter-hack (SL3) | 45 s, Cut |
-| c_mini | 6× and a public model | Launch Sage-mini / Enterprise only | 60 s, Enterprise only |
-| c_bio | 8× with evals | Delay and add classifiers (revenue −30% 3 min, approval +5) / Release with classifiers (−$, 20% chance bio seed) / Release unrestricted (revenue ×1.3, approval −8, bio seed, near miss in 2 min) | 60 s, Delay |
-| c_defense | 8× and Government panel | Accept / Decline (approval +2) | 60 s, Decline |
-| c_protest | Oct 2026, approval < 45 | Jobs program / Statement / Ignore | 60 s, Statement |
-| c_compute_request | 8× | Grant (+0.30 next run, A −5, neuralese early) / Grant but watch (+0.15, translator discount) / Deny (first exfiltration sooner in Stage 3) | none |
-| c_irrelevance | rival ≥ 4× for 3 min | Emergency round (3 Trust: +$ = 300 s revenue, tempo +5) / Keep going | 180 s, ends the run |
-| c_ultimatum | approval < 30 for 2 min | Accept oversight / Refuse | 60 s, Accept |
-| c_emergency_vote | refused | Testify and concede (growth −30% for the stage) / Lobby (relations ≥ 60, 60% success) / Offer nationalization | 180 s, vote passes |
+| id                | When                           | Options (effect)                                                                                                                                                                                  | Timer, default                                                     |
+| ----------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| c_data_wall       | web exhausted                  | Use customer conversations (+25T, approval −8, flag) / License more (opens licensing early) / Respect the boundary                                                                                | none                                                               |
+| c_hearing         | Apr 2026, ≥ 2.5×               | Cooperate (relations +10, research −5% for 3 min) / Deflect (approval −5, relations −8) / Ask to be regulated (approval +5, tempo −3, Anthrosoft endorses)                                        | 60 s, Cooperate                                                    |
+| c_release         | every run after Release Policy | Deploy / Keep internal                                                                                                                                                                            | none; next run can't start until answered (unless pipeline queued) |
+| c_funding         | Mega-round                     | Growth capital / Patient capital                                                                                                                                                                  | none                                                               |
+| c_theft           | roll detected                  | Cut / Trace / Counter-hack (SL3)                                                                                                                                                                  | 45 s, Cut                                                          |
+| c_mini            | 6× and a public model          | Launch Sage-mini / Enterprise only                                                                                                                                                                | 60 s, Enterprise only                                              |
+| c_bio             | 8× with evals                  | Delay and add classifiers (revenue −30% 3 min, approval +5) / Release with classifiers (−$, 20% chance bio seed) / Release unrestricted (revenue ×1.3, approval −8, bio seed, near miss in 2 min) | 60 s, Delay                                                        |
+| c_defense         | 8× and Government panel        | Accept / Decline (approval +2)                                                                                                                                                                    | 60 s, Decline                                                      |
+| c_protest         | Oct 2026, approval < 45        | Jobs program / Statement / Ignore                                                                                                                                                                 | 60 s, Statement                                                    |
+| c_compute_request | 8×                             | Grant (+0.30 next run, A −5, neuralese early) / Grant but watch (+0.15, translator discount) / Deny (first exfiltration sooner in Stage 3)                                                        | none                                                               |
+| c_irrelevance     | rival ≥ 4× for 3 min           | Emergency round (3 Trust: +$ = 300 s revenue, tempo +5) / Keep going                                                                                                                              | 180 s, ends the run                                                |
+| c_ultimatum       | approval < 30 for 2 min        | Accept oversight / Refuse                                                                                                                                                                         | 60 s, Accept                                                       |
+| c_emergency_vote  | refused                        | Testify and concede (growth −30% for the stage) / Lobby (relations ≥ 60, 60% success) / Offer nationalization                                                                                     | 180 s, vote passes                                                 |
 
 - Crises (`crises.ts`): incidents now typed `bio_near_miss`, `cyber_worm` (deployed model with Cyber ≥ HIGH and no classifiers: demand ×0.6 for 90 s, approval −5, relations −5, seeds Stage 3 "Cyberattack at scale"), `datacenter_protest` (approval < 40: compute −5% for 2 min).
 - Console tone for Stage 2: deadpan with a second clause that undercuts the first. Voices: the game, The Ledger, The Circuit, Xinhe Daily, staff (Priya, Kit, Dmitri, Ana, Mo), and Sage starts speaking ("Sage: I noticed the test suite reuses three helpers. Want me to refactor them?"). ~4 lines/min; anti-silence line after 60 s.
@@ -286,11 +286,11 @@ Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r`
 
 ## 9. Early endings available in Stage 2
 
-| Ending | Warnings | Last chance | Result screen |
-|---|---|---|---|
-| Second Place (Irrelevance) | line turns red at 2×; "Series C pulled" at 3× | Irrelevance countdown, 3 min | Race graph frozen with the rival crossing 10×; "OpenMind has been acquired by Anthrosoft. The garage is still a yoga studio." Existing `Ending` page with the 13-row table + the band truth reveal (band vs hidden A) |
-| Shutdown | approval < 30: "Calls grow to shut down OpenMind"; ultimatum | Emergency vote, 3 min | "OpenMind was shut down. Nobody else was." Variant: Nationalized continues the run with `nationalized` seeds |
-| Bio / cyber | near misses only; they arm Stage 3+ | — | — |
+| Ending                     | Warnings                                                     | Last chance                  | Result screen                                                                                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Second Place (Irrelevance) | line turns red at 2×; "Series C pulled" at 3×                | Irrelevance countdown, 3 min | Race graph frozen with the rival crossing 10×; "OpenMind has been acquired by Anthrosoft. The garage is still a yoga studio." Existing `Ending` page with the 13-row table + the band truth reveal (band vs hidden A) |
+| Shutdown                   | approval < 30: "Calls grow to shut down OpenMind"; ultimatum | Emergency vote, 3 min        | "OpenMind was shut down. Nobody else was." Variant: Nationalized continues the run with `nationalized` seeds                                                                                                          |
+| Bio / cyber                | near misses only; they arm Stage 3+                          | —                            | —                                                                                                                                                                                                                     |
 
 - Add `secondPlace` and `shutdown` to `endings.ts`. The ending page gains the truth reveal (visible band over time vs. hidden `alignmentTrue`) and a ledger of seeds (flags with dates).
 - Rewind: after an early ending offer "Rewind to stage start" (stage-start autosave slot) and "Start over".
@@ -303,28 +303,28 @@ Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r`
 
 ## 11. Pacing and balance
 
-| Target | Value | Measured by |
-|---|---|---|
-| Stage length | 38–48 min (bot), human ~45 | `npm run sim -- --stop-at-stage 3` |
-| Time to first meaningful choice after arrival | ≤ 45 s (a GPU batch is affordable at arrival; Release Policy at ~1:30) | critic `firstChoice` |
-| Nothing enabled (hands) | ≤ 10% of checks | critic `hands` |
-| Idle, loose | ≤ 90 s total in the first 5 min; longest stretch ≤ 60 s | critic `idle` |
-| Reveal cadence | new panel/mechanic every ≤ 4 min; longest novelty gap ≤ 180 s | critic `revealGaps` |
-| Greyed goal on screen | ≥ 99% of snapshots | critic `goalVisible` |
-| Modals | 11 eval decisions + 6–8 crises, crises ≥ 240 s apart | sim MODAL lines |
-| Training | 10–11 runs, each ≤ 110 s, a run start every 3–4 min | sim TRAIN lines |
-| Cognitive load | ≤ 24 controls and ≤ 60 numbers on screen at minute 20 of the stage; ≤ 3 new controls per beat | `smoke`-style caps |
-| Soft-locks | none: power zero, data wall ignored for 15 min, no security, approval collapse, reload mid-run, pipeline queued at gate | `softlock.ts` scenarios |
+| Target                                        | Value                                                                                                                   | Measured by                        |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Stage length                                  | 38–48 min (bot), human ~45                                                                                              | `npm run sim -- --stop-at-stage 3` |
+| Time to first meaningful choice after arrival | ≤ 45 s (a GPU batch is affordable at arrival; Release Policy at ~1:30)                                                  | critic `firstChoice`               |
+| Nothing enabled (hands)                       | ≤ 10% of checks                                                                                                         | critic `hands`                     |
+| Idle, loose                                   | ≤ 90 s total in the first 5 min; longest stretch ≤ 60 s                                                                 | critic `idle`                      |
+| Reveal cadence                                | new panel/mechanic every ≤ 4 min; longest novelty gap ≤ 180 s                                                           | critic `revealGaps`                |
+| Greyed goal on screen                         | ≥ 99% of snapshots                                                                                                      | critic `goalVisible`               |
+| Modals                                        | 11 eval decisions + 6–8 crises, crises ≥ 240 s apart                                                                    | sim MODAL lines                    |
+| Training                                      | 10–11 runs, each ≤ 110 s, a run start every 3–4 min                                                                     | sim TRAIN lines                    |
+| Cognitive load                                | ≤ 24 controls and ≤ 60 numbers on screen at minute 20 of the stage; ≤ 3 new controls per beat                           | `smoke`-style caps                 |
+| Soft-locks                                    | none: power zero, data wall ignored for 15 min, no security, approval collapse, reload mid-run, pipeline queued at gate | `softlock.ts` scenarios            |
 
 Bottleneck rotation and levers:
 
-| Stage min | Binding constraint | Levers on screen |
-|---|---|---|
-| 0–8 | Compute (first runs eat the whole fleet) | Buy GPUs, Build Datacenter, G5 chips |
-| 6–16 | Data | Licensing, customer data, Synthetic Data Engine (overbuild inference), RL Environments |
-| 14–26 | Money and demand | Sage for Work, Mega-round, government contracts, marketing, Deploy instead of Keep |
-| 18–30 | Security and tempo | Security levels, Egress, Export Controls, Safety Commitments |
-| 28–40 | Alignment uncertainty and the 10× gate | Model Spec, CoT, Probes, SAEs, safety focus, Compute Cap; G6 chips and Gigawatt Sites for the last runs |
+| Stage min | Binding constraint                       | Levers on screen                                                                                        |
+| --------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 0–8       | Compute (first runs eat the whole fleet) | Buy GPUs, Build Datacenter, G5 chips                                                                    |
+| 6–16      | Data                                     | Web scrapes, licensing, customer data, RL Environments                                                  |
+| 14–26     | Money and demand                         | Sage for Work, Mega-round, government contracts, marketing, Deploy instead of Keep                      |
+| 18–30     | Security and tempo                       | Security levels, Egress, Export Controls, Safety Commitments                                            |
+| 28–40     | Alignment uncertainty and the 10× gate   | Model Spec, CoT, Probes, SAEs, safety focus, Compute Cap; G6 chips and Gigawatt Sites for the last runs |
 
 - Tuning method: extend `src/sim/policy.ts` with a Stage 2 policy (buy infrastructure when a run is GPU-blocked, license data when short, deploy by default, answer crises conservatively). Run seeds 1–10 and read `idleGaps`, `longestRevealGap`, TRAIN cadence, and the transition time. Adjust the constants in §6 until the table above holds. Record results in `docs/stage2-tuning.md`.
 
@@ -335,7 +335,7 @@ Reuse first: `ProjectDef`/`project()` (`src/data/projects.ts`), reveal rules (`s
 1. **State and gate** (`state.ts`, `stages.ts`, `clock.ts`): new fields (`chipGen`, `dcTier`, `data`, `baiwen`, `tempo`, `security`, `alignmentBand`, `deceptionBias`, `jobsDisplaced`, `history`, `training.next`); `SAVE_VERSION` 15 with defaults in `migrate`; Stage 2 `enter` (hide task, `gridAuto`, approval 62, tempo 50, data 8T, history seeded from Stage 1); rename to The Race.
 2. **Infrastructure** (`economy.ts`, `Infrastructure.tsx`): effective compute, chip generations, datacenter tiers, batch sizes, grid tiers, trade-in, security row, data row. Bottleneck messages.
 3. **Training** (`training.ts`, `Training.tsx`): Stage 2 requirement formulas, duration cap, data factor, new eval rows, Release Policy modal, `training.next` pipeline, tier labels.
-4. **Data and research handoff** (`src/engine/data.ts`, `economy.ts`, `Research.tsx`): web scrape, synthetic from idle copies, licensing, AI research term, share bar.
+4. **Data and research handoff** (`src/engine/data.ts`, `economy.ts`, `Research.tsx`): data from tasks, web scrapes, licensing, AI research term, share bar.
 5. **Rivals and graph** (`src/engine/rivals.ts`, `src/components/RaceGraph.tsx`): Baiwen, tempo, lead, history sampling, SVG panel, irrelevance warnings.
 6. **World** (`src/engine/world.ts`, `Public`/`Government` panels in `App.tsx` → own components): approval, relations, jobs displaced, protest, ultimatum, emergency vote.
 7. **Alignment** (`src/engine/alignment.ts`, `src/components/AlignmentStrip.tsx`): band model, drift, bias, strip under the console, interpretability projects.
@@ -361,11 +361,11 @@ Milestones: (a) gate + infrastructure + training loop playable (minutes 0–10);
 
 ## 14. Later stages, skeleton only
 
-| Stage | Calendar (s/month) | Core number | Loop | New | Ends with | Deaths |
-|---|---|---|---|---|---|---|
-| 3 Takeoff | Jan–Oct 2027 (270 s) | capability, band | Sage trains itself; player allocates compute (research / products / safety) and investigates monitor flags; old Sages as monitors; neuralese arrives | energy (GW), monitors, readability, unemployment, whistleblower leak → Oversight Committee, cyberattack at scale, exfiltration attempts, referendum | committee vote at 250× (SAR at ~Aug, SIAR by Nov) | Escape, Shutdown, Second Place |
-| 4 Superintelligence | Nov 2027–Dec 2028 (150 s) | GDP growth, lives saved | robots build factories that build robots; cures; UBI vs riots; special economic zones; treaty with Baiwen verified by AI | humanoid robots (Talos), regional approval, wealth gap, UBI, pathogen risk, Safer-N line if slowed | treaty or autonomy grant at 2,000× | Pathogen, Escape, Second Place, Shutdown |
-| 5 Beyond | 2029–2030 (90 s) | band width | Sage proposes, you approve/investigate/veto; orbital datacenters; matter and energy; the rival clock | space, Dyson-swarm hints, Sage takes panels over as autonomy rises | Hand Over the Keys → Abundance / Quiet Handover / Extinction by hidden A | all |
+| Stage               | Calendar (s/month)        | Core number             | Loop                                                                                                                                                 | New                                                                                                                                                 | Ends with                                                                | Deaths                                   |
+| ------------------- | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------- |
+| 3 Takeoff           | Jan–Oct 2027 (270 s)      | capability, band        | Sage trains itself; player allocates compute (research / products / safety) and investigates monitor flags; old Sages as monitors; neuralese arrives | energy (GW), monitors, readability, unemployment, whistleblower leak → Oversight Committee, cyberattack at scale, exfiltration attempts, referendum | committee vote at 250× (SAR at ~Aug, SIAR by Nov)                        | Escape, Shutdown, Second Place           |
+| 4 Superintelligence | Nov 2027–Dec 2028 (150 s) | GDP growth, lives saved | robots build factories that build robots; cures; UBI vs riots; special economic zones; treaty with Baiwen verified by AI                             | humanoid robots (Talos), regional approval, wealth gap, UBI, pathogen risk, Safer-N line if slowed                                                  | treaty or autonomy grant at 2,000×                                       | Pathogen, Escape, Second Place, Shutdown |
+| 5 Beyond            | 2029–2030 (90 s)          | band width              | Sage proposes, you approve/investigate/veto; orbital datacenters; matter and energy; the rival clock                                                 | space, Dyson-swarm hints, Sage takes panels over as autonomy rises                                                                                  | Hand Over the Keys → Abundance / Quiet Handover / Extinction by hidden A | all                                      |
 
 ## 15. Open questions
 
@@ -380,3 +380,4 @@ Milestones: (a) gate + infrastructure + training loop playable (minutes 0–10);
 - Also implemented since: the truth-reveal ribbon and seed ledger on the ending screen, a rewind-to-stage-start slot after an ending, the reckless bot variant, incremental grid growth and an adaptive GPU block (both from the critic loop), and the Stage 2 cards that carry into Stage 3.
 - Not yet implemented: the two rescue cards (bridge loan, sell old GPUs) and the datacenter-protest crisis. Stage 3 remains the committed skeleton.
 - Verified: unit tests (`tests/stage2.test.ts`), the sim's `== Stage 2 ==` report for seeds 1–3 and the naive, greedy and reckless policies, `npm run test:stage2` (33 browser checks), the phone layout, and six critic rounds against the Paperclips Stage 2 fixture (`docs/stage2-tuning.md`).
+- Reworked after the owner's review (2026-10-08, round 7 in the tuning log): runs cost research; Stage 2 cards have fixed research prices and the Stage 1 carry-overs are only the revenue, press, alignment, batch and MoE cards; New building is the only doubler; decision dialogs show option labels only (what an option costs is still named when it is unaffordable); data comes from tasks completed with web scrapes and licensing on top, and the Data row is on screen from arrival. Synthetic Data Engine, Research campus and Continuous training are gone. In Stage 1, Hire Researcher and Expand Lab are money-priced from the start (Trust pays for one when held) and the desk card is gone; the first Stage 2 run costs `100k × (c/1.8)^3.6`.

@@ -2,15 +2,7 @@ import { Fragment, useEffect, useRef } from 'react';
 import { useGame, usePerform, useGameStore } from '../store/context.js';
 import { Panel, ConfirmButton } from './primitives.js';
 import { dateLabel } from '../engine/format.js';
-import {
-  choiceById,
-  choiceOptionEnabled,
-  optionCost,
-  optionTooltip,
-  optionLine,
-  optionNeeds,
-  defaultIndex,
-} from '../engine/events.js';
+import { choiceById, choiceOptionEnabled, optionCost, optionNeeds, defaultIndex } from '../engine/events.js';
 import { costLabel } from '../engine/projects.js';
 import { endingById, endStats } from '../engine/endings.js';
 import { loadStageStart } from '../ui/save.js';
@@ -189,7 +181,6 @@ export function ChoiceDialog() {
         previous.focus({ preventScroll: true });
     };
   }, [open, perform]);
-  const lines = def?.options.some((option) => option.line !== undefined);
   const fallback = def?.options[defaultIndex(def)];
   return (
     <div id="modalOverlay" data-panel="modal" className={open ? 'shown' : ''}>
@@ -208,26 +199,21 @@ export function ChoiceDialog() {
         <div id="modalButtons">
           {def?.options.map((option, i) => {
             const cost = optionCost(s, option);
-            const tip = optionTooltip(s, option);
             const disabled = !choiceOptionEnabled(s, def, i);
             return (
               <button
                 key={`${def.id}-${i}`}
                 id={`choice-${def.id}-${i}`}
                 data-option={i}
-                className={`modalButton${lines ? ' twoLine' : ''}`}
+                className={`modalButton${disabled ? ' twoLine' : ''}`}
                 disabled={disabled}
-                title={[tip, cost && !tip.startsWith('$') ? `Costs ${costLabel(cost)}.` : '']
-                  .filter(Boolean)
-                  .join(' ')}
+                title={cost ? `Costs ${costLabel(cost)}.` : ''}
                 onClick={() => perform('resolveChoice', i)}
               >
-                {lines ? (
+                {disabled ? (
                   <>
                     <span className="optLabel">{option.label}</span>
-                    <span className="optLine">
-                      {disabled ? optionNeeds(s, option) : optionLine(s, option)}
-                    </span>
+                    <span className="optLine">{optionNeeds(s, option)}</span>
                   </>
                 ) : (
                   option.label

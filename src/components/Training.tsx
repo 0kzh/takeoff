@@ -172,6 +172,8 @@ function trainShortfall(s: ReturnType<typeof useGame>): string {
   const parts: string[] = [];
   const cost = trainCost(s);
   if ((cost.funds ?? 0) > s.funds) parts.push(`${fmtMoneyShort((cost.funds ?? 0) - s.funds)} more`);
+  if ((cost.research ?? 0) > s.research)
+    parts.push(`${fmtInt((cost.research ?? 0) - s.research)} more research`);
   const g = trainGpuFigures(s);
   if (g.need > g.have) parts.push(`${fmtInt(g.need - g.have)} more idle GPUs`);
   if (!trainSlotFree(s)) parts.push('the current model has to ship first');
@@ -189,6 +191,7 @@ function IdleTraining() {
     ['funds', fmtMoneyShort, s.funds, cost.funds ?? 0],
     ['power', (n) => `${fmtInt(n)} kWh`, s.power, cost.power ?? 0],
     ['gpus', (n) => `${fmtInt(n)} GPU${n === 1 ? '' : 's'}`, gpus.have, gpus.need],
+    ['research', (n) => `${fmtInt(n)} research`, s.research, cost.research ?? 0],
     ['data', (n) => `${fmtNum(n, 1)}T data`, effectiveData(s), dataNeed],
   ];
   const slotFree = trainSlotFree(s);
