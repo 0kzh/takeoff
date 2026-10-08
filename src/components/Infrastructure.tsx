@@ -290,7 +290,8 @@ export function Infrastructure() {
             title={`Raise the grid connection to ${fmtMw(next)} MW.${owned ? ` Enough for ${fmtInt(next / GRID_KW_PER_GPU)} GPUs.` : ''}${s.gridAuto ? '' : ` Power is bought ${fmtInt(next)} kWh at a time.`}`}
             onClick={() => perform('expandGrid')}
           >
-            Expand Grid (<span id="gridNext">{fmtMw(next)}</span> MW)
+            Expand Grid ({s.stage >= 2 ? '+' : ''}
+            <span id="gridNext">{fmtMw(s.stage >= 2 ? next - s.gridCapacity : next)}</span> MW)
           </button>{' '}
           Cost: <span id="gridCost">{fmtMoneyShort(gridUpgradeCost(s))}</span>
           <br />

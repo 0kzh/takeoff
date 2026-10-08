@@ -116,13 +116,25 @@ export function theftOdds(s: GameState): number {
   return [0.9, 0.9, 0.5, 0.25, 0.1][Math.min(SECURITY_MAX, Math.max(1, s.security))] ?? 0.1;
 }
 
+export const GRID_STEP_MIN_S2 = 10000;
+export const GRID_STEP_SHARE_S2 = 0.25;
+
+// Stage 2 grows the grid in steps (10 MW, later a quarter of capacity) priced per
+// kW added, so the grid is a steady repeatable buy rather than a ×10 cliff.
+export function gridStep(s: GameState): number {
+  if (s.stage < 2) return s.gridCapacity * (GRID_STEP - 1);
+  const share = s.gridCapacity * GRID_STEP_SHARE_S2;
+  const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, share))) - 1));
+  return Math.max(GRID_STEP_MIN_S2, Math.round(share / unit) * unit);
+}
+
 export function nextGridCapacity(s: GameState): number {
-  return s.gridCapacity * GRID_STEP;
+  return s.gridCapacity + gridStep(s);
 }
 
 export function gridUpgradeCost(s: GameState): number {
   const next = nextGridCapacity(s);
-  if (s.stage >= 2) return Math.round(GRID_COST_PER_KW_S2 * next * (s.flags['ppa'] ? 0.7 : 1));
+  if (s.stage >= 2) return Math.round(GRID_COST_PER_KW_S2 * gridStep(s) * (s.flags['ppa'] ? 0.7 : 1));
   return next <= GRID_FIRST_TIER ? GRID_FIRST_COST : GRID_COST_PER_KW * next;
 }
 
