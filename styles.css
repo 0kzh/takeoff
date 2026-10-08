@@ -33,7 +33,7 @@ div[data-reveal].shown, .panel.shown { display: block; }
 #evalRisk { margin: 2px 0 4px; }
 #pipelineNote { margin-bottom: 4px; }
 .costRow.short .progressFill { background: #b00000; }
-#headerRight { font-size: 16px; padding-right: 4px; display: flex; gap: 0; align-items: baseline; }
+#headerRight { font-size: 16px; padding-right: 4px; display: flex; gap: 10px; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; }
 #capabilityHeader.shown { display: inline; white-space: nowrap; }
 #gameDate { display: none; }
 #gameDate.shown { display: inline; }

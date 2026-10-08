@@ -30,7 +30,7 @@ function Header() {
       </h2>
       <div id="headerRight">
         <span id="capabilityHeader" data-reveal="capabilityHeader" className={capShown ? 'shown' : ''}>
-          {model} · <span id="headerCapability">{cap}</span>× · <span id="headerRevenue">{rev}</span>/s ·{' '}
+          {model} · <span id="headerCapability">{cap}</span>× · <span id="headerRevenue">{rev}</span>/s
         </span>
         <span id="gameDate" data-reveal="log" className={shown ? 'shown' : ''}>
           {date}

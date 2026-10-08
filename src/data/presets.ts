@@ -197,26 +197,32 @@ export interface Stage2Checkpoint {
   id: string;
   label: string;
   title: string;
-  minutes: number;
+  /** The bot plays from the arrival until this holds (plus a short grace), or 40 minutes pass. */
+  reached: (s: GameState) => boolean;
+  graceSeconds: number;
 }
 
-// Checkpoints are produced by letting the bot play from the Stage 2 arrival for
-// a fixed number of minutes with the given seed, so they stay honest as the
-// balance changes. They are cheats for review, not balance evidence.
+// Checkpoints are produced by letting the bot play from the Stage 2 arrival
+// until a game condition holds, so they stay honest as the balance changes.
+// They are cheats for review, not balance evidence.
 export const STAGE2_CHECKPOINTS: Stage2Checkpoint[] = [
-  { id: 'arrival', label: 'arrival', title: 'Stage 2 arrival: the first datacenter', minutes: 0 },
-  { id: 'datawall', label: 'data', title: 'About 7 minutes in: the data wall', minutes: 7 },
-  { id: 'baiwen', label: 'baiwen', title: 'About 18 minutes in: Baiwen and security', minutes: 18 },
-  { id: 'alignment', label: 'align', title: 'About 24 minutes in: the alignment strip', minutes: 24 },
-  { id: 'final', label: 'final', title: 'About 36 minutes in: the final runs', minutes: 36 },
+  { id: 'arrival', label: 'arrival', title: 'Stage 2 arrival: the first datacenter', reached: () => true, graceSeconds: 0 },
+  { id: 'datawall', label: 'data', title: 'The data wall: the public web is exhausted', reached: (s) => s.flags['webExhausted'] === true, graceSeconds: 30 },
+  { id: 'baiwen', label: 'baiwen', title: 'Baiwen joins the race; the Security Office is on screen', reached: (s) => s.baiwen.present, graceSeconds: 45 },
+  { id: 'alignment', label: 'align', title: 'The alignment strip has just appeared', reached: (s) => s.revealed['alignment'] === true, graceSeconds: 20 },
+  { id: 'final', label: 'final', title: 'Automate the Lab is on screen, greyed until 10×', reached: (s) => s.projects['s2_automate']?.shown === true, graceSeconds: 60 },
 ];
+
+export const CHECKPOINT_MAX_SECONDS = 40 * 60;
 
 export function stage2Checkpoint(id: string, seed: number): GameState {
   const cp = STAGE2_CHECKPOINTS.find((c) => c.id === id) ?? STAGE2_CHECKPOINTS[0]!;
   const s = stage2(seed);
   const mem = newBotMemory('bot');
-  const ticks = Math.round(cp.minutes * 600);
-  for (let i = 0; i < ticks && s.stage === 2 && !s.ending; i++) {
+  let reachedAt = cp.reached(s) ? 0 : -1;
+  for (let i = 0; i < CHECKPOINT_MAX_SECONDS * 10 && s.stage === 2 && !s.ending; i++) {
+    if (reachedAt < 0 && cp.reached(s)) reachedAt = i;
+    if (reachedAt >= 0 && i - reachedAt >= cp.graceSeconds * 10) break;
     policyStep(s, actions, mem);
     step(s);
   }

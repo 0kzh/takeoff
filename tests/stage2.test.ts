@@ -266,7 +266,7 @@ describe('Stage 2 gate and persistence', () => {
     const y = stage2Checkpoint('datawall', 1);
     expect(serialize(x)).toBe(serialize(y));
     expect(x.stage).toBe(2);
-    expect(x.stats.timeInStage).toBeGreaterThan(400);
+    expect(x.flags['webExhausted']).toBe(true);
     expect(visibleProjects(x).length).toBeGreaterThan(0);
   });
 });
