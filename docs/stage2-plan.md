@@ -373,3 +373,9 @@ Milestones: (a) gate + infrastructure + training loop playable (minutes 0–10);
 - Should the `race/` draft files be deleted on `main` when Stage 2 lands, or kept until then? This branch simply doesn't have them.
 - Stage 2 ends at 10× (SC). If you prefer the wiki's 50× (SAR) gate, Stage 2 grows by ~4 runs and ~12 minutes and Stage 3 shrinks.
 - Lab name: code says OpenMind, the wiki says OpenBrain. The plan keeps OpenMind.
+
+## 16. Implementation status (2026-10-08)
+
+- Implemented on branch `stage2-plan`: sections 3–10 as described, with the balance in `docs/stage2-tuning.md` (reach exponent 0.35, compute exponent 4.0, GPU price $100 and ×1.05, the gate at 30k research / 150 insight).
+- Not yet implemented: the truth-reveal ribbon on the ending screen (the ending page shows the stats table and hidden true alignment only), the "rewind to stage start" slot, the two rescue cards (bridge loan, sell old GPUs), the datacenter-protest crisis, and a careless bot policy for the sim. Stage 3 remains the committed skeleton.
+- Verified: unit tests (`tests/stage2.test.ts`), the sim's `== Stage 2 ==` report for seeds 1–3, the browser checkpoints and the phone layout.

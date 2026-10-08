@@ -32,6 +32,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     revealResearch: 60,
     description: 'Nimbus swaps every GPU in the fleet. Four times the compute per GPU.',
     trigger: (s) => s.stage === 2,
+    urgent: (s) => s.stage === 2 && s.chipGen < 2,
     buy: (s) => {
       s.chipGen = Math.max(s.chipGen, 2);
     },
