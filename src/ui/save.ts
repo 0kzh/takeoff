@@ -11,6 +11,17 @@ export function loadSave(storage?: Pick<Storage, 'getItem'>): GameState | null {
     return null;
   }
 }
+export function stageStartKey(stage: number): string {
+  return `${SAVE_KEY}.stage${stage}-start`;
+}
+export function loadStageStart(stage: number, storage?: Pick<Storage, 'getItem'>): GameState | null {
+  try {
+    const text = (storage ?? localStorage).getItem(stageStartKey(stage));
+    return text ? deserialize(text) : null;
+  } catch {
+    return null;
+  }
+}
 export function exportSave(state: GameState): string {
   const bytes = new TextEncoder().encode(serialize(state));
   return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
@@ -52,6 +63,14 @@ export function startPersistence(
   const unsubscribe = store.subscribe((current, previous) => {
     if (current.saveRevision !== previous.saveRevision && pending === undefined)
       pending = setTimeout(save, ACTION_SAVE_DELAY_MS);
+    // A stage's opening state is kept so an early ending can rewind to it.
+    if (current.game.stage !== previous.game.stage && current.game.stage >= 2 && !current.game.ending) {
+      try {
+        (storage ?? localStorage).setItem(stageStartKey(current.game.stage), serialize(current.game));
+      } catch {
+        // Storage failures never stop play.
+      }
+    }
   });
   const interval = setInterval(save, AUTOSAVE_MS);
   const hidden = () => {

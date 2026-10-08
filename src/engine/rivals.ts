@@ -97,6 +97,9 @@ export function sampleHistory(s: GameState): void {
     Math.round(s.capability * 1000) / 1000,
     Math.round(s.rivalCapability * 1000) / 1000,
     s.baiwen.present ? Math.round(s.baiwen.capability * 1000) / 1000 : 0,
+    s.revealed['alignment'] ? Math.round(s.alignmentApparent * 10) / 10 : -1,
+    s.revealed['alignment'] ? Math.round(s.alignmentBand * 10) / 10 : -1,
+    Math.round(s.alignmentTrue * 10) / 10,
   ]);
   if (s.history.length > HISTORY_LIMIT) s.history.splice(0, s.history.length - HISTORY_LIMIT);
 }
