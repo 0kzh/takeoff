@@ -65,6 +65,8 @@ Biggest gap named by the numbers: the scripted player has nothing enabled 69% of
 
 Round 2 (build `stage2-v2`, adaptive GPU block): nothing-to-do fell to 314 s / 19.2% (longest 30 s) and nothing-enabled to 20.5%; clicks per minute rose from 8.1 to 26.4; first meaningful choice 0:16; longest reveal gap 152 s; numbers on screen 41 / 70 / 76 / 87 at 0 / 5 / 10 / 20 min. The run died at 27:18 on the Weight Theft dialog crash, which that build predates; round 3 uses the fixed build.
 
+Round 3 (build `stage2-v3`, theft fix): the scripted player reaches Stage 3 at 37:02; nothing-to-do 228 s / 10.3% (longest 28 s); nothing-enabled 11.0%; first meaningful choice 0:16; greyed goal 100%; longest reveal gap 270 s (32:10 → 36:40, the save for the gate); numbers on screen 41 / 70 / 74 / 80 / 90 at 0 / 5 / 10 / 20 / 30 min against Paperclips' 26 / 32 / 60 / 66 / 70. The transition capture shows the gate line and the Oversight and Geopolitics panels arriving, the Projects panel emptying (Stage 3 has no cards yet), and three Stage 2 cards vanishing unbought, so the alignment, security, data and lab cards now stay available in Stage 3.
+
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 
 ## Browser verification (`npm run test:stage2`)

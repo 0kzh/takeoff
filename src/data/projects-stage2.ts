@@ -53,7 +53,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_licensing',
     title: 'Data licensing deal',
-    stages: [2],
+    stages: [2, 3],
     priceTag: (s) => `(${fmtMoneyShort(licenseCost(s))} · repeatable)`,
     cost: (s) => ({ funds: licenseCost(s) }),
     description: `+${LICENSE_DATA}T tokens of training data. Each deal costs twice the last.`,
@@ -67,7 +67,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_synthetic',
     title: 'Synthetic Data Engine',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 10000, insight: 40 },
     revealResearch: 90,
     description: 'Idle copies write training data instead of waiting for customers.',
@@ -95,7 +95,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_rl_envs',
     title: 'RL environments',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 14000, insight: 60 },
     revealResearch: 110,
     description: 'Ten thousand small worlds to practise in. Data goes 50% further; runs gain a little more.',
@@ -119,7 +119,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_building',
     title: 'New building',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 10000, funds: 500000 },
     revealFunds: 60,
     revealResearch: 60,
@@ -135,7 +135,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_hyperscale',
     title: 'Hyperscale campuses',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 12000, funds: 1000000 },
     revealFunds: 90,
     revealResearch: 80,
@@ -150,7 +150,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_chip_g6',
     title: 'Nimbus G6 chips',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 25000, funds: 20000000 },
     revealFunds: 120,
     revealResearch: 120,
@@ -165,7 +165,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_campus',
     title: 'Research campus',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 24000 },
     revealResearch: 150,
     description: 'Most of it is server halls. Research capacity ×2.',
@@ -195,7 +195,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_gov_contracts',
     title: 'Government contracts',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 12000 },
     revealResearch: 100,
     description: 'Four hundred seats and a classified version. A lump of revenue; contracts pay half again as much.',
@@ -224,7 +224,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_security',
     title: 'Security office',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 8000, funds: 1000000 },
     revealFunds: 45,
     revealResearch: 60,
@@ -240,7 +240,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_egress',
     title: 'Egress monitoring',
-    stages: [2],
+    stages: [2, 3],
     chain: true,
     cost: { research: 10000, funds: 500000 },
     revealFunds: 30,
@@ -255,7 +255,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_export',
     title: 'Export controls lobbying',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 15000 },
     revealResearch: 100,
     description: 'Chips stop flowing to Baiwen for six minutes. Tempo rises.',
@@ -270,7 +270,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_evals',
     title: 'Dangerous capability evals',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 14000, funds: 500000 },
     revealFunds: 45,
     revealResearch: 100,
@@ -299,7 +299,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_spec',
     title: 'Model Spec',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 12000, insight: 80 },
     revealResearch: 90,
     description: 'A written constitution for Sage. Alignment +4, band −3.',
@@ -313,7 +313,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_cot',
     title: 'Chain-of-thought monitoring',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 11000 },
     revealResearch: 90,
     description: 'Read the scratchpad. Band −6.',
@@ -327,7 +327,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_probes',
     title: 'Linear probes',
-    stages: [2],
+    stages: [2, 3],
     chain: true,
     cost: { research: 16000, insight: 120 },
     revealResearch: 110,
@@ -342,7 +342,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_redteam',
     title: 'Red team',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 12000, funds: 400000 },
     revealFunds: 45,
     revealResearch: 90,
@@ -356,7 +356,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_honesty',
     title: 'Honesty training',
-    stages: [2],
+    stages: [2, 3],
     chain: true,
     cost: { research: 20000, insight: 150 },
     revealResearch: 120,
@@ -371,7 +371,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_sae',
     title: 'Sparse autoencoders',
-    stages: [2],
+    stages: [2, 3],
     chain: true,
     cost: { research: 24000, insight: 200 },
     revealResearch: 150,
@@ -386,7 +386,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_commitments',
     title: 'Public safety commitments',
-    stages: [2],
+    stages: [2, 3],
     sideline: true,
     cost: { research: 10000, funds: 300000 },
     revealFunds: 30,
@@ -403,7 +403,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_compute_cap',
     title: 'Compute cap proposal',
-    stages: [2],
+    stages: [2, 3],
     sideline: true,
     cost: { insight: 150 },
     description: 'Propose an international limit on training runs. Tempo −15. Baiwen may not keep to it.',
@@ -418,7 +418,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
   project({
     id: 's2_continuous',
     title: 'Continuous learning',
-    stages: [2],
+    stages: [2, 3],
     cost: { research: 18000, insight: 100 },
     revealResearch: 120,
     description: 'Sage learns on the job. Every run gains a little more. Seeds the next stage.',
