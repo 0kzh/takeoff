@@ -52,7 +52,7 @@ Status: plan only, nothing implemented. Branch `stage2-plan`, cut from `main` at
 
 - **Tasks.** `copies × perCopyRate` as today (`perCopyRate = capability^0.8 × copyBoost`). Copies = powered GPUs not busy training, × `copiesPerGPU`. Clicking retires at the gate.
 - **Selling.** Unchanged demand model (`demandAt`, `expectedSalesPerSec`). Demand levers: price (auto if `p_auto_pricing`), marketing, quality (`sqrt(cap/rivalCap)`), products (new `demandMult` projects), contracts.
-- **Compute.** GPUs now owned: Buy GPUs (1,000) → Build Datacenter → Expand Grid. Chip generations multiply compute per GPU. GPUs busy in a training run do not serve customers (existing `busyGpus`): training has a visible revenue cost.
+- **Compute.** GPUs now owned: Buy GPUs (1,000) → Build Datacenter → Expand Grid. Chip generations multiply compute per GPU. A run requires the fleet to hold its GPUs, but the copies keep serving customers while it trains (changed from the original plan at the owner's request).
 - **Training.** Each run needs idle effective GPUs, funds, and enough data. Produces Sage-N.m with a gain. Eval card → fix issues → Deploy or Keep internal. After **Training Pipeline**, a second run may train while the previous model is in eval/red team/rollout.
 - **Research.** Humans decay (existing `humanEfficiency = min(1, 3/cap)`); Sage takes over research after **Sage Writes Our Code**. Research buys projects. Insight accrues only while research is full (existing).
 - **Slack currency.** Idle copies (copies beyond what the market buys) write **synthetic data** once the Synthetic Data Engine is bought. Overbuilding inference is never waste.

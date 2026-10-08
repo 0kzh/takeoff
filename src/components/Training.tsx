@@ -131,7 +131,7 @@ export function Training() {
         <Progress id="runBar" fraction={running ? running.elapsed / running.duration : 0} />
         <span
           id="runLine"
-          title={`Training on ${fmtInt(running?.gpus ?? 0)} GPUs. They serve no customers until it is done.`}
+          title={`Training on ${fmtInt(running?.gpus ?? 0)} GPUs. The copies keep serving customers meanwhile.`}
         >
           {running ? Math.max(0, Math.ceil(running.duration - running.elapsed)) : 0} s remaining
         </span>

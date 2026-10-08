@@ -30,7 +30,7 @@ import {
   theftOdds,
   SECURITY_MAX,
 } from '../engine/economy.js';
-import { trainingRun, startCapability } from '../engine/training.js';
+import { startCapability } from '../engine/training.js';
 import { effectiveData, dataRequired, syntheticRatePerMin, webShare, WEB_TOTAL } from '../engine/data.js';
 import { fmtMoney, fmtMoneyShort, fmtInt, fmtMw, fmtClock, fmtNum } from '../engine/format.js';
 
@@ -38,7 +38,6 @@ export function Infrastructure() {
   const s = useGame();
   const perform = usePerform();
   const owned = s.revealed['infrastructure'] === true;
-  const run = trainingRun(s);
   const room = gpuCapacity(s);
   const batch = gpuBlock(s);
   const full = !canBuyGpuBatch(s);
@@ -97,7 +96,7 @@ export function Infrastructure() {
           <span id="copiesRow" className={copies(s) !== s.gpus ? 'shown' : ''}>
             Copies running: <span id="copies">{fmtInt(copies(s))}</span>{' '}
             <span id="copiesNote" className="note">
-              {copiesIdle(s) ? '(idle: no power)' : run ? `(${fmtInt(run.gpus ?? 0)} GPUs are training)` : ''}
+              {copiesIdle(s) ? '(idle: no power)' : ''}
             </span>
             <br />
           </span>

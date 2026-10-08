@@ -136,7 +136,7 @@ export function gpusNeeded(s: GameState): number {
 }
 
 export function gpusAvailable(s: GameState): number {
-  return Math.max(0, activeGpus(s) - busyGpus(s));
+  return activeGpus(s);
 }
 
 export function busyGpus(s: GameState): number {
@@ -277,7 +277,6 @@ function startRun(s: GameState, cost: Cost): boolean {
   if (inPrologue(s)) return startPrologueRun(s, cost);
   const t = s.training;
   const gpus = gpusNeeded(s);
-  const serving = Math.max(0, gpusAvailable(s) - gpus);
   const duration = Math.round(trainingDuration(s));
   const capBefore = startCapability(s);
   const version = nextVersion(s);
@@ -320,7 +319,7 @@ function startRun(s: GameState, cost: Cost): boolean {
   if (s.stage >= 2) bump(s, 'runsThisStage');
   if (run.focus === 'safety') bump(s, 'safetyRuns');
   const short = s.stage >= 2 && dataShort(s, capBefore) ? ' Data is short: the gain shrinks.' : '';
-  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs; ${fmtInt(serving)} keep serving.${short}`);
+  say(s, `Training ${run.name} on ${fmtInt(gpus)} GPUs.${short}`);
   return true;
 }
 

@@ -1,6 +1,5 @@
 import { rng } from './rng.js';
 import { GameState, say, canPay, pay, bump, counter, addFunds, inPrologue, isBought } from './state.js';
-import { busyGpus } from './training.js';
 import { fmtMoneyShort, fmtInt, fmtMw } from './format.js';
 import { mechanicClear } from './stages.js';
 
@@ -230,8 +229,10 @@ export function activeGpus(s: GameState): number {
   return Math.min(s.gpus, Math.floor(s.gridCapacity / GRID_KW_PER_GPU));
 }
 
+// A training run needs the fleet to be big enough, but it does not take GPUs
+// away from customers: every powered GPU keeps serving while a run trains.
 export function servingGpus(s: GameState): number {
-  return Math.max(0, activeGpus(s) - busyGpus(s));
+  return activeGpus(s);
 }
 
 export function servingCompute(s: GameState): number {
