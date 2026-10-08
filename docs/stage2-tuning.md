@@ -44,6 +44,27 @@ Panels revealed (seed 1, stage time): Infrastructure 0:00 · Data row 1:00 · Ra
 - Round 3: compute 4.2 → 4.0, GPU price $100 and ×1.05, approval drain 1/min (0.3 covered), deploy +1, Security Office urgent on Baiwen's arrival, theft 240 s after Baiwen and retries only at SL1 after 300 s.
 - Round 4: rivals capped at 1.3× ours unless the lab stalls; distillation +3% only to rivals still behind; gate 30k research / 150 insight. Stage 2 ends at ~10× with rivals behind.
 
+## Critic head-to-head (tools/critic, scripted "curious first-timer", seed 1)
+
+Round 1 (build `stage2-v1`) against the Paperclips Stage 2 fixture, both capped at 50 min of game time:
+
+| metric | Takeoff Stage 2 | Paperclips Stage 2 |
+|---|---|---|
+| start → stage end | 33:38 (Stage 3) | not reached in 50:00 |
+| first meaningful choice | 0:20 | 0:38 |
+| nothing-to-do (loose), stage | 1306 s / 64.7%, longest 62 s | 0 s |
+| hands: nothing enabled / two or more enabled | 68.9% / 10.2% | 3.0% / 90.6% |
+| longest reveal gap | 146 s | 850 s |
+| longest novelty gap | 80 s | 390 s |
+| greyed-out goal on screen | 100% | 100% |
+| numbers on screen at 0/5/10/20/end | 40 / 68 / 80 / 93 / 84 | 26 / 32 / 60 / 66 / 74 |
+| interactive elements at 0/10/20 | 11 / 16 / 17 | 11 / 21 / 32 |
+| panels, modals | 9, 18 | 8, 0 |
+
+Biggest gap named by the numbers: the scripted player has nothing enabled 69% of the time because Stage 2 purchases are lumpy ($100k+ each) while Paperclips always has a cheap repeatable buy. Fix in round 2: the GPU buy offers a tenth of the batch (down to 100 GPUs) at the same price per GPU whenever the full batch is out of reach, like Stage 1's power block. Also trimmed numbers: the unbilled line hides under auto pricing in Stage 2, the "uses N MW" note and the theft percentage moved into tooltips.
+
+Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
+
 ## Open tuning questions
 
 - The bot deploys every model. A player who keeps models internal will have less revenue and more research; the sim has no such policy yet.
