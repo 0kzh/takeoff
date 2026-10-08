@@ -377,5 +377,6 @@ Milestones: (a) gate + infrastructure + training loop playable (minutes 0–10);
 ## 16. Implementation status (2026-10-08)
 
 - Implemented on branch `stage2-plan`: sections 3–10 as described, with the balance in `docs/stage2-tuning.md` (reach exponent 0.35, compute exponent 4.0, GPU price $100 and ×1.05, the gate at 30k research / 150 insight).
-- Not yet implemented: the truth-reveal ribbon on the ending screen (the ending page shows the stats table and hidden true alignment only), the "rewind to stage start" slot, the two rescue cards (bridge loan, sell old GPUs), the datacenter-protest crisis, and a careless bot policy for the sim. Stage 3 remains the committed skeleton.
-- Verified: unit tests (`tests/stage2.test.ts`), the sim's `== Stage 2 ==` report for seeds 1–3, the browser checkpoints and the phone layout.
+- Also implemented since: the truth-reveal ribbon and seed ledger on the ending screen, a rewind-to-stage-start slot after an ending, the reckless bot variant, incremental grid growth and an adaptive GPU block (both from the critic loop), and the Stage 2 cards that carry into Stage 3.
+- Not yet implemented: the two rescue cards (bridge loan, sell old GPUs) and the datacenter-protest crisis. Stage 3 remains the committed skeleton.
+- Verified: unit tests (`tests/stage2.test.ts`), the sim's `== Stage 2 ==` report for seeds 1–3 and the naive, greedy and reckless policies, `npm run test:stage2` (33 browser checks), the phone layout, and six critic rounds against the Paperclips Stage 2 fixture (`docs/stage2-tuning.md`).

@@ -84,6 +84,10 @@ Round 4 (build `stage2-v4`): the transition capture now lists only the intended 
 
 Biggest gap named: minutes 27:38–37:02 (a quarter of the stage) are a wait for the gate the player cannot read: the Automate the Lab card said "needs 10×" with no progress, its dollar price was decorative (revenue outran it in seconds), and the real gate was four more training runs. Fix (round 5): the card carries a live line and bar, "Sage 5.5× of 10× · about 4 more capability runs", and the dollar price is gone (research, insight and 10× remain). Smaller issues fixed in the same round: the repeated "Trust +1" line (now every third milestone, worded as an unspent balance), Buy GPUs selling dark GPUs (the block is capped by powered room and the button says "Expand Grid first"), the data line reading as a requirement, the orphaned "(costs Trust)" note, the eleven-digit next-Trust target (compact in Stage 2), and the Stage 1 wording on the greyed Train button (it now names the shortfall).
 
+Round 5 (build `stage2-v5`, readable gate, no dollar price, dark-GPU buys blocked): the scripted player reaches Stage 3 at 24:50 and the longest reveal gap falls to 86 s, but nothing-to-do rises to 33.5% because the grid's ×10 tier ($7M) blocks GPU buys for minutes.
+
+Round 6 (build `stage2-v6`, grid grows in +10 MW steps, a quarter of capacity later): Stage 3 at 36:02; nothing-to-do 248 s / 11.5% (longest 22 s); nothing-enabled 12.2%; first meaningful choice 0:16; longest reveal gap 162 s (four over 120 s); greyed goal 100%; numbers on screen 41 / 68 / 72 / 85 / 87 at 0 / 5 / 10 / 20 / 30 min. Browser verification 33/33 (Stage 3 at 24:43 under autoplay).
+
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 
 ## Browser verification (`npm run test:stage2`)
