@@ -660,9 +660,14 @@ export const CHOICES: ChoiceDef[] = [
   {
     id: 'c_theft',
     title: 'Weight Theft',
+    // The percentage is rolled when the dialog opens; text() runs during render
+    // on a frozen snapshot and must not touch the state.
+    onOpen: (s) => {
+      s.flags['theftPercent'] = randInt(s, 30, 70);
+    },
     text: (s) => [
       'Anomalous egress from Training Cluster 3.',
-      `${randIntText(s)}% of the weights have already left the building.`,
+      `${typeof s.flags['theftPercent'] === 'number' ? s.flags['theftPercent'] : 50}% of the weights have already left the building.`,
     ],
     timer: 45,
     defaultOption: 0,
@@ -1059,11 +1064,3 @@ export const CHOICES: ChoiceDef[] = [
     ],
   },
 ];
-
-function randIntText(s: GameState): number {
-  const v = s.flags['theftPercent'];
-  if (typeof v === 'number') return v;
-  const n = randInt(s, 30, 70);
-  s.flags['theftPercent'] = n;
-  return n;
-}

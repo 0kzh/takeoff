@@ -65,6 +65,10 @@ Biggest gap named by the numbers: the scripted player has nothing enabled 69% of
 
 Soft-lock probes (`softlock.ts --stage 2`): ignoring research for 15 minutes leaves Trust unspent with Expand Lab enabled as the way out; releasing with open issues produces the incident chain; reload mid-training keeps the run. No soft-lock found.
 
+## Browser verification (`npm run test:stage2`)
+
+33/33 checks on seed 1: the arrival screen (no task button, Infrastructure buttons, capability header, no strip or race yet, a greyed card within 15 s), the autoplay run to Stage 3 at 23:03 with no page errors, the reveal order (data 1:01 → race 1:41 → public and government 11:05 → alignment strip 11:51 → Automate the Lab 13:59 greyed → tempo 17:31 → security 17:57), reveals at least 40 s apart, a greyed goal on 100% of samples, the required dialogs, the five checkpoints, save and reload mid-run, layouts at 1280×720 and 390 px, and the Weight Theft dialog round-trip. The script found and this branch fixed a crash: the theft dialog rolled a random number during render.
+
 ## Open tuning questions
 
 - The bot deploys every model. A player who keeps models internal will have less revenue and more research; the sim has no such policy yet.

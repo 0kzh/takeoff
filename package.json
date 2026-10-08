@@ -14,6 +14,7 @@
     "test": "vitest run",
     "sim": "tsx src/sim/bot.ts",
     "test:browser": "node tools/verify/smoke.ts",
+    "test:stage2": "node tools/verify/stage2.ts",
     "format": "prettier --write src tests tools vite.config.ts eslint.config.ts index.html",
     "format:check": "prettier --check src tests tools vite.config.ts eslint.config.ts index.html"
   },
