@@ -17,10 +17,10 @@ Chrome is used through `chromium.launch({ channel: 'chrome', headless: true })`;
 download. Every run starts its own static servers on ephemeral ports (127.0.0.1:0) and stops them
 on exit. Network access other than that server is blocked, so the runs are offline.
 
-**Never point `--game-dir` at the repo root while someone is rebuilding it.** Freeze a build first:
+**Never point `--game-dir` at `dist/` while someone is rebuilding it.** Freeze a build first:
 
 ```sh
-mkdir -p agent-tools/snapshots/<name> && cp -R index.html styles.css dist agent-tools/snapshots/<name>/
+npm run build && mkdir -p agent-tools/snapshots/<name> && cp -R dist/. agent-tools/snapshots/<name>/
 ```
 
 ## Running a stage comparison

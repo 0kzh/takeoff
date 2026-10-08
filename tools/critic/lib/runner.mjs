@@ -17,7 +17,7 @@ export const POST_STAGE_SECONDS = 30;
 export function resolveGameDir(adapter, gameDir) {
   if (gameDir) return path.resolve(gameDir);
   if (adapter.defaultDir) return adapter.defaultDir();
-  throw new Error(`${adapter.name}: pass --game-dir <dir> (a built copy with index.html + dist/)`);
+  throw new Error(`${adapter.name}: pass --game-dir <dir> (a copy of the Vite build, dist/)`);
 }
 
 export function loadFixture(adapter, { stage, fixture }) {
