@@ -10,52 +10,52 @@ All commands run from the repo root. Outputs go to `agent-tools/critic-out/<labe
 
 ```sh
 sh tools/critic/setup.sh            # clones the reference games into agent-tools/refs/ (idempotent)
-(cd tools && npm install)           # only if tools/node_modules is missing (playwright-core)
+npm ci                            # Node 22.18+; includes playwright-core
 ```
 
 Chrome is used through `chromium.launch({ channel: 'chrome', headless: true })`; no browser
 download. Every run starts its own static servers on ephemeral ports (127.0.0.1:0) and stops them
 on exit. Network access other than that server is blocked, so the runs are offline.
 
-**Never point `--game-dir` at the repo root while someone is rebuilding it.** Freeze a build first:
+**Takeoff defaults to the Vite `dist/` build.** Run `npm run build` first. To freeze a build:
 
 ```sh
-mkdir -p agent-tools/snapshots/<name> && cp -R index.html styles.css dist agent-tools/snapshots/<name>/
+mkdir -p agent-tools/snapshots/<name> && cp -R dist/. agent-tools/snapshots/<name>/
 ```
 
 ## Running a stage comparison
 
 ```sh
 # Takeoff build under test (Stage N start via __game.loadPreset(N); presets 1 and 2 are real today)
-node tools/critic/run.mjs takeoff    tk-sN        --game-dir agent-tools/snapshots/<build> --stage N --realtime 300 --accel-minutes 60
-node tools/critic/run.mjs takeoff    tk-sN-auto   --game-dir agent-tools/snapshots/<build> --stage N --realtime 0 --accel-minutes 60 --autoplay
+node tools/critic/run.ts takeoff    tk-sN        --game-dir agent-tools/snapshots/<build> --stage N --realtime 300 --accel-minutes 60
+node tools/critic/run.ts takeoff    tk-sN-auto   --game-dir agent-tools/snapshots/<build> --stage N --realtime 0 --accel-minutes 60 --autoplay
 # Reference (Stage 2/3 start from the cheated fixtures in tools/critic/fixtures/)
-node tools/critic/run.mjs paperclips pc-sN        --stage N --realtime 300 --accel-minutes 60
-node tools/critic/run.mjs paperclips pc-sN-accel  --stage N --realtime 0 --accel-minutes 120
-node tools/critic/analyze.mjs tk-sN               # → agent-tools/critic-out/tk-sN.analysis.md (+ .json)
-node tools/critic/analyze.mjs pc-sN
-node tools/critic/compare.mjs tk-sN pc-sN tk-sN-auto
-node tools/critic/transition.mjs takeoff    --game-dir agent-tools/snapshots/<build> --stage N
-node tools/critic/transition.mjs paperclips                   # Stage 1→2 from fixture paperclips-s1-end
-node tools/critic/softlock.mjs takeoff    --game-dir agent-tools/snapshots/<build> [--stage N]
-node tools/critic/softlock.mjs paperclips
+node tools/critic/run.ts paperclips pc-sN        --stage N --realtime 300 --accel-minutes 60
+node tools/critic/run.ts paperclips pc-sN-accel  --stage N --realtime 0 --accel-minutes 120
+node tools/critic/analyze.ts tk-sN               # → agent-tools/critic-out/tk-sN.analysis.md (+ .json)
+node tools/critic/analyze.ts pc-sN
+node tools/critic/compare.ts tk-sN pc-sN tk-sN-auto
+node tools/critic/transition.ts takeoff    --game-dir agent-tools/snapshots/<build> --stage N
+node tools/critic/transition.ts paperclips                   # Stage 1→2 from fixture paperclips-s1-end
+node tools/critic/softlock.ts takeoff    --game-dir agent-tools/snapshots/<build> [--stage N]
+node tools/critic/softlock.ts paperclips
 ```
 
 Round-1 baselines (Stage 1) were captured with:
 
 ```sh
-node tools/critic/run.mjs takeoff takeoff-base          --game-dir agent-tools/snapshots/base --realtime 300 --accel-minutes 60
-node tools/critic/run.mjs takeoff takeoff-base-autoplay --game-dir agent-tools/snapshots/base --realtime 0 --accel-minutes 60 --autoplay
-node tools/critic/run.mjs paperclips pc-s1              --realtime 300 --accel-minutes 60
-node tools/critic/run.mjs paperclips pc-s1-accel        --realtime 0 --accel-minutes 120
-node tools/critic/run.mjs adr adr-5min                  --realtime 300
+node tools/critic/run.ts takeoff takeoff-base          --game-dir agent-tools/snapshots/base --realtime 300 --accel-minutes 60
+node tools/critic/run.ts takeoff takeoff-base-autoplay --game-dir agent-tools/snapshots/base --realtime 0 --accel-minutes 60 --autoplay
+node tools/critic/run.ts paperclips pc-s1              --realtime 300 --accel-minutes 60
+node tools/critic/run.ts paperclips pc-s1-accel        --realtime 0 --accel-minutes 120
+node tools/critic/run.ts adr adr-5min                  --realtime 300
 ```
 
 Run only one real-time run at a time (phase 1 is timing-sensitive); stepped runs are not.
 
-## run.mjs
+## run.ts
 
-`node tools/critic/run.mjs <takeoff|paperclips|adr> <label|path-prefix> [flags]`
+`node tools/critic/run.ts <takeoff|paperclips|adr> <label|path-prefix> [flags]`
 
 | flag | meaning |
 |---|---|
@@ -70,7 +70,7 @@ Run only one real-time run at a time (phase 1 is timing-sensitive); stepped runs
 
 Phase 1 runs the game on its own clock. Phase 2 steps 2 s of game time at a time: Takeoff with
 `__game.tick(ms)` (its rAF loop is held/`setSpeed(0)`), Paperclips and ADR through a virtual clock
-installed at page init (`lib/initscript.mjs`: `setTimeout/setInterval/requestAnimationFrame/Date/
+installed at page init (`lib/initscript.ts`: `setTimeout/setInterval/requestAnimationFrame/Date/
 performance.now` behind `window.__advance(ms)`; a page-side pump makes it follow the wall clock
 during phase 1). The games' code is never modified.
 
@@ -86,29 +86,29 @@ while mashing). Outputs per run:
 | `<p>.t<min>.png` | screenshots at minutes 0, 1, 3, 5, 10, 20; `.tpre.png` just before the policy buys a stage gate, `.tend.png` at the stage change, `.transition.png` 4 s later |
 | `<p>.transition.txt` | console lines, vanished/appeared elements, projects gone un-bought, buttons on arrival, numbers before/after |
 
-## analyze.mjs, compare.mjs
+## analyze.ts, compare.ts
 
-`node tools/critic/analyze.mjs <label>` prints and writes `<label>.analysis.md` and `.analysis.json`:
+`node tools/critic/analyze.ts <label>` prints and writes `<label>.analysis.md` and `.analysis.json`:
 time to first automation; first-meaningful-choice candidates; nothing-to-do (loose) for the first
 5 minutes and the stage; novelty and reveal gaps (every gap > 120 s, the longest); reveal timeline;
 greyed-out-goal coverage; cognitive load (numbers, interactive elements, panels and words on screen)
 at minutes 0/1/3/5/10/20/30/end (30 added for longer stages; '—' when the stage ends earlier) and the
 five largest single-beat disclosure spikes; action counts (+ game counters for Autoplay runs); the
 **hands** measures for the whole stage, its first 10 minutes and after 10:00 (`handsOf` in
-`lib/analysis.mjs`, the Stage 2 critics' definitions: share of 2-s checks with nothing enabled / with
+`lib/analysis.ts`, the Stage 2 critics' definitions: share of 2-s checks with nothing enabled / with
 two or more distinct things enabled, clicks per minute, share of the window inside ≥ 30-s click
 gaps); panel and project cadence. Analysis windows run from the stage start to the stage change; for a run that starts at
-Stage N (`--stage N`) t = 0 is that stage's start. `analyze.mjs <label> --stage M` analyses a later
+Stage N (`--stage N`) t = 0 is that stage's start. `analyze.ts <label> --stage M` analyses a later
 stage reached inside a run (window from its first snapshot, times re-based; writes
-`<label>.sM.analysis.md`). `compare.mjs A B […]` writes one side-by-side table (`label:M` for a later
+`<label>.sM.analysis.md`). `compare.ts A B […]` writes one side-by-side table (`label:M` for a later
 stage of a run).
 
 ## Probes
 
-* `transition.mjs <game> [--stage N] [--fixture NAME]` — plays (stepped) until the
+* `transition.ts <game> [--stage N] [--fixture NAME]` — plays (stepped) until the
   stage changes and writes `transition-<game>[-sN].md` plus `.tpre/.tend/.transition.png`
   (default cap 60 min).
-* `softlock.mjs <game> [--scenario NAME] [--stage N]` — the §4 dead-end probes as named scenarios,
+* `softlock.ts <game> [--scenario NAME] [--stage N]` — the §4 dead-end probes as named scenarios,
   each from a new game (or the start of Stage N) in stepped mode; writes
   `softlock-<game>[-sN].md` and `softlock-<game>[-sN]-<scenario>.png`. Takeoff: `power-zero`,
   `idle-new-game`, `price-200x` (Stage 1 situations: "not applicable" from Stage 2),
@@ -116,9 +116,9 @@ stage of a run).
   Lab are gone), `release-open-issues` and `reload-mid-training` (Stages 1–3). Paperclips:
   `wire-out-low-price`, `absurd-price`, `reload`, `idle`. A scenario whose preconditions no longer
   hold reports `scenario no longer applicable: <reason>` instead of failing.
-* `determinism.mjs <game> [run flags]` — runs the same stepped run twice and diffs events, actions
+* `determinism.ts <game> [run flags]` — runs the same stepped run twice and diffs events, actions
   and snapshots (`DETERMINISTIC` or the first difference).
-* `make-fixtures.mjs` — rebuilds `fixtures/paperclips-stage2.json` (just after "Release the
+* `make-fixtures.ts` — rebuilds `fixtures/paperclips-stage2.json` (just after "Release the
   HypnoDrones"; cheated: round resource values — processors 30, memory 70, clips 1.2 billion, funds
   $1,000 so the game's milestone chain runs (it starts at "funds ≥ $5" and ends Stage 3 with
   "Universal Paperclips achieved") — and the gating projects bought through their own buttons so the
@@ -131,15 +131,15 @@ stage of a run).
 
 ## Round-2 additions (ported from the round-2 critic's `tools/critic-r2/`)
 
-* `explore.mjs <name[,name…]|list|all-runs|all-probes|all-paperclips> --game-dir DIR [--seed N]
+* `explore.ts <name[,name…]|list|all-runs|all-probes|all-paperclips> --game-dir DIR [--seed N]
   [--minutes MIN] [--stage N] [--tag T]` — "a player who does the unexpected". **Runs** play a
   whole stage with a modified first-timer policy (`greedy`, `no-price`, `price-up`, `no-research`,
   `hire-only`, `expand-only`, `ship-open`, `modal-last`, `modal-ignore`, `modal-worst`,
   `modal-best`, `no-train`, `click-only`, `no-projects`, `mobile` (390 × 844), `focus-efficiency`,
   `focus-safety`, `no-marketing`, `no-redteam-wait`, `no-contracts`, `no-side-projects`,
   `toggles` (every setting pressed once at first sight, each slider set to its minimum at first
-  sight and its maximum 10 minutes later), `baseline`) and write a normal run `<tag>-<name>.*` (so `analyze.mjs`, `compare.mjs` and
-  `decisions.mjs` work on it) plus `<tag>-<name>.explore.md` (one metrics row per minute, every
+  sight and its maximum 10 minutes later), `baseline`) and write a normal run `<tag>-<name>.*` (so `analyze.ts`, `compare.ts` and
+  `decisions.ts` work on it) plus `<tag>-<name>.explore.md` (one metrics row per minute, every
   modal with body text / timer / option tooltips, on-screen notes each time they change, every
   console and log line), `.modals.json` and `.modal<N>.png`. **Probes** are short scripted
   situations writing `<tag>-<name>.md` and screenshots: `reload-mid-modal`, `reload-mid-countdown`,
@@ -151,23 +151,23 @@ stage of a run).
   at Stage N (Takeoff preset, Paperclips fixture; labels get `-sN`); the probes were written for
   Takeoff Stage 1 and say what they cannot find on other stages. `--tag` sets the label prefix
   (default `x`; round 2 used `r2x`).
-* `decisions.mjs <label[:N]…> [--stage N]` — gaps between non-drip decisions, and reveal → purchase
+* `decisions.ts <label[:N]…> [--stage N]` — gaps between non-drip decisions, and reveal → purchase
   latency of projects, for any run; `:N`/`--stage N` takes Stage N of a run, timed from its start.
   From Stage 2 on, repeat purchases count as drip too — Paperclips' drones, farms, batteries, probe
   launches and Processors/Memory bought with swarm gifts; Stage 1 numbers are unchanged.
-* Library hooks: `adapter.policy.modalChoice(modal, enabledOptions, t)` in `lib/policy.mjs`
+* Library hooks: `adapter.policy.modalChoice(modal, enabledOptions, t)` in `lib/policy.ts`
   (default unchanged: first enabled option; return `null` to leave the modal open);
-  `runGame({ adapter, viewport })` in `lib/runner.mjs` (a pre-built adapter instead of the one
+  `runGame({ adapter, viewport })` in `lib/runner.ts` (a pre-built adapter instead of the one
   loaded by name; viewport passed to the session); `openProbe(adapter, { viewport })` in
-  `lib/probe.mjs`.
-* Fixes asked for by the round-2 critic: `determinism.mjs --out LABEL` (writes `LABEL-a/-b` instead
+  `lib/probe.ts`.
+* Fixes asked for by the round-2 critic: `determinism.ts --out LABEL` (writes `LABEL-a/-b` instead
   of overwriting `det-<game>-a/-b`), and the `release-open-issues` soft-lock scenario reports the
   game's own confirmation modal (title, options, the option that releases) as well as browser
   dialogs, and confirms through it.
 
 ## Definitions and implementation choices
 
-The report's §1 definitions are applied verbatim (see the header of `lib/analysis.mjs`). Where §1
+The report's §1 definitions are applied verbatim (see the header of `lib/analysis.ts`). Where §1
 left something open, the harness does this:
 
 * **Big-ticket goals** (Takeoff Stage 1). §1 says the first-timer stops the GPU/marketing drip and saves once a
@@ -191,7 +191,7 @@ left something open, the harness does this:
 * **Numbers on screen** = numeric tokens (`1,234.5`, `.25`, `2025`) in visible text nodes,
   excluding Takeoff's `#dev`/`#toast` and Paperclips' debug/save buttons. **Minute 0** of the
   cognitive-load table is sampled at t = 0:02 (first snapshot after the first input).
-* **Policy** (`lib/policy.mjs`; game knowledge in `games/*.mjs`): mash the main button at 4/s
+* **Policy** (`lib/policy.ts`; game knowledge in `games/*.ts`): mash the main button at 4/s
   until automation makes ≥ 8 units/s (Stage 1 starts only); buy the first automation when
   affordable; answer a modal with its first enabled option; consumable (power/wire) bought when
   below half of one purchase (≤ 3 per check) and, while visible, one purchase of it always kept in
@@ -209,7 +209,7 @@ left something open, the harness does this:
   only with ops at the cap; toggles and "Disassemble All" never clicked. ADR: when nothing in view
   is clickable, visit the next location tab. A click that changes nothing is not retried for 30 s
   (ADR's "not enough wood").
-* **Paperclips Stage 2 (Earth)** — rules used only from Stage 2 on (`games/paperclips-late.mjs`).
+* **Paperclips Stage 2 (Earth)** — rules used only from Stage 2 on (`games/paperclips-late.ts`).
   Every input is a number or word on screen (Manufacturing, Wire Production, Power, Swarm
   Computing, Strategic Modeling, Projects); every action is a click on a visible button or a change
   of a visible control.
@@ -253,7 +253,7 @@ left something open, the harness does this:
     Nav, Wire, Harv, Fac, Combat). The arrows are clicked to match (lower first, then raise).
   * *Launch Probe* once per check, except while probes have died to hazards and the design still has
     no Haz or no Rep.
-* **Settings are not purchases** (all games). `lib/pagelib.mjs` marks a visible button as a setting
+* **Settings are not purchases** (all games). `lib/pagelib.ts` marks a visible button as a setting
   (`t: 1`, ambient) when it is a toggle (class `toggle` or an `aria-pressed` attribute), is labelled
   ON/OFF or AUTO…, or reads "Name: value" with a short value ("Alignment compute: 1%"); the sweep
   never presses one. It also records a greyed button's inline reason (`why`, from a
@@ -281,15 +281,15 @@ left something open, the harness does this:
 ## Layout
 
 ```
-run.mjs analyze.mjs compare.mjs transition.mjs softlock.mjs determinism.mjs make-fixtures.mjs setup.sh
-explore.mjs decisions.mjs   (round-2 additions)
-explore-s1r3.mjs            (Stage 1 round-3 addition: build s12-r4's Stage 1 play styles, probes, gate tables)
-lib/   server.mjs (static server) · initscript.mjs (virtual clock, seeded PRNG, Takeoff boot seed)
-       pagelib.mjs (in-page snapshot/controls/click) · session.mjs (browser + clock control)
-       policy.mjs · recorder.mjs (events) · runner.mjs (phases, outputs) · analysis.mjs
-       transition-report.mjs · probe.mjs (softlock kit) · util.mjs
-games/ takeoff.mjs · paperclips.mjs · adr.mjs   (selectors, ambient set, metrics, policy hooks, cheats)
-       paperclips-late.mjs (Paperclips Stage 2/3 play rules)
+run.ts analyze.ts compare.ts transition.ts softlock.ts determinism.ts make-fixtures.ts setup.sh
+explore.ts decisions.ts   (round-2 additions)
+explore-s1r3.ts            (Stage 1 round-3 addition: build s12-r4's Stage 1 play styles, probes, gate tables)
+lib/   server.ts (static server) · initscript.ts (virtual clock, seeded PRNG, Takeoff boot seed)
+       pagelib.ts (in-page snapshot/controls/click) · session.ts (browser + clock control)
+       policy.ts · recorder.ts (events) · runner.ts (phases, outputs) · analysis.ts
+       transition-report.ts · probe.ts (softlock kit) · util.ts
+games/ takeoff.ts · paperclips.ts · adr.ts   (selectors, ambient set, metrics, policy hooks, cheats)
+       paperclips-late.ts (Paperclips Stage 2/3 play rules)
 fixtures/ paperclips-stage2.json · paperclips-stage3.json · paperclips-s1-end.json
 ```
 

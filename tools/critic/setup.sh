@@ -18,7 +18,7 @@ clone https://github.com/doublespeakgames/adarkroom adarkroom
 
 test -f "$REFS/paperclips/docs/index2.html" || { echo "missing paperclips/docs/index2.html" >&2; exit 1; }
 test -f "$REFS/adarkroom/index.html" || { echo "missing adarkroom/index.html" >&2; exit 1; }
-if [ ! -d "$ROOT/tools/node_modules/playwright-core" ]; then
-  (cd "$ROOT/tools" && npm install --no-audit --no-fund)
+if [ ! -d "$ROOT/node_modules/playwright-core" ]; then
+  (cd "$ROOT" && npm ci --no-audit --no-fund)
 fi
 echo "setup ok"

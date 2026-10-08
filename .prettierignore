@@ -1,0 +1,13 @@
+node_modules
+dist
+public
+agent-tools
+.claude
+tools/critic/fixtures
+package-lock.json
+
+# Existing engine/data formatting is preserved during the UI migration.
+src/engine
+src/data
+src/sim
+tools/critic

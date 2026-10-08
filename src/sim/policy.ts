@@ -237,6 +237,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   if (greedy && s.stage < 2 && s.revealed['compute']) {
     let guard = 0;
     while (s.funds - gpuCost(s) >= reserve && guard++ < 5 && a.rentGpu(s)) {
+      // Each successful condition purchases one GPU, up to the per-step limit.
     }
   }
 
