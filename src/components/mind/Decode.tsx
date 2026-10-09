@@ -118,7 +118,9 @@ function Align({ p, done, onSolve }: GameProps) {
         ))}
       </div>
       <div className="dPrompt">
-        Click a glyph to slide its sample into the lens. Line up a chunk that every sample shares.
+        Click a glyph to slide its sample into the lens.
+        <br />
+        Line up a chunk that every sample shares.
       </div>
       <div className="dFeedback">
         {!done && agree.some(Boolean) ? `${agree.filter(Boolean).length}/${m} columns agree` : ''}
