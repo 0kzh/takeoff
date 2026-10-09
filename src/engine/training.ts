@@ -1,5 +1,5 @@
 import { GameState, TrainingRun, Focus, Cost, say, logNews, canPay, pay, bump, isBought, counter, inPrologue } from './state.js';
-import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
+import { rng, rand, randInt, chance, pick } from './rng.js';
 import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS, chipMult } from './economy.js';
 import { dataFactor, dataShort } from './data.js';
 import { applyDrift } from './alignment.js';
@@ -7,8 +7,7 @@ import { mindSignal } from './mind.js';
 import { moveTempo, distill } from './rivals.js';
 import { moveApproval, DEPLOY_APPROVAL } from './world.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
-import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, REDTEAM_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
-import { INCIDENTS } from '../data/crises.js';
+import { TRAINING_FLAVOR, TRAINING_EVENTS, EVALUATOR_LINES, RELEASE_LINES, RELEASE_HEADLINES } from '../data/flavor.js';
 import { fmtInt } from './format.js';
 import { visibleProjects } from './projects.js';
 
@@ -20,8 +19,6 @@ export const FRONTIER_SCORE = 32;
 export const RELEASE_INSIGHT = 6;
 export const RELEASE_INSIGHT_S2 = 12;
 export const LEADERBOARD_SCORE = 36;
-export const RED_TEAM_SECONDS = 8;
-export const RED_TEAM_SECONDS_EVALS = 5;
 export const RELEASE_SECONDS = 5;
 
 export const PROLOGUE_FUNDS = 4;
@@ -322,9 +319,6 @@ function startRun(s: GameState, cost: Cost): boolean {
     benchBonus: [0, 0, 0, 0, 0, 0],
     benchmarks: [],
     scores: [],
-    issues: 0,
-    issuesFound: 0,
-    extraIssues: 0,
     major: version.major,
     minor: version.minor,
   };
@@ -365,9 +359,6 @@ function startPrologueRun(s: GameState, cost: Cost): boolean {
     benchBonus: [0, 0, 0, 0, 0, 0],
     benchmarks: [],
     scores: [],
-    issues: 0,
-    issuesFound: 0,
-    extraIssues: 0,
     major: 1,
     minor: 0,
     prologue: true,
@@ -387,7 +378,6 @@ export function deployFirstModel(s: GameState): boolean {
   if (!run || run.phase !== 'redteam') return false;
   t.run = null;
   t.releasing = null;
-  t.redTeamRemaining = 0;
   delete s.flags['prologue'];
   s.flags['sageLiveAt'] = s.stats.timePlayed;
   say(s, `${PROLOGUE_NAME} is live. Each GPU runs a copy; each copy completes a task a second.`);
@@ -439,20 +429,6 @@ export function updateTraining(s: GameState, dt: number): void {
   }
   const queued = t.next;
   if (queued?.phase === 'training') updateRunning(s, queued, dt, true);
-  if (t.redTeamRemaining > 0) {
-    t.redTeamRemaining -= dt;
-    if (t.redTeamRemaining <= 0) {
-      t.redTeamRemaining = 0;
-      const r = t.run;
-      if (r && r.phase === 'redteam' && r.issues > 0) {
-        r.issues -= 1;
-        if (r.issues === 0) {
-          logNews(s, pick(s, REDTEAM_LINES));
-          say(s, 'All issues fixed. Ready to release.');
-        }
-      }
-    }
-  }
 }
 
 function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boolean): void {
@@ -484,8 +460,6 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boole
     }
     if (run.prologue) {
       run.phase = 'redteam';
-      run.issues = 0;
-      run.issuesFound = 0;
       run.capAfter = run.capBefore;
       run.benchmarks = [];
       run.scores = [];
@@ -557,9 +531,6 @@ function computeResults(s: GameState, run: TrainingRun): void {
     const noisy = base + rand(s, -0.4, 0.4) + run.benchBonus[i]!;
     return Math.round(Math.min(10, Math.max(0, noisy)) * 10) / 10;
   });
-  const lambda = Math.max(0.3, Math.min(s.stage >= 2 ? 4 : 99, 2 + run.capAfter / 3 - safetyInvestment(s, run)));
-  run.issuesFound = poisson(s, lambda) + run.extraIssues;
-  run.issues = run.issuesFound;
   run.scores = scoreCards(s, run);
   const newMajor = majorFor(run.capAfter);
   if (newMajor > run.major) {
@@ -568,11 +539,6 @@ function computeResults(s: GameState, run: TrainingRun): void {
     run.minor = 0;
     run.name = `Sage-${newMajor}`;
   }
-}
-
-function safetyInvestment(s: GameState, run: TrainingRun): number {
-  const v = (run.focus === 'safety' ? 1.5 : 0) + (isBought(s, 'p_eval_team') ? 0.5 : 0) + (isBought(s, 'p_alignment_team') ? 1 : 0);
-  return v + 0.5 * counter(s, 'safetyReleases');
 }
 
 function clampScore(v: number): number {
@@ -589,8 +555,8 @@ function scoreCards(s: GameState, run: TrainingRun): number[] {
   return [
     clampScore(2.5 + avg * 0.6 + rel * 8 + n()),
     clampScore(4 + rel * 10 + focusCap + n()),
-    clampScore(5 + focusEff + rel * 5 - run.issuesFound * 0.3 + n()),
-    clampScore(8 + focusSafe - run.issuesFound * 0.8 + (s.alignmentApparent - 50) / 10 + n()),
+    clampScore(5 + focusEff + rel * 5 + n()),
+    clampScore(8 + focusSafe + (s.alignmentApparent - 50) / 10 + n()),
   ];
 }
 
@@ -632,39 +598,14 @@ function finishEvaluation(s: GameState, run: TrainingRun): void {
     say(s, `${renamed} is good enough to be called ${run.name}.`);
   }
   const frontier = total >= FRONTIER_SCORE ? ' Frontier model.' : '';
-  say(s, `Evaluation done.${frontier} ${issueWords(run.issuesFound)}`);
+  say(s, `Evaluation done.${frontier} Ready to release.`);
   s.training.frontierBonus = total >= FRONTIER_SCORE ? 0.01 : 0;
   if (total >= LEADERBOARD_SCORE) s.flags['leaderboardEligible'] = true;
   const maxBench = Math.max(...run.benchmarks);
   if (maxBench > ((s.flags['maxBenchmark'] as number) || 0)) s.flags['maxBenchmark'] = maxBench;
 }
 
-const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
-
-function issueWords(n: number): string {
-  const count = n < WORDS.length ? WORDS[n]! : String(n);
-  return n === 0 ? 'No issues found.' : `${count} issue${n === 1 ? '' : 's'} found.`;
-}
-
-export function canRedTeam(s: GameState): boolean {
-  const run = s.training.run;
-  return !!run && run.phase === 'redteam' && run.issues > 0 && s.training.redTeamRemaining <= 0 && !s.training.releasing;
-}
-
-export function redTeamSeconds(s: GameState): number {
-  return isBought(s, 'p_eval_team') ? RED_TEAM_SECONDS_EVALS : RED_TEAM_SECONDS;
-}
-
-export function redTeam(s: GameState): boolean {
-  if (!canRedTeam(s)) return false;
-  const t = s.training;
-  t.redTeamDuration = redTeamSeconds(s);
-  t.redTeamRemaining = t.redTeamDuration;
-  s.flags['redTeamed'] = true;
-  return true;
-}
-
-const RELEASE_CHOICES = ['c_sage2', 'c_ship_issues', 'c_release'];
+const RELEASE_CHOICES = ['c_sage2', 'c_release'];
 
 export function canRelease(s: GameState): boolean {
   const run = s.training.run;
@@ -675,14 +616,6 @@ export function release(s: GameState): boolean {
   const run = s.training.run;
   if (!run || run.phase !== 'redteam' || !canRelease(s)) return false;
   if (run.prologue) return doRelease(s, run, true);
-  if (run.issues > 0 && !s.flags['shipIssuesAsked']) {
-    openChoice(s, 'c_ship_issues', { runId: run.id, issues: run.issues });
-    return true;
-  }
-  return releaseChecked(s, run);
-}
-
-export function releaseChecked(s: GameState, run: TrainingRun): boolean {
   if (s.stage >= 2 && isBought(s, 's2_release_policy')) {
     openChoice(s, 'c_release', { runId: run.id });
     return true;
@@ -699,7 +632,6 @@ export function doRelease(s: GameState, run: TrainingRun, isPublic: boolean): bo
   if (t.run !== run || t.releasing) return false;
   if (run.prologue) return finishRelease(s, run, isPublic);
   t.releasing = { remaining: RELEASE_SECONDS, isPublic };
-  t.redTeamRemaining = 0;
   return true;
 }
 
@@ -716,7 +648,6 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
   if (t.run !== run) return false;
   if (run.prologue) return deployFirstModel(s);
   t.run = null;
-  t.redTeamRemaining = 0;
   t.major = run.major;
   t.minor = run.minor;
   t.modelName = run.name;
@@ -727,7 +658,6 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
   const frontierBefore = Math.max(s.capability, t.internalCapability);
   t.internalCapability = Math.max(t.internalCapability, run.capAfter);
   if (run.capAfter > frontierBefore) applyDrift(s, frontierBefore, run.capAfter, run.focus);
-  if (run.focus === 'safety') bump(s, 'safetyReleases');
   if (isPublic) {
     t.deployedName = run.name;
     s.capability = run.capAfter;
@@ -741,11 +671,9 @@ function finishRelease(s: GameState, run: TrainingRun, isPublic: boolean): boole
     }
     if (s.flags['firstReleaseAt'] === undefined) s.flags['firstReleaseAt'] = s.stats.timePlayed;
     const line = pick(s, RELEASE_LINES).replace('{name}', run.name);
-    if (run.issues === 0) say(s, line);
-    else say(s, `${line} ${run.issues} open issue${run.issues === 1 ? '' : 's'} shipped.`);
+    say(s, line);
     if (s.insightUnlocked) s.insight += s.stage >= 2 ? RELEASE_INSIGHT_S2 : RELEASE_INSIGHT;
     logNews(s, `OpenMind releases ${run.name}. ${pick(s, RELEASE_HEADLINES)}`);
-    if (run.issues > 0) scheduleIncidents(s, run.issues, run.name);
   } else {
     s.researchMult *= 1.25;
     s.lead += 1;
@@ -763,13 +691,5 @@ function applyFocusRewards(s: GameState, run: TrainingRun): void {
   if (run.focus === 'safety') {
     s.alignmentApparent = Math.min(100, s.alignmentApparent + 8);
     s.alignmentTrue = Math.min(100, s.alignmentTrue + 5);
-  }
-}
-
-function scheduleIncidents(s: GameState, issues: number, source: string): void {
-  const count = Math.min(3, 1 + Math.floor((issues - 1) / 2));
-  for (let i = 0; i < count; i++) {
-    const inc = pick(s, INCIDENTS);
-    s.scheduled.push({ id: inc.id, delay: rand(s, 120, 240), source });
   }
 }

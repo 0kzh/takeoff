@@ -5,7 +5,6 @@ import { inPrologue, type Focus, type TrainingRun } from '../engine/state.js';
 import {
   trainCost,
   canStartTraining,
-  canRedTeam,
   canRelease,
   releaseProgress,
   nextRunName,
@@ -46,8 +45,8 @@ const FOCUSES: { id: Focus; label: string; title: string; note: string }[] = [
   {
     id: 'safety',
     label: 'Safety',
-    title: 'Safety: +5% capability, 1.5 fewer issues now and 0.5 fewer on every later run.',
-    note: 'Fewer issues, now and on every later run.',
+    title: 'Safety: +5% capability, and alignment rises on release.',
+    note: 'Alignment rises on release; a smaller capability gain.',
   },
 ];
 const REVIEWERS = ['HumanBench', 'Tech press', 'Enterprise analyst', 'Safety Institute'];
@@ -64,7 +63,7 @@ export function Training() {
       return `The most capable next model (about +${Math.round(100 * (S2_FOCUS_BASE.capability + 0.03))}%).`;
     if (id === 'efficiency')
       return `Copies per GPU ×1.25; about +${Math.round(100 * S2_FOCUS_BASE.efficiency)}% capability.`;
-    return `About +${Math.round(100 * S2_FOCUS_BASE.safety)}%; fewer issues; alignment drifts less and the band narrows.`;
+    return `About +${Math.round(100 * S2_FOCUS_BASE.safety)}%; alignment drifts less and the band narrows.`;
   };
   return (
     <Panel name="training" title="Training">
@@ -323,32 +322,10 @@ function Evaluation({ run }: { run: TrainingRun | null | undefined }) {
 function RedTeam({ run }: { run: TrainingRun | null | undefined }) {
   const s = useGame();
   const perform = usePerform();
-  const cooling =
-    s.training.redTeamRemaining > 0 ? s.training.redTeamRemaining / s.training.redTeamDuration : 0;
   const rollout = releaseProgress(s);
   const progress = rollout ? Math.max(0.01, rollout.p) : 0;
   return (
     <div id="train-redteam" className={run?.phase === 'redteam' ? 'shown' : ''}>
-      <span id="issuesLine" className={run?.prologue ? 'off' : ''}>
-        Open issues: <span id="issuesOpen">{fmtInt(run?.issues ?? 0)}</span>
-        <span className="hiddenIds">
-          {' '}
-          of <span id="issuesFound">{fmtInt(run?.issuesFound ?? 0)}</span>
-        </span>
-        <br />
-      </span>
-      <button
-        className={`button2 cooldown${run?.prologue ? ' off' : ''}${cooling > 0 ? ' cooling' : ''}`}
-        id="btn-redteam"
-        disabled={!canRedTeam(s)}
-        title={`Close one open issue every ${s.training.redTeamDuration} s.`}
-        onClick={() => perform('redTeam')}
-      >
-        <span className="cooldownBar" id="redteamBar" style={{ width: fractionPercent(cooling) }} />
-        <span className="cooldownLabel" id="redteamLabel">
-          Fix issue
-        </span>
-      </button>{' '}
       <button
         className={`button2 cooldown${progress > 0 ? ' cooling' : ''}`}
         id="btn-release"
@@ -356,19 +333,13 @@ function RedTeam({ run }: { run: TrainingRun | null | undefined }) {
         title={
           run?.prologue
             ? `Deploy ${run.name}: each GPU runs a copy that completes tasks on its own, using power.`
-            : run && run.issues > 0
-              ? `${run.issues} open issue${run.issues === 1 ? '' : 's'} will ship with ${run.name}. Expect incidents.`
-              : `Release ${run?.name ?? ''} to customers. Demand and hype go up; +1 Trust.`
+            : `Release ${run?.name ?? ''} to customers. Demand and hype go up; +1 Trust.`
         }
         onClick={() => perform('release')}
       >
         <span className="cooldownBar" id="releaseBar" style={{ width: fractionPercent(progress) }} />
         <span className="cooldownLabel" id="releaseLabel">
-          {run?.prologue
-            ? `Deploy ${run.name}`
-            : run && run.issues > 0
-              ? `Release (${run.issues} open)`
-              : 'Release'}
+          {run?.prologue ? `Deploy ${run.name}` : 'Release'}
         </span>
       </button>
     </div>

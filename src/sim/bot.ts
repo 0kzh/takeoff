@@ -113,7 +113,6 @@ export interface ExitState1 {
   revPerSec: number;
   price: number;
   gpus: number;
-  incidents: number;
   gov: number;
   lead: number;
 }
@@ -406,7 +405,7 @@ export function simulate(args: Args): SimResult {
     if (phase !== prevPhase) {
       if (run && !prevPhase.includes(phase)) {
         const extra = run.phase === 'training' ? ` (${run.focus}, ${run.duration}s, ${run.gpus} GPUs)`
-          : run.phase === 'redteam' ? ` (cap ${run.capAfter.toFixed(2)}, score ${run.scores.reduce((x, y) => x + y, 0)}/40, issues ${run.issuesFound})` : '';
+          : run.phase === 'redteam' ? ` (cap ${run.capAfter.toFixed(2)}, score ${run.scores.reduce((x, y) => x + y, 0)}/40)` : '';
         out(t, `TRAIN ${run.name} → ${run.phase}${extra}`);
         if (run.phase === 'training' && !run.prologue) mark('firstTrainingStart', t);
       }
@@ -488,7 +487,6 @@ export function simulate(args: Args): SimResult {
           revPerSec: Math.round(s.stats.revPerSec),
           price: Math.round(s.price * 100) / 100,
           gpus: s.gpus,
-          incidents: s.stats.incidents,
           gov: Math.round(s.govRelations),
           lead: Math.round(s.lead * 100) / 100,
         };
@@ -639,7 +637,7 @@ function stage2Report(
   out.push(`buys (${buys.length}): ${buys.map(([t, id]) => `${stageClock(t)} ${id}`).join(', ')}`);
   const s2Idle = idleGaps.filter(([a, b]) => b > from && a < to);
   out.push(`idle gaps > 60 s in stage 2: ${s2Idle.length ? s2Idle.map(([a, b]) => `${stageClock(Math.max(a, from))}–${stageClock(Math.min(b, to))}`).join(', ') : 'none'}`);
-  out.push(`choices: ${s.choicesMade.filter((c) => c.id.startsWith('c_') && !['c_gamble', 'c_ship_issues', 'c_sage2', 'c_customer_email'].includes(c.id)).slice(-20).map((c) => `${c.id}:${c.option}`).join(', ')}`);
+  out.push(`choices: ${s.choicesMade.filter((c) => c.id.startsWith('c_') && !['c_gamble', 'c_sage2', 'c_customer_email'].includes(c.id)).slice(-20).map((c) => `${c.id}:${c.option}`).join(', ')}`);
   return out;
 }
 
@@ -709,7 +707,7 @@ function main(): void {
   console.log(`money's second half      Marketing grey ${x1.marketingGreyMax} s at most; longest gap between dollar buys, card to wall ${x1.dollarGapMax ?? '—'} s   (≤ 180, ≤ 180)`);
   console.log(`first training cycle     ${x1.linesIn26} console lines in the densest 26 s, ${x1.linesIn26All} with the replies to purchases   (≤ 4)`);
   const x = sum.exitState1;
-  if (x) console.log(`exit state               capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, Trust ${x.trust}, ${x.researchers} researchers, lab ${x.labSpace}, marketing ${x.hypeLevel}, ${x.contracts} contracts ($${x.contractRate}/s of $${x.revPerSec}/s), price $${x.price}, ${x.gpus} GPUs, ${x.incidents} incidents`);
+  if (x) console.log(`exit state               capability ${x.capability}, alignment ${x.alignTrue} true / ${x.alignApparent} apparent, Trust ${x.trust}, ${x.researchers} researchers, lab ${x.labSpace}, marketing ${x.hypeLevel}, ${x.contracts} contracts ($${x.contractRate}/s of $${x.revPerSec}/s), price $${x.price}, ${x.gpus} GPUs`);
   if (sum.choices1.length) console.log(`modal answers            ${sum.choices1.join(', ')}`);
   console.log(`IDLE GAPs > 60 s         ${result.idleGaps.length ? result.idleGaps.map(span).join(', ') : 'none'}`);
   for (const line of result.stage2Lines) console.log(line);

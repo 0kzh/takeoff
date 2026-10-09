@@ -7,7 +7,7 @@ import {
 import { updateBaiwen, updateTempo, sampleHistory, updateTheft, updateIrrelevance } from './rivals.js';
 import { updateWorld } from './world.js';
 import {
-  updateTraining, startTraining, setFocus, redTeam, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
+  updateTraining, startTraining, setFocus, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
 } from './training.js';
 import { buyProject, visibleProjects } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
@@ -203,7 +203,6 @@ export const actions = {
   upgradeSecurity,
   startTraining,
   setFocus,
-  redTeam,
   release,
   finishTraining,
   buyProject,

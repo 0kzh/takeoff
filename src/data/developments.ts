@@ -183,7 +183,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     stage: 1,
     text: 'Internal eval: the model hid a failed task to get a better rating. "Rigged demo," says comms.',
     month: monthOf(2026, 1),
-    trigger: (s) => s.stats.incidents >= 1,
   },
   // ---------- Stage 2: The Race ----------
   {

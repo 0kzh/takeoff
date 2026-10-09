@@ -1,5 +1,5 @@
 import { GameState, Cost, TrainingRun, say, addFunds, logNews, counter } from '../engine/state.js';
-import { BENCHMARKS, doRelease, releaseChecked, runById, riskTier } from '../engine/training.js';
+import { BENCHMARKS, doRelease, runById, riskTier } from '../engine/training.js';
 import { chance, randInt } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
 import { researchRate, bestCapability, researchCap } from '../engine/economy.js';
@@ -93,8 +93,8 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'let her try',
         record: 'gamble',
-        tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss adds issues.`,
-        line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else more issues · ${fmtNum(gambleCost(s), 0)} research`,
+        tooltip: (s) => `${fmtNum(gambleCost(s), 0)} research. Good odds of a benchmark tier; a miss costs hype.`,
+        line: (s) => `${Math.round(100 * gambleOdds(s))}%: a benchmark tier · else less hype · ${fmtNum(gambleCost(s), 0)} research`,
         cost: (s) => ({ research: gambleCost(s) }),
         enabled: (s, ctx) => runFor(s, ctx)?.phase === 'training',
         effect: (s, ctx) => {
@@ -109,9 +109,8 @@ export const CHOICES: ChoiceDef[] = [
             say(s, `It worked. ${BENCHMARKS[bench]} jumps a tier.`);
           } else {
             run.gamble = 'fail';
-            run.extraIssues += randInt(s, 4, 6);
             s.hypeBoost = Math.max(1, s.hypeBoost - 0.2);
-            say(s, 'It did not work. More issues to fix.');
+            say(s, 'It did not work. The run trains as planned.');
           }
         },
       },
@@ -131,7 +130,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'release publicly',
         record: 'public',
-        tooltip: 'Market grows with capability. Release hype ×2. Open issues become incidents. Lead −0.15 months.',
+        tooltip: 'Market grows with capability. Release hype ×2. Lead −0.15 months.',
         line: 'market grows with it · +1 Trust · lead −0.15 months',
         effect: (s, ctx) => {
           s.flags['sage2Decided'] = true;
@@ -151,40 +150,6 @@ export const CHOICES: ChoiceDef[] = [
           if (run) doRelease(s, run, false);
         },
         log: (s, ctx) => `${runFor(s, ctx)?.name ?? s.training.modelName} is kept for research. Customers are not told.`,
-      },
-    ],
-  },
-  {
-    id: 'c_ship_issues',
-    title: 'Ship With Open Issues?',
-    timer: 60,
-    defaultOption: 0,
-    text: (s, ctx) => {
-      const n = Number(ctx['issues'] ?? 1);
-      return [
-        `${runName(s, ctx)} has ${n} issue${n === 1 ? '' : 's'} still open.`,
-        'They ship with it. Customers tend to find them within a few minutes.',
-      ];
-    },
-    options: [
-      {
-        label: 'keep fixing',
-        record: 'kept fixing',
-        line: 'a clean release: +1 Trust',
-        effect: (s) => {
-          s.flags['shipIssuesAsked'] = true;
-        },
-      },
-      {
-        label: 'release anyway',
-        record: 'shipped issues',
-        tooltip: 'Incidents follow in 2–4 minutes: each cuts demand by 40% and pauses the contract customers for 1:30, and costs 1 Trust. No Trust for this release.',
-        line: 'incidents in 2–4 min: each pauses the contracts 1:30 · no Trust',
-        effect: (s, ctx) => {
-          s.flags['shipIssuesAsked'] = true;
-          const run = runFor(s, ctx);
-          if (run) releaseChecked(s, run);
-        },
       },
     ],
   },
@@ -522,7 +487,7 @@ export const CHOICES: ChoiceDef[] = [
       {
         label: 'deploy',
         record: 'deployed',
-        tooltip: 'Demand follows the new capability. Hype ×2. Tempo +3; each rival gains 5%. Open issues ship.',
+        tooltip: 'Demand follows the new capability. Hype ×2. Tempo +3; each rival gains 5%.',
         line: 'market grows with it · hype ×2 · rivals +5%',
         effect: (s, ctx) => {
           const run = runFor(s, ctx);

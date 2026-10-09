@@ -161,15 +161,15 @@ function focusSpecial(key) {
   };
 }
 const releaseAtOnce = {
-  /** Release the moment the button works, whatever is open; never red-team. */
+  /** Release the moment the button works. */
   async special(ctx) {
     let c = ctx.controls;
     if (c.m.trainingPhase !== 'redteam') return c;
     const rel = c.buttons.find((b) => b.k === 'btn-release');
-    if (rel && rel.e && !ctx.noop.has('btn-release')) c = await ctx.click('btn-release', 'release-open', `${c.m.issuesOpen} open issues`);
+    if (rel && rel.e && !ctx.noop.has('btn-release')) c = await ctx.click('btn-release', 'release', 'model ready');
     return c;
   },
-  /** The open-issues confirm: pick the option that ships. Every other modal: first option. */
+  /** Release prompts: pick the option that ships. Every other modal: first option. */
   modalChoice(modal, enabled) {
     const ship = enabled.find((o) => /release|ship/i.test(o.l) && !/red|wait|hold|back|not|keep/i.test(o.l));
     return ship || enabled[0];
@@ -204,7 +204,7 @@ const RUNS = {
   'modal-last': { title: 'Answers every modal with its last enabled option', adapter: variant({ modalChoice: (modal, enabled) => enabled[enabled.length - 1] }) },
   'modal-ignore': { title: 'Never answers a modal (every one runs out its timer)', adapter: variant({ modalChoice: () => null }) },
   'modal-worst': {
-    title: 'Picks the worst-looking option of every modal, judged from the effect line printed on the button (lose Trust, smaller contracts, lose researchers, a demand hit, the gamble, ship with open issues; the leaderboard: submit when behind, decline when ahead)',
+    title: 'Picks the worst-looking option of every modal, judged from the effect line printed on the button (lose Trust, smaller contracts, lose researchers, a demand hit, the gamble; the leaderboard: submit when behind, decline when ahead)',
     adapter: variant({ modalChoice: byLabel([/take the bridge/, /cut the price/, /no comment/, /publish a rebuttal/, /let them go/, () => (screenNow.ahead ? /decline/ : /submit Sage/), /let her try/, /release anyway/]) }),
   },
   'modal-best': {
@@ -222,7 +222,7 @@ const RUNS = {
   'm-board-decline': { title: 'The Leaderboard Wants Sage → decline', adapter: variant({ modalChoice: only(/Leaderboard/, /decline/) }) },
   'm-try-no': { title: 'Can I try something? → not now (the first option, let her try, is taken by the control whenever it is affordable)', adapter: variant({ modalChoice: only(/Can I try/, /not now/) }) },
   // --- release, focus ---
-  'ship-open': { title: 'Releases every model the moment Release works, open issues or not; never red-teams', adapter: variant(releaseAtOnce) },
+  'ship-open': { title: 'Releases every model the moment Release works', adapter: variant(releaseAtOnce) },
   'focus-capability': { title: 'Always trains with Focus: Capability (pressed explicitly; it is also the default)', adapter: variant({ special: focusSpecial('btn-focus-capability') }) },
   'focus-efficiency': { title: 'Always trains with Focus: Efficiency', adapter: variant({ special: focusSpecial('btn-focus-efficiency') }) },
   'focus-safety': { title: 'Always trains with Focus: Safety', adapter: variant({ special: focusSpecial('btn-focus-safety') }) },
@@ -524,7 +524,6 @@ async function runVariant(name, flags, seed) {
     tasks: m.tasks,
     runs: m.trainings,
     releases: m.releases,
-    incidents: m.incidents,
     rescues: m.idleRescues,
     projects: m.projectsBought,
     contracts: m.contracts,
@@ -543,8 +542,8 @@ async function runVariant(name, flags, seed) {
   fs.writeFileSync(`${prefix}.modals.json`, JSON.stringify(modals, null, 1));
 
   const md = [`# Explore run (s1r3): ${name} — ${sc.title}`, '', `Seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${end != null ? mmss(end) : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.${reloads ? ` Reloads: ${reloads}.` : ''}`, ''];
-  md.push('## Per minute', '', '| t | stage | funds | rev/s | contracts line | tasks/s | sold/s | price | unsold | GPUs / quota | power | research / cap | trust | researchers | lab | cap × | rival × | mkt | contracts | runs | releases | incidents | rescues | numbers | controls | panels | words | billing line |', `|${'---|'.repeat(28)}`);
-  for (const r of minutes) md.push(`| ${mmss(r.t)} | ${r.stage} | ${money(r.funds)} | ${money(r.revPerSec)} | ${r.notes.contractRate ?? ''} | ${fmtN(r.rate, 1)} | ${fmtN(r.soldPerSec, 1)} | $${fmtN(r.price, 2)} | ${fmtN(r.backlog)} | ${r.gpus} / ${r.quota ?? ''} | ${fmtN(r.power)} | ${fmtN(r.research)} / ${r.researchCap ?? ''} | ${r.trust} | ${r.researchers} | ${r.labSpace} | ${fmtN(r.capability, 2)} | ${fmtN(r.rival, 2)} | ${r.hypeLevel} | ${r.contracts} | ${r.trainings} | ${r.releases} | ${r.incidents} | ${r.idleRescues} | ${r.numbers} | ${r.controls} | ${r.panels} | ${r.words} | ${r.notes.billing ?? r.notes.billing2 ?? ''} |`);
+  md.push('## Per minute', '', '| t | stage | funds | rev/s | contracts line | tasks/s | sold/s | price | unsold | GPUs / quota | power | research / cap | trust | researchers | lab | cap × | rival × | mkt | contracts | runs | releases | rescues | numbers | controls | panels | words | billing line |', `|${'---|'.repeat(27)}`);
+  for (const r of minutes) md.push(`| ${mmss(r.t)} | ${r.stage} | ${money(r.funds)} | ${money(r.revPerSec)} | ${r.notes.contractRate ?? ''} | ${fmtN(r.rate, 1)} | ${fmtN(r.soldPerSec, 1)} | $${fmtN(r.price, 2)} | ${fmtN(r.backlog)} | ${r.gpus} / ${r.quota ?? ''} | ${fmtN(r.power)} | ${fmtN(r.research)} / ${r.researchCap ?? ''} | ${r.trust} | ${r.researchers} | ${r.labSpace} | ${fmtN(r.capability, 2)} | ${fmtN(r.rival, 2)} | ${r.hypeLevel} | ${r.contracts} | ${r.trainings} | ${r.releases} | ${r.idleRescues} | ${r.numbers} | ${r.controls} | ${r.panels} | ${r.words} | ${r.notes.billing ?? r.notes.billing2 ?? ''} |`);
   md.push('', '## Modals (first sight of each; option text as printed on the button, effect line after the dash)', '');
   for (const mo of modals) md.push(`- **${mmss(mo.t)} — ${mo.title}** ${mo.timer ? `[${mo.timer}] ` : '(no timer shown) '}(funds ${money(mo.m.funds)}, trust ${mo.m.trust}, research ${fmtN(mo.m.research)})`, `  - text: ${mo.text}`, ...mo.options.map((o) => `  - option${o.disabled ? ' (disabled)' : ''}: "${o.label}"${o.title ? ` — tooltip: ${o.title}` : ''}`));
   md.push('', '## Modal answers', '', ...rec.actions.filter((a) => a.why === 'modal').map((a) => `- ${mmss(a.t)} ${a.detail}`));
@@ -698,10 +697,10 @@ function tableCmd(names, flags) {
     });
     return v.length ? v.map((n) => `${n}`).join(' / ') : '—';
   };
-  const md = ['| play style | stage end (per seed) | mean | cap × | align (true) | researchers / lab | mkt | Trust | funds at exit ($k) | rev/s last 30 s | rev/s +30 s | GPUs | runs / releases | incidents | rescues | cards | contracts | Train GPU-blocked (s, per seed) |', `|${'---|'.repeat(18)}`];
+  const md = ['| play style | stage end (per seed) | mean | cap × | align (true) | researchers / lab | mkt | Trust | funds at exit ($k) | rev/s last 30 s | rev/s +30 s | GPUs | runs / releases | rescues | cards | contracts | Train GPU-blocked (s, per seed) |', `|${'---|'.repeat(17)}`];
   for (const r of rows) {
     const c = r.cells;
-    md.push(`| ${r.name} | ${c.map(endOf).join(' / ')} | ${mean(c)} | ${rng(c, (x) => x.capability, 2)} | ${rng(c, (x) => x.alignT, 0)} | ${rng(c, (x) => x.researchers)} / ${rng(c, (x) => x.lab)} | ${rng(c, (x) => x.marketing)} | ${rng(c, (x) => x.trust)} | ${rng(c, (x) => Math.round(x.funds / 1000))} | ${rng(c, (x) => Math.round(x.rev))} | ${rng(c, (x) => (x.revAfter == null ? null : Math.round(x.revAfter)))} | ${rng(c, (x) => x.gpus)} | ${rng(c, (x) => x.runs)} / ${rng(c, (x) => x.releases)} | ${rng(c, (x) => x.incidents)} | ${rng(c, (x) => x.rescues)} | ${rng(c, (x) => x.projects)} | ${rng(c, (x) => x.contracts)} | ${gateOf(c, r.name)} |`);
+    md.push(`| ${r.name} | ${c.map(endOf).join(' / ')} | ${mean(c)} | ${rng(c, (x) => x.capability, 2)} | ${rng(c, (x) => x.alignT, 0)} | ${rng(c, (x) => x.researchers)} / ${rng(c, (x) => x.lab)} | ${rng(c, (x) => x.marketing)} | ${rng(c, (x) => x.trust)} | ${rng(c, (x) => Math.round(x.funds / 1000))} | ${rng(c, (x) => Math.round(x.rev))} | ${rng(c, (x) => (x.revAfter == null ? null : Math.round(x.revAfter)))} | ${rng(c, (x) => x.gpus)} | ${rng(c, (x) => x.runs)} / ${rng(c, (x) => x.releases)} | ${rng(c, (x) => x.rescues)} | ${rng(c, (x) => x.projects)} | ${rng(c, (x) => x.contracts)} | ${gateOf(c, r.name)} |`);
   }
   const out = md.join('\n');
   console.log(out);
@@ -912,7 +911,7 @@ function saysCmd(names, flags) {
     }
     const top = [...counts.values()].filter((x) => x.n >= 3).sort((a, b) => b.n - a.n).slice(0, 7);
     const ls = end.lastScreen || {};
-    console.log(`\n== ${label}: stage end ${end.end != null ? mmss(end.end) : `> ${mmss(end.endT)}`}; capability ${fmtN(end.capability, 2)}×; GPUs ${end.gpus}; funds ${money(end.funds)}; rev/s ${money(end.rev)}; runs ${end.runs}; incidents ${end.incidents}; rescues ${end.rescues}; Buy Power presses ${end.powerPresses}; price moves ${end.priceMoves}; modals ${end.modals}`);
+    console.log(`\n== ${label}: stage end ${end.end != null ? mmss(end.end) : `> ${mmss(end.endT)}`}; capability ${fmtN(end.capability, 2)}×; GPUs ${end.gpus}; funds ${money(end.funds)}; rev/s ${money(end.rev)}; runs ${end.runs}; rescues ${end.rescues}; Buy Power presses ${end.powerPresses}; price moves ${end.priceMoves}; modals ${end.modals}`);
     console.log(`  repeated lines: ${top.map((x) => `${x.n}× "${x.ex}" (first ${mmss(x.first)})`).join(' | ') || '—'}`);
     console.log(`  last console: ${(ls.console || []).slice(-3).map((c) => `"${c}"`).join(' / ')}`);
     console.log(`  Train row: ${ls.train && ls.train.btn ? `${ls.train.btn.l}${ls.train.btn.e ? '' : ' (grey)'} — ${ls.train.cost} — ${ls.train.gpus} — ${ls.train.reason ?? ''}` : '(no Train button)'}; billing: ${(ls.notes && (ls.notes.billing ?? ls.notes.billing2)) ?? ''}`);
@@ -1240,13 +1239,6 @@ const PROBES = {
       await playUntil(kit, pol, 300, async (s) => s.m.trainingPhase === 'evaluating');
       await kit.session.advance(1500);
       await check('7-mid-evaluation');
-      // 8. red-team cool-down (if any issue is open)
-      const rt = await playUntil(kit, pol, 300, async (s) => s.m.trainingPhase === 'redteam');
-      if (rt && (rt.m.issuesOpen ?? 0) > 0) {
-        await kit.click('btn-redteam', 1, 'redteam');
-        await kit.session.advance(1000);
-        await check('8-redteam-cooldown');
-      } else out.push('**8-redteam-cooldown** — the first evaluation had no open issue; skipped.');
       // 9. a timed modal open
       const mo = await playUntil(kit, pol, 1500, async (s) => !!s.modal);
       if (mo) {

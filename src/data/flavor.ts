@@ -67,14 +67,6 @@ export const RELEASE_LINES: string[] = [
   '{name} released. The press call goes long.',
 ];
 
-export const REDTEAM_LINES: string[] = [
-  'Red team closes a jailbreak.',
-  'Red team patches a prompt injection.',
-  'Red team finds the model will lie to finish a task. Patched.',
-  'Red team removes a recipe it should not know.',
-  'Red team fixes a refusal that was too polite to be useful.',
-];
-
 export const RELEASE_HEADLINES: string[] = [
   'The demo works on the first try.',
   'Enterprise waitlist doubles.',

@@ -202,7 +202,6 @@ describe('Stage 2 training', () => {
     actions.finishTraining(s);
     runTicks(s, 1);
     expect(s.training.next!.phase).toBe('waiting');
-    s.training.run!.issues = 0;
     s.flags['sage2Decided'] = true;
     expect(actions.release(s)).toBe(true);
     runTicks(s, 6);
@@ -218,7 +217,6 @@ describe('Stage 2 training', () => {
     actions.startTraining(s);
     actions.finishTraining(s);
     runTicks(s, 6);
-    s.training.run!.issues = 0;
     const rival = s.rivalCapability;
     const tempo = s.tempo;
     expect(actions.release(s)).toBe(true);
