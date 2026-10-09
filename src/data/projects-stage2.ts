@@ -4,6 +4,7 @@ import { bestCapability, researchCap } from '../engine/economy.js';
 import { visibleProjects } from '../engine/projects.js';
 import { licenseCost, licenseData, LICENSE_DATA, scrapeCost, scrapeData, SCRAPE_DATA, WEB_TOTAL, dataShort } from '../engine/data.js';
 import { revealAlignment, raiseAlignment, narrowBand, reduceBias } from '../engine/alignment.js';
+import { forceLight } from '../engine/mind.js';
 import { moveTempo, EXPORT_CONTROL_SECONDS } from '../engine/rivals.js';
 import { moveApproval, moveRelations } from '../engine/world.js';
 import { openChoice } from '../engine/events.js';
@@ -391,6 +392,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     buy: (s) => {
       narrowBand(s, 7);
       reduceBias(s, 2);
+      forceLight(s, 'glance');
     },
     consoleMsg: 'Sixteen million features. Feature 4,113,902 fires on "being watched".',
   }),

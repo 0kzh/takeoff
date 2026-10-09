@@ -31,7 +31,7 @@ export function AlignmentStrip() {
       </span>
       <span className="note stripNote" id="alignmentNote">
         {s.revealed['interpretability']
-          ? `interpretability ${interpretabilityPercent(s)}%`
+          ? `interpretability ${interpretabilityPercent(s)}%${s.mind.narrowed > 0 ? ` · mind -${fmtNum(s.mind.narrowed, 0)}` : ''}`
           : band >= 20
             ? 'the band is how little we know'
             : 'narrowing'}

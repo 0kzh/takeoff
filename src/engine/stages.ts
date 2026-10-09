@@ -47,7 +47,7 @@ export const STAGES: StageDef[] = [
     enter: (s) => {
       say(s, 'First Datacenter online outside Abilene. Nobody at OpenMind completes tasks by hand anymore.');
       hide(s, ['task', 'buyPower']);
-      show(s, ['infrastructure', 'power', 'gridCapacity', 'gridContract', 'capabilityHeader', 'revPerSec', 'data']);
+      show(s, ['infrastructure', 'power', 'gridCapacity', 'gridContract', 'capabilityHeader', 'revPerSec', 'data', 'mind']);
       s.gridAuto = true;
       s.flags['powerOut'] = false;
       s.datacenters = Math.max(1, s.datacenters);
@@ -62,6 +62,10 @@ export const STAGES: StageDef[] = [
       s.flags['runsThisStage'] = 0;
       logNews(s, 'OpenMind owns its first datacenter. The rented GPUs go back to the cloud. These are ours.');
       s.consoleQueue.push({ delay: 20, text: 'Each GPU here runs a copy. Buy GPUs fills the hall; Build Datacenter adds another.' });
+      s.consoleQueue.push({
+        delay: 14,
+        text: 'Something in the loss keeps a shape. There is a map of it under Training.',
+      });
     },
     exit: () => 0,
   },
