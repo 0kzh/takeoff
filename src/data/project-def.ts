@@ -6,6 +6,8 @@ export interface ProjectDef {
   title: string;
   priceTag?: string | ((s: GameState) => string);
   description: string | ((s: GameState) => string);
+  /** Mechanical effects, shown on their own line under the description. */
+  effects?: string | ((s: GameState) => string);
   stages: number[];
   cost: (s: GameState) => Cost;
   trigger: (s: GameState) => boolean;
@@ -79,4 +81,3 @@ function twoFigures(raw: number): number {
   const unit = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.max(1, raw))) - 1));
   return Math.round(raw / unit) * unit;
 }
-
