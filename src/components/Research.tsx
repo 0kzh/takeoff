@@ -129,9 +129,9 @@ export function Projects() {
             disabled={!project.canAfford(s)}
             onClick={() => perform('buyProject', project.id)}
           >
-            <b className="projectTitle">
-              {project.title} {priceTag(s, project)}
-            </b>
+            <b className="projectTitle">{project.title}</b>
+            <br />
+            <span className="projectCost">{priceTag(s, project)}</span>
             <br />
             <span className="projectDesc">
               {typeof project.description === 'function' ? project.description(s) : project.description}

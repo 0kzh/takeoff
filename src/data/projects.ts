@@ -119,7 +119,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_beg_power',
     title: 'Ask the cloud provider for credit',
-    priceTag: '(1 Trust)',
+    priceTag: '1 Trust',
     cost: {},
     description: 'One block of power, on credit.',
     trigger: (s) => s.stage === 1 && STUCK(s),
@@ -137,7 +137,7 @@ export const PROJECTS: ProjectDef[] = [
   project({
     id: 'p_press',
     title: 'Press release',
-    priceTag: (s) => `(${fmtInt(pressCost(s))} insight)`,
+    priceTag: (s) => `${fmtInt(pressCost(s))} insight`,
     cost: (s) => ({ insight: pressCost(s) }),
     description: 'Marketing level +1.',
     trigger: (s) => s.flags['idlePress'] === true && s.insight >= pressCost(s),
@@ -409,7 +409,7 @@ export const PROJECTS: ProjectDef[] = [
     id: 'p_contract',
     chain: true,
     title: 'Custom model contract',
-    priceTag: (s) => `(${contractCost(s).toLocaleString('en-US')} research · repeatable)`,
+    priceTag: (s) => `${contractCost(s).toLocaleString('en-US')} research · repeatable`,
     cost: (s) => ({ research: contractCost(s) }),
     description: 'A bank that buys at your price. Demand +12%.',
     repeatable: true,
