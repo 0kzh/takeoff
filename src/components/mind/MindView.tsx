@@ -5,7 +5,7 @@ import { foundCount } from '../../engine/mind.js';
 import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
 import { HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
 import { DecodeModal, ThoughtResult } from './Decode.js';
-import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
+import { CIRCUIT_COLOR } from './theme.js';
 
 const STATE_LINE: Record<NodeView, string> = {
   hidden: 'Nothing has lit up here yet. Decode what leads to it first.',
@@ -20,9 +20,7 @@ function FeatureCard({ id, view, onDecode }: { id: string; view: NodeView; onDec
   const circuit = CIRCUITS.find((c) => c.id === def.circuit)!;
   return (
     <div className={`mindCard ${view}`} style={{ ['--c' as string]: CIRCUIT_COLOR[def.circuit] }}>
-      <div className="mindCardCircuit">
-        {CIRCUIT_MARK[def.circuit]} {circuit.name}
-      </div>
+      <div className="mindCardCircuit">{circuit.name}</div>
       <div className="mindCardName">{nodeTitle(def, view)}</div>
       {view === 'found' ? (
         <>
@@ -59,7 +57,6 @@ function Overview() {
         const n = feats.filter((f) => views[f.id] === 'decoded' || views[f.id] === 'wired').length;
         return (
           <div key={c.id} className="overviewRow" style={{ ['--c' as string]: CIRCUIT_COLOR[c.id] }}>
-            <span className="overviewMark">{CIRCUIT_MARK[c.id]}</span>
             <span className="overviewName">{c.name}</span>
             <span className="overviewPips">
               {feats.map((f) => (
@@ -172,7 +169,6 @@ export function MindToast() {
         setMindPrefs({ tab: 'mind' });
       }}
     >
-      <span className="mtMark">{CIRCUIT_MARK[def.circuit]}</span>
       <span className="mtText">
         <span className="mtTop">Feature lit up · {circuit.name}</span>
         <span className="mtName">{def.name}</span>
