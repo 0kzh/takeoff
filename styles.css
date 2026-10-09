@@ -502,10 +502,16 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 @media (prefers-reduced-motion: reduce) { .thoughtReveal > *, .thoughtCursor.blink { animation: none; } }
 .thoughtMeaning { margin: 0 0 10px; line-height: 1.35; }
 .thoughtVerdict { margin: 0 0 6px; }
-.thoughtVerdict.pop, .thoughtReveal > .thoughtVerdict.pop { animation: thoughtFade 0.2s steps(4, end) backwards; }
-.thoughtActions { display: flex; align-items: center; gap: 14px; }
+@keyframes thoughtPop { from { opacity: 0; visibility: hidden; } }
+.thoughtVerdict.pop, .thoughtReveal > .thoughtVerdict.pop { animation: thoughtPop 0.2s steps(4, end) backwards; }
+.thoughtActions { display: flex; align-items: center; gap: 14px; --d: 1.6s; }
+.thoughtActions > :nth-child(2) { --s: 0.4s; }
+.thoughtActions > :nth-child(3) { --s: 0.8s; }
 .thoughtActions .dButton { margin: 0; }
-.thoughtActions.pop, .thoughtReveal > .thoughtActions.pop { animation: thoughtFade 0.2s steps(4, end) 0.4s backwards; }
+.thoughtReveal > .thoughtActions, .thoughtReveal > .thoughtActions.pop { animation: none; }
+.thoughtReveal > .thoughtActions > * { animation: thoughtFade 0.2s steps(4, end) calc(var(--d) + var(--s, 0s)) backwards; }
+.thoughtActions.pop { --d: 0.4s; }
+.thoughtActions.pop > *, .thoughtReveal > .thoughtActions.pop > * { animation: thoughtPop 0.2s steps(4, end) calc(var(--d) + var(--s, 0s)) backwards; }
 .overviewRow { display: grid; grid-template-columns: 1fr auto 30px; align-items: center; gap: 6px; padding: 2px 0; }
 .overviewCount { text-align: right; color: #555; font-size: 13px; }
 .overviewPips { display: flex; gap: 3px; }
@@ -592,7 +598,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dGame + .dResult { margin-top: 0; }
 .dResult p { margin: 0 0 10px; }
 .dResult.enter { animation: thoughtFade 0.2s steps(4, end) backwards; }
-@media (prefers-reduced-motion: reduce) { .dResult.enter, .thoughtVerdict.pop, .thoughtActions.pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dResult.enter, #decodeModal .thoughtVerdict.pop, #decodeModal .thoughtActions > * { animation: none; } }
 
 /* Feature notification: a small paper card like the dialog */
 #mindToast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 10px; font-family: "Times New Roman", Times, serif; text-align: left; background: #fff; color: #000; border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); padding: 6px 12px; cursor: pointer; animation: toastIn 0.2s steps(3, end); }
