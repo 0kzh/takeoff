@@ -427,7 +427,7 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
           </span>
         )}
       </div>
-      <div className={done ? '' : 'thoughtPending'} aria-hidden={!done}>
+      <div className={done ? (animate ? 'thoughtReveal' : '') : 'thoughtPending'} aria-hidden={!done}>
         <p className="thoughtMeaning">{benign ? def.benign : def.finding}</p>
         {benign ? (
           <p className="thoughtVerdict">
