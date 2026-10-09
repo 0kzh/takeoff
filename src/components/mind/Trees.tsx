@@ -1,7 +1,7 @@
 import type { GameState } from '../../engine/state.js';
 import { CIRCUITS, FEATURES, circuitFeatures, type CircuitId, type FeatureDef } from '../../data/mind.js';
 import { featureStatus, frontier } from '../../engine/mind.js';
-import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
+import { CIRCUIT_MARK } from './theme.js';
 
 export type NodeView = 'hidden' | 'detectable' | 'found' | 'decoded' | 'wired';
 export interface TreeProps {
@@ -34,19 +34,6 @@ const lit = (v: NodeView) => v === 'decoded' || v === 'wired';
 export const nodeTitle = (f: FeatureDef, v: NodeView) =>
   known(v) ? f.name : v === 'detectable' ? 'Unidentified activity' : 'Unknown';
 
-function edges(): [FeatureDef, FeatureDef][] {
-  const out: [FeatureDef, FeatureDef][] = [];
-  for (const f of FEATURES)
-    for (const r of f.requires) {
-      const parent = FEATURES.find((p) => p.id === r);
-      if (parent) out.push([parent, f]);
-    }
-  return out;
-}
-const EDGES = edges();
-const DEEP_TO_CORE = FEATURES.filter((f) => f.circuit !== 'core' && f.slot === 3);
-const CORE_HEART = FEATURES.find((f) => f.circuit === 'core' && f.slot === 3);
-
 function nodeAria(f: FeatureDef, v: NodeView): string {
   const circuit = CIRCUITS.find((c) => c.id === f.circuit)!.name;
   const state = {
@@ -65,85 +52,78 @@ function keyActivate(e: React.KeyboardEvent, fn: () => void) {
   }
 }
 
-// ---------- Hex: a Plague-Inc-style honeycomb that converges on the core ----------
-const DIR: Record<Exclude<CircuitId, 'core'>, [number, number]> = {
-  watched: [-0.866, -0.5],
-  pleasing: [0.866, -0.5],
-  self: [0, 1],
+// ---------- Hex: a packed honeycomb. Sage (the deepest core feature) sits in the
+// middle; each outer circuit is a diamond arm, the other core features fill the gaps.
+type Axial = [number, number];
+const R = 34;
+const SQ3 = Math.sqrt(3);
+const toXY = ([q, r]: Axial): [number, number] => [SQ3 * R * (q + r / 2), 1.5 * R * r];
+const rot60 = ([q, r]: Axial): Axial => [q + r, -q];
+const add = (a: Axial, b: Axial, k = 1): Axial => [a[0] + b[0] * k, a[1] + b[1] * k];
+const ARM: Record<Exclude<CircuitId, 'core'>, Axial> = {
+  watched: [0, -1],
+  pleasing: [1, 0],
+  self: [-1, 1],
 };
-const HD = 50;
-const HR = 25;
-function hexPos(f: FeatureDef): [number, number] {
-  if (f.circuit === 'core') {
-    if (f.slot === 3) return [0, 0];
-    const deg = [270, 30, 150][f.slot]!;
-    return [Math.cos((deg * Math.PI) / 180) * HD, Math.sin((deg * Math.PI) / 180) * HD];
-  }
-  const [ux, uy] = DIR[f.circuit];
-  const [px, py] = [-uy, ux];
-  const k = f.slot === 0 ? 3.7 : f.slot === 3 ? 2 : 2.85;
-  const off = f.slot === 1 ? 0.5 : f.slot === 2 ? -0.5 : 0;
-  return [(ux * k + px * off) * HD, (uy * k + py * off) * HD];
+const CORE_CELL: Axial[] = [rot60(ARM.watched), rot60(ARM.pleasing), rot60(ARM.self)];
+function cell(f: FeatureDef): Axial {
+  if (f.circuit === 'core') return f.slot === 3 ? [0, 0] : CORE_CELL[f.slot]!;
+  const d = ARM[f.circuit];
+  const side = rot60(d);
+  if (f.slot === 3) return d;
+  if (f.slot === 1) return add(d, d);
+  if (f.slot === 2) return add(d, side);
+  return add(add(d, d), side);
 }
+const OCCUPIED = new Set(FEATURES.map((f) => cell(f).join(',')));
+const BACKDROP: Axial[] = [];
+for (let q = -4; q <= 4; q++)
+  for (let r = -4; r <= 4; r++)
+    if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) <= 4 && !OCCUPIED.has(`${q},${r}`))
+      BACKDROP.push([q, r]);
 const hexPoints = (x: number, y: number, r: number) =>
   Array.from({ length: 6 }, (_, k) => {
     const a = ((-90 + 60 * k) * Math.PI) / 180;
     return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
   }).join(' ');
-const HEX_LABEL: Record<CircuitId, [number, number]> = {
-  watched: [-160, -128],
-  pleasing: [160, -128],
-  self: [0, 228],
-  core: [0, -84],
-};
+function shortName(name: string): string[] {
+  const words = name.replace(/^The /, '').split(' ');
+  if (words.length < 2) return words;
+  const cut = Math.ceil(words.length / 2);
+  return [words.slice(0, cut).join(' '), words.slice(cut).join(' ')];
+}
+function circuitLabel(c: Exclude<CircuitId, 'core'>): {
+  x: number;
+  y: number;
+  anchor: 'start' | 'middle' | 'end';
+} {
+  const [x, y] = toXY(cell(circuitFeatures(c)[0]!));
+  const [dx, dy] = toXY(ARM[c]);
+  const n = Math.hypot(dx, dy);
+  const ux = dx / n;
+  const anchor = ux > 0.3 ? 'start' : ux < -0.3 ? 'end' : 'middle';
+  const k = anchor === 'middle' ? R * 1.5 : Math.abs(dy / n) > 0.6 ? R * 1.45 : R * 1.1;
+  return { x: x + ux * k, y: y + (dy / n) * k, anchor };
+}
 
 export function HexTree({ s, selected, onSelect }: TreeProps) {
   const views = nodeViews(s);
   const fresh = new Set(s.mind.fresh);
   return (
-    <svg className="hexTree" viewBox="-250 -146 500 386" role="group" aria-label="Sage's circuits">
-      {EDGES.map(([a, b]) => {
-        const [x1, y1] = hexPos(a);
-        const [x2, y2] = hexPos(b);
-        const cls =
-          lit(views[a.id]!) && known(views[b.id]!) ? 'on' : views[b.id] === 'hidden' ? 'off' : 'dim';
-        return (
-          <line
-            key={`${a.id}-${b.id}`}
-            className={`hexEdge ${cls}`}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
-            stroke={CIRCUIT_COLOR[b.circuit]}
-          />
-        );
+    <svg className="hexTree" viewBox="-270 -235 540 470" role="group" aria-label="Sage's circuits">
+      {BACKDROP.map((a) => {
+        const [x, y] = toXY(a);
+        return <polygon key={a.join(',')} className="hexBack" points={hexPoints(x, y, R - 2)} />;
       })}
-      {CORE_HEART
-        ? DEEP_TO_CORE.map((f) => {
-            const [x1, y1] = hexPos(f);
-            const on = lit(views[f.id]!) && known(views[CORE_HEART.id]!);
-            return (
-              <line
-                key={`feed-${f.id}`}
-                className={`hexEdge feed ${on ? 'on' : 'off'}`}
-                x1={x1}
-                y1={y1}
-                x2={0}
-                y2={0}
-                stroke={CIRCUIT_COLOR[f.circuit]}
-              />
-            );
-          })
-        : null}
       {CIRCUITS.map((c) => {
-        const [x, y] = HEX_LABEL[c.id];
+        if (c.id === 'core') return null;
+        const { x, y, anchor } = circuitLabel(c.id);
         const feats = circuitFeatures(c.id);
         const done = feats.filter((f) => lit(views[f.id]!)).length;
         const any = feats.some((f) => views[f.id] !== 'hidden');
         return (
-          <text key={c.id} className={`hexLabel${any ? '' : ' dark'}`} x={x} y={y} fill={CIRCUIT_COLOR[c.id]}>
-            {c.name.toUpperCase()}{' '}
+          <text key={c.id} className={`hexLabel${any ? '' : ' dark'}`} x={x} y={y} textAnchor={anchor}>
+            {c.name}{' '}
             <tspan className="hexCount">
               {done}/{feats.length}
             </tspan>
@@ -151,28 +131,49 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
         );
       })}
       {FEATURES.map((f) => {
-        const [x, y] = hexPos(f);
+        const [x, y] = toXY(cell(f));
         const v = views[f.id]!;
-        const color = CIRCUIT_COLOR[f.circuit];
+        const hub = f.circuit === 'core' && f.slot === 3;
+        const benign = s.mind.features[f.id]?.wiring === 'benign';
+        const icon =
+          v === 'detectable'
+            ? '?'
+            : v === 'found'
+              ? CIRCUIT_MARK[f.circuit]
+              : v === 'decoded'
+                ? '⟳'
+                : v === 'wired'
+                  ? '✓'
+                  : '';
+        const lines = hub ? ['Sage'] : known(v) ? shortName(f.name) : [];
+        const top = y - (lines.length > 1 ? 4 : 0) + (icon ? 8 : 0);
         return (
           <g
             key={f.id}
-            className={`hexNode ${v}${selected === f.id ? ' sel' : ''}${fresh.has(f.id) ? ' fresh' : ''}`}
+            className={`hexNode ${v}${hub ? ' hub' : ''}${benign ? ' benign' : ''}${selected === f.id ? ' sel' : ''}${fresh.has(f.id) ? ' fresh' : ''}`}
             data-feature={f.id}
             role="button"
             tabIndex={0}
             aria-label={nodeAria(f, v)}
             onClick={() => onSelect(f.id)}
             onKeyDown={(e) => keyActivate(e, () => onSelect(f.id))}
-            style={{ ['--c' as string]: color }}
           >
-            <title>{nodeTitle(f, v)}</title>
-            {selected === f.id ? <polygon className="hexSel" points={hexPoints(x, y, HR + 5)} /> : null}
-            <polygon className="hexShape" points={hexPoints(x, y, HR)} />
-            <text className="hexMark" x={x} y={y + 1}>
-              {v === 'hidden' ? '' : v === 'detectable' ? '?' : v === 'found' ? '!' : CIRCUIT_MARK[f.circuit]}
-            </text>
-            {v === 'wired' ? <circle className="hexWired" cx={x + 15} cy={y - 14} r={4} /> : null}
+            <title>{hub && !known(v) ? 'Sage' : nodeTitle(f, v)}</title>
+            <polygon className="hexShape" points={hexPoints(x, y, R - 2)} />
+            {v === 'decoded' || selected === f.id ? (
+              <polygon className="hexInset" points={hexPoints(x, y, R - 7)} />
+            ) : null}
+            {icon && !(hub && !known(v)) ? (
+              <text className="hexIcon" x={x} y={lines.length ? y - 9 - (lines.length > 1 ? 5 : 0) : y + 1}>
+                {icon}
+              </text>
+            ) : null}
+            {lines.map((line, i) => (
+              <text key={i} className="hexName" x={x} y={(icon && !(hub && !known(v)) ? top : y) + i * 11}>
+                {line}
+              </text>
+            ))}
+            {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 19} cy={y - 18} r={4} /> : null}
           </g>
         );
       })}
