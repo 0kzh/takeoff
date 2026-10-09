@@ -54,8 +54,8 @@ function keyActivate(e: React.KeyboardEvent, fn: () => void) {
 // ---------- Hex: a packed honeycomb. Sage (the deepest core feature) sits in the
 // middle; each outer circuit is a diamond arm, the other core features fill the gaps.
 type Axial = [number, number];
-const R = 31;
-const TILE = 26;
+const R = 27;
+const TILE = R - 2;
 const SQ3 = Math.sqrt(3);
 const toXY = ([q, r]: Axial): [number, number] => [SQ3 * R * (q + r / 2), 1.5 * R * r];
 const rot60 = ([q, r]: Axial): Axial => [q + r, -q];
@@ -103,7 +103,7 @@ function circuitLabel(c: Exclude<CircuitId, 'core'>): {
   const n = Math.hypot(dx, dy);
   const ux = dx / n;
   const anchor = ux > 0.3 ? 'start' : ux < -0.3 ? 'end' : 'middle';
-  const k = anchor === 'middle' ? R * 1.35 : Math.abs(dy / n) > 0.6 ? R * 1.3 : R * 1.05;
+  const k = anchor === 'middle' ? R * 1.5 : Math.abs(dy / n) > 0.6 ? R * 1.45 : R * 1.1;
   return { x: x + ux * k, y: y + (dy / n) * k, anchor };
 }
 
@@ -113,7 +113,7 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
   const coreFeats = circuitFeatures('core');
   const coreDone = coreFeats.filter((f) => lit(views[f.id]!)).length;
   return (
-    <svg className="hexTree" viewBox="-290 -220 580 440" role="group" aria-label="Sage's circuits">
+    <svg className="hexTree" viewBox="-250 -190 500 380" role="group" aria-label="Sage's circuits">
       {BACKDROP.map((a) => {
         const [x, y] = toXY(a);
         const ring = Math.max(Math.abs(a[0]), Math.abs(a[1]), Math.abs(a[0] + a[1]));
@@ -189,7 +189,7 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
                 </text>
               </>
             ) : null}
-            {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 14} cy={y - 14} r={3.5} /> : null}
+            {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 15} cy={y - 14} r={3.5} /> : null}
           </g>
         );
       })}
