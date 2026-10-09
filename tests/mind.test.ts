@@ -215,6 +215,8 @@ describe('Decode and rewire', () => {
       expect(def.finding.length, `${def.id} finding`).toBeGreaterThan(0);
       expect(def.benign.length, `${def.id} benign`).toBeGreaterThan(0);
       expect(def.rewired.length, `${def.id} rewired`).toBeGreaterThan(0);
+      expect(def.rewiredThought.length, `${def.id} rewiredThought`).toBeGreaterThan(0);
+      expect(def.rewiredThought, `${def.id} rewiredThought differs`).not.toBe(def.thought);
       expect(thoughtOf(def, s).length, `${def.id} thought`).toBeGreaterThan(0);
     }
   });

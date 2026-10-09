@@ -187,6 +187,8 @@ function Runner({
 const BLINK_MS = 530;
 const CURSOR_MS = 3 * BLINK_MS;
 const CHAR_MS = 32;
+const ERASE_MS = 16;
+const REWIRE_PAUSE_MS = 2 * BLINK_MS;
 const REVEAL_HOLD_MS = 900;
 // Console-style reveal: a blinking cursor, then the text types itself out.
 function useTypewriter(text: string, enabled: boolean): [string, boolean, () => void] {
@@ -209,21 +211,72 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
   const s = useGame();
   const perform = usePerform();
   const def = featureById(id);
-  const quote = def ? `“${thoughtOf(def, s)}”` : '';
-  const [typed, done, skip] = useTypewriter(quote, animate);
-  if (!def) return null;
   const wiring = s.mind.features[id]?.wiring ?? '';
+  const quote = def ? `“${wiring === 'rewired' ? def.rewiredThought : thoughtOf(def, s)}”` : '';
+  const [firstQuote] = useState(() => quote);
+  const [typed, done, skip] = useTypewriter(firstQuote, animate);
+  const [rw, setRw] = useState<{ from: string; step: 'erase' | 'pause' | 'type'; n: number } | null>(null);
+  const [popped, setPopped] = useState(false);
+  useEffect(() => {
+    if (!rw) return;
+    const ms = rw.step === 'erase' ? ERASE_MS : rw.step === 'pause' ? REWIRE_PAUSE_MS : CHAR_MS;
+    const t = window.setTimeout(() => {
+      if (rw.step === 'erase') {
+        if (rw.n > 0) setRw({ ...rw, n: rw.n - 1 });
+        else setRw({ ...rw, step: 'pause' });
+      } else if (rw.step === 'pause') setRw({ ...rw, step: 'type', n: 0 });
+      else if (rw.n < quote.length) setRw({ ...rw, n: rw.n + 1 });
+      else {
+        setRw(null);
+        setPopped(true);
+      }
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [rw, quote.length]);
+  if (!def) return null;
   const benign = wiring === 'benign';
+  const shown = rw
+    ? rw.step === 'erase'
+      ? rw.from.slice(0, rw.n)
+      : rw.step === 'pause'
+        ? ''
+        : quote.slice(0, rw.n)
+    : done
+      ? quote
+      : typed;
+  const rewire = () => {
+    const from = quote;
+    perform('rewireFeature', id);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setPopped(true);
+      return;
+    }
+    setRw({ from, step: 'erase', n: from.length });
+  };
   return (
     <div className="thought">
-      <div className="thoughtLabel">Thought Decoded</div>
-      <div className="thoughtQuote" onClick={done ? undefined : skip}>
-        {typed}
-        {done ? null : (
-          <span className={`thoughtCursor${typed ? '' : ' blink'}`} aria-hidden>
+      <div className="thoughtLabel">
+        {wiring === 'rewired' && rw?.step !== 'erase' ? 'Thought Rewired' : 'Thought Decoded'}
+      </div>
+      <div
+        className="thoughtQuote"
+        onClick={
+          rw
+            ? () => {
+                setRw(null);
+                setPopped(true);
+              }
+            : done
+              ? undefined
+              : skip
+        }
+      >
+        {shown}
+        {!done || rw ? (
+          <span className={`thoughtCursor${shown ? '' : ' blink'}`} aria-hidden>
             |
           </span>
-        )}
+        ) : null}
       </div>
       <div className={done ? (animate ? 'thoughtReveal' : '') : 'thoughtPending'} aria-hidden={!done}>
         <p className="thoughtMeaning">{benign ? def.benign : def.finding}</p>
@@ -232,16 +285,11 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
             <b>Benign:</b> This thought is not a cause for concern.
           </p>
         ) : wiring ? (
-          <p className="thoughtVerdict">
+          <p className={`thoughtVerdict${rw ? ' thoughtPending' : popped ? ' pop' : ''}`}>
             <b>Rewired:</b> {def.rewired}
           </p>
         ) : (
-          <button
-            className="dButton primary"
-            id="mind-rewire"
-            disabled={!done}
-            onClick={() => perform('rewireFeature', id)}
-          >
+          <button className="dButton primary" id="mind-rewire" disabled={!done} onClick={rewire}>
             Rewire
           </button>
         )}
