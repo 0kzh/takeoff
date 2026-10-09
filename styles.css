@@ -495,9 +495,9 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .thoughtPending { visibility: hidden; }
 .thoughtCursor.blink { animation: cursorBlink 0.53s steps(1, end) infinite; }
 @keyframes cursorBlink { 50% { opacity: 0; } }
-.thoughtReveal > * { animation: thoughtFade 0.2s steps(4, end) backwards; }
-.thoughtReveal > :nth-child(2) { animation-delay: 0.15s; }
-@keyframes thoughtFade { from { opacity: 0; } }
+.thoughtReveal > * { animation: thoughtFade 0.2s steps(4, end) 0.5s backwards; }
+.thoughtReveal > :nth-child(2) { animation-delay: 1.1s; }
+@keyframes thoughtFade { from { opacity: 0; visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) { .thoughtReveal > *, .thoughtCursor.blink { animation: none; } }
 .thoughtMeaning { margin: 0 0 10px; line-height: 1.35; }
 .thoughtVerdict { margin: 0 0 6px; }
@@ -554,7 +554,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dTimerFill { display: block; height: 100%; background: #888; }
 .dTimerFill.low { background: #000; }
 .phase-solved .dTimer { visibility: hidden; }
-.dRows { display: flex; flex-direction: column; gap: 4px; }
 .dRow { display: flex; align-items: center; gap: 8px; }
 .dRowLabel { width: 20px; font-size: 13px; color: #555; text-align: right; flex: none; }
 .dStrip { display: flex; gap: 2px; }
@@ -567,25 +566,11 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dRow:nth-child(5) .dTile.hit { animation-delay: 0.2s; }
 .dRow:nth-child(6) .dTile.hit { animation-delay: 0.25s; }
 @keyframes pop { from { background: #fff; color: #000; } }
-.dTile.ghost { border: 1px dashed #000; background: #eee; }
-.dRow.missing .dStrip { animation: shake 0.3s steps(5, end); }
-.dRow.missing .dRowLabel { color: #000; font-weight: bold; }
-.dRow.missing .dTile { border-color: #000; border-width: 2px; }
-@keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(1px); } }
 .dPrompt { font-size: 15px; margin: 12px 0 8px; }
 .dFeedback { font-size: 13px; color: #555; min-height: 17px; margin-top: 6px; }
-.dChoices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.dChoice { display: flex; align-items: center; gap: 6px; font-family: "Times New Roman", Times, serif; font-size: 15px; background: #fff; color: #000; border: 1px solid #000; padding: 5px 10px; cursor: pointer; }
-.dChoice:hover:not(:disabled) { background: #f4f4f4; }
-.dChoice .glyph { width: 15px; height: 15px; }
-.dChoice.wrong { color: #999; border-color: #999; text-decoration: line-through; cursor: default; }
-.dChoice.right { background: #000; color: #fff; }
-.dKey { font-size: 13px; color: #555; margin-right: 4px; }
-.dChoice.wrong .dKey { color: #bbb; }
-.dChoice.right .dKey { color: #fff; }
 .dAlign { position: relative; }
-.dLens { position: absolute; top: -3px; bottom: 1px; display: flex; border: 2px solid #000; pointer-events: none; z-index: 1; }
-.dLensCol { height: 100%; }
+.dLens { position: absolute; top: -3px; box-sizing: border-box; display: flex; gap: 2px; padding: 1px; border: 2px solid #000; pointer-events: none; z-index: 1; }
+.dLensCol { flex: 1; }
 .dLensCol.agree { background: rgba(0, 0, 0, 0.12); }
 .alignRow { margin-bottom: 4px; }
 .dWindow { overflow: hidden; display: block; flex: none; }
@@ -597,8 +582,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .alignRow.cursor .dRowLabel::before { content: '▸'; }
 .variant-trace .dRow.source .dTile { cursor: crosshair; }
 .variant-trace .dRow.source .dRowLabel { color: #000; font-weight: bold; }
-.dTile.picked { background: #888; color: #fff; border-color: #000; }
-.dTile.echo { background: #ddd; border-color: #000; }
 .variant-trace .dRow.lit .dRowLabel { color: #000; font-weight: bold; }
 .dResult { margin-top: 12px; font-size: 15px; }
 .dResult p { margin: 0 0 10px; }
