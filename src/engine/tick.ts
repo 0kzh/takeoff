@@ -19,6 +19,7 @@ import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
 import { fmtInt, fmtDuration } from './format.js';
+import { acknowledgeMind, closeMind, guessMind, lightMind, openMindNode, solveMind } from './mind.js';
 
 export const TICK_MS = 100;
 export const SLOW_TICK_EVERY = 10;
@@ -210,6 +211,12 @@ export const actions = {
   takeDefault,
   fireEvent,
   forceEnding,
+  openMindNode,
+  guessMind,
+  closeMind,
+  acknowledgeMind,
+  lightMind,
+  solveMind,
 };
 
 export type Actions = typeof actions;

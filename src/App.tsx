@@ -5,6 +5,7 @@ import { Business } from './components/Business.js';
 import { Infrastructure } from './components/Infrastructure.js';
 import { Research, Projects } from './components/Research.js';
 import { Training } from './components/Training.js';
+import { Mind } from './components/Mind.js';
 import { Console, Developments, ChoiceDialog, Ending } from './components/Narrative.js';
 import { DevPanel } from './components/DevPanel.js';
 import { Race } from './components/Race.js';
@@ -149,6 +150,7 @@ export function App({ seed }: { seed: number }) {
         </div>
         <div id="rightColumn" className="column">
           <Training />
+          <Mind />
           <LaterPanels column="right" />
         </div>
       </div>

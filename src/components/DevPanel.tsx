@@ -16,6 +16,9 @@ export function DevPanel({ seed }: { seed: number }) {
   const perform = usePerform();
   const speed = useGameStore((state) => state.speed);
   const autoplay = useGameStore((state) => state.autoplay);
+  const mindTree = useGameStore((state) => state.mindTree);
+  const mindDecode = useGameStore((state) => state.mindDecode);
+  const setMindChrome = useGameStore((state) => state.setMindChrome);
   const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('dev') === '1');
   const [showHidden, setShowHidden] = useState(false);
   const [event, setEvent] = useState(EVENTS[0]?.id ?? '');
@@ -145,6 +148,52 @@ export function DevPanel({ seed }: { seed: number }) {
         </select>
         <button id="dev-fire" onClick={() => perform('fireEvent', event)}>
           Fire event ▾
+        </button>
+      </div>
+      <div className="devRow">
+        Tree{' '}
+        {(
+          [
+            ['branches', 'Skill tree. Locked circuits are silhouettes; a lit one opens the puzzle.'],
+            ['plague', 'Mutation columns. Names show while locked. Select a circuit, then decode it.'],
+            ['atlas', 'Fogged constellation. A circuit appears only after the one before it is rewired.'],
+          ] as const
+        ).map(([id, title]) => (
+          <button
+            key={id}
+            id={`dev-mind-tree-${id}`}
+            title={title}
+            className={id === mindTree ? 'devActive' : ''}
+            onClick={() => setMindChrome(id)}
+          >
+            {id}
+          </button>
+        ))}
+      </div>
+      <div className="devRow">
+        Decode{' '}
+        {(
+          [
+            ['tiles', 'Glyph captcha. Click the fragment that was added to every trace.'],
+            ['tape', 'The same puzzle, read as tokens.'],
+            ['stack', 'Test a fragment against the traces, then click again to cut it in.'],
+          ] as const
+        ).map(([id, title]) => (
+          <button
+            key={id}
+            id={`dev-mind-decode-${id}`}
+            title={title}
+            className={id === mindDecode ? 'devActive' : ''}
+            onClick={() => setMindChrome(undefined, id)}
+          >
+            {id}
+          </button>
+        ))}
+        <button id="dev-mind-light" onClick={() => perform('lightMind')}>
+          Light
+        </button>
+        <button id="dev-mind-solve" onClick={() => perform('solveMind')}>
+          Solve
         </button>
       </div>
       <div className="devRow">

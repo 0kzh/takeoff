@@ -1,7 +1,7 @@
 import { dateLabel } from './format.js';
 import { seedFrom } from './rng.js';
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 export const SAVE_KEY = 'takeoff.save.v1';
 export const CONSOLE_LINES = 5;
 export const LOG_LIMIT = 60;
@@ -144,6 +144,32 @@ export interface IdleState {
   lastNoveltyAt: number;
 }
 
+export interface MindChunk {
+  id: string;
+  token: string;
+  bits: number[];
+}
+
+export interface MindPuzzle {
+  nodeId: string;
+  baseline: string[];
+  rows: string[][];
+  answer: string;
+  chunks: MindChunk[];
+  struck: string[];
+  solved: boolean;
+}
+
+export interface MindState {
+  status: Record<string, 'lit' | 'rewired'>;
+  pinged: number[];
+  puzzles: Record<string, MindPuzzle>;
+  active: string;
+  notice: string;
+  seen: string[];
+  narrowed: number;
+}
+
 export interface Stats {
   timePlayed: number;
   timeInStage: number;
@@ -265,6 +291,7 @@ export interface GameState {
   idle: IdleState;
   cadence: Cadence;
   stats: Stats;
+  mind: MindState;
 
   tickAccum: number;
   tickCount: number;
@@ -289,6 +316,10 @@ export function newTraining(): TrainingState {
     releasing: null,
     armed: false,
   };
+}
+
+export function newMind(): MindState {
+  return { status: {}, pinged: [], puzzles: {}, active: '', notice: '', seen: [], narrowed: 0 };
 }
 
 export function newStats(): Stats {
@@ -416,6 +447,7 @@ export function newGame(seed: number = Date.now()): GameState {
     idle: { quiet: 0, affordable: [], shown: 0, lastNoveltyAt: 0 },
     cadence: { queue: [], lastDripAt: -999, lastRevealAt: 0, lastModalAt: -999, seen: [], governed: [] },
     stats: newStats(),
+    mind: newMind(),
 
     tickAccum: 0,
     tickCount: 0,
@@ -500,10 +532,11 @@ function keep(base: object, data: unknown): Record<string, unknown> {
 export function migrate(raw: Record<string, unknown>): GameState | null {
   const version = raw['version'];
   const legacy = (version === 14 || version === 13) && raw['stage'] === 1;
-  if (version !== SAVE_VERSION && !legacy) return null;
+  if (version !== SAVE_VERSION && version !== 15 && !legacy) return null;
   const base = newGame(typeof raw['seed'] === 'number' ? (raw['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged = keep(base, raw);
-  for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen'] as const) merged[key] = keep(base[key] as object, raw[key]);
+  for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen', 'mind'] as const)
+    merged[key] = keep(base[key] as object, raw[key]);
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
   if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags']) delete run[key];
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;
@@ -512,6 +545,8 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   const out = merged as unknown as GameState;
   // Saves from before the web could be scraped in Stage 1 start with nothing left to scrape.
   if (out.stage === 1 && out.data.webRemaining === 0 && !(out.projects['s2_scrape']?.bought ?? 0)) out.data.webRemaining = 20;
+  // The mind map opens with Stage 2. Older saves already passed the stage entrance.
+  if (out.stage >= 2) out.revealed['mind'] = true;
   return out;
 }
 

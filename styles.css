@@ -438,6 +438,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
   #panel-task { order: 1; }
   #panel-infrastructure { order: 3; }
   #panel-training { order: 4; }
+  #panel-mind { order: 4; }
   #panel-race { order: 5; }
   #panel-projects { order: 6; }
   #panel-business { order: 7; }
@@ -468,3 +469,417 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .meter { display: inline-block; width: 90px; vertical-align: middle; overflow: hidden; text-align: left; }
 .meterFill { display: inline-block; vertical-align: top; }
 .meter.warn .meterFill { background: #b00000; }
+
+#mindSummary {
+  margin-bottom: 2px;
+}
+#mindCounts {
+  display: block;
+  margin-bottom: 6px;
+}
+#btn-mind-open {
+  margin-top: 2px;
+}
+#mindNotice {
+  display: block;
+  margin-top: 6px;
+}
+.mindWaiting {
+  font-weight: bold;
+}
+
+#mindShade,
+#mindDecodeShade {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+#mindShade {
+  z-index: 16;
+}
+#mindDecodeShade {
+  z-index: 18;
+}
+#mindMap,
+#mindDecode {
+  position: fixed;
+  background: #fff;
+  border: 2px solid #000;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+}
+#mindMap {
+  z-index: 17;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 14px 16px 16px;
+}
+#mindMap:focus,
+#mindDecode:focus {
+  outline: none;
+}
+#mindMapTitle {
+  font-weight: bold;
+  font-size: 20px;
+}
+.mindHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mindBlurb,
+.mindLegend {
+  margin: 6px 0;
+}
+.mindScroll {
+  overflow-x: auto;
+  margin: 4px 0 8px;
+}
+.mindBandReadout {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.mindMiniTrack {
+  position: relative;
+  display: block;
+  width: 160px;
+  height: 12px;
+  border: 1px solid #000;
+  margin-bottom: 3px;
+  overflow: hidden;
+}
+.mindDossier {
+  border-top: 1px solid #000;
+  padding-top: 8px;
+  min-height: 52px;
+}
+.mindDossier p {
+  margin: 4px 0;
+}
+
+.mindCanvas {
+  position: relative;
+}
+.mindWires {
+  display: block;
+  pointer-events: none;
+}
+.mindWire {
+  fill: none;
+  stroke: #b0b0b0;
+  stroke-width: 1.5;
+}
+.mindOrbit {
+  fill: none;
+  stroke: #ddd;
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+.mindWire.hot {
+  stroke: #111;
+  stroke-width: 2;
+}
+.mindLane {
+  position: absolute;
+  left: 8px;
+  width: 120px;
+  font-size: 13px;
+  line-height: 1.15;
+}
+.mindCore {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  letter-spacing: 0.14em;
+  font-size: 12px;
+  pointer-events: none;
+}
+.mindQuad {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 110px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  pointer-events: none;
+}
+.mindNode {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 13px;
+  line-height: 1.15;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+  text-align: center;
+}
+.mindCanvas .mindNode {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 118px;
+  min-height: 34px;
+  padding: 4px 6px;
+}
+.mindNode.locked {
+  color: #9a9a9a;
+  background: #eee;
+  border-color: #c8c8c8;
+  border-style: dashed;
+}
+.mindNode.lit {
+  background: #fff;
+  border-width: 2px;
+  font-weight: bold;
+  animation: mindPulse 1.6s ease-in-out infinite;
+}
+.mindNode.rewired {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.mindNode.selected {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+.mindNode.rewired.selected {
+  outline-color: #555;
+}
+.skin-atlas .mindNode.locked {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+.skin-atlas .mindNode.lit,
+.skin-atlas .mindNode.rewired {
+  width: auto;
+  max-width: 120px;
+  border-radius: 14px;
+}
+.mindDot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 6px auto;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.mindPlague {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.mindCol {
+  border-top: 2px solid #000;
+  padding-top: 6px;
+}
+.mindCol h3 {
+  font-size: 15px;
+  margin: 0 0 2px;
+}
+.mindCol .note {
+  display: block;
+  min-height: 34px;
+}
+.mindColNodes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mindFork {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mindPlague .mindNode {
+  position: static;
+  transform: none;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+}
+
+#mindDecode {
+  z-index: 19;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 16px 18px;
+}
+#mindDecodeTitle {
+  font-weight: bold;
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.mindHelp {
+  margin: 0 0 8px;
+}
+.mindWhich {
+  margin: 0 0 8px;
+}
+.mindSamples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.mindSample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+}
+.mindSample.before {
+  background: #f3f3f3;
+}
+.mindSample.hit {
+  border-color: #000;
+  background: #fff;
+}
+.mindSampleLabel {
+  width: 58px;
+  flex: none;
+  font-size: 13px;
+  color: #333;
+}
+.mindSampleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mindChunk {
+  border: 1px solid #000;
+  background: #fff;
+  padding: 4px;
+  cursor: pointer;
+  font-family: 'Times New Roman', Times, serif;
+  color: #000;
+}
+.mindChunk:hover:not(:disabled) {
+  background: #f7f7f7;
+}
+.mindChunk:disabled {
+  cursor: default;
+}
+.mindChunk.struck {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+.mindChunk.solved,
+.mindChunk.armed {
+  outline: 2px solid #000;
+  outline-offset: 1px;
+  background: #111;
+  color: #fff;
+}
+.mindChunk.solved .mindGlyph i.on,
+.mindChunk.armed .mindGlyph i.on {
+  background: #fff;
+}
+.mindChunk.solved .mindGlyph i,
+.mindChunk.armed .mindGlyph i {
+  background: #333;
+}
+.mindGlyph {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 8px);
+  gap: 2px;
+}
+.mindGlyph i {
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: #e4e4e4;
+}
+.mindGlyph i.on {
+  background: #111;
+}
+.mindToken {
+  font-family: 'Lucida Console', Monaco, monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 2px 4px;
+}
+.mindStack {
+  display: flex;
+  flex-direction: column;
+}
+.mindPalette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.mindPalette .mindChunk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.mindBlip {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  background: #ddd;
+  border: 1px solid #bbb;
+}
+.mindBlip.hot {
+  background: #111;
+  border-color: #111;
+}
+.mindMiss {
+  min-height: 1.2em;
+  font-style: italic;
+  margin: 0 0 8px;
+}
+.mindInsight p {
+  margin: 0 0 10px;
+}
+
+@keyframes mindPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.12);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mindNode.lit {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  #mindMap {
+    top: 8px;
+    width: calc(100vw - 16px);
+    padding: 12px;
+  }
+  #mindDecode {
+    width: auto;
+    left: 8px;
+    right: 8px;
+    transform: none;
+    top: 16px;
+  }
+  .mindHead {
+    flex-wrap: wrap;
+  }
+  .mindPlague {
+    grid-template-columns: 1fr 1fr;
+  }
+}

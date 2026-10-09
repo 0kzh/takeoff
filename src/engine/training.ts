@@ -3,6 +3,7 @@ import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS, chipMult } from './economy.js';
 import { dataFactor, dataShort } from './data.js';
 import { applyDrift } from './alignment.js';
+import { pingMindDuringRun } from './mind.js';
 import { moveTempo, distill } from './rivals.js';
 import { moveApproval, DEPLOY_APPROVAL } from './world.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
@@ -463,10 +464,12 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boole
       run.flavorShown = 1;
       if (pool.length) say(s, pick(s, pool));
     }
+    if (progress >= 0.72) pingMindDuringRun(s, run);
     if (!queued && run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
     if (run.eventAt >= 0 && !run.eventId && progress >= run.eventAt) applyTrainingEvent(s, run);
   }
   if (run.elapsed >= run.duration) {
+    pingMindDuringRun(s, run);
     run.elapsed = run.duration;
     if (queued) {
       computeResults(s, run);
