@@ -18,6 +18,7 @@ import {
 import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
+import { decodeFeature, failDecode, rewireFeature, markMindSeen, devMindSignal } from './mind.js';
 import { fmtInt, fmtDuration } from './format.js';
 
 export const TICK_MS = 100;
@@ -210,6 +211,11 @@ export const actions = {
   takeDefault,
   fireEvent,
   forceEnding,
+  decodeFeature,
+  failDecode,
+  rewireFeature,
+  markMindSeen,
+  devMindSignal,
 };
 
 export type Actions = typeof actions;

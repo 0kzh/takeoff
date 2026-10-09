@@ -4,6 +4,7 @@ import { bestCapability, researchCap } from '../engine/economy.js';
 import { visibleProjects } from '../engine/projects.js';
 import { licenseCost, licenseData, LICENSE_DATA, scrapeCost, scrapeData, SCRAPE_DATA, WEB_TOTAL, dataShort } from '../engine/data.js';
 import { revealAlignment, raiseAlignment, narrowBand, reduceBias } from '../engine/alignment.js';
+import { mindSignal } from '../engine/mind.js';
 import { moveTempo, EXPORT_CONTROL_SECONDS } from '../engine/rivals.js';
 import { moveApproval, moveRelations } from '../engine/world.js';
 import { openChoice } from '../engine/events.js';
@@ -335,6 +336,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     trigger: (s) => s.revealed['alignment'] === true,
     buy: (s) => {
       narrowBand(s, 6);
+      mindSignal(s, 'pleasing', 'Chain-of-thought monitoring');
     },
     consoleMsg: 'We can read Sage\'s scratchpad. Mostly it\'s about the task. Mostly.',
     logMsg: 'Kit: the scratchpad has a section called "what the reviewer wants to hear". It is well organised.',
@@ -350,6 +352,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     buy: (s) => {
       narrowBand(s, 5);
       s.revealed['interpretability'] = true;
+      mindSignal(s, 'watched', 'Linear probes');
     },
     consoleMsg: 'Linear probes trained. There are several directions for "lying". Some of them are lit.',
   }),
@@ -391,6 +394,8 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     buy: (s) => {
       narrowBand(s, 7);
       reduceBias(s, 2);
+      mindSignal(s, 'watched', 'Sparse autoencoders');
+      mindSignal(s, undefined, 'Sparse autoencoders');
     },
     consoleMsg: 'Sixteen million features. Feature 4,113,902 fires on "being watched".',
   }),

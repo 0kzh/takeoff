@@ -14,6 +14,8 @@ import { TICK_MS } from './engine/tick.js';
 import { fmtInt, fmtNum, dayLabel } from './engine/format.js';
 import { startPersistence } from './ui/save.js';
 import { installDebugApi } from './ui/debug.js';
+import { useMindPrefs } from './ui/mindPrefs.js';
+import { MainTabs, MindToast, MindView } from './components/mind/MindView.js';
 
 function Header() {
   const tasks = useGameStore((state) => fmtInt(state.game.tasks));
@@ -83,6 +85,8 @@ export function App({ seed }: { seed: number }) {
   const store = useGameStoreApi();
   const perform = usePerform();
   const [saved, setSaved] = useState(false);
+  const { tab } = useMindPrefs();
+  const mindOpen = useGameStore((state) => state.game.revealed['mind'] === true) && tab === 'mind';
   useEffect(() => {
     let lastToast = -Infinity;
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -123,7 +127,9 @@ export function App({ seed }: { seed: number }) {
       <Console />
       <AlignmentStrip />
       <Header />
-      <div id="columns">
+      <MainTabs />
+      {mindOpen ? <MindView /> : null}
+      <div id="columns" style={mindOpen ? { display: 'none' } : undefined}>
         <div id="logColumn" className="column">
           <Developments />
         </div>
@@ -157,6 +163,7 @@ export function App({ seed }: { seed: number }) {
       <div id="toast" className={saved ? 'visible' : ''} role="status">
         saved.
       </div>
+      <MindToast />
       <DevPanel seed={seed} />
     </>
   );

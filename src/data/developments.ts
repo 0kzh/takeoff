@@ -2,6 +2,7 @@ import { isBought, type GameState } from '../engine/state.js';
 import { monthOf } from '../engine/format.js';
 import { bestCapability } from '../engine/economy.js';
 import { revealAlignment } from '../engine/alignment.js';
+import { mindSignal } from '../engine/mind.js';
 
 export interface DevelopmentDef {
   id: string;
@@ -225,6 +226,7 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     effect: (s) => {
       s.flags['rewardHacking'] = true;
       if (isBought(s, 'p_alignment_team')) revealAlignment(s);
+      mindSignal(s, 'pleasing', 'Reward hacking');
     },
   },
   {
