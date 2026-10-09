@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame, useGameStore, usePerform } from '../../store/context.js';
 import { CIRCUITS, FEATURES, featureById, sageWants } from '../../data/mind.js';
-import { decodedCount, foundCount } from '../../engine/mind.js';
+import { foundCount } from '../../engine/mind.js';
 import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
 import { HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
 import { DecodeModal, ThoughtResult } from './Decode.js';
@@ -90,18 +90,8 @@ export function MindView() {
     setSelected(id);
     if (views[id] === 'found' || views[id] === 'decoded') setDecoding(id);
   };
-  const decoded = decodedCount(s);
-  const waiting = foundCount(s);
   return (
     <div id="mindView">
-      <div className="mindHead">
-        <b className="mindTitle">Sage’s mind</b>
-        <span className="mindStats">
-          {decoded} of {FEATURES.length} decoded
-          {waiting ? ` · ${waiting} waiting` : ''}
-        </span>
-      </div>
-      <hr />
       <div className="mindBody">
         <div className="mindTree">
           <HexTree s={s} selected={selected} onSelect={select} />
