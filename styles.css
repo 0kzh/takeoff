@@ -493,10 +493,12 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .thoughtLabel { font-size: 13px; color: #555; margin-bottom: 4px; }
 .thoughtQuote { font-family: "Lucida Sans Typewriter", "Lucida Console", Monaco, "Bitstream Vera Sans Mono", monospace; font-size: 13px; line-height: 1.4; min-height: 1.4em; margin-bottom: 8px; }
 .thoughtPending { visibility: hidden; }
-.thoughtReveal > * { animation: thoughtFade 0.45s ease-out backwards; }
-.thoughtReveal > :nth-child(2) { animation-delay: 0.2s; }
+.thoughtCursor.blink { animation: cursorBlink 0.53s steps(1, end) infinite; }
+@keyframes cursorBlink { 50% { opacity: 0; } }
+.thoughtReveal > * { animation: thoughtFade 0.2s steps(4, end) backwards; }
+.thoughtReveal > :nth-child(2) { animation-delay: 0.15s; }
 @keyframes thoughtFade { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .thoughtReveal > * { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .thoughtReveal > *, .thoughtCursor.blink { animation: none; } }
 .thoughtMeaning { margin: 0 0 10px; line-height: 1.35; }
 .thoughtVerdict { margin: 0 0 6px; }
 .overviewRow { display: grid; grid-template-columns: 1fr auto 30px; align-items: center; gap: 6px; padding: 2px 0; }
@@ -558,15 +560,15 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dStrip { display: flex; gap: 2px; }
 .dTile { width: 24px; height: 26px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; background: #fff; color: #000; border: 1px solid #999; flex: none; user-select: none; transition: background 0.15s, color 0.15s; }
 .dTile .glyph { width: 14px; height: 14px; }
-.dTile.hit { background: #000; color: #fff; border-color: #000; animation: pop 0.3s ease-out both; }
+.dTile.hit { background: #000; color: #fff; border-color: #000; animation: pop 0.2s steps(2, end) both; }
 .dRow:nth-child(2) .dTile.hit { animation-delay: 0.05s; }
 .dRow:nth-child(3) .dTile.hit { animation-delay: 0.1s; }
 .dRow:nth-child(4) .dTile.hit { animation-delay: 0.15s; }
 .dRow:nth-child(5) .dTile.hit { animation-delay: 0.2s; }
 .dRow:nth-child(6) .dTile.hit { animation-delay: 0.25s; }
-@keyframes pop { 45% { transform: scale(1.2); } }
+@keyframes pop { from { background: #fff; color: #000; } }
 .dTile.ghost { border: 1px dashed #000; background: #eee; }
-.dRow.missing .dStrip { animation: shake 0.35s; }
+.dRow.missing .dStrip { animation: shake 0.3s steps(5, end); }
 .dRow.missing .dRowLabel { color: #000; font-weight: bold; }
 .dRow.missing .dTile { border-color: #000; border-width: 2px; }
 @keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(1px); } }
@@ -583,11 +585,11 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dChoice.right .dKey { color: #fff; }
 .dAlign { position: relative; }
 .dLens { position: absolute; top: -3px; bottom: 1px; display: flex; border: 2px solid #000; pointer-events: none; z-index: 1; }
-.dLensCol { height: 100%; transition: background 0.2s; }
+.dLensCol { height: 100%; }
 .dLensCol.agree { background: rgba(0, 0, 0, 0.12); }
 .alignRow { margin-bottom: 4px; }
 .dWindow { overflow: hidden; display: block; flex: none; }
-.dTrack { display: flex; gap: 2px; transition: transform 0.2s ease-out; }
+.dTrack { display: flex; gap: 2px; transition: transform 0.08s linear; }
 .alignRow .dTile { cursor: pointer; }
 .alignRow .dTile:hover { background: #eee; }
 .dTile.lensed { border-color: #000; }
@@ -602,7 +604,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dResult p { margin: 0 0 10px; }
 
 /* Feature notification: a small paper card like the dialog */
-#mindToast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 10px; font-family: "Times New Roman", Times, serif; text-align: left; background: #fff; color: #000; border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); padding: 6px 12px; cursor: pointer; animation: toastIn 0.3s ease-out; }
+#mindToast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 10px; font-family: "Times New Roman", Times, serif; text-align: left; background: #fff; color: #000; border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); padding: 6px 12px; cursor: pointer; animation: toastIn 0.2s steps(3, end); }
 @keyframes toastIn { from { transform: translate(-50%, 12px); opacity: 0; } }
 .mtText { display: flex; flex-direction: column; }
 .mtTop { font-size: 13px; color: #555; }

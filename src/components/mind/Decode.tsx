@@ -388,7 +388,9 @@ function Runner({
   );
 }
 
-const CURSOR_MS = 700;
+// Matches the .thoughtCursor.blink period in styles.css.
+const BLINK_MS = 530;
+const CURSOR_MS = 3 * BLINK_MS;
 const CHAR_MS = 32;
 // Console-style reveal: a blinking cursor, then the text types itself out.
 function useTypewriter(text: string, enabled: boolean): [string, boolean, () => void] {
@@ -422,7 +424,7 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
       <div className="thoughtQuote" onClick={done ? undefined : skip}>
         {typed}
         {done ? null : (
-          <span className="pulsate" aria-hidden>
+          <span className={`thoughtCursor${typed ? '' : ' blink'}`} aria-hidden>
             |
           </span>
         )}
