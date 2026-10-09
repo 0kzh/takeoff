@@ -3,7 +3,7 @@ import { useGame, useGameStore, usePerform } from '../../store/context.js';
 import { CIRCUITS, FEATURES, featureById, sageWants } from '../../data/mind.js';
 import { decodedCount, foundCount } from '../../engine/mind.js';
 import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
-import { AtlasTree, DossierTree, HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
+import { HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
 import { DecodeModal, ThoughtResult } from './Decode.js';
 import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
 
@@ -82,7 +82,6 @@ function Overview() {
 export function MindView() {
   const s = useGame();
   const perform = usePerform();
-  const { tree } = useMindPrefs();
   const [selected, setSelected] = useState<string | null>(null);
   const [decoding, setDecoding] = useState<string | null>(null);
   const views = nodeViews(s);
@@ -91,11 +90,10 @@ export function MindView() {
     setSelected(id);
     if (views[id] === 'found' || views[id] === 'decoded') setDecoding(id);
   };
-  const Tree = tree === 'atlas' ? AtlasTree : tree === 'dossier' ? DossierTree : HexTree;
   const decoded = decodedCount(s);
   const waiting = foundCount(s);
   return (
-    <div id="mindView" className={`tree-${tree}`}>
+    <div id="mindView">
       <div className="mindHead">
         <b className="mindTitle">Sage’s mind</b>
         <span className="mindStats">
@@ -106,7 +104,7 @@ export function MindView() {
       <hr />
       <div className="mindBody">
         <div className="mindTree">
-          <Tree s={s} selected={selected} onSelect={select} />
+          <HexTree s={s} selected={selected} onSelect={select} />
         </div>
         <div className="mindSide">
           {selected ? (

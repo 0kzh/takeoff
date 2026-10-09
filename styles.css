@@ -535,51 +535,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .hexNode.fresh .hexShape { stroke: #b00000; }
 @keyframes inkPulse { 50% { stroke-width: 4; } }
 
-/* Atlas tree: a star chart in ink */
-.atlasRing { fill: none; stroke: #ddd; stroke-dasharray: 2 4; }
-.atlasSpoke { stroke: #e4e4e4; }
-.atlasStar { fill: #d4d4d4 !important; transition: fill 1s; }
-.atlasStar.on { fill: #000 !important; }
-.atlasStar.tw.on { animation: twinkle 3.2s ease-in-out infinite; }
-@keyframes twinkle { 50% { opacity: 0.3; } }
-.atlasEdge { fill: none; stroke-width: 1; opacity: 0.15; stroke-dasharray: 2 3; }
-.atlasEdge.dim { opacity: 0.45; }
-.atlasEdge.on { opacity: 1; stroke-dasharray: none; stroke-width: 1.5; }
-.atlasLabel { font-family: "Times New Roman", Times, serif; font-size: 10px; font-weight: bold; text-anchor: middle; fill: #000 !important; }
-.atlasLabel.core { font-size: 10px; }
-.atlasNode { cursor: pointer; outline: none; }
-.atlasHit { fill: transparent; }
-.atlasDot { fill: #bbb; transition: r 0.3s, fill 0.3s; }
-.atlasNode.detectable .atlasDot { fill: #fff; stroke: #555; stroke-dasharray: 2 2; }
-.atlasNode.found .atlasDot { fill: #fff; stroke: #000; stroke-width: 2.5; animation: inkPulse 1.6s ease-in-out infinite; }
-.atlasNode.decoded .atlasDot, .atlasNode.wired .atlasDot { fill: #000; }
-.atlasNode.wired .atlasDot { stroke: #fff; stroke-width: 1.5; }
-.atlasNode.fresh .atlasDot { stroke: #b00000; }
-.atlasSel { fill: none; stroke: #b00000; stroke-width: 1.5; }
-.atlasNode:hover .atlasDot, .atlasNode:focus-visible .atlasDot { stroke: #000; stroke-width: 2; }
-.atlasName { font-family: "Times New Roman", Times, serif; font-size: 11px; text-anchor: middle; fill: #000; pointer-events: none; }
-
-/* Dossier tree: a redacted case file */
-.dossier { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
-.dossierFile { font-size: 15px; }
-.dossierHead { display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; }
-.dossierCount { font-weight: normal; font-size: 13px; color: #555; }
-.dossierBlurb { font-style: italic; font-size: 13px; color: #555; margin: 3px 0 4px; }
-.dossierRow { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 10px; width: 100%; text-align: left; font: inherit; background: none; border: none; border-bottom: 1px dotted #aaa; padding: 6px 2px; cursor: pointer; color: #000; }
-.dossierRow:hover .dossierName { text-decoration: underline; }
-.dossierRow.sel { background: #f4f4f4; }
-.dossierRow.hidden { cursor: default; }
-.dossierRow.hidden:hover .dossierName { text-decoration: none; }
-.dossierName { font-weight: bold; }
-.dossierText { grid-column: 1; font-size: 13px; color: #333; margin-top: 2px; }
-.dossierAct { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 13px; }
-.dossierRow.found .dossierAct, .dossierRow.decoded .dossierAct { border: 1px solid #000; padding: 2px 8px; background: #fff; }
-.dossierRow.found .dossierAct { font-weight: bold; }
-.dossierRow.wired .dossierAct { color: #555; font-style: italic; }
-.dossierRow.fresh .dossierName::after { content: 'new'; margin-left: 6px; font-size: 12px; font-weight: normal; font-style: italic; color: #b00000; }
-.redact { display: inline-block; height: 0.85em; vertical-align: -0.05em; background: #000; }
-.dossierRow.detectable .redact { background: repeating-linear-gradient(90deg, #000 0 6px, #999 6px 8px); }
-
 /* Decode modal: the same box as the game's choice dialog */
 #decodeOverlay { position: fixed; inset: 0; z-index: 30; background: rgba(255, 255, 255, 0.55); display: flex; align-items: center; justify-content: center; }
 #decodeModal { width: min(500px, calc(100vw - 24px)); max-height: calc(100vh - 40px); overflow-y: auto; background: #fff; color: #000; border: 2px solid #000; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35); padding: 16px 20px; }
@@ -649,7 +604,6 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 
 @media (max-width: 860px) {
   .mindBody { grid-template-columns: 1fr; }
-  .dossier { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   #mindView *, #decodeModal *, #mindToast { animation: none !important; transition: none !important; }

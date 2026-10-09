@@ -8,7 +8,7 @@ import { researchCap, batchSize } from '../engine/economy.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { dateLabel, fmtDuration, fmtNum } from '../engine/format.js';
 import { exportSave, importSave } from '../ui/save.js';
-import { DECODE_STYLES, TREE_STYLES, setMindPrefs, useMindPrefs } from '../ui/mindPrefs.js';
+import { DECODE_STYLES, setMindPrefs, useMindPrefs } from '../ui/mindPrefs.js';
 
 const EVENTS = fireableEvents();
 export function DevPanel({ seed }: { seed: number }) {
@@ -123,17 +123,6 @@ export function DevPanel({ seed }: { seed: number }) {
         ))}
       </div>
       <div className="devRow">
-        Mind{' '}
-        {TREE_STYLES.map((style) => (
-          <button
-            key={style}
-            id={`dev-tree-${style}`}
-            className={mindPrefs.tree === style ? 'devActive' : ''}
-            onClick={() => setMindPrefs({ tree: style })}
-          >
-            {style}
-          </button>
-        ))}{' '}
         Decode{' '}
         {DECODE_STYLES.map((style) => (
           <button
