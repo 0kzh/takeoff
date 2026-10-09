@@ -129,8 +129,7 @@ export function Projects() {
             disabled={!project.canAfford(s)}
             onClick={() => perform('buyProject', project.id)}
           >
-            <b className="projectTitle">{project.title}</b>
-            <br />
+            <b className="projectTitle">{project.title}</b>{' '}
             <span className="projectCost">{priceTag(s, project)}</span>
             <br />
             <span className="projectDesc">

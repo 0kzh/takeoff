@@ -18,7 +18,7 @@ export function costLabel(c: Cost): string {
 
 export function priceTag(s: GameState, def: ProjectDef): string {
   if (typeof def.priceTag === 'function') return def.priceTag(s);
-  return def.priceTag ?? costLabel(def.cost(s));
+  return def.priceTag ?? `(${costLabel(def.cost(s))})`;
 }
 
 function remainingUses(s: GameState, def: ProjectDef): number {
