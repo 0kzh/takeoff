@@ -388,31 +388,66 @@ function Runner({
   );
 }
 
-export function ThoughtResult({ id }: { id: string }) {
+const CURSOR_MS = 700;
+const CHAR_MS = 32;
+// Console-style reveal: a blinking cursor, then the text types itself out.
+function useTypewriter(text: string, enabled: boolean): [string, boolean, () => void] {
+  const [count, setCount] = useState(enabled ? -1 : text.length);
+  useEffect(() => {
+    if (!enabled) return;
+    let n = -1;
+    let timer = window.setTimeout(function tick() {
+      n += 1;
+      setCount(n);
+      if (n < text.length) timer = window.setTimeout(tick, CHAR_MS);
+    }, CURSOR_MS);
+    return () => window.clearTimeout(timer);
+  }, [text, enabled]);
+  const done = count >= text.length;
+  return [text.slice(0, Math.max(0, count)), done, () => setCount(text.length)];
+}
+
+export function ThoughtResult({ id, animate = false }: { id: string; animate?: boolean }) {
   const s = useGame();
   const perform = usePerform();
   const def = featureById(id);
+  const quote = def ? `“${thoughtOf(def, s)}”` : '';
+  const [typed, done, skip] = useTypewriter(quote, animate);
   if (!def) return null;
   const wiring = s.mind.features[id]?.wiring ?? '';
   const benign = wiring === 'benign';
   return (
     <div className="thought">
       <div className="thoughtLabel">Thought Decoded</div>
-      <div className="thoughtQuote">“{thoughtOf(def, s)}”</div>
-      <p className="thoughtMeaning">{benign ? def.benign : def.finding}</p>
-      {benign ? (
-        <p className="thoughtVerdict">
-          <b>Benign:</b> This thought is not a cause for concern.
-        </p>
-      ) : wiring ? (
-        <p className="thoughtVerdict">
-          <b>Rewired:</b> {def.rewired}
-        </p>
-      ) : (
-        <button className="dButton primary" id="mind-rewire" onClick={() => perform('rewireFeature', id)}>
-          Rewire
-        </button>
-      )}
+      <div className="thoughtQuote" onClick={done ? undefined : skip}>
+        {typed}
+        {done ? null : (
+          <span className="pulsate" aria-hidden>
+            |
+          </span>
+        )}
+      </div>
+      <div className={done ? '' : 'thoughtPending'} aria-hidden={!done}>
+        <p className="thoughtMeaning">{benign ? def.benign : def.finding}</p>
+        {benign ? (
+          <p className="thoughtVerdict">
+            <b>Benign:</b> This thought is not a cause for concern.
+          </p>
+        ) : wiring ? (
+          <p className="thoughtVerdict">
+            <b>Rewired:</b> {def.rewired}
+          </p>
+        ) : (
+          <button
+            className="dButton primary"
+            id="mind-rewire"
+            disabled={!done}
+            onClick={() => perform('rewireFeature', id)}
+          >
+            Rewire
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -534,7 +569,7 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
         ) : null}
         {phase === 'solved' && status === 'decoded' ? (
           <div className="dResult">
-            <ThoughtResult id={id} />
+            <ThoughtResult id={id} animate />
             {wired ? (
               <button className="dButton" onClick={onClose} autoFocus>
                 Close
