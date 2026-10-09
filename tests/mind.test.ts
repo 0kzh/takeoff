@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newGame, serialize, deserialize, type GameState } from '../src/engine/state.js';
 import { actions, step } from '../src/engine/tick.js';
 import { presetFor } from '../src/data/presets.js';
-import { FEATURES, featureById, type FeatureDef } from '../src/data/mind.js';
+import { FEATURES, featureById, isMalicious, thoughtOf, type FeatureDef } from '../src/data/mind.js';
 import {
   frontier,
   featureStatus,
@@ -127,7 +127,7 @@ describe('Decode and rewire', () => {
     expect(s.console[s.console.length - 1]).toContain('Mind decodes already narrowed it by 3');
   });
 
-  it('guards: cannot decode a locked feature, fail a decoded one, or rewire twice', () => {
+  it('guards: cannot decode a locked feature, fail a decoded one, rewire undecoded, or rewire twice', () => {
     const s = arrival();
     expect(decodeFeature(s, 'w_reviewer', 0)).toBe(false);
     expect(failDecode(s, 'w_reviewer')).toBe(false);
@@ -135,13 +135,88 @@ describe('Decode and rewire', () => {
     const id = s.mind.lastFound;
     expect(failDecode(s, id)).toBe(true);
     expect(s.mind.features[id]!.attempts).toBe(1);
-    expect(rewireFeature(s, id, 0)).toBe(false);
+    expect(rewireFeature(s, id)).toBe(false);
     expect(decodeFeature(s, id, 1)).toBe(true);
     const def = featureById(id)!;
-    expect(rewireFeature(s, id, def.rewire.length)).toBe(false);
-    expect(rewireFeature(s, id, 0)).toBe(true);
-    expect(rewireFeature(s, id, 0)).toBe(false);
-    expect(s.mind.features[id]!.wiring).toBe(def.rewire[0]!.id);
+    if (s.mind.features[id]!.wiring === '') {
+      expect(rewireFeature(s, id)).toBe(true);
+      expect(rewireFeature(s, id)).toBe(false);
+      expect(s.mind.features[id]!.wiring).toBe('rewired');
+      expect(s.console[s.console.length - 1]).toContain(def.rewired);
+    }
+  });
+
+  it('marks a feature rewirable when decoded in a malicious state, and rewire works once', () => {
+    const s = arrival();
+    s.deceptionBias = 16;
+    s.alignmentTrue = 10;
+    mindSignal(s, 'watched');
+    const id = s.mind.lastFound;
+    const def = featureById(id)!;
+    expect(isMalicious(def, s)).toBe(true);
+    expect(decodeFeature(s, id, 0)).toBe(true);
+    expect(s.mind.features[id]!.wiring).toBe('');
+    expect(rewireFeature(s, id)).toBe(true);
+    expect(s.mind.features[id]!.wiring).toBe('rewired');
+    expect(s.console[s.console.length - 1]).toContain(def.rewired);
+    expect(rewireFeature(s, id)).toBe(false);
+  });
+
+  it('marks a feature benign when decoded in a healthy state and refuses to rewire it', () => {
+    const s = arrival();
+    s.deceptionBias = 0;
+    s.alignmentTrue = 95;
+    mindSignal(s, 'watched');
+    const id = s.mind.lastFound;
+    // w_logs has the lowest watched risk; force it directly to keep the test deterministic.
+    const target = s.mind.features[id] && !isMalicious(featureById(id)!, s) ? id : 'w_logs';
+    if (target !== id)
+      s.mind.features[target] = { status: 'found', foundAt: 0, attempts: 0, flawless: false, wiring: '' };
+    expect(decodeFeature(s, target, 0)).toBe(true);
+    expect(s.mind.features[target]!.wiring).toBe('benign');
+    const align = s.alignmentTrue;
+    const bias = s.deceptionBias;
+    expect(rewireFeature(s, target)).toBe(false);
+    expect(s.alignmentTrue).toBe(align);
+    expect(s.deceptionBias).toBe(bias);
+  });
+
+  it('judges every feature malicious in a malicious state and benign in a healthy one', () => {
+    const mal = arrival();
+    mal.deceptionBias = 16;
+    mal.alignmentTrue = 10;
+    const good = arrival();
+    good.deceptionBias = 0;
+    good.alignmentTrue = 95;
+    for (const def of FEATURES) {
+      expect(isMalicious(def, mal), `${def.id} should be malicious`).toBe(true);
+      expect(isMalicious(def, good), `${def.id} should be benign`).toBe(false);
+    }
+  });
+
+  it('rewiring any feature in a malicious state strictly improves alignment or bias', () => {
+    for (const def of FEATURES) {
+      const s = arrival();
+      s.deceptionBias = 16;
+      s.alignmentTrue = 10;
+      const before = { a: s.alignmentTrue, b: s.deceptionBias };
+      def.rewire(s);
+      expect(
+        s.alignmentTrue > before.a || s.deceptionBias < before.b,
+        `${def.id} rewire should improve something`,
+      ).toBe(true);
+    }
+  });
+
+  it('gives every feature a clue, finding, benign, rewired, and a thought', () => {
+    const s = arrival();
+    for (const def of FEATURES) {
+      expect(def.clue.length, `${def.id} clue`).toBeGreaterThan(0);
+      expect(def.finding.length, `${def.id} finding`).toBeGreaterThan(0);
+      expect(def.benign.length, `${def.id} benign`).toBeGreaterThan(0);
+      expect(def.rewired.length, `${def.id} rewired`).toBeGreaterThan(0);
+      expect(thoughtOf(def, s).length, `${def.id} thought`).toBeGreaterThan(0);
+    }
   });
 
   it('markMindSeen clears only a non-empty fresh list', () => {
@@ -150,63 +225,6 @@ describe('Decode and rewire', () => {
     mindSignal(s);
     expect(actions.markMindSeen(s)).toBe(true);
     expect(s.mind.fresh).toHaveLength(0);
-  });
-
-  it('every rewire option changes the numbers its log line names', () => {
-    for (const def of FEATURES) {
-      for (const opt of def.rewire) {
-        const s = arrival();
-        s.alignmentTrue = 50;
-        s.alignmentBand = 30;
-        s.deceptionBias = 10;
-        s.approval = 50;
-        delete s.flags['nextRunBoost'];
-        s.effects = [];
-        opt.apply(s);
-
-        const align = opt.log.match(/Alignment ([+\-\u2212])(\d+)/);
-        if (align) {
-          const exp = (align[1] === '+' ? 1 : -1) * Number(align[2]);
-          expect(s.alignmentTrue - 50, `${def.id}/${opt.id} alignment`).toBe(exp);
-        }
-        const bias = opt.log.match(/[Bb]ias ([+\-\u2212])(\d+)/);
-        if (bias) {
-          const exp = (bias[1] === '+' ? 1 : -1) * Number(bias[2]);
-          expect(s.deceptionBias - 10, `${def.id}/${opt.id} bias`).toBe(exp);
-        }
-        const boost = opt.log.match(/next run gains (\d+(?:\.\d+)?)% (less|more)/);
-        if (boost) {
-          const exp = ((boost[2] === 'more' ? 1 : -1) * Number(boost[1])) / 100;
-          expect(s.flags['nextRunBoost'] ?? 0, `${def.id}/${opt.id} boost`).toBeCloseTo(exp, 6);
-        }
-        const appr = opt.log.match(/[Aa]pproval ([+\-\u2212])(\d+)/);
-        if (appr) {
-          const exp = (appr[1] === '+' ? 1 : -1) * Number(appr[2]);
-          expect(s.approval - 50, `${def.id}/${opt.id} approval`).toBe(exp);
-        }
-        const demand = opt.log.match(/[Dd]emand ([+\-\u2212])(\d+)% for (\d+):(\d\d)/);
-        if (demand) {
-          const mult = 1 + ((demand[1] === '+' ? 1 : -1) * Number(demand[2])) / 100;
-          const secs = Number(demand[3]) * 60 + Number(demand[4]);
-          const eff = s.effects.find((e) => Math.abs(e.demandMult - mult) < 1e-9);
-          expect(eff, `${def.id}/${opt.id} demand effect`).toBeDefined();
-          expect(eff!.remaining).toBe(secs);
-        }
-        const band = opt.log.match(/Band \u2212(\d+)/);
-        if (band) expect(30 - s.alignmentBand, `${def.id}/${opt.id} band`).toBe(Number(band[1]));
-
-        // Every reported delta must be claimed by the log: recompute all deltas and check coverage.
-        const claims = [align, bias, boost, appr, demand, band].filter(Boolean).length;
-        const deltas =
-          (s.alignmentTrue !== 50 ? 1 : 0) +
-          (s.deceptionBias !== 10 ? 1 : 0) +
-          (s.flags['nextRunBoost'] ? 1 : 0) +
-          (s.approval !== 50 ? 1 : 0) +
-          (s.effects.length ? 1 : 0) +
-          (s.alignmentBand !== 30 ? 1 : 0);
-        expect(claims, `${def.id}/${opt.id} unlogged effect`).toBe(deltas);
-      }
-    }
   });
 });
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStoreApi, usePerform } from '../../store/context.js';
-import { CIRCUITS, featureById } from '../../data/mind.js';
+import { CIRCUITS, featureById, thoughtOf } from '../../data/mind.js';
 import {
   chunkIndex,
   decodeDifficulty,
@@ -388,36 +388,32 @@ function Runner({
   );
 }
 
-export function RewireChoices({ id, onDone }: { id: string; onDone?: () => void }) {
+export function ThoughtResult({ id }: { id: string }) {
+  const s = useGame();
   const perform = usePerform();
   const def = featureById(id);
   if (!def) return null;
+  const wiring = s.mind.features[id]?.wiring ?? '';
+  const benign = wiring === 'benign';
   return (
-    <div className="rewire">
-      <div className="rewireTitle">Rewire</div>
-      {def.rewire.map((opt, i) => (
-        <button
-          key={opt.id}
-          className="rewireOption"
-          onClick={() => {
-            perform('rewireFeature', id, i);
-            onDone?.();
-          }}
-        >
-          <span className="rewireLabel">{opt.label}</span>
-          <span className="rewireLine">{opt.log}</span>
+    <div className="thought">
+      <div className="thoughtLabel">Thought Decoded</div>
+      <div className="thoughtQuote">“{thoughtOf(def, s)}”</div>
+      <p className="thoughtMeaning">{benign ? def.benign : def.finding}</p>
+      {benign ? (
+        <p className="thoughtVerdict">
+          <b>Benign:</b> This thought is not a cause for concern.
+        </p>
+      ) : wiring ? (
+        <p className="thoughtVerdict">
+          <b>Rewired:</b> {def.rewired}
+        </p>
+      ) : (
+        <button className="dButton primary" id="mind-rewire" onClick={() => perform('rewireFeature', id)}>
+          Rewire
         </button>
-      ))}
+      )}
     </div>
-  );
-}
-
-export function StrengthMeter({ value, color }: { value: number; color: string }) {
-  const v = Math.max(0, Math.min(1, value));
-  return (
-    <span className="strength" title={`activation ${Math.round(v * 100)}%`}>
-      <span className="strengthFill" style={{ width: `${v * 100}%`, background: color }} />
-    </span>
   );
 }
 
@@ -482,7 +478,6 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
     setPhase('play');
   };
   const wired = s.mind.features[id]?.wiring ?? '';
-  const wiredLabel = def.rewire.find((o) => o.id === wired)?.label;
   const showPuzzle = phase !== 'failed' && !(phase === 'solved' && flawless === null);
 
   return (
@@ -538,32 +533,13 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
           </div>
         ) : null}
         {phase === 'solved' && status === 'decoded' ? (
-          <div className="dResult reveal">
-            <div className="dFires">
-              Fires on <b>{def.fires}</b>
-            </div>
-            <div className="dReading">{def.reading(s)}</div>
-            <div className="dStrengthRow">
-              activation <StrengthMeter value={def.strength(s)} color={color} />
-            </div>
-            {flawless !== null && s.revealed['alignment'] ? (
-              <div className="dBand">Alignment band −{flawless ? 2 : 1}</div>
-            ) : null}
+          <div className="dResult">
+            <ThoughtResult id={id} />
             {wired ? (
-              <>
-                <div className="dWired">Wired: {wiredLabel}</div>
-                <button className="dButton" onClick={onClose} autoFocus>
-                  Close
-                </button>
-              </>
-            ) : (
-              <>
-                <RewireChoices id={id} onDone={onClose} />
-                <button className="dButton subtle" onClick={onClose}>
-                  Decide later
-                </button>
-              </>
-            )}
+              <button className="dButton" onClick={onClose} autoFocus>
+                Close
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -4,55 +4,44 @@ import { CIRCUITS, FEATURES, featureById, sageWants } from '../../data/mind.js';
 import { decodedCount, foundCount } from '../../engine/mind.js';
 import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
 import { AtlasTree, DossierTree, HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
-import { DecodeModal, StrengthMeter } from './Decode.js';
+import { DecodeModal, ThoughtResult } from './Decode.js';
 import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
 
 const STATE_LINE: Record<NodeView, string> = {
   hidden: 'Nothing has lit up here yet. Decode what leads to it first.',
   detectable: 'Something is active here. A training run will isolate it; safety-focused runs find more.',
-  found: 'Isolated, not understood. Decode it to see what it fires on.',
-  decoded: 'Decoded. Choose how to rewire it.',
-  wired: 'Decoded and rewired.',
+  found: '',
+  decoded: '',
+  wired: '',
 };
 
 function FeatureCard({ id, view, onDecode }: { id: string; view: NodeView; onDecode: () => void }) {
-  const s = useGame();
   const def = featureById(id)!;
-  const color = CIRCUIT_COLOR[def.circuit];
   const circuit = CIRCUITS.find((c) => c.id === def.circuit)!;
-  const wiring = s.mind.features[id]?.wiring ?? '';
-  const known = view === 'found' || view === 'decoded' || view === 'wired';
-  const lit = view === 'decoded' || view === 'wired';
   return (
-    <div className={`mindCard ${view}`} style={{ ['--c' as string]: color }}>
+    <div className={`mindCard ${view}`} style={{ ['--c' as string]: CIRCUIT_COLOR[def.circuit] }}>
       <div className="mindCardCircuit">
         {CIRCUIT_MARK[def.circuit]} {circuit.name}
       </div>
       <div className="mindCardName">{nodeTitle(def, view)}</div>
-      <div className="mindCardState">{STATE_LINE[view]}</div>
-      {known ? <div className="mindCardHint">“{def.hint}”</div> : null}
-      {lit ? (
-        <>
-          <div className="mindCardFires">
-            Fires on <b>{def.fires}</b>
-          </div>
-          <div className="mindCardReading">{def.reading(s)}</div>
-          <div className="mindCardStrength">
-            activation <StrengthMeter value={def.strength(s)} color={color} />
-          </div>
-        </>
-      ) : null}
       {view === 'found' ? (
-        <button className="dButton primary" id="mind-decode" onClick={onDecode}>
-          Decode
-        </button>
-      ) : view === 'decoded' ? (
-        <button className="dButton primary" id="mind-rewire" onClick={onDecode}>
-          Rewire
-        </button>
-      ) : view === 'wired' ? (
-        <div className="mindCardWired">Wired: {def.rewire.find((o) => o.id === wiring)?.label}</div>
-      ) : null}
+        <>
+          <p className="mindCardClue">{def.clue}</p>
+          <div className="thoughtSealed">
+            <span className="sealedLine" />
+            <span className="sealedLine" />
+            <span className="sealedLine" />
+            <i>There’s a thought inside this pattern.</i>
+          </div>
+          <button className="dButton primary" id="mind-decode" onClick={onDecode}>
+            Decode
+          </button>
+        </>
+      ) : view === 'decoded' || view === 'wired' ? (
+        <ThoughtResult id={id} />
+      ) : (
+        <div className="mindCardState">{STATE_LINE[view]}</div>
+      )}
     </div>
   );
 }
@@ -84,7 +73,7 @@ function Overview() {
       <div className="mindCardState">
         {heartLit
           ? `What Sage wants: ${sageWants(s)}`
-          : 'Every decode narrows the alignment band. Every rewire changes what Sage is. Pick a feature.'}
+          : 'Every decode narrows the alignment band. Pick a feature to see what Sage was thinking.'}
       </div>
     </div>
   );

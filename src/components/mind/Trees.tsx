@@ -1,5 +1,12 @@
 import type { GameState } from '../../engine/state.js';
-import { CIRCUITS, FEATURES, circuitFeatures, type CircuitId, type FeatureDef } from '../../data/mind.js';
+import {
+  CIRCUITS,
+  FEATURES,
+  circuitFeatures,
+  thoughtOf,
+  type CircuitId,
+  type FeatureDef,
+} from '../../data/mind.js';
 import { featureStatus, frontier } from '../../engine/mind.js';
 import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
 
@@ -54,7 +61,7 @@ function nodeAria(f: FeatureDef, v: NodeView): string {
     detectable: 'not yet found',
     found: 'ready to decode',
     decoded: 'decoded',
-    wired: 'rewired',
+    wired: 'resolved',
   }[v];
   return `${circuit}: ${nodeTitle(f, v)}, ${state}`;
 }
@@ -359,9 +366,9 @@ export function DossierTree({ s, selected, onSelect }: TreeProps) {
                   </span>
                   <span className="dossierText">
                     {lit(v) ? (
-                      <>fires on {f.fires}</>
+                      <>“{thoughtOf(f, s)}”</>
                     ) : v === 'found' ? (
-                      f.hint
+                      f.clue
                     ) : v === 'detectable' ? (
                       <i>activity detected; a training run will isolate it</i>
                     ) : (
@@ -369,7 +376,15 @@ export function DossierTree({ s, selected, onSelect }: TreeProps) {
                     )}
                   </span>
                   <span className="dossierAct">
-                    {v === 'found' ? 'decode' : v === 'decoded' ? 'rewire' : v === 'wired' ? 'wired' : ''}
+                    {v === 'found'
+                      ? 'decode'
+                      : v === 'decoded'
+                        ? 'rewire'
+                        : v === 'wired'
+                          ? s.mind.features[f.id]?.wiring === 'benign'
+                            ? 'benign'
+                            : 'rewired'
+                          : ''}
                   </span>
                 </button>
               );

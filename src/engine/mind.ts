@@ -1,7 +1,7 @@
 import { GameState, MindStatus, say } from './state.js';
 import { pick, seedFrom } from './rng.js';
 import { alignmentShown, narrowBand } from './alignment.js';
-import { CIRCUITS, FEATURES, featureById, type CircuitId, type FeatureDef } from '../data/mind.js';
+import { CIRCUITS, FEATURES, featureById, isMalicious, thoughtOf, type CircuitId, type FeatureDef } from '../data/mind.js';
 
 // Sage's mind: Stage 2 training runs light up features; the player decodes each
 // in a minigame, then rewires it. Each decode tightens the alignment band, even
@@ -59,13 +59,14 @@ export function decodeFeature(s: GameState, id: string, mistakes: number): boole
   f.attempts += 1;
   f.status = 'decoded';
   f.flawless = mistakes === 0;
+  f.wiring = isMalicious(def, s) ? '' : 'benign';
   s.mind.fresh = s.mind.fresh.filter((x) => x !== id);
   const n = 1 + (f.flawless ? 1 : 0);
   narrowBand(s, n);
   if (alignmentShown(s)) {
-    say(s, `Decoded "${def.name}": it fires on ${def.fires}. Band −${n}.`);
+    say(s, `Decoded "${def.name}": “${thoughtOf(def, s)}” Band −${n}.`);
   } else {
-    say(s, `Decoded "${def.name}": it fires on ${def.fires}.`);
+    say(s, `Decoded "${def.name}": “${thoughtOf(def, s)}”`);
   }
   return true;
 }
@@ -77,15 +78,13 @@ export function failDecode(s: GameState, id: string): boolean {
   return true;
 }
 
-export function rewireFeature(s: GameState, id: string, index: number): boolean {
+export function rewireFeature(s: GameState, id: string): boolean {
   const f = s.mind.features[id];
   const def = featureById(id);
   if (!f || !def || f.status !== 'decoded' || f.wiring !== '') return false;
-  const opt = def.rewire[index];
-  if (!opt) return false;
-  opt.apply(s);
-  f.wiring = opt.id;
-  say(s, opt.log);
+  def.rewire(s);
+  f.wiring = 'rewired';
+  say(s, `Rewired: ${def.rewired}`);
   return true;
 }
 

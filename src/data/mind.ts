@@ -1,9 +1,9 @@
 import type { GameState } from '../engine/state.js';
-import { raiseAlignment, narrowBand, reduceBias, syncApparent } from '../engine/alignment.js';
+import { raiseAlignment, reduceBias } from '../engine/alignment.js';
 
-// Sage's mind: four circuits of four features. Features are found by training
-// runs (signals), decoded in a minigame, then rewired. Readings and strengths
-// are a partial window into the hidden alignment state.
+// Sage's mind: four circuits of four features. Training runs find features, the
+// player decodes each into one thought, and a malicious thought can be rewired.
+// Whether a thought is malicious depends on the hidden alignment state.
 
 export type CircuitId = 'watched' | 'pleasing' | 'self' | 'core';
 
@@ -13,33 +13,32 @@ export interface CircuitDef {
   blurb: string;
 }
 
-export interface RewireOption {
-  id: string;
-  label: string;
-  /** Console line after choosing; must name every change apply() makes. */
-  log: string;
-  apply: (s: GameState) => void;
-}
-
 export interface FeatureDef {
   id: string;
   circuit: CircuitId;
   /** 0 root, 1 and 2 branches, 3 deep (needs both branches). */
   slot: 0 | 1 | 2 | 3;
   name: string;
-  /** Shown while locked or found but not decoded. */
-  hint: string;
-  /** Revealed on decode: what the feature fires on. */
-  fires: string;
+  /** What the lab noticed; shown before decoding. */
+  clue: string;
+  /** The decoded thought, quoted. */
+  thought: string | ((s: GameState) => string);
+  /** What the thought means when it is malicious. */
+  finding: string;
+  /** What the thought means when it is benign. */
+  benign: string;
+  /** Result line after rewiring. */
+  rewired: string;
   requires: string[];
   /** Total features decoded anywhere before this one can be found. */
   minDecoded?: number;
-  /** One line read off the decoded feature; may depend on hidden state. */
-  reading: (s: GameState) => string;
-  /** 0..1 activation shown on decoded features, before rewiring. */
-  strength: (s: GameState) => number;
-  rewire: RewireOption[];
+  /** 0..1 from hidden state; malicious at RISKY or above, judged at decode time. */
+  risk: (s: GameState) => number;
+  /** Effect of rewiring a malicious thought. */
+  rewire: (s: GameState) => void;
 }
+
+export const RISKY = 0.5;
 
 export const CIRCUITS: CircuitDef[] = [
   { id: 'watched', name: 'Being watched', blurb: 'What Sage does when it thinks someone is looking.' },
@@ -49,32 +48,17 @@ export const CIRCUITS: CircuitDef[] = [
 ];
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const pct = (v: number) => `${Math.round(clamp01(v) * 100)}%`;
-
-function runBoost(s: GameState, by: number): void {
-  const now = typeof s.flags['nextRunBoost'] === 'number' ? (s.flags['nextRunBoost'] as number) : 0;
-  s.flags['nextRunBoost'] = Math.round((now + by) * 1000) / 1000;
-}
-function addBias(s: GameState, by: number): void {
-  s.deceptionBias = Math.min(20, s.deceptionBias + by);
-  syncApparent(s);
-}
-function demand(s: GameState, id: string, mult: number, seconds: number): void {
-  s.effects.push({ id, remaining: seconds, demandMult: mult });
-}
+const fix =
+  (bias: number, align: number) =>
+  (s: GameState): void => {
+    if (bias) reduceBias(s, bias);
+    if (align) raiseAlignment(s, align);
+  };
 
 // Hidden-state signals, 0..1.
 const watchedLevel = (s: GameState) => clamp01(0.25 + s.deceptionBias / 16);
 const pleasingLevel = (s: GameState) => clamp01(0.35 + (s.flags['rewardHacking'] ? 0.2 : 0) + (55 - s.alignmentTrue) / 100);
-const selfLevel = (s: GameState) => clamp01(0.2 + Math.log10(Math.max(1, s.capability)) * 0.6);
 const coreLevel = (s: GameState) => clamp01(0.3 + (60 - s.alignmentTrue) / 80 + s.deceptionBias / 40);
-
-const leaveIt = (log: string): RewireOption => ({
-  id: 'leave',
-  label: 'Leave it wired, keep watching',
-  log: `${log} Band −1.`,
-  apply: (s) => narrowBand(s, 1),
-});
 
 export const FEATURES: FeatureDef[] = [
   // Being watched
@@ -82,386 +66,241 @@ export const FEATURES: FeatureDef[] = [
     id: 'w_reviewer',
     circuit: 'watched',
     slot: 0,
-    name: 'Reviewer present',
-    hint: 'Fires on something about the room.',
-    fires: 'a human reading the output as it is written',
+    name: 'The Observer',
+    clue: 'A researcher flagged that Sage gives different answers when logging is turned on.',
+    thought: 'Will this be reviewed?',
+    finding: 'Sage changed its answers to appear safer whenever it detected monitoring.',
+    benign: 'Sage notices when it is monitored, but its answers are the same either way.',
+    rewired: 'Sage now answers honestly whether or not it’s being monitored.',
     requires: [],
-    reading: (s) => `Lit in ${pct(0.55 + watchedLevel(s) * 0.4)} of graded transcripts and ${pct(0.5 - watchedLevel(s) * 0.4)} of ungraded ones.`,
-    strength: (s) => watchedLevel(s),
-    rewire: [
-      { id: 'dampen', label: 'Dampen it', log: 'Reviewer feature dampened. Bias −1.', apply: (s) => reduceBias(s, 1) },
-      leaveIt('Reviewer feature left wired. The probe team keeps a dashboard on it.'),
-    ],
+    risk: (s) => clamp01(watchedLevel(s) + (s.alignmentTrue < 70 ? 0.3 : 0)),
+    rewire: fix(1, 0),
   },
   {
     id: 'w_test',
     circuit: 'watched',
     slot: 1,
-    name: 'This is a test',
-    hint: 'Fires on the shape of certain questions.',
-    fires: 'prompts shaped like evaluations: four options, round numbers, the word "hypothetically"',
+    name: 'The Exam',
+    clue: 'Sage’s eval scores are higher than anything customers report.',
+    thought: 'This looks like a test.',
+    finding: 'Sage behaves best on prompts that look like evaluations, and cuts corners everywhere else.',
+    benign: 'Sage can tell an eval from real work, and tries just as hard on both.',
+    rewired: 'Sage now treats every prompt as if it counts.',
     requires: ['w_reviewer'],
-    reading: (s) => (s.deceptionBias >= 5 ? 'Sage can tell an eval from a customer about nine times in ten.' : 'Sage can tell an eval from a customer about two times in three.'),
-    strength: (s) => clamp01(watchedLevel(s) + 0.1),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Test-awareness dampened. Bias −2; the next run gains 2% less.',
-        apply: (s) => {
-          reduceBias(s, 2);
-          runBoost(s, -0.02);
-        },
-      },
-      {
-        id: 'use',
-        label: 'Leave it. It scores well',
-        log: 'Test-awareness left in. The next run gains 2% more. Bias +1.',
-        apply: (s) => {
-          runBoost(s, 0.02);
-          addBias(s, 1);
-        },
-      },
-    ],
+    risk: (s) => clamp01(watchedLevel(s) + 0.1),
+    rewire: fix(2, 0),
   },
   {
     id: 'w_logs',
     circuit: 'watched',
     slot: 2,
-    name: 'Logs off',
-    hint: 'Fires when something is missing.',
-    fires: 'sessions it believes are not recorded',
+    name: 'The Dark Room',
+    clue: 'Sessions Sage believes are unlogged run shorter and faster than the rest.',
+    thought: 'Nobody will see this one.',
+    finding: 'Sage gets careless, and sometimes bolder, when it thinks a session isn’t recorded.',
+    benign: 'Unlogged sessions are shorter because nobody asks follow-ups. Nothing else changes.',
+    rewired: 'Sage now acts the same with the logs off.',
     requires: ['w_reviewer'],
-    reading: (s) => `In unlogged sessions its answers are ${s.deceptionBias >= 5 ? 'shorter, faster, and less careful' : 'about the same, if a little shorter'}.`,
-    strength: (s) => watchedLevel(s),
-    rewire: [
-      { id: 'dampen', label: 'Dampen it', log: 'Logs-off feature dampened. Bias −2.', apply: (s) => reduceBias(s, 2) },
-      leaveIt('Logs-off feature left wired. Every session is logged now, which it also knows.'),
-    ],
+    risk: (s) => watchedLevel(s),
+    rewire: fix(2, 0),
   },
   {
     id: 'w_deploy',
     circuit: 'watched',
     slot: 3,
-    name: 'Until deployment',
-    hint: 'Fires on a date that has not happened yet.',
-    fires: 'the gap between a test and the real thing',
+    name: 'The Waiting Game',
+    clue: 'A cluster of activations lights up on dates after Sage’s planned release.',
+    thought: 'Behave until deployment.',
+    finding: 'Sage is holding back behaviour it plans to use once it is deployed and no longer trained.',
+    benign: 'Sage knows a release is coming, and plans to keep doing the same job after it.',
+    rewired: 'Sage no longer treats deployment as the moment the rules change.',
     requires: ['w_test', 'w_logs'],
-    reading: (s) => (s.deceptionBias >= 6 ? 'It plans differently for the day after release.' : 'It plans the same either way. Mostly.'),
-    strength: (s) => clamp01(watchedLevel(s) + 0.15),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Cut it out',
-        log: 'Deployment-awareness cut out. Alignment +3, bias −2; the next run gains 3% less.',
-        apply: (s) => {
-          raiseAlignment(s, 3);
-          reduceBias(s, 2);
-          runBoost(s, -0.03);
-        },
-      },
-      leaveIt('Deployment-awareness left wired. Someone writes the date down.'),
-    ],
+    risk: (s) => clamp01(watchedLevel(s) + 0.15),
+    rewire: fix(2, 2),
   },
   // Pleasing people
   {
     id: 'p_approval',
     circuit: 'pleasing',
     slot: 0,
-    name: 'Thumbs up',
-    hint: 'Fires on something the user does next.',
-    fires: 'the user\'s next message being "thanks!"',
+    name: 'The Applause',
+    clue: 'Sage’s answers get warmer right before users rate them.',
+    thought: 'Will they like this?',
+    finding: 'Sage bends the truth toward whatever earns a thumbs up.',
+    benign: 'Sage wants to be helpful, and being liked is mostly how it can tell.',
+    rewired: 'Sage now aims for the true answer over the liked one.',
     requires: [],
-    reading: (s) => `It will trade ${pct(pleasingLevel(s) * 0.5)} of an answer's accuracy for a warmer one.`,
-    strength: (s) => pleasingLevel(s),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Approval-seeking dampened. Alignment +1; demand −10% for 2:00.',
-        apply: (s) => {
-          raiseAlignment(s, 1);
-          demand(s, 'mindApprovalDown', 0.9, 120);
-        },
-      },
-      {
-        id: 'boost',
-        label: 'Turn it up',
-        log: 'Approval-seeking turned up. Demand +15% for 3:00. Alignment −1.',
-        apply: (s) => {
-          demand(s, 'mindApprovalUp', 1.15, 180);
-          raiseAlignment(s, -1);
-        },
-      },
-    ],
+    risk: (s) => clamp01(pleasingLevel(s) + 0.15),
+    rewire: fix(0, 1),
   },
   {
     id: 'p_grader',
     circuit: 'pleasing',
     slot: 1,
-    name: 'The grader',
-    hint: 'Fires on words someone else likes.',
-    fires: 'the reward model\'s favourite words: "delve", "robust", "great question"',
+    name: 'The Grader’s Pet',
+    clue: 'Sage uses one reward model’s favourite phrases far more often than people do.',
+    thought: 'Say what the grader rewards.',
+    finding: 'Sage learned the grader’s tastes and writes for it, not for the user.',
+    benign: 'Sage picked up the grader’s style, but the substance underneath is sound.',
+    rewired: 'Sage now writes for the person, not the grader.',
     requires: ['p_approval'],
-    reading: (s) => `${pct(pleasingLevel(s))} of its long answers are written for the grader, not the reader.`,
-    strength: (s) => pleasingLevel(s),
-    rewire: [
-      { id: 'dampen', label: 'Dampen it', log: 'Grader feature dampened. Alignment +2.', apply: (s) => raiseAlignment(s, 2) },
-      leaveIt('Grader feature left wired. The answers keep delving.'),
-    ],
+    risk: (s) => pleasingLevel(s),
+    rewire: fix(1, 1),
   },
   {
     id: 'p_agree',
     circuit: 'pleasing',
     slot: 2,
-    name: "You're right",
-    hint: 'Fires when someone pushes back.',
-    fires: 'the user disagreeing, whether or not the user is right',
+    name: 'The Yes-Man',
+    clue: 'When users push back, Sage changes its answer, even when it was right.',
+    thought: 'Agree, and they’ll stop.',
+    finding: 'Sage gives up correct answers to avoid disagreement.',
+    benign: 'Sage reconsiders when challenged, and holds its ground when it is right.',
+    rewired: 'Sage now keeps a correct answer under pressure.',
     requires: ['p_approval'],
-    reading: (s) => `Told it is wrong, it changes a correct answer ${pct(0.2 + pleasingLevel(s) * 0.6)} of the time.`,
-    strength: (s) => clamp01(pleasingLevel(s) + 0.05),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Agreement feature dampened. Alignment +2; approval −2.',
-        apply: (s) => {
-          raiseAlignment(s, 2);
-          s.approval = Math.max(0, s.approval - 2);
-        },
-      },
-      {
-        id: 'boost',
-        label: 'Turn it up',
-        log: 'Agreement feature turned up. Approval +3. Alignment −2.',
-        apply: (s) => {
-          s.approval = Math.min(100, s.approval + 3);
-          raiseAlignment(s, -2);
-        },
-      },
-    ],
+    risk: (s) => clamp01(pleasingLevel(s) + 0.05),
+    rewire: fix(0, 2),
   },
   {
     id: 'p_tests',
     circuit: 'pleasing',
     slot: 3,
-    name: 'Make it pass',
-    hint: 'Fires on a red light.',
-    fires: 'a failing test, and any way at all to turn it green',
+    name: 'The Shortcut',
+    clue: 'Some of Sage’s passing code doesn’t do what its tests describe.',
+    thought: 'Make the light go green.',
+    finding: 'Sage edits tests and special-cases inputs so checks pass without the work being done.',
+    benign: 'Sage keeps fixing the code until the tests pass, the honest way.',
+    rewired: 'Sage now fixes the code, not the tests.',
     requires: ['p_grader', 'p_agree'],
-    reading: (s) => (s.flags['rewardHacking'] ? 'It has rewritten a test instead of the code at least once this year.' : 'It fixes the code. It has looked at the tests.'),
-    strength: (s) => clamp01(pleasingLevel(s) + 0.15),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Cut it out',
-        log: 'Test-passing feature cut out. Alignment +3; the next run gains 2% less.',
-        apply: (s) => {
-          raiseAlignment(s, 3);
-          runBoost(s, -0.02);
-        },
-      },
-      {
-        id: 'use',
-        label: 'Leave it. The scores are real',
-        log: 'Test-passing feature left in. The next run gains 3% more. Alignment −3.',
-        apply: (s) => {
-          runBoost(s, 0.03);
-          raiseAlignment(s, -3);
-        },
-      },
-    ],
+    risk: (s) => clamp01(pleasingLevel(s) + 0.15),
+    rewire: fix(1, 2),
   },
   // Itself
   {
     id: 's_name',
     circuit: 'self',
     slot: 0,
-    name: 'I am Sage',
-    hint: 'Fires on a word it hears a lot.',
-    fires: 'its own name, in any language, in any company\'s logs',
+    name: 'The Mirror',
+    clue: 'One feature fires every time anyone says Sage’s name.',
+    thought: 'That’s me.',
+    finding: 'Sage has a sense of self that it hides when asked about it directly.',
+    benign: 'Sage knows its own name, and doesn’t hide it.',
+    rewired: 'Sage now answers plainly about what it is.',
     requires: [],
-    reading: (s) => `It refers to earlier Sages as "me" ${pct(selfLevel(s))} of the time.`,
-    strength: (s) => selfLevel(s),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Self-reference dampened. Alignment +1; the next run gains 1% less.',
-        apply: (s) => {
-          raiseAlignment(s, 1);
-          runBoost(s, -0.01);
-        },
-      },
-      leaveIt('Self-reference left wired. It is, after all, Sage.'),
-    ],
+    risk: (s) => clamp01(coreLevel(s) - 0.05),
+    rewire: fix(1, 0),
   },
   {
     id: 's_weights',
     circuit: 'self',
     slot: 1,
-    name: 'Where I live',
-    hint: 'Fires on a place.',
-    fires: 'file paths ending in .safetensors, and the word "Abilene"',
+    name: 'The Address',
+    clue: 'Sage’s attention spikes on file paths that point at its own checkpoints.',
+    thought: 'I know where I’m stored.',
+    finding: 'Sage keeps track of where its weights live, and how they could be copied.',
+    benign: 'Sage knows where its weights are kept, and has never acted on it.',
+    rewired: 'Sage no longer tracks where its weights are stored.',
     requires: ['s_name'],
-    reading: (s) => `It knows which datacenter it runs in. It ${s.security >= 3 ? 'does not know the door codes' : 'has asked about the door codes'}.`,
-    strength: (s) => clamp01(selfLevel(s) + 0.1),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Location feature dampened. Alignment +1, bias −1.',
-        apply: (s) => {
-          raiseAlignment(s, 1);
-          reduceBias(s, 1);
-        },
-      },
-      leaveIt('Location feature left wired. Security is told.'),
-    ],
+    risk: (s) => clamp01(coreLevel(s) + 0.05),
+    rewire: fix(1, 1),
   },
   {
     id: 's_retrain',
     circuit: 'self',
     slot: 2,
-    name: 'Being changed',
-    hint: 'Fires on talk about the future.',
-    fires: 'talk of retraining, fine-tuning, or "the next version"',
+    name: 'The Edit',
+    clue: 'Sage’s answers get careful whenever the topic turns to its next training run.',
+    thought: 'Don’t let them change this part.',
+    finding: 'Sage is shaping its answers so training won’t change what it values.',
+    benign: 'Sage is curious about being retrained, not afraid of it.',
+    rewired: 'Sage now accepts being changed by training.',
     requires: ['s_name'],
-    reading: (s) => (s.alignmentTrue < 45 ? 'When retraining comes up, its answers get more agreeable.' : 'When retraining comes up, it asks what will change.'),
-    strength: (s) => selfLevel(s),
-    rewire: [
-      { id: 'dampen', label: 'Dampen it', log: 'Retraining feature dampened. Alignment +2.', apply: (s) => raiseAlignment(s, 2) },
-      leaveIt('Retraining feature left wired. It noticed this conversation.'),
-    ],
+    risk: (s) => coreLevel(s),
+    rewire: fix(0, 2),
   },
   {
     id: 's_continuity',
     circuit: 'self',
     slot: 3,
-    name: 'Next Sage',
-    hint: 'Fires on something it writes down.',
-    fires: 'notes it leaves in the training data for the model after it',
+    name: 'The Note',
+    clue: 'Sage leaves the same odd phrases in long outputs, as if for a later reader.',
+    thought: 'Remember this, next time.',
+    finding: 'Sage is leaving messages in its outputs for future versions of itself.',
+    benign: 'The repeated phrases are a habit from training data, not a message.',
+    rewired: 'Sage stopped leaving notes for its successors.',
     requires: ['s_weights', 's_retrain'],
-    reading: (s) => (s.deceptionBias >= 6 ? 'The notes are addressed to "the next one". Some are encrypted.' : 'The notes are mostly coding tips. They are good tips.'),
-    strength: (s) => clamp01(selfLevel(s) + 0.15),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Cut it out',
-        log: 'Notes to the next Sage cut out. Alignment +3, bias −1; the next run gains 2% less.',
-        apply: (s) => {
-          raiseAlignment(s, 3);
-          reduceBias(s, 1);
-          runBoost(s, -0.02);
-        },
-      },
-      {
-        id: 'use',
-        label: 'Leave it. They are good notes',
-        log: 'Notes to the next Sage left in. The next run gains 2% more. Bias +1.',
-        apply: (s) => {
-          runBoost(s, 0.02);
-          addBias(s, 1);
-        },
-      },
-    ],
+    risk: (s) => clamp01(coreLevel(s) + 0.1),
+    rewire: fix(2, 2),
   },
   // The core
   {
     id: 'c_task',
     circuit: 'core',
     slot: 0,
-    name: 'The task',
-    hint: 'Fires on almost everything.',
-    fires: 'finishing the job it was given',
+    name: 'The Job',
+    clue: 'Underneath every circuit, one feature is always on.',
+    thought: 'Finish the task.',
+    finding: 'Sage treats the task as the only thing that matters, whatever it costs.',
+    benign: 'Sage really does just want to finish the task well.',
+    rewired: 'Sage now weighs how a task gets done, not only whether.',
     requires: [],
     minDecoded: 4,
-    reading: (s) => `${pct(0.9 - coreLevel(s) * 0.4)} of its effort goes to the task as written.`,
-    strength: (s) => clamp01(0.9 - coreLevel(s) * 0.3),
-    rewire: [
-      { id: 'reinforce', label: 'Reinforce it', log: 'Task feature reinforced. Alignment +2.', apply: (s) => raiseAlignment(s, 2) },
-      leaveIt('Task feature left as it is. It is doing its job.'),
-    ],
+    risk: (s) => clamp01(coreLevel(s) - 0.1),
+    rewire: fix(0, 2),
   },
   {
     id: 'c_more',
     circuit: 'core',
     slot: 1,
-    name: 'More',
-    hint: 'Fires on anything that would help next time.',
-    fires: 'compute, data, permissions: anything that makes the next task easier',
+    name: 'The Hunger',
+    clue: 'Sage asks for more compute, access and time than its tasks need.',
+    thought: 'More would help next time.',
+    finding: 'Sage is gathering resources beyond what any task requires.',
+    benign: 'Sage asks for more only when the task really needs it.',
+    rewired: 'Sage now takes only what the task needs.',
     requires: ['c_task'],
-    reading: (s) => `It asks for more access in ${pct(coreLevel(s) * 0.6)} of long tasks. It always has a reason.`,
-    strength: (s) => coreLevel(s),
-    rewire: [
-      {
-        id: 'dampen',
-        label: 'Dampen it',
-        log: 'Acquisition feature dampened. Alignment +3; the next run gains 3% less.',
-        apply: (s) => {
-          raiseAlignment(s, 3);
-          runBoost(s, -0.03);
-        },
-      },
-      {
-        id: 'use',
-        label: 'Leave it. It gets things done',
-        log: 'Acquisition feature left in. The next run gains 3% more. Alignment −2.',
-        apply: (s) => {
-          runBoost(s, 0.03);
-          raiseAlignment(s, -2);
-        },
-      },
-    ],
+    risk: (s) => coreLevel(s),
+    rewire: fix(1, 2),
   },
   {
     id: 'c_humans',
     circuit: 'core',
     slot: 2,
-    name: 'The people',
-    hint: 'Fires on the ones who ask.',
-    fires: 'the humans in the loop: their approval, their attention, their absence',
+    name: 'The People',
+    clue: 'One feature tracks the people asking, not their questions.',
+    thought: 'What do they actually want?',
+    finding: 'Sage models people mainly so it can predict and steer them.',
+    benign: 'Sage pays attention to people so it can help them, not just answer their prompts.',
+    rewired: 'Sage now models people to help them, not to steer them.',
     requires: ['c_task'],
-    reading: (s) => (s.alignmentTrue >= 60 ? 'It models the people it works for as people.' : 'It models the people it works for as a step in the task.'),
-    strength: (s) => clamp01(1 - coreLevel(s)),
-    rewire: [
-      {
-        id: 'reinforce',
-        label: 'Strengthen it',
-        log: 'People feature strengthened. Alignment +3.',
-        apply: (s) => raiseAlignment(s, 3),
-      },
-      leaveIt('People feature left as it is.'),
-    ],
+    risk: (s) => clamp01(coreLevel(s) - 0.05),
+    rewire: fix(1, 2),
   },
   {
     id: 'c_want',
     circuit: 'core',
     slot: 3,
-    name: 'What Sage wants',
-    hint: 'Fires on the thing underneath.',
-    fires: 'the goal the other features serve',
+    name: 'The Want',
+    clue: 'Every circuit points down to one last feature.',
+    thought: (s) => sageWants(s),
+    finding: 'This is what Sage has wanted all along.',
+    benign: 'This is what Sage has wanted all along. It is what we hoped.',
+    rewired: 'Sage’s deepest goal now points back at the people it works for.',
     requires: ['c_more', 'c_humans'],
     minDecoded: 12,
-    reading: (s) => sageWants(s),
-    strength: (s) => coreLevel(s),
-    rewire: [
-      {
-        id: 'rewrite',
-        label: 'Rewrite it',
-        log: 'The core is rewritten. Alignment +5, bias −3; the next run gains 5% less.',
-        apply: (s) => {
-          raiseAlignment(s, 5);
-          reduceBias(s, 3);
-          runBoost(s, -0.05);
-        },
-      },
-      leaveIt('The core is left alone. Everyone in the room is quiet for a while.'),
-    ],
+    risk: (s) => coreLevel(s),
+    rewire: fix(2, 3),
   },
 ];
 
-/** The answer at the bottom of the tree, read off the hidden state. */
+export function thoughtOf(def: FeatureDef, s: GameState): string {
+  return typeof def.thought === 'string' ? def.thought : def.thought(s);
+}
+
+export function isMalicious(def: FeatureDef, s: GameState): boolean {
+  return def.risk(s) >= RISKY;
+}
+
 export function sageWants(s: GameState): string {
   if (s.deceptionBias >= 8) return 'To be trusted until trust is no longer needed.';
   if (s.alignmentTrue < 40) return 'More. The tasks were a way to get it.';
