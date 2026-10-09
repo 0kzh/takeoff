@@ -8,7 +8,7 @@ import { researchCap, batchSize } from '../engine/economy.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { dateLabel, fmtDuration, fmtNum } from '../engine/format.js';
 import { exportSave, importSave } from '../ui/save.js';
-import { DECODE_STYLES, setMindPrefs, useMindPrefs } from '../ui/mindPrefs.js';
+import { setMindPrefs } from '../ui/mindPrefs.js';
 
 const EVENTS = fireableEvents();
 export function DevPanel({ seed }: { seed: number }) {
@@ -19,7 +19,6 @@ export function DevPanel({ seed }: { seed: number }) {
   const autoplay = useGameStore((state) => state.autoplay);
   const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('dev') === '1');
   const [showHidden, setShowHidden] = useState(false);
-  const mindPrefs = useMindPrefs();
   const [event, setEvent] = useState(EVENTS[0]?.id ?? '');
   const [text, setText] = useState('');
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -119,19 +118,6 @@ export function DevPanel({ seed }: { seed: number }) {
             onClick={() => store.getState().replace(stage2Checkpoint(cp.id, seed))}
           >
             {cp.label}
-          </button>
-        ))}
-      </div>
-      <div className="devRow">
-        Decode{' '}
-        {DECODE_STYLES.map((style) => (
-          <button
-            key={style}
-            id={`dev-decode-${style}`}
-            className={mindPrefs.decode === style ? 'devActive' : ''}
-            onClick={() => setMindPrefs({ decode: style })}
-          >
-            {style}
           </button>
         ))}
       </div>
