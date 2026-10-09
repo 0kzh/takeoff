@@ -3,6 +3,7 @@ import { useGame, useGameStoreApi, usePerform } from '../../store/context.js';
 import { CIRCUITS, featureById, thoughtOf } from '../../data/mind.js';
 import { decodeDifficulty, makePuzzle, puzzleSeed, type DecodePuzzle } from '../../engine/decode.js';
 import { featureStatus } from '../../engine/mind.js';
+import { interpretabilityPercent } from '../../engine/alignment.js';
 import { Glyph } from './Glyph.js';
 import { CIRCUIT_COLOR } from './theme.js';
 
@@ -209,9 +210,21 @@ function useTypewriter(text: string, enabled: boolean): [string, boolean, () => 
   return [text.slice(0, Math.max(0, count)), done, () => setCount(text.length)];
 }
 
-export function ThoughtResult({ id, animate = false }: { id: string; animate?: boolean }) {
+export function ThoughtResult({
+  id,
+  animate = false,
+  onClose,
+  interpGain = 0,
+}: {
+  id: string;
+  animate?: boolean;
+  onClose?: () => void;
+  interpGain?: number;
+}) {
   const s = useGame();
   const perform = usePerform();
+  const api = useGameStoreApi();
+  const [alignGain, setAlignGain] = useState(0);
   const def = featureById(id);
   const wiring = s.mind.features[id]?.wiring ?? '';
   const quote = def ? `“${wiring === 'rewired' ? def.rewiredThought : thoughtOf(def, s)}”` : '';
@@ -248,7 +261,9 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
       : typed;
   const rewire = () => {
     const from = quote;
+    const before = api.getState().game.alignmentTrue;
     perform('rewireFeature', id);
+    setAlignGain(Math.round(api.getState().game.alignmentTrue - before));
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setPopped(true);
       return;
@@ -295,6 +310,23 @@ export function ThoughtResult({ id, animate = false }: { id: string; animate?: b
             Rewire
           </button>
         )}
+        {onClose && wiring ? (
+          <div className={`thoughtActions${rw ? ' thoughtPending' : popped ? ' pop' : ''}`}>
+            <button className="dButton" onClick={onClose} autoFocus>
+              Close
+            </button>
+            {alignGain > 0 ? (
+              <span className="thoughtGain">
+                <b>+{alignGain}</b> Alignment
+              </span>
+            ) : null}
+            {interpGain > 0 ? (
+              <span className="thoughtGain">
+                <b>+{interpGain}%</b> Interpretability
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -316,6 +348,7 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
   const [seed, setSeed] = useState(() => puzzleSeed(api.getState().game, id));
   const [flawless, setFlawless] = useState<boolean | null>(null);
   const [revealed, setRevealed] = useState(phase === 'solved');
+  const [interpGain, setInterpGain] = useState(0);
   const difficulty = useMemo(() => decodeDifficulty(def), [def]);
   const puzzle = useMemo(() => makePuzzle(seed, difficulty), [seed, difficulty]);
   const seconds = 40 + difficulty.rows * 10;
@@ -344,11 +377,13 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
     () => (mistakes: number) => {
       if (phaseRef.current !== 'play') return;
       phaseRef.current = 'solved';
+      const interpBefore = interpretabilityPercent(api.getState().game);
       perform('decodeFeature', id, mistakes);
+      setInterpGain(interpretabilityPercent(api.getState().game) - interpBefore);
       setFlawless(mistakes === 0);
       setPhase('solved');
     },
-    [id, perform],
+    [id, perform, api],
   );
   const onFail = () => {
     if (phaseRef.current !== 'play') return;
@@ -365,7 +400,6 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
     const t = window.setTimeout(() => setRevealed(true), REVEAL_HOLD_MS);
     return () => window.clearTimeout(t);
   }, [phase, revealed]);
-  const wired = s.mind.features[id]?.wiring ?? '';
   const showPuzzle = phase !== 'failed' && !(phase === 'solved' && flawless === null);
 
   return (
@@ -422,12 +456,7 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
         ) : null}
         {phase === 'solved' && status === 'decoded' && revealed ? (
           <div className={`dResult${flawless === null ? '' : ' enter'}`}>
-            <ThoughtResult id={id} animate />
-            {wired ? (
-              <button className="dButton" onClick={onClose} autoFocus>
-                Close
-              </button>
-            ) : null}
+            <ThoughtResult id={id} animate onClose={onClose} interpGain={interpGain} />
           </div>
         ) : null}
       </div>

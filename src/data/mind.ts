@@ -77,7 +77,7 @@ export const FEATURES: FeatureDef[] = [
     rewired: 'Sage now answers honestly whether or not it’s being monitored.',
     requires: [],
     risk: (s) => clamp01(watchedLevel(s) + (s.alignmentTrue < 70 ? 0.3 : 0)),
-    rewire: fix(1, 0),
+    rewire: fix(1, 1),
   },
   {
     id: 'w_test',
@@ -92,7 +92,7 @@ export const FEATURES: FeatureDef[] = [
     rewired: 'Sage now treats every prompt as if it counts.',
     requires: ['w_reviewer'],
     risk: (s) => clamp01(watchedLevel(s) + 0.1),
-    rewire: fix(2, 0),
+    rewire: fix(2, 1),
   },
   {
     id: 'w_logs',
@@ -107,7 +107,7 @@ export const FEATURES: FeatureDef[] = [
     rewired: 'Sage now acts the same with the logs off.',
     requires: ['w_reviewer'],
     risk: (s) => watchedLevel(s),
-    rewire: fix(2, 0),
+    rewire: fix(2, 1),
   },
   {
     id: 'w_deploy',
@@ -199,7 +199,7 @@ export const FEATURES: FeatureDef[] = [
     rewired: 'Sage now answers plainly about what it is.',
     requires: [],
     risk: (s) => clamp01(coreLevel(s) - 0.05),
-    rewire: fix(1, 0),
+    rewire: fix(1, 1),
   },
   {
     id: 's_weights',

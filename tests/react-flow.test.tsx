@@ -69,26 +69,37 @@ describe('React gameplay and lifecycle', () => {
   });
 });
 
-function mountThought() {
+function mountThought({
+  wiring = '',
+  alignmentTrue = 50,
+  ...props
+}: { wiring?: string; alignmentTrue?: number; onClose?: () => void; interpGain?: number } = {}) {
   const store = createGameStore(newGame(1), 0);
   store.getState().update((g) => {
+    g.alignmentTrue = alignmentTrue;
     g.mind.features['w_reviewer'] = {
       status: 'decoded',
       foundAt: 0,
       attempts: 1,
       flawless: true,
-      wiring: '',
+      wiring,
     };
   });
   const view = render(
     <StrictMode>
       <GameProvider store={store}>
-        <ThoughtResult id="w_reviewer" animate={false} />
+        <ThoughtResult id="w_reviewer" animate={false} {...props} />
       </GameProvider>
     </StrictMode>,
   );
   return { store, ...view };
 }
+const advance = (steps: number, ms = 50) => {
+  for (let i = 0; i < steps; i++)
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+};
 describe('Mind rewire reveal', () => {
   const noMotion = () => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -109,10 +120,7 @@ describe('Mind rewire reveal', () => {
     fireEvent.click(container.querySelector('#mind-rewire')!);
     expect(container.querySelector('.thoughtLabel')!.textContent).toBe('Thought Decoded');
     expect(container.querySelector('.thoughtCursor')).toBeTruthy();
-    for (let i = 0; i < 300; i++)
-      act(() => {
-        vi.advanceTimersByTime(50);
-      });
+    advance(300);
     expect(container.querySelector('.thoughtQuote')!.textContent).toBe('“Answer the same either way.”');
     expect(container.querySelector('.thoughtLabel')!.textContent).toBe('Thought Rewired');
     const verdict = container.querySelector('.thoughtVerdict')!;
@@ -124,13 +132,45 @@ describe('Mind rewire reveal', () => {
     noMotion();
     const { container } = mountThought();
     fireEvent.click(container.querySelector('#mind-rewire')!);
-    for (let i = 0; i < 6; i++)
-      act(() => {
-        vi.advanceTimersByTime(50);
-      });
+    advance(6);
     fireEvent.click(container.querySelector('.thoughtQuote')!);
     expect(container.querySelector('.thoughtQuote')!.textContent).toBe('“Answer the same either way.”');
     expect(container.querySelector('.thoughtLabel')!.textContent).toBe('Thought Rewired');
     expect(container.querySelector('.thoughtVerdict')!.className).toContain('pop');
+  });
+  it('shows gains beside Close after the sequence finishes', () => {
+    vi.useFakeTimers();
+    noMotion();
+    const onClose = vi.fn();
+    const { container } = mountThought({ onClose, interpGain: 4 });
+    fireEvent.click(container.querySelector('#mind-rewire')!);
+    advance(6);
+    expect(container.querySelector('.thoughtActions')!.className).toContain('thoughtPending');
+    advance(300);
+    const actions = container.querySelector('.thoughtActions')!;
+    expect(actions.className).toContain('pop');
+    expect(actions.textContent).toContain('+1 Alignment');
+    expect(actions.textContent).toContain('+4% Interpretability');
+    fireEvent.click(actions.querySelector('button')!);
+    expect(onClose).toHaveBeenCalled();
+  });
+  it('shows only Interpretability for a benign feature', () => {
+    vi.useFakeTimers();
+    noMotion();
+    const onClose = vi.fn();
+    const { container } = mountThought({ wiring: 'benign', onClose, interpGain: 4 });
+    const actions = container.querySelector('.thoughtActions')!;
+    expect(actions.textContent).toContain('+4% Interpretability');
+    expect(actions.textContent).not.toContain('Alignment');
+  });
+  it('shows no gains when they clamp to zero', () => {
+    vi.useFakeTimers();
+    noMotion();
+    const onClose = vi.fn();
+    const { container } = mountThought({ alignmentTrue: 100, onClose, interpGain: 0 });
+    fireEvent.click(container.querySelector('#mind-rewire')!);
+    advance(300);
+    expect(container.querySelectorAll('.thoughtGain')).toHaveLength(0);
+    expect(container.querySelector('.thoughtActions button')).toBeTruthy();
   });
 });
