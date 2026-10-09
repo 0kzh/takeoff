@@ -523,7 +523,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .hexShape { fill: #f2f2f2; stroke: #ccc; stroke-width: 1; }
 .hexIcon, .hexName { font-family: "Times New Roman", Times, serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; fill: #000; }
 .hexIcon { font-size: 12px; font-weight: bold; }
-.hexName { font-size: 9.5px; }
+.hexName { font-size: 9px; }
 .hexInset { fill: none; stroke: #fff; stroke-width: 1.5; pointer-events: none; }
 .hexNode.detectable .hexShape { fill: #fff; stroke: #888; stroke-width: 1.5; stroke-dasharray: 4 3; }
 .hexNode.detectable .hexIcon { fill: #888; font-weight: normal; font-size: 14px; }

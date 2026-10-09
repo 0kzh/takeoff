@@ -147,8 +147,19 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
         const hub = f.circuit === 'core' && f.slot === 3;
         const benign = s.mind.features[f.id]?.wiring === 'benign';
         const icon = v === 'detectable' ? '?' : v === 'wired' ? '✓' : '';
-        const lines = hub ? [] : known(v) ? shortName(f.name) : [];
-        const top = y - (lines.length > 1 ? 3 : 0) + (icon ? 6 : 0);
+        const showIcon = icon && !(hub && !known(v));
+        const rows: { text: string; cls: string; h: number }[] = [
+          ...(showIcon ? [{ text: icon, cls: 'hexIcon', h: 12 }] : []),
+          ...(hub
+            ? [
+                { text: 'Core', cls: 'hexHubName', h: 12 },
+                { text: `${coreDone}/${coreFeats.length}`, cls: 'hexHubCount', h: 10 },
+              ]
+            : known(v)
+              ? shortName(f.name).map((line) => ({ text: line, cls: 'hexName', h: 10 }))
+              : []),
+        ];
+        let rowY = y - rows.reduce((sum, r) => sum + r.h, 0) / 2;
         return (
           <g
             key={f.id}
@@ -160,35 +171,20 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
             onClick={() => onSelect(f.id)}
             onKeyDown={(e) => keyActivate(e, () => onSelect(f.id))}
           >
-            <title>{hub && !known(v) ? 'The Core' : nodeTitle(f, v)}</title>
+            <title>{hub && !known(v) ? 'Core' : nodeTitle(f, v)}</title>
             <polygon className="hexShape" points={hexPoints(x, y, TILE)} />
             {v === 'decoded' || selected === f.id ? (
               <polygon className="hexInset" points={hexPoints(x, y, TILE - 5)} />
             ) : null}
-            {icon && !(hub && !known(v)) ? (
-              <text
-                className="hexIcon"
-                x={x}
-                y={hub ? y - 10 : lines.length ? y - 7 - (lines.length > 1 ? 4 : 0) : y + 1}
-              >
-                {icon}
-              </text>
-            ) : null}
-            {lines.map((line, i) => (
-              <text key={i} className="hexName" x={x} y={(icon && !(hub && !known(v)) ? top : y) + i * 9}>
-                {line}
-              </text>
-            ))}
-            {hub ? (
-              <>
-                <text className="hexHubName" x={x} y={y + (icon ? 3 : -3)}>
-                  The Core
+            {rows.map((row, i) => {
+              const ry = rowY + row.h / 2;
+              rowY += row.h;
+              return (
+                <text key={i} className={row.cls} x={x} y={ry}>
+                  {row.text}
                 </text>
-                <text className="hexHubCount" x={x} y={y + (icon ? 13 : 8)}>
-                  {coreDone}/{coreFeats.length}
-                </text>
-              </>
-            ) : null}
+              );
+            })}
             {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 15} cy={y - 14} r={3.5} /> : null}
           </g>
         );
