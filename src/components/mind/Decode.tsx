@@ -185,6 +185,7 @@ function Runner({
 const BLINK_MS = 530;
 const CURSOR_MS = 3 * BLINK_MS;
 const CHAR_MS = 32;
+const REVEAL_HOLD_MS = 900;
 // Console-style reveal: a blinking cursor, then the text types itself out.
 function useTypewriter(text: string, enabled: boolean): [string, boolean, () => void] {
   const [count, setCount] = useState(enabled ? -1 : text.length);
@@ -262,6 +263,7 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
   );
   const [seed, setSeed] = useState(() => puzzleSeed(api.getState().game, id));
   const [flawless, setFlawless] = useState<boolean | null>(null);
+  const [revealed, setRevealed] = useState(phase === 'solved');
   const difficulty = useMemo(() => decodeDifficulty(def), [def]);
   const puzzle = useMemo(() => makePuzzle(seed, difficulty), [seed, difficulty]);
   const seconds = 20 + difficulty.rows * 6;
@@ -306,6 +308,11 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
     setSeed(puzzleSeed(api.getState().game, id));
     setPhase('play');
   };
+  useEffect(() => {
+    if (phase !== 'solved' || revealed) return;
+    const t = window.setTimeout(() => setRevealed(true), REVEAL_HOLD_MS);
+    return () => window.clearTimeout(t);
+  }, [phase, revealed]);
   const wired = s.mind.features[id]?.wiring ?? '';
   const showPuzzle = phase !== 'failed' && !(phase === 'solved' && flawless === null);
 
@@ -361,8 +368,8 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
             </button>
           </div>
         ) : null}
-        {phase === 'solved' && status === 'decoded' ? (
-          <div className="dResult">
+        {phase === 'solved' && status === 'decoded' && revealed ? (
+          <div className={`dResult${flawless === null ? '' : ' enter'}`}>
             <ThoughtResult id={id} animate />
             {wired ? (
               <button className="dButton" onClick={onClose} autoFocus>
