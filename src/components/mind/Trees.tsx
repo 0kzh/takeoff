@@ -76,6 +76,7 @@ function cell(f: FeatureDef): Axial {
   return add(add(d, d), side);
 }
 const OCCUPIED = new Set(FEATURES.map((f) => cell(f).join(',')));
+const BACK_FADE = [1, 1, 0.9, 0.45, 0.15];
 const BACKDROP: Axial[] = [];
 for (let q = -4; q <= 4; q++)
   for (let r = -4; r <= 4; r++)
@@ -109,11 +110,21 @@ function circuitLabel(c: Exclude<CircuitId, 'core'>): {
 export function HexTree({ s, selected, onSelect }: TreeProps) {
   const views = nodeViews(s);
   const fresh = new Set(s.mind.fresh);
+  const coreFeats = circuitFeatures('core');
+  const coreDone = coreFeats.filter((f) => lit(views[f.id]!)).length;
   return (
     <svg className="hexTree" viewBox="-250 -190 500 380" role="group" aria-label="Sage's circuits">
       {BACKDROP.map((a) => {
         const [x, y] = toXY(a);
-        return <polygon key={a.join(',')} className="hexBack" points={hexPoints(x, y, R - 2)} />;
+        const ring = Math.max(Math.abs(a[0]), Math.abs(a[1]), Math.abs(a[0] + a[1]));
+        return (
+          <polygon
+            key={a.join(',')}
+            className="hexBack"
+            points={hexPoints(x, y, R - 2)}
+            opacity={BACK_FADE[ring] ?? 0}
+          />
+        );
       })}
       {CIRCUITS.map((c) => {
         if (c.id === 'core') return null;
@@ -145,7 +156,7 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
                 : v === 'wired'
                   ? '✓'
                   : '';
-        const lines = hub ? ['Sage'] : known(v) ? shortName(f.name) : [];
+        const lines = hub ? [] : known(v) ? shortName(f.name) : [];
         const top = y - (lines.length > 1 ? 3 : 0) + (icon ? 6 : 0);
         return (
           <g
@@ -158,13 +169,17 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
             onClick={() => onSelect(f.id)}
             onKeyDown={(e) => keyActivate(e, () => onSelect(f.id))}
           >
-            <title>{hub && !known(v) ? 'Sage' : nodeTitle(f, v)}</title>
+            <title>{hub && !known(v) ? 'The Core' : nodeTitle(f, v)}</title>
             <polygon className="hexShape" points={hexPoints(x, y, R - 2)} />
             {v === 'decoded' || selected === f.id ? (
               <polygon className="hexInset" points={hexPoints(x, y, R - 7)} />
             ) : null}
             {icon && !(hub && !known(v)) ? (
-              <text className="hexIcon" x={x} y={lines.length ? y - 7 - (lines.length > 1 ? 4 : 0) : y + 1}>
+              <text
+                className="hexIcon"
+                x={x}
+                y={hub ? y - 10 : lines.length ? y - 7 - (lines.length > 1 ? 4 : 0) : y + 1}
+              >
                 {icon}
               </text>
             ) : null}
@@ -173,6 +188,16 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
                 {line}
               </text>
             ))}
+            {hub ? (
+              <>
+                <text className="hexHubName" x={x} y={y + (icon ? 3 : -3)}>
+                  The Core
+                </text>
+                <text className="hexHubCount" x={x} y={y + (icon ? 13 : 8)}>
+                  {coreDone}/{coreFeats.length}
+                </text>
+              </>
+            ) : null}
             {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 15} cy={y - 14} r={3.5} /> : null}
           </g>
         );

@@ -515,7 +515,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .dButton.subtle { border-color: transparent; color: #555; padding-left: 0; }
 
 /* Hex tree */
-.hexBack { fill: none; stroke: #e6e6e6; stroke-width: 1; stroke-dasharray: 4 3; }
+.hexBack { fill: none; stroke: #c4c4c4; stroke-width: 1; stroke-dasharray: 4 3; }
 .hexLabel { font-family: "Times New Roman", Times, serif; font-size: 12px; font-weight: bold; dominant-baseline: central; fill: #000; }
 .hexLabel.dark { fill: #aaa; }
 .hexCount { fill: #555; font-weight: normal; }
@@ -532,7 +532,9 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .hexNode.wired .hexShape { fill: #888; stroke: #888; stroke-dasharray: none; }
 .hexNode.decoded text, .hexNode.wired text { fill: #fff; }
 .hexNode.hub .hexShape { fill: #000; stroke: #000; stroke-dasharray: none; }
-.hexNode.hub .hexName { fill: #fff; font-size: 14px; font-weight: bold; }
+.hexHubName, .hexHubCount { font-family: "Times New Roman", Times, serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; fill: #fff; }
+.hexHubName { font-size: 11px; font-weight: bold; }
+.hexHubCount { font-size: 9px; fill: #bbb; }
 .hexNode.hub.found .hexIcon { fill: #fff; }
 .hexNode.sel .hexInset { stroke: #000; }
 .hexNode.sel.decoded .hexInset, .hexNode.sel.wired .hexInset, .hexNode.sel.hub .hexInset { stroke: #fff; }
