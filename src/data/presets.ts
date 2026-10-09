@@ -13,7 +13,7 @@ export interface Preset {
 
 const STAGE1_BOUGHT = [
   'p_prompting', 'p_grid', 'p_insight', 'p_prompting2', 'p_seed', 'p_prompting3', 'p_blogpost',
-  'p_lab_cluster', 'p_eval_team', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
+  'p_lab_cluster', 'p_api', 'p_compute_deal', 'p_dogfood', 'p_pricing', 'p_series_a',
   'p_enterprise', 'p_contract', 'p_distributed', 'p_floor', 'p_auto_pricing', 'p_region', 'p_ppa',
   'p_abatement', 'p_reserved',
 ];
@@ -117,8 +117,6 @@ function stage1End(seed: number): GameState {
     trainingAt: 300.1,
     armedRuns: 5,
     maxBenchmark: 7.1,
-    redTeamed: true,
-    "rprice:p_eval_team": 6800,
     releasedAt: 1059.4,
     firstReleaseAt: 423.5,
     releasesThisStage: 5,
@@ -155,7 +153,6 @@ function stage1End(seed: number): GameState {
     trainings: 5,
     releases: 5,
     publicReleases: 5,
-    incidents: 0,
     crises: 2,
     choices: 5,
     idleRescues: 0,

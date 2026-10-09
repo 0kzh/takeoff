@@ -76,7 +76,6 @@ export function endStats(s: GameState): [string, string][] {
     ['Date reached', dateLabel(s.date)],
     ['Generations trained', String(st.trainings)],
     ['Releases', String(st.releases)],
-    ['Incidents', String(st.incidents)],
     ['Crises survived', String(st.crises)],
     ['Lead at end', `${fmtNum(s.lead, 1)} months`],
     ['Approval at end', fmtNum(s.approval, 0)],

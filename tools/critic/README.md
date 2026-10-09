@@ -113,7 +113,7 @@ stage of a run).
   `softlock-<game>[-sN].md` and `softlock-<game>[-sN]-<scenario>.png`. Takeoff: `power-zero`,
   `idle-new-game`, `price-200x` (Stage 1 situations: "not applicable" from Stage 2),
   `ignore-research-15min` (Stages 1–2; "not applicable" in Stage 3, where Hire Researcher / Expand
-  Lab are gone), `release-open-issues` and `reload-mid-training` (Stages 1–3). Paperclips:
+  Lab are gone) and `reload-mid-training` (Stages 1–3). Paperclips:
   `wire-out-low-price`, `absurd-price`, `reload`, `idle`. A scenario whose preconditions no longer
   hold reports `scenario no longer applicable: <reason>` instead of failing.
 * `determinism.ts <game> [run flags]` — runs the same stepped run twice and diffs events, actions
@@ -143,7 +143,7 @@ stage of a run).
   modal with body text / timer / option tooltips, on-screen notes each time they change, every
   console and log line), `.modals.json` and `.modal<N>.png`. **Probes** are short scripted
   situations writing `<tag>-<name>.md` and screenshots: `reload-mid-modal`, `reload-mid-countdown`,
-  `reload-mid-transition`, `reload-mid-redteam`, `idle-10min-new`, `idle-mid`,
+  `reload-mid-transition`, `idle-10min-new`, `idle-mid`,
   `price-200x-at-start`, `price-floor`, `modal-click-through` (real mouse and keyboard),
   `modal-hover`, `wall-flag`, `contracts-vs-price`, `tour` (screens at each first
   meeting, full text of every project card, clipped cards), `mobile-shots`. **Paperclips**
@@ -161,9 +161,7 @@ stage of a run).
   loaded by name; viewport passed to the session); `openProbe(adapter, { viewport })` in
   `lib/probe.ts`.
 * Fixes asked for by the round-2 critic: `determinism.ts --out LABEL` (writes `LABEL-a/-b` instead
-  of overwriting `det-<game>-a/-b`), and the `release-open-issues` soft-lock scenario reports the
-  game's own confirmation modal (title, options, the option that releases) as well as browser
-  dialogs, and confirms through it.
+  of overwriting `det-<game>-a/-b`).
 
 ## Definitions and implementation choices
 
@@ -201,7 +199,7 @@ left something open, the harness does this:
   first; settings are never pressed by this sweep, see below); while a big-ticket goal is visible
   (Takeoff Stage 1: funds-priced projects, see above) the drip
   (GPU/marketing) is held back until it is bought; a purchase that changes the stage ends the check
-  (the new screen is read at the next one). Takeoff: red-team until 0 open issues, then release;
+  (the new screen is read at the next one). Takeoff: release as soon as the model is ready;
   in Stage 1 Train goes through the sweep like a purchase, pressed once its price is in hand (so it
   never arms).
   Paperclips: Memory (never Processors) while the cheapest visible project costs more ops than the

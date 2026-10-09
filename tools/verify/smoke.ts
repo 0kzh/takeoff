@@ -935,7 +935,7 @@ try {
   const focusNotes = [
     'The most capable next model (about +12%).',
     'Copies per GPU ×1.25; a smaller capability gain.',
-    'Fewer issues, now and on every later run.',
+    'Alignment rises on release; a smaller capability gain.',
   ];
   check(
     'Focus is three plain buttons and one note line under them, and reads `Focus:` during a run',

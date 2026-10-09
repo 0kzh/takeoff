@@ -130,66 +130,6 @@ const TAKEOFF = [
     },
   },
   {
-    name: 'release-open-issues',
-    title: 'Release with open issues and watch for an incident',
-    stages: { 1: true, 2: true, 3: true, other: 'Stages 1–3 only: the Training panel leaves the screen in Stage 4' },
-    async run(kit, out) {
-      kit.mashKey = 'btn-task';
-      // No red-team/release logic.
-      const pol = kit.policy({}, false);
-      const shipOf = (snap) => kit.find(snap, 'btn-release');
-      let hit = null;
-      await kit.run(1500, async (t, s) => {
-        await pol.pass(t);
-        const s2 = await kit.snap();
-        const rel = shipOf(s2);
-        if (s2.m.trainingPhase === 'redteam' && rel && rel.e) {
-          if ((s2.m.issuesOpen ?? 0) > 0) {
-            hit = s2;
-            return 'stop';
-          }
-          await kit.click(rel.k, 1, 'release-clean'); // nothing open: release normally, wait for the next run
-        }
-        return undefined;
-      });
-      need(hit, 'no evaluation with open issues within 25 minutes');
-      const rel = shipOf(hit);
-      const dialogs = [];
-      kit.session.page.on('dialog', async (d) => {
-        dialogs.push(d.message());
-        await d.accept();
-      });
-      await kit.click(rel.k, 1, 'release-open');
-      let after = await kit.snap();
-      // The game may confirm with its own modal rather than a browser dialog: report it and confirm.
-      let confirm = null;
-      if (after.modal) {
-        const modal = after.modal;
-        confirm = { title: modal.title, options: modal.options.map((o) => `"${o.l}"${o.e ? '' : ' (disabled)'}`) };
-        const ship = modal.options.find((o) => o.e && /release|ship/i.test(o.l) && !/red|wait|hold|back|not|keep/i.test(o.l));
-        if (ship) {
-          await kit.click(ship.k, 1, 'confirm-release');
-          confirm.chose = ship.l;
-          after = await kit.snap();
-        }
-      }
-      const how = dialogs.length
-        ? `browser dialog "${dialogs[0]}"`
-        : confirm
-          ? `the game's own modal "${confirm.title}" (${confirm.options.join(' / ')})${confirm.chose ? `, confirmed with "${confirm.chose}"` : ', no option that releases'}`
-          : 'no confirmation of any kind';
-      out.push(`At ${mmss(hit.t)}: evaluation found ${hit.m.issuesOpen} open issues; the button reads "${rel.l}". Clicked it once: ${how}; training phase now "${after.m.trainingPhase || 'idle'}".`);
-      const t0 = kit.t;
-      const end = await kit.run(240, kit.with(pol));
-      await kit.shot('release-open-issues');
-      const lines = kit.linesBetween(t0, kit.t);
-      out.push('', 'Next 4 minutes (policy keeps playing, no further releases):', ...lines.map((l) => `- ${l}`));
-      const inc = kit.rec.events.filter((e) => (e.type === 'console' || e.type === 'log') && e.t >= t0 && /incident/i.test(e.text));
-      const attrib = kit.rec.events.filter((e) => (e.type === 'console' || e.type === 'log') && e.t >= t0 && /red.?team|open issue|released with|skipped/i.test(e.text));
-      out.push('', inc.length ? `Incident line(s): ${inc.map((e) => `${mmss(e.t)} "${e.text}" (${e.t - t0} s after the release)`).join('; ')}.` : 'No line containing "incident" within 4 minutes.', `Lines that mention red-teaming / open issues / the release: ${attrib.length ? attrib.map((e) => `"${e.text}"`).join('; ') : 'none'}.`, `Incidents counter: ${fmtN(hit.m.incidents)} → ${fmtN(end.m.incidents)}.`);
-    },
-  },
-  {
     name: 'reload-mid-training',
     title: 'Reload the page mid-training',
     stages: { 1: true, 2: true, 3: true, other: 'Stages 1–3 only: the Training panel leaves the screen in Stage 4' },

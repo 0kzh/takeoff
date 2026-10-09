@@ -63,9 +63,7 @@ export default {
       research: s.research,
       insight: s.insight,
       trust: s.trust,
-      issuesOpen: run && run.phase === 'redteam' ? run.issues : null,
       trainingPhase: run ? run.phase : '',
-      redTeamRemaining: s.training ? s.training.redTeamRemaining : 0,
       choice: s.activeChoice ? s.activeChoice.id : '',
       revPerSec: s.stats.revPerSec,
       soldPerSec: s.stats.soldPerSec,
@@ -82,7 +80,6 @@ export default {
       releases: s.stats.releases,
       choices: s.stats.choices,
       idleRescues: s.stats.idleRescues,
-      incidents: s.stats.incidents,
       projectsBought,
       capability: s.capability,
       date: s.date,
@@ -120,25 +117,14 @@ export default {
       const floor = Math.max(10000, 60 * (c.m.revPerSec || 0));
       return c.buttons.filter((b) => b.kind === 'project' && ((b.costs && b.costs.funds) || 0) >= floor).map((b) => b.k);
     },
-    /** Never clicked by the generic buy loop: red-team and release (special), and the end screen's button. */
-    skip: ['btn-redteam', 'btn-release', 'btn-newGame'],
-    /** Red-team until no issue is open, then Release (or Deploy, which has no Fix issue button beside it). */
+    /** Never clicked by the generic buy loop: release (special), and the end screen's button. */
+    skip: ['btn-release', 'btn-newGame'],
+    /** Release (or Deploy) as soon as the evaluated model is ready. */
     async special(ctx) {
-      let c = ctx.controls;
-      const find = (k) => c.buttons.find((b) => b.k === k);
-      for (let guard = 0; guard < 3; guard++) {
-        const m = c.m;
-        if (m.trainingPhase !== 'redteam') break;
-        const rt = find('btn-redteam');
-        const rel = find('btn-release');
-        const open = m.issuesOpen ?? 0;
-        if (open > 0 && rt && rt.e) {
-          c = await ctx.click('btn-redteam', 'redteam', `${open} open issues`);
-        } else if (rel && rel.e && !ctx.noop.has(rel.k) && (open === 0 || !rt)) {
-          c = await ctx.click(rel.k, 'release', open === 0 ? '0 open issues' : `${open} open issues, no Red-team button on screen`);
-        } else break;
-      }
-      return c;
+      const c = ctx.controls;
+      if (c.m.trainingPhase !== 'redteam') return c;
+      const rel = c.buttons.find((b) => b.k === 'btn-release');
+      return rel && rel.e && !ctx.noop.has(rel.k) ? ctx.click(rel.k, 'release', 'model ready') : c;
     },
   },
 

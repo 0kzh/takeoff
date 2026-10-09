@@ -1,16 +1,16 @@
 import { GameState, ActiveChoice, Cost, say, logNews, canPay, pay } from './state.js';
 import { DEVELOPMENTS, DevelopmentDef } from '../data/developments.js';
 import { CHOICES, ChoiceDef, ChoiceOption } from '../data/choices.js';
-import { crisisById, CRISES, INCIDENTS } from '../data/crises.js';
+import { crisisById, CRISES } from '../data/crises.js';
 import { RIVAL_LINES } from '../data/flavor.js';
 import { visibleProjects, costLabel } from './projects.js';
 import { pressCost } from '../data/projects.js';
 import { effectiveData } from './data.js';
 import {
-  gpuCost, marketingCost, qualityMult, powerBlockCost, CONTRACT_PAUSE_SECONDS, researchCap, researchRate,
+  gpuCost, marketingCost, qualityMult, powerBlockCost, researchCap, researchRate,
   datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, canBuyGpuBatch, canUpgradeSecurity, securityCost,
 } from './economy.js';
-import { canStartTraining, canRedTeam, trainCost } from './training.js';
+import { canStartTraining, trainCost } from './training.js';
 import { dateLabel, fmtMoneyShort, fmtInt } from './format.js';
 import { mechanic, mechanicClear } from './stages.js';
 import { BEAT_GAP_SECONDS } from './reveal.js';
@@ -89,7 +89,7 @@ export function pendingDevelopments(s: GameState): DevelopmentDef[] {
   return DEVELOPMENTS.filter((d) => !s.developments[d.id] && d.stage >= s.stage && d.stage <= s.stage + 1);
 }
 
-export function fireCrisis(s: GameState, id: string, source?: string): boolean {
+export function fireCrisis(s: GameState, id: string): boolean {
   const c = crisisById(id);
   if (!c) return false;
   if (c.duration > 0) {
@@ -101,33 +101,20 @@ export function fireCrisis(s: GameState, id: string, source?: string): boolean {
   }
   c.effect(s);
   if (c.console) say(s, c.console);
-  const incident = INCIDENTS.includes(c);
-  if (source && incident) say(s, `Traced to an issue shipped in ${source}.`);
-  if (c.log) logNews(s, source && incident ? `${c.log} It traces back to ${source}.` : c.log);
-  if (incident) {
-    s.stats.incidents += 1;
-    s.trust -= 1;
-    say(s, 'The board asks what happened. Trust −1.');
-    if ((s.projects['p_contract']?.bought ?? 0) > 0) {
-      const until = typeof s.flags['contractsPausedUntil'] === 'number' ? (s.flags['contractsPausedUntil'] as number) : 0;
-      s.flags['contractsPausedUntil'] = Math.max(until, s.stats.timePlayed) + CONTRACT_PAUSE_SECONDS;
-      say(s, 'The bank pauses its pilot. Contract customers stop buying for 1:30.');
-    }
-  } else {
-    s.stats.crises += 1;
-  }
+  if (c.log) logNews(s, c.log);
+  s.stats.crises += 1;
   return true;
 }
 
 export function updateScheduled(s: GameState, dt: number): void {
   if (s.scheduled.length === 0) return;
-  const due: { id: string; source?: string }[] = [];
+  const due: string[] = [];
   for (const e of s.scheduled) {
     e.delay -= dt;
-    if (e.delay <= 0) due.push({ id: e.id, source: e.source });
+    if (e.delay <= 0) due.push(e.id);
   }
   s.scheduled = s.scheduled.filter((e) => e.delay > 0);
-  for (const e of due) fireCrisis(s, e.id, e.source);
+  for (const id of due) fireCrisis(s, id);
 }
 
 export function updateRival(s: GameState): void {
@@ -160,7 +147,7 @@ export function rivalRelease(s: GameState): void {
 }
 
 export const MODAL_SPACING = 150;
-export const PLAYER_MODALS = ['c_ship_issues', 'c_sage2', 'c_release'];
+export const PLAYER_MODALS = ['c_sage2', 'c_release'];
 
 export interface OpenOptions {
   onlyIfFree?: boolean;
@@ -373,7 +360,6 @@ export function noveltyKeys(s: GameState): string[] {
   const run = s.training.run;
   if (run) {
     keys.push(`phase:${run.id}:${run.phase}`);
-    if (canRedTeam(s)) keys.push(`aff:redteam:${run.id}:${run.issues}`);
   }
   if (s.revealed['infrastructure']) {
     if (s.funds >= datacenterCost(s)) keys.push(`aff:datacenter:${s.datacenters}`);
@@ -477,7 +463,6 @@ export interface FireableEvent {
 export function fireableEvents(): FireableEvent[] {
   return [
     ...DEVELOPMENTS.map((d) => ({ id: d.id, label: `dev: ${d.id}` })),
-    ...INCIDENTS.map((c) => ({ id: c.id, label: `incident: ${c.title}` })),
     ...CRISES.map((c) => ({ id: c.id, label: `crisis: ${c.title}` })),
     ...CHOICES.map((c) => ({ id: c.id, label: `choice: ${c.title}` })),
     { id: 'rival_release', label: 'rival: Anthrosoft release' },
@@ -494,7 +479,7 @@ export function fireEvent(s: GameState, id: string): boolean {
   const choice = choiceById(id);
   if (choice) {
     const run = s.training.run;
-    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s) || 25, issues: run?.issues ?? 1 }, { force: true });
+    return openChoice(s, id, { runId: run ? run.id : 0, amount: customerEmailAmount(s) || 25 }, { force: true });
   }
   return false;
 }

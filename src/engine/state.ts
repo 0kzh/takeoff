@@ -51,9 +51,6 @@ export interface TrainingRun {
   benchBonus: number[];
   benchmarks: number[];
   scores: number[];
-  issues: number;
-  issuesFound: number;
-  extraIssues: number;
   major: number;
   minor: number;
   prologue?: boolean;
@@ -73,8 +70,6 @@ export interface TrainingState {
   run: TrainingRun | null;
   next: TrainingRun | null;
   nextRunId: number;
-  redTeamRemaining: number;
-  redTeamDuration: number;
   major: number;
   minor: number;
   modelName: string;
@@ -109,7 +104,6 @@ export interface TimedEffect {
 export interface ScheduledEvent {
   id: string;
   delay: number;
-  source?: string;
 }
 
 export interface ActiveChoice {
@@ -183,7 +177,6 @@ export interface Stats {
   trainings: number;
   releases: number;
   publicReleases: number;
-  incidents: number;
   crises: number;
   choices: number;
   idleRescues: number;
@@ -296,8 +289,6 @@ export function newTraining(): TrainingState {
     run: null,
     next: null,
     nextRunId: 1,
-    redTeamRemaining: 0,
-    redTeamDuration: 12,
     major: 1,
     minor: 0,
     modelName: 'Sage-1',
@@ -332,7 +323,6 @@ export function newStats(): Stats {
     trainings: 0,
     releases: 0,
     publicReleases: 0,
-    incidents: 0,
     crises: 0,
     choices: 0,
     idleRescues: 0,
@@ -525,7 +515,9 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   const merged = keep(base, raw);
   for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen', 'mind'] as const) merged[key] = keep(base[key] as object, raw[key]);
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
-  if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags']) delete run[key];
+  if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags', 'issues', 'issuesFound', 'extraIssues']) delete run[key];
+  if ((merged['activeChoice'] as { id?: string } | null)?.id === 'c_ship_issues') merged['activeChoice'] = null;
+  merged['scheduled'] = (merged['scheduled'] as { id: string }[]).filter((e) => !e.id.startsWith('inc_'));
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;
   if ((merged['revealed'] as Record<string, boolean>)['gridContract']) merged['gridAuto'] = true;
   merged['version'] = SAVE_VERSION;

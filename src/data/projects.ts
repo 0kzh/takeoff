@@ -253,17 +253,6 @@ export const PROJECTS: ProjectDef[] = [
     stages: [1],
   }),
   project({
-    id: 'p_eval_team',
-    revealResearch: 100,
-    title: 'Hire an evals team',
-    cost: { research: 2500 },
-    description: 'Fixes take a third less time.',
-    trigger: (s) => s.flags['redTeamed'] === true,
-    buy: () => undefined,
-    stages: [1],
-    consoleMsg: 'Evals team hired. Fixes are faster.',
-  }),
-  project({
     id: 'p_api',
     revealResearch: 100,
     title: 'Public API',
@@ -463,8 +452,8 @@ export const PROJECTS: ProjectDef[] = [
     revealResearch: 100,
     title: 'Alignment team',
     cost: { research: 6000 },
-    description: 'Four people who ask why. Fewer issues.',
-    trigger: (s) => s.stats.incidents >= 1 || s.training.runIndex >= 3,
+    description: 'Four people who ask why.',
+    trigger: (s) => s.training.runIndex >= 3,
     buy: (s) => {
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 5);
       s.alignmentTrue = Math.min(100, s.alignmentTrue + 3);
@@ -574,7 +563,7 @@ export const PROJECTS: ProjectDef[] = [
     title: 'Publish a safety framework',
     cost: { research: 6000 },
     description: 'Thresholds and commitments. +1 Trust.',
-    trigger: (s) => s.stats.incidents >= 1 || ((s.flags['safetyRuns'] as number) || 0) >= 1 || dateAtLeast(s, 2025, 11.5),
+    trigger: (s) => ((s.flags['safetyRuns'] as number) || 0) >= 1 || dateAtLeast(s, 2025, 11.5),
     buy: (s) => {
       s.trust += 1;
       s.alignmentApparent = Math.min(100, s.alignmentApparent + 3);

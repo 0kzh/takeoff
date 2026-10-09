@@ -5,7 +5,7 @@ import {
   activeGpus, datacenterCost, gpuBatchCost, gridUpgradeCost, canExpandGrid, gridOutgrown, powerDrawPerSec,
   canBuyGpuBatch, batchSize, canUpgradeSecurity, securityCost, gpuCapacity } from '../engine/economy.js';
 import {
-  trainCost, canRedTeam, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
+  trainCost, canRelease, canStartTraining, gpusShort, needsDatacenter, canPressTrain, runDelaySeconds, waitingGoalS1,
   trainSlotFree, startCapability,
 } from '../engine/training.js';
 import { dataShort } from '../engine/data.js';
@@ -84,10 +84,6 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
     if (enabled.length) a.resolveChoice(s, enabled[enabled.length - 1]!);
     return true;
   }
-  if (mem.variant === 'redteam-never' && active.id === 'c_ship_issues') {
-    a.resolveChoice(s, optionIndex(def, 'shipped issues'));
-    return true;
-  }
   if (s.stage !== 1 || (mem.variant !== 'modals-best' && mem.variant !== 'modals-worst')) return false;
   const wanted = mem.variant === 'modals-best' ? BEST_LABELS : WORST_LABELS;
   const matches = (i: number) => wanted.some((re) => re.test(def.options[i]!.label));
@@ -98,13 +94,6 @@ function answerVariant(s: GameState, a: Actions, mem: BotMemory): boolean {
   }
   if (mem.variant === 'modals-best' && def.options.some((_, i) => !enabled.includes(i) && matches(i))) return true;
   if (enabled.length) a.resolveChoice(s, enabled[0]!);
-  return true;
-}
-
-function releaseAtOnce(s: GameState, a: Actions, mem: BotMemory): boolean {
-  if (mem.variant !== 'redteam-never') return false;
-  const run = s.training.run;
-  if (run?.phase === 'redteam' && canRelease(s)) a.release(s);
   return true;
 }
 
@@ -151,7 +140,6 @@ const CHOICE_POLICY: Record<string, Answer[]> = {
   c_rival: ['open-sourced'],
   c_journalist: ['system card', 'no comment'],
   c_customer_email: [0],
-  c_ship_issues: ['kept fixing'],
   c_poach: ['equity', 'matched', 'let go'],
   c_bridge: ['no bridge'],
   c_letter: ['signed'],
@@ -242,10 +230,7 @@ export function policyStep(s: GameState, a: Actions, mem: BotMemory): void {
   } else if (mem.ticks % NAIVE_PRICE_EVERY === 0 && mem.variant !== 'price-never') naivePrice(s, a, mem, now);
 
   const run = s.training.run;
-  if (run?.phase === 'redteam' && !releaseAtOnce(s, a, mem)) {
-    if (canRedTeam(s)) a.redTeam(s);
-    if (run.issues === 0 && canRelease(s)) a.release(s);
-  }
+  if (run?.phase === 'redteam' && canRelease(s)) a.release(s);
 
   if (mem.ticks % NAIVE_BUY_EVERY !== 0) return;
   const trainFirst = mem.policy === 'trainfirst';

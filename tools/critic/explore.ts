@@ -71,15 +71,15 @@ const READ_SCREEN = () => {
 
 // ------------------------------------------------------------------------------------------ RUNS
 const releaseAtOnce = {
-  /** Release the moment the button works, whatever is open; never red-team. */
+  /** Release the moment the button works. */
   async special(ctx) {
     let c = ctx.controls;
     if (c.m.trainingPhase !== 'redteam') return c;
     const rel = c.buttons.find((b) => b.k === 'btn-release');
-    if (rel && rel.e && !ctx.noop.has('btn-release')) c = await ctx.click('btn-release', 'release-open', `${c.m.issuesOpen} open issues`);
+    if (rel && rel.e && !ctx.noop.has('btn-release')) c = await ctx.click('btn-release', 'release', 'model ready');
     return c;
   },
-  /** The open-issues confirm: pick the option that ships. Every other modal: first option. */
+  /** Release prompts: pick the option that ships. Every other modal: first option. */
   modalChoice(modal, enabled) {
     const ship = enabled.find((o) => /release|ship/i.test(o.l) && !/red|wait|hold|back|not/i.test(o.l));
     return ship || enabled[0];
@@ -105,7 +105,7 @@ const RUNS = {
   'no-research': { title: 'Never clicks Hire Researcher or Expand Lab (Trust is never spent)', adapter: variant({ skip: [...base.policy.skip, 'btn-hireResearcher', 'btn-expandLab'] }) },
   'hire-only': { title: 'Spends every Trust on Hire Researcher, never Expand Lab', adapter: variant({ skip: [...base.policy.skip, 'btn-expandLab'] }) },
   'expand-only': { title: 'Spends every Trust on Expand Lab, never Hire Researcher', adapter: variant({ skip: [...base.policy.skip, 'btn-hireResearcher'] }) },
-  'ship-open': { title: 'Releases every model the moment Release works, open issues or not; never red-teams', adapter: variant(releaseAtOnce) },
+  'ship-open': { title: 'Releases every model the moment Release works', adapter: variant(releaseAtOnce) },
   'modal-last': { title: 'Answers every modal with its last enabled option', adapter: variant({ modalChoice: (modal, enabled) => enabled[enabled.length - 1] }) },
   'modal-ignore': { title: 'Never answers a modal (timed ones expire, the rest stay)', adapter: variant({ modalChoice: () => null }) },
   'modal-worst': {
@@ -124,7 +124,7 @@ const RUNS = {
   'focus-efficiency': { title: 'Always trains with Focus: Efficiency', adapter: variant({ special: focusSpecial('btn-focus-efficiency') }) },
   'focus-safety': { title: 'Always trains with Focus: Safety', adapter: variant({ special: focusSpecial('btn-focus-safety') }) },
   'no-marketing': { title: 'Never buys Marketing', adapter: variant({ skip: [...base.policy.skip, 'btn-marketing'] }) },
-  'no-redteam-wait': { title: 'Red-teams to zero but never answers "let her try" (first option only on other modals)', adapter: variant({ modalChoice: (modal, enabled) => (/Can I try/.test(modal.title) ? enabled[enabled.length - 1] : enabled[0]) }) },
+  'no-redteam-wait': { title: 'Never answers "let her try" (first option only on other modals)', adapter: variant({ modalChoice: (modal, enabled) => (/Can I try/.test(modal.title) ? enabled[enabled.length - 1] : enabled[0]) }) },
   'no-contracts': { title: 'Never buys the repeatable Custom model contract', adapter: { ...base, policy: { ...base.policy, veto: (c) => c.buttons.filter((b) => /Custom model contract/.test(b.l)).map((b) => b.k) } } },
   toggles: {
     title: 'Presses every setting (toggle, AUTO, "Name: value" button) once when it first appears, and drags each slider to its minimum when it first appears and to its maximum 10 minutes later',
@@ -232,8 +232,8 @@ async function runScenario(name, flags) {
   });
   for (const e of rec.events) if (e.type === 'console' || e.type === 'log') lines.push(`${mmss(e.t)} [${e.type}${e.novel ? '' : ', repeat'}] ${e.text}`);
   const md = [`# Explore run: ${name} — ${sc.title}`, '', `Stage ${meta.stageStart} start, seed ${meta.seed}, stepped, cap ${meta.accelMinutes} min. **Stage end: ${meta.stageEnd != null ? `${mmss(meta.stageEnd)}${meta.stageEndBy ? ` (${meta.stageEndBy})` : ''}` : `not reached by ${mmss(meta.endT)}`}**. Page errors: ${meta.pageErrors.length}${meta.pageErrors.length ? ` (${meta.pageErrors[0]})` : ''}. Largest horizontal overflow: ${maxOverflow} px.`, ''];
-  md.push('## Per minute', '', '| t | stage | funds | rev/s | tasks/s | sold/s | price | unbilled | GPUs | power | research | trust | researchers | lab | trainings | releases | incidents | rescues | numbers | page height | billing line |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
-  for (const m of minutes) md.push(`| ${mmss(m.t)} | ${m.stage} | ${money(m.funds)} | ${money(m.revPerSec)} | ${fmtN(m.rate, 1)} | ${fmtN(m.soldPerSec, 1)} | ${money(m.price)} | ${fmtN(m.backlog)} | ${m.gpus} | ${fmtN(m.power)} | ${fmtN(m.research)} | ${m.trust} | ${m.researchers} | ${m.labSpace} | ${m.trainings} | ${m.releases} | ${m.incidents} | ${m.idleRescues} | ${m.numbers} | ${m.pageHeight} | ${m.billing ?? ''} |`);
+  md.push('## Per minute', '', '| t | stage | funds | rev/s | tasks/s | sold/s | price | unbilled | GPUs | power | research | trust | researchers | lab | trainings | releases | rescues | numbers | page height | billing line |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
+  for (const m of minutes) md.push(`| ${mmss(m.t)} | ${m.stage} | ${money(m.funds)} | ${money(m.revPerSec)} | ${fmtN(m.rate, 1)} | ${fmtN(m.soldPerSec, 1)} | ${money(m.price)} | ${fmtN(m.backlog)} | ${m.gpus} | ${fmtN(m.power)} | ${fmtN(m.research)} | ${m.trust} | ${m.researchers} | ${m.labSpace} | ${m.trainings} | ${m.releases} | ${m.idleRescues} | ${m.numbers} | ${m.pageHeight} | ${m.billing ?? ''} |`);
   md.push('', '## Modals (first sight of each)', '');
   for (const m of modals) md.push(`- **${mmss(m.t)} — ${m.title}** ${m.timer ? `[${m.timer}] ` : ''}(funds ${money(m.m.funds)}, trust ${m.m.trust})`, `  - text: ${m.text}`, ...m.options.map((o) => `  - option${o.disabled ? ' (disabled)' : ''}: "${o.label}"${o.title ? ` — tooltip: ${o.title}` : ''}`));
   md.push('', '## Modal answers', '', ...rec.actions.filter((a) => a.why === 'modal').map((a) => `- ${mmss(a.t)} ${a.detail}`));
@@ -350,22 +350,6 @@ const PROBES = {
       const end = await kit.run(30);
       out.push('', 'Next 30 s (nothing clicked):', ...kit.linesBetween(t0, kit.t, ['console', 'log']).map((l) => `- ${l}`), '', 'On screen:', ...kit.screen(end, { lines: 5 }).map((l) => `- ${l}`));
       await kit.shot('reload-mid-transition-30s');
-    },
-  },
-  'reload-mid-redteam': {
-    title: 'Reload during the red-team cool-down and during evaluation',
-    async run(kit, out) {
-      kit.mashKey = 'btn-task';
-      const pol = kit.policy({}, false);
-      const hit = await playUntil(kit, pol, 1800, async (s) => s.m.trainingPhase === 'redteam' && (s.m.issuesOpen ?? 0) > 0);
-      if (!hit) return void out.push('No evaluation with open issues within 30 minutes.');
-      await kit.click('btn-redteam', 1, 'redteam');
-      await kit.session.advance(1000);
-      const a = { label: await text(kit, '#btn-redteam'), open: await text(kit, '#issuesOpen'), rem: (await kit.session.metrics()).redTeamRemaining, dis: await kit.session.page.evaluate(() => (document.getElementById('btn-redteam') as HTMLButtonElement).disabled) };
-      await kit.reload();
-      const b = { label: await text(kit, '#btn-redteam'), open: await text(kit, '#issuesOpen'), rem: (await kit.session.metrics()).redTeamRemaining, dis: await kit.session.page.evaluate(() => (document.getElementById('btn-redteam') as HTMLButtonElement).disabled) };
-      await kit.shot('reload-mid-redteam');
-      out.push(`At ${mmss(kit.t)}, 1 s after clicking Red-team: button "${a.label}" (${a.dis ? 'disabled' : 'enabled'}), open issues ${a.open}, cool-down ${fmtN(a.rem, 1)} s. After reload: "${b.label}" (${b.dis ? 'disabled' : 'enabled'}), open issues ${b.open}, cool-down ${fmtN(b.rem, 1)} s.`);
     },
   },
   'idle-10min-new': {

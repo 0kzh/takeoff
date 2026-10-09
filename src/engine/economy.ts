@@ -54,7 +54,6 @@ export const MARKET_GROWTH_TASKS = 1500;
 
 export const CONTRACT_WEIGHT = 0.25;
 export const CONTRACT_WEIGHT_GROWTH = 1.15;
-export const CONTRACT_PAUSE_SECONDS = 90;
 
 export const RENT_QUOTA = 80;
 export const QUOTA_STEP = 20;
@@ -441,13 +440,7 @@ export function contractTerms(s: GameState): number {
   return num('contractMult') * num('contractTermsMult');
 }
 
-export function contractsPaused(s: GameState): boolean {
-  const until = s.flags['contractsPausedUntil'];
-  return typeof until === 'number' && s.stats.timePlayed < until;
-}
-
 export function contractDemand(s: GameState): number {
-  if (contractsPaused(s)) return 0;
   return contractWeight(s);
 }
 
