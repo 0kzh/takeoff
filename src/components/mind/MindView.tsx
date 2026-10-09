@@ -85,7 +85,6 @@ export function MindView() {
   useEffect(() => () => void perform('markMindSeen'), [perform]);
   const select = (id: string) => {
     setSelected(id);
-    if (views[id] === 'found' || views[id] === 'decoded') setDecoding(id);
   };
   return (
     <div id="mindView">
