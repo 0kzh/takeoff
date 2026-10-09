@@ -55,7 +55,7 @@ function keyActivate(e: React.KeyboardEvent, fn: () => void) {
 // ---------- Hex: a packed honeycomb. Sage (the deepest core feature) sits in the
 // middle; each outer circuit is a diamond arm, the other core features fill the gaps.
 type Axial = [number, number];
-const R = 34;
+const R = 27;
 const SQ3 = Math.sqrt(3);
 const toXY = ([q, r]: Axial): [number, number] => [SQ3 * R * (q + r / 2), 1.5 * R * r];
 const rot60 = ([q, r]: Axial): Axial => [q + r, -q];
@@ -110,7 +110,7 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
   const views = nodeViews(s);
   const fresh = new Set(s.mind.fresh);
   return (
-    <svg className="hexTree" viewBox="-270 -235 540 470" role="group" aria-label="Sage's circuits">
+    <svg className="hexTree" viewBox="-250 -190 500 380" role="group" aria-label="Sage's circuits">
       {BACKDROP.map((a) => {
         const [x, y] = toXY(a);
         return <polygon key={a.join(',')} className="hexBack" points={hexPoints(x, y, R - 2)} />;
@@ -146,7 +146,7 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
                   ? '✓'
                   : '';
         const lines = hub ? ['Sage'] : known(v) ? shortName(f.name) : [];
-        const top = y - (lines.length > 1 ? 4 : 0) + (icon ? 8 : 0);
+        const top = y - (lines.length > 1 ? 3 : 0) + (icon ? 6 : 0);
         return (
           <g
             key={f.id}
@@ -164,16 +164,16 @@ export function HexTree({ s, selected, onSelect }: TreeProps) {
               <polygon className="hexInset" points={hexPoints(x, y, R - 7)} />
             ) : null}
             {icon && !(hub && !known(v)) ? (
-              <text className="hexIcon" x={x} y={lines.length ? y - 9 - (lines.length > 1 ? 5 : 0) : y + 1}>
+              <text className="hexIcon" x={x} y={lines.length ? y - 7 - (lines.length > 1 ? 4 : 0) : y + 1}>
                 {icon}
               </text>
             ) : null}
             {lines.map((line, i) => (
-              <text key={i} className="hexName" x={x} y={(icon && !(hub && !known(v)) ? top : y) + i * 11}>
+              <text key={i} className="hexName" x={x} y={(icon && !(hub && !known(v)) ? top : y) + i * 9}>
                 {line}
               </text>
             ))}
-            {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 19} cy={y - 18} r={4} /> : null}
+            {fresh.has(f.id) ? <circle className="hexFresh" cx={x + 15} cy={y - 14} r={3.5} /> : null}
           </g>
         );
       })}

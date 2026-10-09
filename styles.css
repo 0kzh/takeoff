@@ -481,7 +481,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .mindTitle { font-weight: bold; }
 .mindStats { font-size: 14px; color: #555; }
 .mindBody { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; margin-top: 6px; }
-.mindTree svg { display: block; width: 100%; max-height: calc(100vh - 240px); min-height: 360px; }
+.mindTree svg { display: block; width: 500px; max-width: 100%; height: auto; margin: 0 auto; }
 .mindSide { display: flex; flex-direction: column; gap: 8px; }
 .mindCard { border: 1px solid #000; padding: 8px 10px; background: #fff; font-size: 15px; }
 .mindCardCircuit { font-size: 13px; color: #555; margin-bottom: 2px; }
@@ -494,7 +494,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .sealedLine:nth-child(3) { width: 80%; margin-bottom: 12px; }
 .thought { margin-bottom: 4px; }
 .thoughtLabel { font-size: 13px; color: #555; margin-bottom: 4px; }
-.thoughtQuote { font-family: "Lucida Sans Typewriter", "Lucida Console", Monaco, "Bitstream Vera Sans Mono", monospace; font-size: 15px; line-height: 1.4; min-height: 1.4em; margin-bottom: 8px; }
+.thoughtQuote { font-family: "Lucida Sans Typewriter", "Lucida Console", Monaco, "Bitstream Vera Sans Mono", monospace; font-size: 13px; line-height: 1.4; min-height: 1.4em; margin-bottom: 8px; }
 .thoughtPending { visibility: hidden; }
 .thoughtMeaning { margin: 0 0 10px; line-height: 1.35; }
 .thoughtVerdict { margin: 0 0 6px; }
@@ -521,17 +521,17 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .hexNode { cursor: pointer; outline: none; }
 .hexShape { fill: #f2f2f2; stroke: #ccc; stroke-width: 1; }
 .hexIcon, .hexName { font-family: "Times New Roman", Times, serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; fill: #000; }
-.hexIcon { font-size: 15px; font-weight: bold; }
-.hexName { font-size: 10.5px; }
+.hexIcon { font-size: 12px; font-weight: bold; }
+.hexName { font-size: 9.5px; }
 .hexInset { fill: none; stroke: #fff; stroke-width: 1.5; pointer-events: none; }
 .hexNode.detectable .hexShape { fill: #fff; stroke: #888; stroke-width: 1.5; stroke-dasharray: 4 3; }
-.hexNode.detectable .hexIcon { fill: #888; font-weight: normal; font-size: 17px; }
+.hexNode.detectable .hexIcon { fill: #888; font-weight: normal; font-size: 14px; }
 .hexNode.found .hexShape { fill: #fff; stroke: #000; stroke-width: 3; stroke-dasharray: none; }
 .hexNode.decoded .hexShape { fill: #000; stroke: #000; stroke-dasharray: none; }
 .hexNode.wired .hexShape { fill: #888; stroke: #888; stroke-dasharray: none; }
 .hexNode.decoded text, .hexNode.wired text { fill: #fff; }
 .hexNode.hub .hexShape { fill: #000; stroke: #000; stroke-dasharray: none; }
-.hexNode.hub .hexName { fill: #fff; font-size: 17px; font-weight: bold; }
+.hexNode.hub .hexName { fill: #fff; font-size: 14px; font-weight: bold; }
 .hexNode.hub.found .hexIcon { fill: #fff; }
 .hexNode.sel .hexInset { stroke: #000; }
 .hexNode.sel.decoded .hexInset, .hexNode.sel.wired .hexInset, .hexNode.sel.hub .hexInset { stroke: #fff; }
