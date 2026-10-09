@@ -3,6 +3,7 @@ import { rng, rand, randInt, chance, pick, poisson } from './rng.js';
 import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS, chipMult } from './economy.js';
 import { dataFactor, dataShort } from './data.js';
 import { applyDrift } from './alignment.js';
+import { mindSignal } from './mind.js';
 import { moveTempo, distill } from './rivals.js';
 import { moveApproval, DEPLOY_APPROVAL } from './world.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
@@ -465,6 +466,13 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boole
     }
     if (!queued && run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
     if (run.eventAt >= 0 && !run.eventId && progress >= run.eventAt) applyTrainingEvent(s, run);
+    if (s.stage >= 2 && !run.prologue) {
+      const thresholds = run.focus === 'safety' ? [0.4, 0.6, 0.85] : [0.4, 0.85];
+      while ((run.mindSignals ?? 0) < thresholds.length && progress >= thresholds[run.mindSignals ?? 0]!) {
+        mindSignal(s, undefined, run.name);
+        run.mindSignals = (run.mindSignals ?? 0) + 1;
+      }
+    }
   }
   if (run.elapsed >= run.duration) {
     run.elapsed = run.duration;

@@ -8,6 +8,7 @@ import { researchCap, batchSize } from '../engine/economy.js';
 import { fireableEvents, pendingDevelopments } from '../engine/events.js';
 import { dateLabel, fmtDuration, fmtNum } from '../engine/format.js';
 import { exportSave, importSave } from '../ui/save.js';
+import { DECODE_STYLES, TREE_STYLES, setMindPrefs, useMindPrefs } from '../ui/mindPrefs.js';
 
 const EVENTS = fireableEvents();
 export function DevPanel({ seed }: { seed: number }) {
@@ -18,6 +19,7 @@ export function DevPanel({ seed }: { seed: number }) {
   const autoplay = useGameStore((state) => state.autoplay);
   const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('dev') === '1');
   const [showHidden, setShowHidden] = useState(false);
+  const mindPrefs = useMindPrefs();
   const [event, setEvent] = useState(EVENTS[0]?.id ?? '');
   const [text, setText] = useState('');
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -119,6 +121,52 @@ export function DevPanel({ seed }: { seed: number }) {
             {cp.label}
           </button>
         ))}
+      </div>
+      <div className="devRow">
+        Mind{' '}
+        {TREE_STYLES.map((style) => (
+          <button
+            key={style}
+            id={`dev-tree-${style}`}
+            className={mindPrefs.tree === style ? 'devActive' : ''}
+            onClick={() => setMindPrefs({ tree: style })}
+          >
+            {style}
+          </button>
+        ))}{' '}
+        Decode{' '}
+        {DECODE_STYLES.map((style) => (
+          <button
+            key={style}
+            id={`dev-decode-${style}`}
+            className={mindPrefs.decode === style ? 'devActive' : ''}
+            onClick={() => setMindPrefs({ decode: style })}
+          >
+            {style}
+          </button>
+        ))}
+      </div>
+      <div className="devRow">
+        <button id="dev-mind-signal" onClick={() => perform('devMindSignal')}>
+          +Signal
+        </button>{' '}
+        <button
+          id="dev-mind-signals"
+          onClick={() => {
+            for (let i = 0; i < 5; i++) perform('devMindSignal');
+          }}
+        >
+          +5 signals
+        </button>{' '}
+        <button
+          id="dev-mind-open"
+          onClick={() => {
+            if (!store.getState().game.revealed['mind']) perform('devMindSignal');
+            setMindPrefs({ tab: 'mind' });
+          }}
+        >
+          Open Mind
+        </button>
       </div>
       <div className="devRow">
         {['funds', 'research', 'insight', 'compute', 'power', 'trust', 'data', 'approval'].map((what) => (

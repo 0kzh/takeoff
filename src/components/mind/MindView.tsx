@@ -1,0 +1,206 @@
+import { useEffect, useRef, useState } from 'react';
+import { useGame, useGameStore, usePerform } from '../../store/context.js';
+import { CIRCUITS, FEATURES, featureById, sageWants } from '../../data/mind.js';
+import { decodedCount, foundCount } from '../../engine/mind.js';
+import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
+import { AtlasTree, DossierTree, HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
+import { DecodeModal, StrengthMeter } from './Decode.js';
+import { CIRCUIT_COLOR, CIRCUIT_MARK } from './theme.js';
+
+const STATE_LINE: Record<NodeView, string> = {
+  hidden: 'Nothing has lit up here yet. Decode what leads to it first.',
+  detectable: 'Something is active here. A training run will isolate it; safety-focused runs find more.',
+  found: 'Isolated, not understood. Decode it to see what it fires on.',
+  decoded: 'Decoded. Choose how to rewire it.',
+  wired: 'Decoded and rewired.',
+};
+
+function FeatureCard({ id, view, onDecode }: { id: string; view: NodeView; onDecode: () => void }) {
+  const s = useGame();
+  const def = featureById(id)!;
+  const color = CIRCUIT_COLOR[def.circuit];
+  const circuit = CIRCUITS.find((c) => c.id === def.circuit)!;
+  const wiring = s.mind.features[id]?.wiring ?? '';
+  const known = view === 'found' || view === 'decoded' || view === 'wired';
+  const lit = view === 'decoded' || view === 'wired';
+  return (
+    <div className={`mindCard ${view}`} style={{ ['--c' as string]: color }}>
+      <div className="mindCardCircuit">
+        {CIRCUIT_MARK[def.circuit]} {circuit.name}
+      </div>
+      <div className="mindCardName">{nodeTitle(def, view)}</div>
+      <div className="mindCardState">{STATE_LINE[view]}</div>
+      {known ? <div className="mindCardHint">“{def.hint}”</div> : null}
+      {lit ? (
+        <>
+          <div className="mindCardFires">
+            Fires on <b>{def.fires}</b>
+          </div>
+          <div className="mindCardReading">{def.reading(s)}</div>
+          <div className="mindCardStrength">
+            activation <StrengthMeter value={def.strength(s)} color={color} />
+          </div>
+        </>
+      ) : null}
+      {view === 'found' ? (
+        <button className="dButton primary" id="mind-decode" onClick={onDecode}>
+          Decode
+        </button>
+      ) : view === 'decoded' ? (
+        <button className="dButton primary" id="mind-rewire" onClick={onDecode}>
+          Rewire
+        </button>
+      ) : view === 'wired' ? (
+        <div className="mindCardWired">Wired: {def.rewire.find((o) => o.id === wiring)?.label}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function Overview() {
+  const s = useGame();
+  const views = nodeViews(s);
+  const heart = FEATURES.find((f) => f.circuit === 'core' && f.slot === 3);
+  const heartLit = heart && (views[heart.id] === 'decoded' || views[heart.id] === 'wired');
+  return (
+    <div className="mindCard overview">
+      <div className="mindCardName">What we know</div>
+      {CIRCUITS.map((c) => {
+        const feats = FEATURES.filter((f) => f.circuit === c.id);
+        const n = feats.filter((f) => views[f.id] === 'decoded' || views[f.id] === 'wired').length;
+        return (
+          <div key={c.id} className="overviewRow" style={{ ['--c' as string]: CIRCUIT_COLOR[c.id] }}>
+            <span className="overviewMark">{CIRCUIT_MARK[c.id]}</span>
+            <span className="overviewName">{c.name}</span>
+            <span className="overviewPips">
+              {feats.map((f) => (
+                <span key={f.id} className={`pip ${views[f.id]}`} />
+              ))}
+            </span>
+            <span className="overviewCount">{n}/4</span>
+          </div>
+        );
+      })}
+      <div className="mindCardState">
+        {heartLit
+          ? `What Sage wants: ${sageWants(s)}`
+          : 'Every decode narrows the alignment band. Every rewire changes what Sage is. Pick a feature.'}
+      </div>
+    </div>
+  );
+}
+
+export function MindView() {
+  const s = useGame();
+  const perform = usePerform();
+  const { tree } = useMindPrefs();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [decoding, setDecoding] = useState<string | null>(null);
+  const views = nodeViews(s);
+  useEffect(() => () => void perform('markMindSeen'), [perform]);
+  const select = (id: string) => {
+    setSelected(id);
+    if (views[id] === 'found' || views[id] === 'decoded') setDecoding(id);
+  };
+  const Tree = tree === 'atlas' ? AtlasTree : tree === 'dossier' ? DossierTree : HexTree;
+  const decoded = decodedCount(s);
+  const waiting = foundCount(s);
+  return (
+    <div id="mindView" className={`tree-${tree}`}>
+      <div className="mindHead">
+        <b className="mindTitle">Sage’s mind</b>
+        <span className="mindStats">
+          {decoded} of {FEATURES.length} decoded
+          {waiting ? ` · ${waiting} waiting` : ''}
+        </span>
+      </div>
+      <hr />
+      <div className="mindBody">
+        <div className="mindTree">
+          <Tree s={s} selected={selected} onSelect={select} />
+        </div>
+        <div className="mindSide">
+          {selected ? (
+            <FeatureCard id={selected} view={views[selected]!} onDecode={() => setDecoding(selected)} />
+          ) : (
+            <Overview />
+          )}
+          {selected ? (
+            <button className="dButton subtle" onClick={() => setSelected(null)}>
+              Back to overview
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {decoding ? <DecodeModal key={decoding} id={decoding} onClose={() => setDecoding(null)} /> : null}
+    </div>
+  );
+}
+
+export function MainTabs() {
+  const shown = useGameStore((st) => st.game.revealed['mind'] === true);
+  const waiting = useGameStore((st) => foundCount(st.game));
+  const { tab } = useMindPrefs();
+  if (!shown) return null;
+  return (
+    <div id="mainTabs" role="tablist">
+      <button
+        role="tab"
+        id="tab-lab"
+        aria-selected={tab === 'lab'}
+        className={tab === 'lab' ? 'active' : ''}
+        onClick={() => setMindPrefs({ tab: 'lab' })}
+      >
+        Lab
+      </button>
+      <button
+        role="tab"
+        id="tab-mind"
+        aria-selected={tab === 'mind'}
+        className={tab === 'mind' ? 'active' : ''}
+        onClick={() => setMindPrefs({ tab: 'mind' })}
+      >
+        Mind{waiting ? <span className="tabBadge">{waiting}</span> : null}
+      </button>
+    </div>
+  );
+}
+
+// A small, clickable notice when a training run lights up a feature while the
+// player is looking at the lab.
+export function MindToast() {
+  const signals = useGameStore((st) => st.game.mind.signals);
+  const last = useGameStore((st) => st.game.mind.lastFound);
+  const { tab } = useMindPrefs();
+  const [shown, setShown] = useState<string | null>(null);
+  const seen = useRef({ signals, last });
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = { signals, last };
+    if (signals === prev.signals || !last || last === prev.last) return;
+    setShown(last);
+    const t = setTimeout(() => setShown(null), 6000);
+    return () => clearTimeout(t);
+  }, [signals, last]);
+  const def = shown ? featureById(shown) : undefined;
+  if (!def || tab === 'mind') return null;
+  const circuit = CIRCUITS.find((c) => c.id === def.circuit)!;
+  return (
+    <button
+      id="mindToast"
+      key={shown}
+      style={{ ['--c' as string]: CIRCUIT_COLOR[def.circuit] }}
+      onClick={() => {
+        setShown(null);
+        setMindPrefs({ tab: 'mind' });
+      }}
+    >
+      <span className="mtMark">{CIRCUIT_MARK[def.circuit]}</span>
+      <span className="mtText">
+        <span className="mtTop">Feature lit up · {circuit.name}</span>
+        <span className="mtName">{def.name}</span>
+      </span>
+      <span className="mtGo">open Mind →</span>
+    </button>
+  );
+}

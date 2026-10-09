@@ -57,6 +57,7 @@ export interface TrainingRun {
   major: number;
   minor: number;
   prologue?: boolean;
+  mindSignals?: number;
 }
 
 export interface ModelRecord {
@@ -121,6 +122,23 @@ export interface ChoiceRecord {
   id: string;
   option: string;
   date: string;
+}
+
+export type MindStatus = 'locked' | 'found' | 'decoded';
+
+export interface MindFeatureState {
+  status: MindStatus;
+  foundAt: number;
+  attempts: number;
+  flawless: boolean;
+  wiring: string;
+}
+
+export interface MindState {
+  features: Record<string, MindFeatureState>;
+  signals: number;
+  lastFound: string;
+  fresh: string[];
 }
 
 export interface QueuedLine {
@@ -250,6 +268,7 @@ export interface GameState {
   history: number[][];
 
   training: TrainingState;
+  mind: MindState;
   effects: TimedEffect[];
   scheduled: ScheduledEvent[];
   projects: Record<string, ProjectState>;
@@ -401,6 +420,7 @@ export function newGame(seed: number = Date.now()): GameState {
     history: [],
 
     training: newTraining(),
+    mind: { features: {}, signals: 0, lastFound: '', fresh: [] },
     effects: [],
     scheduled: [],
     projects: {},
@@ -503,7 +523,7 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   if (version !== SAVE_VERSION && !legacy) return null;
   const base = newGame(typeof raw['seed'] === 'number' ? (raw['seed'] as number) : 0) as unknown as Record<string, unknown>;
   const merged = keep(base, raw);
-  for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen'] as const) merged[key] = keep(base[key] as object, raw[key]);
+  for (const key of ['training', 'stats', 'idle', 'cadence', 'data', 'baiwen', 'mind'] as const) merged[key] = keep(base[key] as object, raw[key]);
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
   if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags']) delete run[key];
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;

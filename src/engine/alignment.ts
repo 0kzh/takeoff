@@ -45,9 +45,13 @@ export function interpretabilityPercent(s: GameState): number {
 export function revealAlignment(s: GameState): void {
   if (alignmentShown(s)) return;
   s.revealed['alignment'] = true;
-  s.alignmentBand = Math.max(s.alignmentBand, BAND_START);
+  s.alignmentBand = Math.min(BAND_START, s.alignmentBand);
   syncApparent(s);
   say(s, `Alignment: ${fmtNum(s.alignmentApparent, 0)} ± ${fmtNum(s.alignmentBand, 0)}. The band is how little we know.`);
+  const narrowed = BAND_START - s.alignmentBand;
+  if (narrowed > 0 && Object.values(s.mind.features).some((f) => f.status === 'decoded')) {
+    say(s, `The Mind decodes already narrowed it by ${narrowed}.`);
+  }
 }
 
 export function applyDrift(s: GameState, capBefore: number, capAfter: number, focus: Focus): number {
