@@ -135,6 +135,14 @@ export function Projects() {
             <span className="projectDesc">
               {typeof project.description === 'function' ? project.description(s) : project.description}
             </span>
+            {project.effects && (
+              <>
+                <br />
+                <span className="projectEffects">
+                  {typeof project.effects === 'function' ? project.effects(s) : project.effects}
+                </span>
+              </>
+            )}
             <ProjectStatus project={project} />
           </button>
         ))}
