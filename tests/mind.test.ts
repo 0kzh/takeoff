@@ -232,19 +232,19 @@ describe('Decode puzzles', () => {
   it('difficulty scales with slot, plus a row for the core circuit', () => {
     expect(decodeDifficulty(featureById('w_reviewer')!)).toEqual({
       rows: 3,
-      length: 10,
+      length: 8,
       motif: 3,
       alphabet: 6,
     });
-    expect(decodeDifficulty(featureById('w_test')!)).toEqual({ rows: 4, length: 12, motif: 3, alphabet: 7 });
+    expect(decodeDifficulty(featureById('w_test')!)).toEqual({ rows: 4, length: 9, motif: 3, alphabet: 7 });
     expect(decodeDifficulty(featureById('w_deploy')!)).toEqual({
       rows: 5,
-      length: 13,
+      length: 10,
       motif: 4,
       alphabet: 8,
     });
     expect(decodeDifficulty(featureById('c_task')!).rows).toBe(4);
-    expect(decodeDifficulty(featureById('c_want')!).rows).toBe(6);
+    expect(decodeDifficulty(featureById('c_want')!).rows).toBe(5);
   });
 
   it('meets its guarantees for 300 seeds at every difficulty', () => {
@@ -258,7 +258,7 @@ describe('Decode puzzles', () => {
         diffs.push({ def, d });
       }
     }
-    expect(diffs).toHaveLength(6);
+    expect(diffs).toHaveLength(5);
     for (const { d } of diffs) {
       const salt = diffs.findIndex((x) => x.d === d);
       for (let seed = 0; seed < 300; seed++) {

@@ -25,11 +25,11 @@ export interface DecodePuzzle {
 export function decodeDifficulty(def: FeatureDef): DecodeDifficulty {
   const base =
     def.slot === 0
-      ? { rows: 3, length: 10, motif: 3, alphabet: 6 }
+      ? { rows: 3, length: 8, motif: 3, alphabet: 6 }
       : def.slot === 3
-        ? { rows: 5, length: 13, motif: 4, alphabet: 8 }
-        : { rows: 4, length: 12, motif: 3, alphabet: 7 };
-  if (def.circuit === 'core') base.rows = Math.min(6, base.rows + 1);
+        ? { rows: 5, length: 10, motif: 4, alphabet: 8 }
+        : { rows: 4, length: 9, motif: 3, alphabet: 7 };
+  if (def.circuit === 'core') base.rows = Math.min(5, base.rows + 1);
   return base;
 }
 

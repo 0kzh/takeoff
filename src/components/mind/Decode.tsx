@@ -42,6 +42,8 @@ function Align({ p, done, onSolve }: GameProps) {
   const m = p.motif.length;
   const width = p.rows[0]!.length;
   const lens = Math.floor((width - m) / 2);
+  const lo = lens + m - width;
+  const lane = width + lens - lo;
   const [shift, setShift] = useState<number[]>(() => p.rows.map(() => 0));
   const [moves, setMoves] = useState(0);
   const [cursor, setCursor] = useState(0);
@@ -81,11 +83,11 @@ function Align({ p, done, onSolve }: GameProps) {
   }, [p]);
   return (
     <>
-      <div className="dAlign" style={{ width: width * TILE + ROW_LABEL }}>
+      <div className="dAlign" style={{ width: lane * TILE + ROW_LABEL }}>
         <div
           className="dLens"
           style={{
-            left: ROW_LABEL + lens * TILE - LENS_PAD,
+            left: ROW_LABEL + (lens - lo) * TILE - LENS_PAD,
             width: m * TILE - TILE_GAP + 2 * LENS_PAD,
             height: p.rows.length * ROW_PITCH - ROW_GAP + 2 * LENS_PAD,
           }}
@@ -97,8 +99,8 @@ function Align({ p, done, onSolve }: GameProps) {
         {p.rows.map((row, r) => (
           <div key={r} className={`dRow alignRow${cursor === r && !done ? ' cursor' : ''}`}>
             <span className="dRowLabel">{r + 1}</span>
-            <span className="dWindow" style={{ width: width * TILE }}>
-              <span className="dTrack" style={{ transform: `translateX(${shift[r]! * TILE}px)` }}>
+            <span className="dWindow" style={{ width: lane * TILE }}>
+              <span className="dTrack" style={{ transform: `translateX(${(shift[r]! - lo) * TILE}px)` }}>
                 {row.map((g, i) => {
                   const inLens = i + shift[r]! >= lens && i + shift[r]! < lens + m;
                   return (
@@ -266,7 +268,7 @@ export function DecodeModal({ id, onClose }: { id: string; onClose: () => void }
   const [revealed, setRevealed] = useState(phase === 'solved');
   const difficulty = useMemo(() => decodeDifficulty(def), [def]);
   const puzzle = useMemo(() => makePuzzle(seed, difficulty), [seed, difficulty]);
-  const seconds = 20 + difficulty.rows * 6;
+  const seconds = 40 + difficulty.rows * 10;
 
   useEffect(() => {
     const prev = api.getState().speed;
