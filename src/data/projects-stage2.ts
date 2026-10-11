@@ -415,7 +415,6 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
       narrowBand(s, 7);
       reduceBias(s, 2);
       mindSignal(s, 'watched', 'Sparse autoencoders');
-      mindSignal(s, undefined, 'Sparse autoencoders');
     },
     consoleMsg: 'Sixteen million features. Feature 4,113,902 fires on "being watched".',
   }),

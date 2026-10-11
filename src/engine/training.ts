@@ -3,7 +3,7 @@ import { rng, rand, randInt, chance, pick } from './rng.js';
 import { researchCap, rentQuota, atRentQuota, activeGpus, ARRIVAL_GPUS, chipMult } from './economy.js';
 import { dataFactor, dataShort } from './data.js';
 import { applyDrift } from './alignment.js';
-import { mindSignal } from './mind.js';
+import { mindSignal, lastFoundAt, MIND_RUN_EVERY, MIND_RUN_SPACING } from './mind.js';
 import { moveTempo, distill } from './rivals.js';
 import { moveApproval, DEPLOY_APPROVAL } from './world.js';
 import { openChoice, secondsToNextCalendarModal, MODAL_SPACING } from './events.js';
@@ -442,11 +442,18 @@ function updateRunning(s: GameState, run: TrainingRun, dt: number, queued: boole
     }
     if (!queued && run.gambleAt >= 0 && run.gamble === 'none' && progress >= run.gambleAt) offerGamble(s, run);
     if (run.eventAt >= 0 && !run.eventId && progress >= run.eventAt) applyTrainingEvent(s, run);
-    if (s.stage >= 2 && !run.prologue) {
-      const thresholds = run.focus === 'safety' ? [0.4, 0.6, 0.85] : [0.4, 0.85];
-      while ((run.mindSignals ?? 0) < thresholds.length && progress >= thresholds[run.mindSignals ?? 0]!) {
-        mindSignal(s, undefined, run.name);
-        run.mindSignals = (run.mindSignals ?? 0) + 1;
+    // One signal attempt per stage-2+ run (safety focus or every third run),
+    // spaced at least MIND_RUN_SPACING after the last find from any source.
+    if (s.stage >= 2 && !run.prologue && !run.mindSignals) {
+      const noneFound = Object.keys(s.mind.features).length === 0;
+      const at = noneFound ? 0.4 : 0.85;
+      if (progress >= at) {
+        run.mindSignals = 1;
+        s.mind.runsSinceSignal += 1;
+        const spaced = s.stats.timePlayed - lastFoundAt(s) >= MIND_RUN_SPACING;
+        if (spaced && (run.focus === 'safety' || noneFound || s.mind.runsSinceSignal >= MIND_RUN_EVERY)) {
+          if (mindSignal(s, undefined, run.name) !== null) s.mind.runsSinceSignal = 0;
+        }
       }
     }
   }
