@@ -100,7 +100,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 | ~20:00                          | Sage for Work live for 2 min    | Jobs displaced counter in Public; first job-loss headlines                                                                              | "The Ledger: junior developer hiring falls for a third quarter."                          |
 | ~22:00                          | 4× (Sage-3)                     | Development: reward hacking → **Alignment Team** (if unbought) → **Alignment strip** fills: `60 ± 30`; Model Spec, CoT Monitoring chain | "Kit: it didn't fix the code. it fixed the tests."                                        |
 | ~24:00                          | 2 datacenters full on G5        | **Nimbus G6 chips**                                                                                                                     | "The G6 needs liquid cooling and a moment of silence."                                    |
-| ~19:00                          | Baiwen present ≥ 90 s and ≥ 3×   | Crisis: **Weight theft** (Baiwen gets the security-level share)                                                                         | "Anomalous egress from Training Cluster 3."                                               |
+| ~19:00                          | Baiwen present ≥ 90 s and ≥ 2.5× | Crisis: **Weight theft** (Baiwen gets the security-level share)                                                                         | "Anomalous egress from Training Cluster 3."                                               |
 | ~28:00                          | 5×                              | **Automate the Lab** appears, grey: "needs 10×"                                                                                         | "Sage has asked, politely, whether it could just do the research."                        |
 | ~30:00                          | 6×                              | **Sage-mini** product decision (cheap public model)                                                                                     | "A Sage you can run on a laptop. Twelve million people do."                               |
 | ~33:00                          | 8×                              | Crisis: **Bio uplift red line** (a choice with Dangerous Capability Evals, a surprise headline without)                                 | "Bio uplift: HIGH. We are told this is fine."                                             |
@@ -200,7 +200,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 ### 6.8 Security and weight theft
 
 - Security Office project (Baiwen present) adds a row: "Security: SL1 · Upgrade to SL2 $5M". Levels SL1–SL4; each −3% research and reduces the stolen share to 85/75/65/55%.
-- Weight theft fires once at ≥ 3×, at least 90 s after Baiwen enters, and only below security level 4. It always opens a crisis modal and immediately gives Baiwen the security-level share of Sage; egress monitoring reduces that share to 50%.
+- Weight theft fires once at ≥ 2.5×, at least 90 s after Baiwen enters, and only below security level 4. It always opens a crisis modal and immediately gives Baiwen the security-level share of Sage; egress monitoring reduces that share to 50%.
 - Egress Monitoring project: the theft gives Baiwen half a model.
 
 ### 6.9 Alignment arrives (strip under the console)

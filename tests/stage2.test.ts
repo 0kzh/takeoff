@@ -289,7 +289,7 @@ describe('Stage 2 world', () => {
     },
   );
 
-  it('waits 90 seconds, requires 3× capability, and waits for another choice to close', () => {
+  it('waits 90 seconds, requires 2.5× capability, and waits for another choice to close', () => {
     const makeReady = () => {
       const s = arrival();
       s.stats.timePlayed = 100;
@@ -305,8 +305,8 @@ describe('Stage 2 world', () => {
     expect(tooSoon.activeChoice).toBeNull();
 
     const tooWeak = makeReady();
-    tooWeak.capability = 2.9;
-    tooWeak.training.internalCapability = 2.9;
+    tooWeak.capability = 2.4;
+    tooWeak.training.internalCapability = 2.4;
     updateCrises(tooWeak);
     expect(tooWeak.activeChoice).toBeNull();
 
