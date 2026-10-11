@@ -278,7 +278,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     cost: { research: 10000, funds: 500000 },
     revealFunds: 30,
     description: 'Count every byte leaving the building.',
-    effects: 'Thefts are always noticed',
+    effects: 'Thefts give Baiwen half a model',
     trigger: (s) => isBought(s, 's2_security'),
     buy: (s) => {
       s.flags['egress'] = true;

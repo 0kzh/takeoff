@@ -4,7 +4,7 @@ import {
   powerPriceWalk, averages, bottleneckMessages, researchCap, trackStuck,
   clickTask, buyPower, rentGpu, lowerPrice, raisePrice, buyMarketing, hireResearcher, expandLab,
   buildDatacenter, buyGpuBatch, expandGrid, rentQuota, upgradeSecurity, canExpandLab } from './economy.js';
-import { updateBaiwen, updateTempo, sampleHistory, updateTheft, updateIrrelevance } from './rivals.js';
+import { updateBaiwen, updateTempo, sampleHistory, updateIrrelevance } from './rivals.js';
 import { updateWorld } from './world.js';
 import {
   updateTraining, startTraining, setFocus, release, finishTraining, trainSlotFree, needsDatacenter, nextRunName, gpusNeeded, cardWall,
@@ -13,7 +13,7 @@ import { buyProject, visibleProjects } from './projects.js';
 import { datacenterAtWall } from '../data/projects.js';
 import { updateProjects, noteReveals } from './reveal.js';
 import {
-  updateDevelopments, updateScheduled, updateChoice, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
+  updateDevelopments, updateScheduled, updateChoice, updateCrises, updateRival, idleGuard, resolveChoice, takeDefault, fireEvent, drainChoiceQueue,
 } from './events.js';
 import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
@@ -69,7 +69,7 @@ export function step(s: GameState): void {
     updateBaiwen(s);
     updateTempo(s);
     updateWorld(s);
-    updateTheft(s);
+    updateCrises(s);
     updateIrrelevance(s);
     sampleHistory(s);
   }

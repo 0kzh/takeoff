@@ -100,7 +100,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 | ~20:00                          | Sage for Work live for 2 min    | Jobs displaced counter in Public; first job-loss headlines                                                                              | "The Ledger: junior developer hiring falls for a third quarter."                          |
 | ~22:00                          | 4× (Sage-3)                     | Development: reward hacking → **Alignment Team** (if unbought) → **Alignment strip** fills: `60 ± 30`; Model Spec, CoT Monitoring chain | "Kit: it didn't fix the code. it fixed the tests."                                        |
 | ~24:00                          | 2 datacenters full on G5        | **Nimbus G6 chips**                                                                                                                     | "The G6 needs liquid cooling and a moment of silence."                                    |
-| ~27:00                          | Baiwen present and ≥ 5×         | Crisis: **Weight theft** (roll vs security level)                                                                                       | "Anomalous egress from Training Cluster 3."                                               |
+| ~19:00                          | Baiwen present ≥ 90 s and ≥ 5×   | Crisis: **Weight theft** (Baiwen gets the security-level share)                                                                         | "Anomalous egress from Training Cluster 3."                                               |
 | ~28:00                          | 5×                              | **Automate the Lab** appears, grey: "needs 10×"                                                                                         | "Sage has asked, politely, whether it could just do the research."                        |
 | ~30:00                          | 6×                              | **Sage-mini** product decision (cheap public model)                                                                                     | "A Sage you can run on a laptop. Twelve million people do."                               |
 | ~33:00                          | 8×                              | Crisis: **Bio uplift red line** (a choice with Dangerous Capability Evals, a surprise headline without)                                 | "Bio uplift: HIGH. We are told this is fine."                                             |
@@ -126,7 +126,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 | GPUs, batch of 1,000 | $40 × 1,000 × chipPrice[gen] (gen 1/2/3 = ×1 / ×3 / ×10) | ×1.04 per batch of the same size                                    | batch size steps ×10 with datacenter tier; price per GPU unchanged |
 | Datacenter           | $250k × 2.2^n                                            | ×2.2                                                                | room 10k GPUs; Hyperscale ×10, Gigawatt ×100                       |
 | Grid tier            | 10 MW → 100 MW → 1 GW → 10 GW                            | $1/kW of the new tier (10 MW = $10M … 1 GW = $1B), PPA project −30% | GPUs beyond grid capacity sit dark (existing `activeGpus`)         |
-| Security level       | $5M × 8^(n−1)                                            | ×8                                                                  | research −3% per level, theft odds 90 / 50 / 25 / 10%              |
+| Security level       | $5M × 8^(n−1)                                            | ×8                                                                  | research −3% per level; theft share 85 / 75 / 65 / 55%              |
 | Power bill           | existing `powerBillPerSec` with `gridAuto`               | `powerBase` inflation                                               | shown as "Power bill $/s"                                          |
 
 - Rule of thumb for tuning: a routine purchase costs 15–40 s of current revenue; a tier purchase (datacenter tier, grid tier, chip generation) 60–120 s; the stage gate ~3 min.
@@ -183,8 +183,8 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 ### 6.6 Rivals and the race graph (right column)
 
 - Anthrosoft: existing `rivalRelease` cadence (240–420 s) with the rubber band, now multiplied by tempo (`interval × (1.4 − tempo/125)`) and +5% on each of our public deploys.
-- Baiwen: new `baiwen: { present, capability, version, nextIn }`. Enters Jun 2026 at 0.35× ours; growth = rubber band toward 0.6× ours, faster at high tempo; export controls slow it; theft jumps it to 0.85× ours.
-- Tempo (0–100, hidden until Baiwen, then a gauge on the graph): starts 50; +3 per deploy, +5 funding, +5 Defense, +15 theft; −3 Safety Commitments, −15 Compute Cap; drifts 1/min toward 50. Feeds rival speed and alignment drift.
+- Baiwen: new `baiwen: { present, capability, version, nextIn }`. Enters Jun 2026 at 0.35× ours; growth = rubber band toward 0.6× ours, faster at high tempo; export controls slow it; theft gives it the security-level share of our model (50% with egress monitoring).
+- Tempo (0–100, hidden until Baiwen, then a gauge on the graph): starts 50; +3 per deploy, +5 funding, +5 Defense, +8 theft; −3 Safety Commitments, −15 Compute Cap; drifts 1/min toward 50. Feeds rival speed and alignment drift.
 - Lead (months, existing field): `log(ours/baiwen) / log(2) × baiwenDoublingMonths`. Shown in Government panel as "Lead over Baiwen: N months".
 - Graph: inline SVG, `viewBox 0 0 360 140`, x = calendar from Jul 2025 to now + 3 months, y = log capability 0.5× to 4× the max line. Lines: OpenMind solid, Anthrosoft dashed, Baiwen dotted, our dotted projection at the current rate. Tier lines with labels, event markers (⚠ theft, ↑ release). Sampled every 5 s into `history` (capped 720 points; saved).
 - Irrelevance: a rival leads by ≥ 2× → OpenMind line turns red (warning 1, "Investors are asking about Anthrosoft."). ≥ 3× → development "Series C pulled" (warning 2). ≥ 4× for 3 min → **Irrelevance countdown** modal (last chance: emergency round for 3 Trust, or keep going) → ending **Second Place**.
@@ -192,18 +192,16 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 ### 6.7 Government and public (left column, two small panels)
 
 - Approval (existing field; set to 62 at the gate): +2 per public deploy (decays over 2 min), −0.5/min from jobs displaced while no mitigation, −6 Defense, +8 Safety Commitments, −8 customer data, −3 per incident, −8 unrestricted bio release.
-- Government relations (existing `govRelations`, 50): hearing cooperate +10 / deflect −8 / ask to be regulated +6; Defense +15; theft traced +10; incidents −3. Gates: Government contracts ≥ 55, Export Controls ≥ 60, Compute Cap ≥ 60.
+- Government relations (existing `govRelations`, 50): hearing cooperate +10 / deflect −8 / ask to be regulated +6; Defense +15; incidents −3. Gates: Government contracts ≥ 55, Export Controls ≥ 60, Compute Cap ≥ 60.
 - Jobs displaced: `0.02M × (demand share of Sage for Work)` per minute, shown in Public with a headline every 2M.
 - Protest: approval < 45 in Oct 2026 or later → crisis with options (jobs program $: approval +6; statement: +2; ignore: −4 and tempo +2).
 - Ultimatum: approval < 30 for 2 min (warning: "Calls grow to shut down OpenMind") → **Administration ultimatum** modal: accept oversight (relations +10, research −10% for the stage, flag `oversightEarly`) or refuse → **Emergency vote** (3 min, last chance: testify and concede / lobby with relations ≥ 60 / offer nationalization) → ending **Shutdown** (variant: nationalized if accepted).
 
 ### 6.8 Security and weight theft
 
-- Security Office project (Baiwen present) adds a row: "Security: SL1 · Upgrade to SL2 $5M". Levels SL1–SL4; each −3% research, theft odds 90/50/25/10%.
-- Weight theft fires once, at ≥ 5× with Baiwen present (and may fire again at ≥ 9× if SL ≤ 2). Roll vs level:
-  - Detected (modal, 45 s, default Cut): Cut the link (Baiwen ×1.4, revenue −20% for 2 min, tempo +8); Trace it (Baiwen → 0.85× ours, relations +10, tempo +15); Counter-hack (needs SL3: Baiwen −30% growth for 4 min, tempo +20, approval −3).
-  - Undetected: Baiwen → 0.85× silently; 3 min later "Wenshu-3 has our model's unusual errors."
-- Egress Monitoring project: theft always detected; seeds Stage 3 containment.
+- Security Office project (Baiwen present) adds a row: "Security: SL1 · Upgrade to SL2 $5M". Levels SL1–SL4; each −3% research and reduces the stolen share to 85/75/65/55%.
+- Weight theft fires once at ≥ 5×, at least 90 s after Baiwen enters. It always opens a crisis modal and immediately gives Baiwen the security-level share of Sage; egress monitoring reduces that share to 50%.
+- Egress Monitoring project: the theft gives Baiwen half a model.
 
 ### 6.9 Alignment arrives (strip under the console)
 
@@ -241,7 +239,7 @@ Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r`
 | s2_gov_contracts  | Government Contracts                      | hearing resolved, relations ≥ 55                            | 20k research                                    | lump + contracts ×1.5                             | "The Department of Energy would like 400 seats and a classified version."                           |
 | s2_mega_round     | Mega-round                                | 3× and 2 releases                                           | 150 insight                                     | opens the funding choice                          | "OpenMind raises more money than it can spell. The chart goes up."                                  |
 | s2_security       | Security Office                           | Baiwen present                                              | 10k research, $r 45                             | security row                                      | "Mo took the whiteboards out of the hallway."                                                       |
-| s2_egress         | Egress Monitoring                         | Security Office                                             | 15k research, $r 30                             | theft always detected; containment seed           | "Every byte leaving the building is now counted."                                                   |
+| s2_egress         | Egress Monitoring                         | Security Office                                             | 15k research, $r 30                             | Baiwen gets half a model in a theft               | "Every byte leaving the building is now counted."                                                   |
 | s2_export         | Export Controls Lobbying                  | Baiwen present, relations ≥ 60                              | 25k research                                    | Baiwen −25% growth 6 min, tempo +4                | "Chip exports restricted. Baiwen announces its own chips. Everyone checks the calendar."            |
 | s2_evals          | Dangerous Capability Evals                | 4×                                                          | 22k research, $r 45                             | Bio/Cyber rows; bio crisis becomes a choice       | "We now test whether Sage can help build a bioweapon. We would like the answer to stay no."         |
 | s2_alignment_team | Alignment Team                            | reward-hacking development (if `p_alignment_team` unbought) | 15k research, 50 insight                        | reveals the strip                                 | "We have an alignment team now. They have questions. So do we."                                     |
@@ -270,7 +268,6 @@ Costs marked `r` use `revealResearch` (seconds of research rate at reveal), `$r`
 | c_hearing         | Apr 2026, ≥ 2.5×               | Cooperate (relations +10, research −5% for 3 min) / Deflect (approval −5, relations −8) / Ask to be regulated (approval +5, tempo −3, Anthrosoft endorses)                                        | 60 s, Cooperate                                                    |
 | c_release         | every run after Release Policy | Deploy / Keep internal                                                                                                                                                                            | none; next run can't start until answered (unless pipeline queued) |
 | c_funding         | Mega-round                     | Growth capital / Patient capital                                                                                                                                                                  | none                                                               |
-| c_theft           | roll detected                  | Cut / Trace / Counter-hack (SL3)                                                                                                                                                                  | 45 s, Cut                                                          |
 | c_mini            | 6× and a public model          | Launch Sage-mini / Enterprise only                                                                                                                                                                | 60 s, Enterprise only                                              |
 | c_bio             | 8× with evals                  | Delay and add classifiers (revenue −30% 3 min, approval +5) / Release with classifiers (−$, 20% chance bio seed) / Release unrestricted (revenue ×1.3, approval −8, bio seed, near miss in 2 min) | 60 s, Delay                                                        |
 | c_defense         | 8× and Government panel        | Accept / Decline (approval +2)                                                                                                                                                                    | 60 s, Decline                                                      |
@@ -348,7 +345,7 @@ Milestones: (a) gate + infrastructure + training loop playable (minutes 0–10);
 
 ## 13. Build and testing
 
-- **Unit (vitest)**: data factor math; pipeline rules (second run waits, gate blocks with a queued run? no: it resolves first); drift and bias determinism; theft roll per security level; irrelevance countdown and Second Place; ultimatum → emergency vote → Shutdown; `migrate` v14 → v15; stage-exit flags; save/resume identical after 10 min of bot play.
+- **Unit (vitest)**: data factor math; pipeline rules (second run waits, gate blocks with a queued run? no: it resolves first); drift and bias determinism; one-off theft share by security level; irrelevance countdown and Second Place; ultimatum → emergency vote → Shutdown; `migrate` v14 → v15; stage-exit flags; save/resume identical after 10 min of bot play.
 - **Browser (`tools/verify/stage2.ts`, replaces `race.ts`)**: expected first-visible order for Stage 2 ids (`panel-infrastructure` rows, `proj-s2_chip_g5`, `panel-race`, `dataRow`, `proj-s2_pipeline`, `panel-public`, `panel-government`, `securityRow`, `alignmentStrip`, `proj-s2_automate`); per-beat control caps; no overflow at 390 px; modal focus; each dev checkpoint loads and plays 2 min without errors.
 - **Dev overlay**: backtick / `?dev=1`; Stage 2 checkpoints `#dev-s2-{arrival,datawall,baiwen,alignment,final}`; `?preview=stage2` with its own save key (as in the draft's `save.ts` change, re-done here).
 - **Critic loop** (existing tooling in `tools/critic/`):

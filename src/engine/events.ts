@@ -22,8 +22,24 @@ export function developmentById(id: string): DevelopmentDef | undefined {
 }
 
 export function choiceById(id: string): ChoiceDef | undefined {
-  return CHOICES.find((c) => c.id === id);
+  const choice = CHOICES.find((c) => c.id === id);
+  if (choice) return choice;
+  const crisis = crisisById(id);
+  if (!crisis) return undefined;
+  let fallback = crisisChoices.get(id);
+  if (!fallback) {
+    fallback = {
+      id,
+      title: crisis.title,
+      text: (s) => crisis.text(s),
+      options: [{ label: 'back to work', record: 'noted', effect: () => undefined }],
+    };
+    crisisChoices.set(id, fallback);
+  }
+  return fallback;
 }
+
+const crisisChoices = new Map<string, ChoiceDef>();
 
 export function updateDevelopments(s: GameState): void {
   for (const d of DEVELOPMENTS) {
@@ -41,7 +57,11 @@ export const EVENT_SPACING = 156;
 
 let calendarChoices: Set<string> | null = null;
 function isCalendarChoice(id: string): boolean {
-  calendarChoices ??= new Set(DEVELOPMENTS.filter((d) => d.calendar && d.choice).map((d) => d.choice!));
+  calendarChoices ??= new Set(
+    DEVELOPMENTS.filter((d) => d.calendar).flatMap((d) =>
+      d.choice ? [d.choice] : d.crisis ? [crisisById(d.crisis)?.choice ?? d.crisis] : [],
+    ),
+  );
   return calendarChoices.has(id);
 }
 
@@ -73,8 +93,7 @@ export function fireDevelopment(s: GameState, id: string): boolean {
   const d = developmentById(id);
   if (!d) return false;
   s.developments[id] = true;
-  if (d.crisis && d.choice) s.scheduled.push({ id: d.crisis, delay: 4 });
-  else if (d.crisis) fireCrisis(s, d.crisis);
+  if (d.crisis) fireCrisis(s, d.crisis);
   if (d.text) logNews(s, d.text);
   d.effect?.(s);
   if (d.choice) openChoice(s, d.choice, {});
@@ -89,20 +108,23 @@ export function pendingDevelopments(s: GameState): DevelopmentDef[] {
   return DEVELOPMENTS.filter((d) => !s.developments[d.id] && d.stage >= s.stage && d.stage <= s.stage + 1);
 }
 
-export function fireCrisis(s: GameState, id: string): boolean {
+export function fireCrisis(s: GameState, id: string, opts: { force?: boolean } = {}): boolean {
   const c = crisisById(id);
   if (!c) return false;
-  if (c.duration > 0) {
+  if (s.crises[id] !== undefined && !opts.force) return false;
+  s.crises[id] = s.stats.timePlayed;
+  if (c.duration && c.duration > 0) {
     s.effects.push({
       id: c.id,
       remaining: c.duration,
-      demandMult: c.demandMult,
+      demandMult: c.demandMult ?? 1,
     });
   }
-  c.effect(s);
+  const effects = c.effect?.(s) || '';
   if (c.console) say(s, c.console);
-  if (c.log) logNews(s, c.log);
+  logNews(s, c.log, 'crisis');
   s.stats.crises += 1;
+  openChoice(s, c.choice ?? c.id, { crisis: c.id, effects }, { force: true });
   return true;
 }
 
@@ -115,6 +137,21 @@ export function updateScheduled(s: GameState, dt: number): void {
   }
   s.scheduled = s.scheduled.filter((e) => e.delay > 0);
   for (const id of due) fireCrisis(s, id);
+}
+
+export function updateCrises(s: GameState): void {
+  if (s.ending || s.activeChoice) return;
+  for (const crisis of CRISES) {
+    if (
+      crisis.when &&
+      crisis.stage === s.stage &&
+      s.crises[crisis.id] === undefined &&
+      crisis.when(s)
+    ) {
+      fireCrisis(s, crisis.id);
+      return;
+    }
+  }
 }
 
 export function updateRival(s: GameState): void {
@@ -475,7 +512,7 @@ export function fireEvent(s: GameState, id: string): boolean {
     return true;
   }
   if (developmentById(id)) return fireDevelopment(s, id);
-  if (crisisById(id)) return fireCrisis(s, id);
+  if (crisisById(id)) return fireCrisis(s, id, { force: true });
   const choice = choiceById(id);
   if (choice) {
     const run = s.training.run;

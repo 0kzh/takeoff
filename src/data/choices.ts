@@ -2,10 +2,10 @@ import { GameState, Cost, TrainingRun, say, addFunds, logNews, counter } from '.
 import { BENCHMARKS, doRelease, runById, riskTier } from '../engine/training.js';
 import { chance, randInt } from '../engine/rng.js';
 import { fmtMoney, fmtMoneyShort, fmtNum } from '../engine/format.js';
-import { researchRate, bestCapability, researchCap } from '../engine/economy.js';
+import { researchRate, researchCap } from '../engine/economy.js';
 import { datacenterPrice } from './projects.js';
 import { rivalRelease, openChoice } from '../engine/events.js';
-import { moveTempo, BAIWEN_THEFT_RATIO } from '../engine/rivals.js';
+import { moveTempo } from '../engine/rivals.js';
 import { moveApproval, moveRelations, revealWorld } from '../engine/world.js';
 import { raiseAlignment } from '../engine/alignment.js';
 
@@ -615,63 +615,6 @@ export const CHOICES: ChoiceDef[] = [
           s.flags['revenueShareUntil'] = s.stats.timePlayed + 360;
         },
         log: 'OpenMind takes patient capital. The fund\'s partner asks to sit in on safety reviews, and does.',
-      },
-    ],
-  },
-  {
-    id: 'c_theft',
-    title: 'Weight Theft',
-    // The percentage is rolled when the dialog opens; text() runs during render
-    // on a frozen snapshot and must not touch the state.
-    onOpen: (s) => {
-      s.flags['theftPercent'] = randInt(s, 30, 70);
-    },
-    text: (s) => [
-      'Anomalous egress from Training Cluster 3.',
-      `${typeof s.flags['theftPercent'] === 'number' ? s.flags['theftPercent'] : 50}% of the weights have already left the building.`,
-    ],
-    timer: 45,
-    defaultOption: 0,
-    options: [
-      {
-        label: 'cut the link',
-        record: 'cut',
-        tooltip: 'Baiwen gets a partial copy: its model jumps 40%. Revenue −20% for two minutes. Tempo +8.',
-        line: 'Baiwen ×1.4 · revenue −20% for 2:00 · tempo +8',
-        effect: (s) => {
-          s.baiwen.capability *= 1.4;
-          s.effects.push({ id: 'theftCut', remaining: 120, demandMult: 0.8 });
-          moveTempo(s, 8);
-          say(s, 'Link cut. Baiwen got about half. Wenshu will look familiar.');
-        },
-        log: 'OpenMind cuts a cluster off the network mid-transfer. Baiwen gets about half of a frontier model.',
-      },
-      {
-        label: 'trace it',
-        record: 'traced',
-        tooltip: 'Let it run to trace the route. Baiwen gets the full model (0.85× yours). Relations +10. Tempo +15.',
-        line: 'Baiwen to 0.85× · relations +10 · tempo +15',
-        effect: (s) => {
-          s.baiwen.capability = Math.max(s.baiwen.capability, BAIWEN_THEFT_RATIO * bestCapability(s));
-          moveRelations(s, 10);
-          moveTempo(s, 15);
-          say(s, 'Traced to the Wenshan zone. The intelligence agencies send a fruit basket.');
-        },
-        log: 'OpenMind traces a weight theft to the Wenshan Compute Zone. The weights are already there.',
-      },
-      {
-        label: 'counter-hack',
-        record: 'counter-hacked',
-        tooltip: 'Needs security level 3. Baiwen\'s growth −30% for four minutes. Tempo +20. Approval −3.',
-        line: 'needs SL3 · Baiwen slowed 4:00 · tempo +20 · approval −3',
-        enabled: (s) => s.security >= 3,
-        effect: (s) => {
-          s.flags['exportControlsUntil'] = Math.max(Number(s.flags['exportControlsUntil'] ?? 0), s.stats.timePlayed + 240);
-          moveTempo(s, 20);
-          moveApproval(s, -3);
-          say(s, 'Counter-hack done. Baiwen\'s training cluster reboots into a screensaver.');
-        },
-        log: 'Someone turns Baiwen\'s training cluster into a screensaver for a day. Nobody claims it.',
       },
     ],
   },
