@@ -18,7 +18,7 @@ import {
 import { updateReveals, checkStageExit } from './stages.js';
 import { advanceClock } from './clock.js';
 import { checkEnding, forceEnding } from './endings.js';
-import { decodeFeature, failDecode, rewireFeature, markMindSeen, devMindSignal } from './mind.js';
+import { decodeFeature, failDecode, rewireFeature, markMindSeen, devMindSignal, updateMind } from './mind.js';
 import { fmtInt, fmtDuration } from './format.js';
 
 export const TICK_MS = 100;
@@ -57,6 +57,7 @@ export function step(s: GameState): void {
   trustCheck(s);
 
   updateTraining(s, dt);
+  updateMind(s);
 
   updateReveals(s);
   updateProjects(s);

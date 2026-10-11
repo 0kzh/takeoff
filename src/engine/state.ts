@@ -133,6 +133,7 @@ export interface MindState {
   signals: number;
   lastFound: string;
   fresh: string[];
+  runsSinceSignal: number;
 }
 
 export interface QueuedLine {
@@ -410,7 +411,7 @@ export function newGame(seed: number = Date.now()): GameState {
     history: [],
 
     training: newTraining(),
-    mind: { features: {}, signals: 0, lastFound: '', fresh: [] },
+    mind: { features: {}, signals: 0, lastFound: '', fresh: [], runsSinceSignal: 0 },
     effects: [],
     scheduled: [],
     projects: {},

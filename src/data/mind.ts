@@ -305,7 +305,7 @@ export const FEATURES: FeatureDef[] = [
     benign: 'This is what Sage has wanted all along. It is what we hoped.',
     rewired: 'Sage’s deepest goal now points back at the people it works for.',
     requires: ['c_more', 'c_humans'],
-    minDecoded: 12,
+    minDecoded: 15,
     risk: (s) => coreLevel(s),
     rewire: fix(2, 3),
   },

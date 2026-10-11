@@ -1,21 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame, useGameStore, usePerform } from '../../store/context.js';
 import { CIRCUITS, FEATURES, featureById, sageWants } from '../../data/mind.js';
-import { foundCount } from '../../engine/mind.js';
+import type { GameState } from '../../engine/state.js';
+import { foundCount, mindCapped } from '../../engine/mind.js';
 import { setMindPrefs, useMindPrefs } from '../../ui/mindPrefs.js';
 import { HexTree, nodeTitle, nodeViews, type NodeView } from './Trees.js';
 import { DecodeModal, ThoughtResult } from './Decode.js';
 import { CIRCUIT_COLOR } from './theme.js';
 
-const STATE_LINE: Record<NodeView, string> = {
+const STATE_LINE: Record<Exclude<NodeView, 'detectable'>, string> = {
   hidden: 'Nothing has lit up here yet. Decode what leads to it first.',
-  detectable: 'Something is active here. A training run will isolate it; safety-focused runs find more.',
   found: '',
   decoded: '',
   wired: '',
 };
 
+function detectableLine(s: GameState): string {
+  if (mindCapped(s))
+    return 'Something is active here, too faint to isolate yet. It will sharpen as Sage grows.';
+  if (s.stage >= 4) return 'Something is active here. The monitors will isolate it.';
+  return 'Something is active here. A training run will isolate it; safety-focused runs find it sooner.';
+}
+
 function FeatureCard({ id, view, onDecode }: { id: string; view: NodeView; onDecode: () => void }) {
+  const s = useGame();
   const def = featureById(id)!;
   const circuit = CIRCUITS.find((c) => c.id === def.circuit)!;
   return (
@@ -38,7 +46,7 @@ function FeatureCard({ id, view, onDecode }: { id: string; view: NodeView; onDec
       ) : view === 'decoded' || view === 'wired' ? (
         <ThoughtResult id={id} />
       ) : (
-        <div className="mindCardState">{STATE_LINE[view]}</div>
+        <div className="mindCardState">{view === 'detectable' ? detectableLine(s) : STATE_LINE[view]}</div>
       )}
     </div>
   );

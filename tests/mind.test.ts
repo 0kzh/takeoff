@@ -9,9 +9,13 @@ import {
   decodedCount,
   foundCount,
   mindSignal,
+  mindCapped,
+  lastFoundAt,
+  updateMind,
   decodeFeature,
   failDecode,
   rewireFeature,
+  MIND_LATE_GAP,
 } from '../src/engine/mind.js';
 import { decodeDifficulty, makePuzzle, puzzleSeed, chunkIndex } from '../src/engine/decode.js';
 import { revealAlignment } from '../src/engine/alignment.js';
@@ -45,6 +49,7 @@ function decodeAll(s: GameState, ids: string[]): void {
 describe('Mind frontier', () => {
   it('opens with the three non-core roots and gates the core tree on decodes', () => {
     const s = arrival();
+    s.stage = 5; // lift the stage cap so the whole frontier can be walked
     expect(
       frontier(s)
         .map((f) => f.id)
@@ -59,7 +64,7 @@ describe('Mind frontier', () => {
     expect(mindSignal(s)).not.toBeNull();
     expect(decodeFeature(s, s.mind.lastFound, 0)).toBe(true);
     expect(frontier(s).map((f) => f.id)).toContain('c_task');
-    // c_want needs c_more + c_humans decoded and 12 total decodes.
+    // c_want needs c_more + c_humans decoded and 15 total decodes.
     decodeAll(
       s,
       FEATURES.filter((f) => f.id !== 'c_want').map((f) => f.id),
@@ -74,28 +79,82 @@ describe('Mind frontier', () => {
 });
 
 describe('Mind signals from runs', () => {
-  it('a Stage 2 run emits two signals, three on safety focus, and the first reveals mind', () => {
+  // Runs a training run to completion (or past the signal point) and drops it,
+  // returning how many new features lit up.
+  function runOnce(s: GameState, ticks = 120): number {
+    startRun(s);
+    const before = Object.keys(s.mind.features).length;
+    runTicks(s, ticks);
+    s.training.run = null;
+    return Object.keys(s.mind.features).length - before;
+  }
+
+  it('the first Stage 2 run lights exactly one feature, early, and reveals mind', () => {
     const s = arrival();
     startRun(s);
-    runTicks(s, 55);
-    expect(s.training.run!.mindSignals).toBe(2);
-    expect(s.mind.signals).toBe(2);
-    expect(foundCount(s)).toBe(2);
+    runTicks(s, 30); // past 40% of a 50s run
+    expect(foundCount(s)).toBe(1);
+    expect(s.mind.signals).toBe(1);
     expect(s.revealed['mind']).toBe(true);
-    expect(s.mind.fresh).toHaveLength(2);
+    expect(s.mind.fresh).toHaveLength(1);
+    runTicks(s, 30); // the rest of the run adds nothing
+    expect(foundCount(s)).toBe(1);
+    expect(s.mind.signals).toBe(1);
+  });
 
-    const s2 = arrival();
-    s2.training.focus = 'safety';
-    startRun(s2);
-    runTicks(s2, 55);
-    expect(s2.training.run!.mindSignals).toBe(3);
-    expect(foundCount(s2)).toBe(3);
+  it('lights every third capability run after the first', () => {
+    const s = arrival();
+    expect(runOnce(s)).toBe(1); // first run reveals
+    expect(runOnce(s)).toBe(0);
+    expect(runOnce(s)).toBe(0);
+    expect(runOnce(s)).toBe(1);
+    expect(runOnce(s)).toBe(0);
+  });
+
+  it('a safety-focus run lights a feature even right after one lit', () => {
+    const s = arrival();
+    expect(runOnce(s)).toBe(1);
+    s.training.focus = 'safety';
+    expect(runOnce(s)).toBe(1);
+  });
+
+  it('stops at the stage cap without bumping signals; force bypasses the cap', () => {
+    const s = arrival();
+    while (Object.keys(s.mind.features).length < 8) {
+      const id = mindSignal(s);
+      expect(id).not.toBeNull();
+      expect(decodeFeature(s, id!, 0)).toBe(true);
+    }
+    expect(mindCapped(s)).toBe(true);
+    const signals = s.mind.signals;
+    expect(mindSignal(s)).toBeNull();
+    expect(s.mind.signals).toBe(signals);
+    expect(mindSignal(s, undefined, undefined, true)).not.toBeNull();
+    expect(s.mind.signals).toBe(signals + 1);
+  });
+
+  it('stage 4 monitors light one feature per MIND_LATE_GAP since the last find', () => {
+    const s = arrival();
+    s.stage = 4;
+    expect(mindSignal(s)).not.toBeNull();
+    const found = () => Object.keys(s.mind.features).length;
+    runTicks(s, MIND_LATE_GAP - 5);
+    expect(found()).toBe(1);
+    runTicks(s, 6);
+    expect(found()).toBe(2);
+    // the next find waits a full gap from the previous one
+    while (s.stats.timePlayed - lastFoundAt(s) < MIND_LATE_GAP - 1) step(s);
+    expect(found()).toBe(2);
+    runTicks(s, 2);
+    expect(found()).toBe(3);
   });
 
   it('does not touch the game rng stream', () => {
     const s = arrival();
     const before = s.rngSeed;
     mindSignal(s);
+    expect(s.rngSeed).toBe(before);
+    updateMind(s);
     expect(s.rngSeed).toBe(before);
   });
 
@@ -105,6 +164,8 @@ describe('Mind signals from runs', () => {
       s.mind.features[f.id] = { status: 'decoded', foundAt: 0, attempts: 1, flawless: true, wiring: 'leave' };
     const lines = s.console.length;
     expect(mindSignal(s)).toBeNull();
+    expect(s.mind.signals).toBe(0); // the cap blocks it before signals is bumped
+    expect(mindSignal(s, undefined, undefined, true)).toBeNull();
     expect(s.console.length).toBe(lines);
     expect(s.mind.signals).toBe(1);
   });
@@ -323,7 +384,7 @@ describe('Mind persistence', () => {
     delete raw['mind'];
     const s = deserialize(JSON.stringify(raw))!;
     expect(s).not.toBeNull();
-    expect(s.mind).toEqual({ features: {}, signals: 0, lastFound: '', fresh: [] });
+    expect(s.mind).toEqual({ features: {}, signals: 0, lastFound: '', fresh: [], runsSinceSignal: 0 });
     expect(featureStatus(s, 'w_reviewer')).toBe('locked');
   });
 });

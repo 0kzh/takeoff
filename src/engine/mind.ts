@@ -7,6 +7,31 @@ import { CIRCUITS, FEATURES, featureById, isMalicious, thoughtOf, type CircuitId
 // in a minigame, then rewires it. Each decode tightens the alignment band, even
 // before the band itself is on screen.
 
+// One feature per third capability run (safety runs always find one), with a
+// per-stage cap so later stages still have something left to light up. Past
+// Stage 4 the training panel is hidden, so the monitors pick up the slack.
+export const MIND_RUN_EVERY = 3;
+
+// Cumulative found-or-decoded features allowed per stage (stage 1: none).
+export const MIND_STAGE_CAP: Record<number, number> = { 2: 8, 3: 13, 4: 15, 5: 16 };
+
+// Stage 4+ non-training source: one feature per gap since the last find.
+export const MIND_LATE_GAP = 240;
+
+export function mindCapped(s: GameState): boolean {
+  return Object.keys(s.mind.features).length >= (MIND_STAGE_CAP[s.stage] ?? (s.stage > 5 ? 16 : 0));
+}
+
+export function lastFoundAt(s: GameState): number {
+  return Math.max(-Infinity, ...Object.values(s.mind.features).map((f) => f.foundAt));
+}
+
+export function updateMind(s: GameState): void {
+  if (s.stage < 4) return;
+  if (!s.revealed['mind']) return;
+  if (s.stats.timePlayed - lastFoundAt(s) >= MIND_LATE_GAP) mindSignal(s, undefined, 'Monitors');
+}
+
 export function featureStatus(s: GameState, id: string): MindStatus {
   return s.mind.features[id]?.status ?? 'locked';
 }
@@ -29,7 +54,10 @@ export function frontier(s: GameState): FeatureDef[] {
   );
 }
 
-export function mindSignal(s: GameState, prefer?: CircuitId, source?: string): string | null {
+export function mindSignal(s: GameState, prefer?: CircuitId, source?: string, force = false): string | null {
+  // Blocked attempts must not shift the rng-seed derivation, so return before
+  // s.mind.signals is bumped.
+  if (!force && mindCapped(s)) return null;
   const list = frontier(s);
   let def: FeatureDef | undefined;
   if (list.length) {
@@ -95,5 +123,5 @@ export function markMindSeen(s: GameState): boolean {
 }
 
 export function devMindSignal(s: GameState): boolean {
-  return mindSignal(s, undefined, 'Dev') !== null;
+  return mindSignal(s, undefined, 'Dev', true) !== null;
 }
