@@ -16,6 +16,7 @@ import {
   failDecode,
   rewireFeature,
   MIND_LATE_GAP,
+  MIND_RUN_EVERY,
 } from '../src/engine/mind.js';
 import { decodeDifficulty, makePuzzle, puzzleSeed, chunkIndex } from '../src/engine/decode.js';
 import { revealAlignment } from '../src/engine/alignment.js';
@@ -116,6 +117,21 @@ describe('Mind signals from runs', () => {
     expect(runOnce(s)).toBe(1);
     s.training.focus = 'safety';
     expect(runOnce(s)).toBe(1);
+  });
+
+  it('suppresses a run signal within 90 s of a find from another source', () => {
+    const s = arrival();
+    expect(runOnce(s)).toBe(1); // first run reveals; later runs attempt at 85%
+    s.mind.runsSinceSignal = MIND_RUN_EVERY - 1; // the next run is eligible
+    startRun(s);
+    runTicks(s, 30); // ~60% through the run, before the 85% attempt
+    expect(mindSignal(s, undefined, 'Sparse autoencoders')).not.toBeNull();
+    const foundAt = lastFoundAt(s);
+    runTicks(s, 90); // the run's attempt lands <90 s after the project find
+    expect(lastFoundAt(s)).toBe(foundAt); // it lit nothing
+    expect(s.mind.runsSinceSignal).toBe(MIND_RUN_EVERY); // kept, not reset
+    s.training.run = null;
+    expect(runOnce(s)).toBe(1); // the following run lights it
   });
 
   it('stops at the stage cap without bumping signals; force bypasses the cap', () => {

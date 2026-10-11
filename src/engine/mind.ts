@@ -18,6 +18,9 @@ export const MIND_STAGE_CAP: Record<number, number> = { 2: 8, 3: 13, 4: 15, 5: 1
 // Stage 4+ non-training source: one feature per gap since the last find.
 export const MIND_LATE_GAP = 240;
 
+// Run signals can't land within this many seconds of another find.
+export const MIND_RUN_SPACING = 90;
+
 export function mindCapped(s: GameState): boolean {
   return Object.keys(s.mind.features).length >= (MIND_STAGE_CAP[s.stage] ?? (s.stage > 5 ? 16 : 0));
 }
