@@ -20,7 +20,7 @@ import {
   S2_RUN_MAX,
 } from '../src/engine/training.js';
 import { applyDrift } from '../src/engine/alignment.js';
-import { updateIrrelevance, IRRELEVANCE_SECONDS } from '../src/engine/rivals.js';
+import { updateBaiwen, updateIrrelevance, IRRELEVANCE_SECONDS } from '../src/engine/rivals.js';
 import { updateWorld, ULTIMATUM_SECONDS } from '../src/engine/world.js';
 import {
   chipMult,
@@ -257,7 +257,7 @@ describe('Stage 2 world', () => {
     s.baiwen.capability = 2;
     s.capability = 6;
     s.training.internalCapability = 6;
-    s.security = 1;
+    s.security = 3;
     const crisesBefore = s.stats.crises;
 
     updateCrises(s);
@@ -265,7 +265,7 @@ describe('Stage 2 world', () => {
     expect(s.activeChoice?.id).toBe('cr_theft');
     expect(s.activeChoice?.context['crisis']).toBe('cr_theft');
     expect(s.activeChoice?.context['effects']).toMatch(/^Baiwen .*× → .*× · tempo \+8$/);
-    expect(s.baiwen.capability).toBeCloseTo(0.85 * 6);
+    expect(s.baiwen.capability).toBeCloseTo(0.65 * 6);
     expect(s.log.at(-1)?.kind).toBe('crisis');
     actions.resolveChoice(s, 0);
     updateCrises(s);
@@ -310,11 +310,46 @@ describe('Stage 2 world', () => {
     updateCrises(tooWeak);
     expect(tooWeak.activeChoice).toBeNull();
 
+    const maxed = makeReady();
+    maxed.security = 4;
+    updateCrises(maxed);
+    expect(maxed.activeChoice).toBeNull();
+    expect(maxed.crises['cr_theft']).toBeUndefined();
+
     const occupied = makeReady();
     occupied.activeChoice = { id: 'c_rival', remaining: 0, context: {} };
     updateCrises(occupied);
     expect(occupied.activeChoice?.id).toBe('c_rival');
     expect(occupied.crises['cr_theft']).toBeUndefined();
+  });
+
+  it('enters Baiwen at 180 seconds once the Race panel is visible', () => {
+    const s = arrival();
+    s.flags['stage2At'] = 0;
+    s.stats.timePlayed = 179;
+    s.revealed['race'] = false;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(false);
+
+    s.revealed['race'] = true;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(false);
+
+    s.stats.timePlayed = 180;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(true);
+    expect(s.flags['baiwenAt']).toBe(180);
+  });
+
+  it('treats a missing Stage 2 start time as elapsed once Race is visible', () => {
+    const s = arrival();
+    delete s.flags['stage2At'];
+    s.stats.timePlayed = 1;
+    s.revealed['race'] = true;
+
+    updateBaiwen(s);
+
+    expect(s.baiwen.present).toBe(true);
   });
 
   it('migrates saves with a completed theft and removes its old modal and schedule', () => {

@@ -95,7 +95,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 | ~10:30                          | Apr 2026 and ≥ 2.5×             | Crisis: **Senate hearing** → **Public** and **Government** panels                                                                       | "Senator Albright asks whether Sage could testify instead."                               |
 | ~12:00                          | 3 datacenters                   | **Hyperscale Campuses** project (×10 room per datacenter)                                                                               | "Abilene wants a second substation. Abilene gets a second substation."                    |
 | ~14:00                          | 3×                              | **Sage for Work** product; **Mega-round** funding                                                                                       | "Sage for Work attends meetings so you don't have to. The meetings remain."               |
-| ~17:30                          | Jun 2026                        | **Baiwen** joins the graph at 0.35×; tempo gauge; **Security Office** project                                                           | "Baiwen consolidates China's labs into the Wenshan Compute Zone. Wenshu-1 is 'adequate'." |
+| ~3:00 into Stage 2              | 180 s elapsed; Race is visible  | **Baiwen** joins the graph at 0.35×; tempo gauge; **Security Office** project                                                           | "Baiwen consolidates China's labs into the Wenshan Compute Zone. Wenshu-1 is 'adequate'." |
 | ~19:00                          | Security Office bought          | Security row (SL1 → SL4) in Infrastructure                                                                                              | "Mo took the whiteboards out of the hallway."                                             |
 | ~20:00                          | Sage for Work live for 2 min    | Jobs displaced counter in Public; first job-loss headlines                                                                              | "The Ledger: junior developer hiring falls for a third quarter."                          |
 | ~22:00                          | 4× (Sage-3)                     | Development: reward hacking → **Alignment Team** (if unbought) → **Alignment strip** fills: `60 ± 30`; Model Spec, CoT Monitoring chain | "Kit: it didn't fix the code. it fixed the tests."                                        |
@@ -183,7 +183,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 ### 6.6 Rivals and the race graph (right column)
 
 - Anthrosoft: existing `rivalRelease` cadence (240–420 s) with the rubber band, now multiplied by tempo (`interval × (1.4 − tempo/125)`) and +5% on each of our public deploys.
-- Baiwen: new `baiwen: { present, capability, version, nextIn }`. Enters Jun 2026 at 0.35× ours; growth = rubber band toward 0.6× ours, faster at high tempo; export controls slow it; theft gives it the security-level share of our model (50% with egress monitoring).
+- Baiwen: new `baiwen: { present, capability, version, nextIn }`. Enters 3 min into Stage 2 after the Race panel appears, at 0.35× ours; growth = rubber band toward 0.6× ours, faster at high tempo; export controls slow it; theft gives it the security-level share of our model (50% with egress monitoring).
 - Tempo (0–100, hidden until Baiwen, then a gauge on the graph): starts 50; +3 per deploy, +5 funding, +5 Defense, +8 theft; −3 Safety Commitments, −15 Compute Cap; drifts 1/min toward 50. Feeds rival speed and alignment drift.
 - Lead (months, existing field): `log(ours/baiwen) / log(2) × baiwenDoublingMonths`. Shown in Government panel as "Lead over Baiwen: N months".
 - Graph: inline SVG, `viewBox 0 0 360 140`, x = calendar from Jul 2025 to now + 3 months, y = log capability 0.5× to 4× the max line. Lines: OpenMind solid, Anthrosoft dashed, Baiwen dotted, our dotted projection at the current rate. Tier lines with labels, event markers (⚠ theft, ↑ release). Sampled every 5 s into `history` (capped 720 points; saved).
@@ -200,7 +200,7 @@ Gate line, centered for 1.5 s, then dropped into the console: _"First Datacenter
 ### 6.8 Security and weight theft
 
 - Security Office project (Baiwen present) adds a row: "Security: SL1 · Upgrade to SL2 $5M". Levels SL1–SL4; each −3% research and reduces the stolen share to 85/75/65/55%.
-- Weight theft fires once at ≥ 5×, at least 90 s after Baiwen enters. It always opens a crisis modal and immediately gives Baiwen the security-level share of Sage; egress monitoring reduces that share to 50%.
+- Weight theft fires once at ≥ 5×, at least 90 s after Baiwen enters, and only below security level 4. It always opens a crisis modal and immediately gives Baiwen the security-level share of Sage; egress monitoring reduces that share to 50%.
 - Egress Monitoring project: the theft gives Baiwen half a model.
 
 ### 6.9 Alignment arrives (strip under the console)

@@ -1,6 +1,6 @@
 import { isBought, type GameState } from '../engine/state.js';
 import { fmtNum } from '../engine/format.js';
-import { theftShare } from '../engine/economy.js';
+import { SECURITY_MAX, theftShare } from '../engine/economy.js';
 import { THEFT_CAPABILITY, THEFT_DELAY_SECONDS, moveTempo } from '../engine/rivals.js';
 
 export interface CrisisDef {
@@ -60,6 +60,7 @@ export const CRISES: CrisisDef[] = [
       return (
         s.baiwen.present &&
         sinceBaiwen >= THEFT_DELAY_SECONDS &&
+        s.security < SECURITY_MAX &&
         Math.max(s.capability, s.training.internalCapability) >= THEFT_CAPABILITY
       );
     },

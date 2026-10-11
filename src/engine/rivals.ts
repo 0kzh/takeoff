@@ -1,11 +1,11 @@
 import { GameState, say, logNews, counter } from './state.js';
-import { monthOf, fmtNum } from './format.js';
+import { fmtNum } from './format.js';
 import { openChoice } from './events.js';
 
 // Rivals are the clock. Anthrosoft rubber-bands to the player; Baiwen enters
-// mid-2026 far behind and catches up, faster when the race is hot or after a
-// theft. Tempo (0–100) is how hard the whole field is running.
-export const BAIWEN_MONTH = monthOf(2026, 6);
+// about three minutes into Stage 2 and catches up, faster when the race is hot
+// or after a theft. Tempo (0–100) is how hard the whole field is running.
+export const BAIWEN_DELAY_SECONDS = 180;
 export const BAIWEN_ENTRY = 0.35;
 export const BAIWEN_TARGET = 0.6;
 export const BAIWEN_DOUBLING_SECONDS = 540;
@@ -61,7 +61,9 @@ function baiwenGrowthPerSec(s: GameState): number {
 export function updateBaiwen(s: GameState): void {
   if (s.stage < 2) return;
   if (!s.baiwen.present) {
-    if (s.date >= BAIWEN_MONTH) enterBaiwen(s);
+    const stage2At = s.flags['stage2At'];
+    const sinceStage2 = typeof stage2At === 'number' ? s.stats.timePlayed - stage2At : BAIWEN_DELAY_SECONDS;
+    if (s.revealed['race'] === true && sinceStage2 >= BAIWEN_DELAY_SECONDS) enterBaiwen(s);
     return;
   }
   s.baiwen.capability *= Math.exp(baiwenGrowthPerSec(s));
