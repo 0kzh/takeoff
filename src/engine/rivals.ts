@@ -1,13 +1,11 @@
-import { GameState, say, logNews, isBought, counter } from './state.js';
-import { chance } from './rng.js';
-import { monthOf, fmtNum } from './format.js';
-import { theftOdds } from './economy.js';
+import { GameState, say, logNews, counter } from './state.js';
+import { fmtNum } from './format.js';
 import { openChoice } from './events.js';
 
 // Rivals are the clock. Anthrosoft rubber-bands to the player; Baiwen enters
-// mid-2026 far behind and catches up, faster when the race is hot or after a
-// theft. Tempo (0–100) is how hard the whole field is running.
-export const BAIWEN_MONTH = monthOf(2026, 6);
+// about three minutes into Stage 2 and catches up, faster when the race is hot
+// or after a theft. Tempo (0–100) is how hard the whole field is running.
+export const BAIWEN_DELAY_SECONDS = 180;
 export const BAIWEN_ENTRY = 0.35;
 export const BAIWEN_TARGET = 0.6;
 export const BAIWEN_DOUBLING_SECONDS = 540;
@@ -16,10 +14,8 @@ export const EXPORT_CONTROL_SECONDS = 360;
 export const TEMPO_DRIFT_PER_MIN = 1;
 export const IRRELEVANCE_RATIO = 4;
 export const IRRELEVANCE_SECONDS = 180;
-export const THEFT_CAPABILITY = 5;
-export const THEFT_DELAY_SECONDS = 240;
-export const THEFT_RETRY_GAP_SECONDS = 300;
-export const THEFT_RETRY_CAPABILITY = 9;
+export const THEFT_CAPABILITY = 2.5;
+export const THEFT_DELAY_SECONDS = 90;
 export const HISTORY_LIMIT = 720;
 export const SAMPLE_EVERY = 5;
 
@@ -65,7 +61,9 @@ function baiwenGrowthPerSec(s: GameState): number {
 export function updateBaiwen(s: GameState): void {
   if (s.stage < 2) return;
   if (!s.baiwen.present) {
-    if (s.date >= BAIWEN_MONTH) enterBaiwen(s);
+    const stage2At = s.flags['stage2At'];
+    const sinceStage2 = typeof stage2At === 'number' ? s.stats.timePlayed - stage2At : BAIWEN_DELAY_SECONDS;
+    if (s.revealed['race'] === true && sinceStage2 >= BAIWEN_DELAY_SECONDS) enterBaiwen(s);
     return;
   }
   s.baiwen.capability *= Math.exp(baiwenGrowthPerSec(s));
@@ -115,29 +113,6 @@ export function distill(s: GameState): void {
 export function labStalled(s: GameState): boolean {
   const at = s.flags['lastReleaseAt'];
   return typeof at !== 'number' || s.stats.timePlayed - at > 600;
-}
-
-export function updateTheft(s: GameState): void {
-  if (s.stage < 2 || !s.baiwen.present) return;
-  const rolls = counter(s, 'theftRolls');
-  const since = typeof s.flags['baiwenAt'] === 'number' ? s.stats.timePlayed - (s.flags['baiwenAt'] as number) : 0;
-  if (since < THEFT_DELAY_SECONDS) return;
-  const cap = Math.max(s.capability, s.training.internalCapability);
-  const lastRoll = typeof s.flags['theftRollAt'] === 'number' ? (s.flags['theftRollAt'] as number) : -Infinity;
-  const rested = s.stats.timePlayed - lastRoll >= THEFT_RETRY_GAP_SECONDS;
-  const due = rolls === 0 ? cap >= THEFT_CAPABILITY : rolls === 1 && rested && s.security <= 1 && cap >= THEFT_RETRY_CAPABILITY;
-  if (!due || s.activeChoice) return;
-  s.flags['theftRolls'] = rolls + 1;
-  s.flags['theftRollAt'] = s.stats.timePlayed;
-  const detected = isBought(s, 's2_egress') || !chance(s, theftOdds(s));
-  if (detected) {
-    openChoice(s, 'c_theft', {}, { force: true });
-    return;
-  }
-  s.baiwen.capability = Math.max(s.baiwen.capability, BAIWEN_THEFT_RATIO * cap);
-  moveTempo(s, 8);
-  s.flags['theftUndetected'] = true;
-  s.scheduled.push({ id: 'cr_theft_discovered', delay: 180 });
 }
 
 export function updateIrrelevance(s: GameState): void {

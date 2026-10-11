@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, serialize, deserialize, SAVE_VERSION, type GameState } from '../src/engine/state.js';
+import {
+  newGame,
+  serialize,
+  deserialize,
+  migrate,
+  SAVE_VERSION,
+  type GameState,
+} from '../src/engine/state.js';
 import { actions, step, tick } from '../src/engine/tick.js';
 import { presetFor, stage2Checkpoint } from '../src/data/presets.js';
 import { newBotMemory, policyStep } from '../src/sim/policy.js';
@@ -13,7 +20,7 @@ import {
   S2_RUN_MAX,
 } from '../src/engine/training.js';
 import { applyDrift } from '../src/engine/alignment.js';
-import { updateTheft, updateIrrelevance, enterBaiwen, IRRELEVANCE_SECONDS } from '../src/engine/rivals.js';
+import { updateBaiwen, updateIrrelevance, IRRELEVANCE_SECONDS } from '../src/engine/rivals.js';
 import { updateWorld, ULTIMATUM_SECONDS } from '../src/engine/world.js';
 import {
   chipMult,
@@ -24,10 +31,11 @@ import {
   humanResearchShare,
   gpuBlock,
   gpuBatchCost,
+  theftShare,
 } from '../src/engine/economy.js';
 import { dayLabel } from '../src/engine/format.js';
 import { projectById, buyProject, visibleProjects } from '../src/engine/projects.js';
-import { choiceById } from '../src/engine/events.js';
+import { choiceById, fireDevelopment, updateCrises } from '../src/engine/events.js';
 
 function arrival(seed = 1): GameState {
   return presetFor(2).build(seed);
@@ -241,31 +249,137 @@ describe('Stage 2 world', () => {
     expect(hot.alignmentTrue).toBeLessThan(calm.alignmentTrue);
   });
 
-  it('rolls theft against the security level and always detects it with egress monitoring', () => {
-    const silent = arrival(3);
-    enterBaiwen(silent);
-    silent.flags['baiwenAt'] = -1000;
-    silent.capability = 6;
-    silent.security = 1;
-    let detected = 0;
-    for (let seed = 0; seed < 40; seed++) {
-      const s = arrival(seed);
-      enterBaiwen(s);
-      s.flags['baiwenAt'] = -1000;
+  it('fires a one-off theft crisis and applies the visible stolen share', () => {
+    const s = arrival(3);
+    s.stats.timePlayed = 90;
+    s.flags['baiwenAt'] = 0;
+    s.baiwen.present = true;
+    s.baiwen.capability = 2;
+    s.capability = 6;
+    s.training.internalCapability = 6;
+    s.security = 3;
+    const crisesBefore = s.stats.crises;
+
+    updateCrises(s);
+
+    expect(s.activeChoice?.id).toBe('cr_theft');
+    expect(s.activeChoice?.context['crisis']).toBe('cr_theft');
+    expect(s.activeChoice?.context['effects']).toMatch(/^Baiwen .*× → .*× · tempo \+8$/);
+    expect(s.baiwen.capability).toBeCloseTo(0.65 * 6);
+    expect(s.log.at(-1)?.kind).toBe('crisis');
+    actions.resolveChoice(s, 0);
+    updateCrises(s);
+    expect(s.activeChoice).toBeNull();
+    expect(s.stats.crises).toBe(crisesBefore + 1);
+  });
+
+  it.each([
+    { security: 1, share: 0.85, egress: false },
+    { security: 2, share: 0.75, egress: false },
+    { security: 3, share: 0.65, egress: false },
+    { security: 4, share: 0.55, egress: false },
+    { security: 1, share: 0.5, egress: true },
+  ])(
+    'sets the theft share at security level $security with egress=$egress',
+    ({ security, share, egress }) => {
+      const s = arrival();
+      s.security = security;
+      if (egress) s.projects['s2_egress'] = { shown: true, bought: 1 };
+      expect(theftShare(s)).toBe(share);
+    },
+  );
+
+  it('waits 90 seconds, requires 2.5× capability, and waits for another choice to close', () => {
+    const makeReady = () => {
+      const s = arrival();
+      s.stats.timePlayed = 100;
+      s.flags['baiwenAt'] = 10;
+      s.baiwen.present = true;
       s.capability = 6;
-      s.security = 1;
-      updateTheft(s);
-      if (s.activeChoice?.id === 'c_theft') detected++;
-      else expect(s.baiwen.capability).toBeGreaterThanOrEqual(0.85 * 6);
-    }
-    expect(detected).toBeLessThan(20);
-    const watched = arrival(4);
-    enterBaiwen(watched);
-    watched.flags['baiwenAt'] = -1000;
-    watched.capability = 6;
-    watched.projects['s2_egress'] = { shown: true, bought: 1 };
-    updateTheft(watched);
-    expect(watched.activeChoice?.id).toBe('c_theft');
+      s.training.internalCapability = 6;
+      return s;
+    };
+    const tooSoon = makeReady();
+    tooSoon.stats.timePlayed = 99.9;
+    updateCrises(tooSoon);
+    expect(tooSoon.activeChoice).toBeNull();
+
+    const tooWeak = makeReady();
+    tooWeak.capability = 2.4;
+    tooWeak.training.internalCapability = 2.4;
+    updateCrises(tooWeak);
+    expect(tooWeak.activeChoice).toBeNull();
+
+    const maxed = makeReady();
+    maxed.security = 4;
+    updateCrises(maxed);
+    expect(maxed.activeChoice).toBeNull();
+    expect(maxed.crises['cr_theft']).toBeUndefined();
+
+    const occupied = makeReady();
+    occupied.activeChoice = { id: 'c_rival', remaining: 0, context: {} };
+    updateCrises(occupied);
+    expect(occupied.activeChoice?.id).toBe('c_rival');
+    expect(occupied.crises['cr_theft']).toBeUndefined();
+  });
+
+  it('enters Baiwen at 180 seconds once the Race panel is visible', () => {
+    const s = arrival();
+    s.flags['stage2At'] = 0;
+    s.stats.timePlayed = 179;
+    s.revealed['race'] = false;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(false);
+
+    s.revealed['race'] = true;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(false);
+
+    s.stats.timePlayed = 180;
+    updateBaiwen(s);
+    expect(s.baiwen.present).toBe(true);
+    expect(s.flags['baiwenAt']).toBe(180);
+  });
+
+  it('treats a missing Stage 2 start time as elapsed once Race is visible', () => {
+    const s = arrival();
+    delete s.flags['stage2At'];
+    s.stats.timePlayed = 1;
+    s.revealed['race'] = true;
+
+    updateBaiwen(s);
+
+    expect(s.baiwen.present).toBe(true);
+  });
+
+  it('migrates saves with a completed theft and removes its old modal and schedule', () => {
+    const raw = JSON.parse(serialize(newGame(5))) as Record<string, unknown>;
+    raw['flags'] = { ...(raw['flags'] as Record<string, unknown>), theftRolls: 1 };
+    raw['activeChoice'] = { id: 'c_theft', remaining: 45, context: {} };
+    raw['choiceQueue'] = [{ id: 'c_theft', remaining: 45, context: {} }];
+    raw['scheduled'] = [{ id: 'cr_theft_discovered', delay: 80 }];
+
+    const migrated = migrate(raw)!;
+
+    expect(migrated.crises['cr_theft']).toBe(0);
+    expect(migrated.activeChoice).toBeNull();
+    expect(migrated.choiceQueue).toEqual([]);
+    expect(migrated.scheduled).toEqual([]);
+  });
+
+  it('opens each development-triggered crisis as its own modal', () => {
+    const outage = newGame(1);
+    fireDevelopment(outage, 'd_outage');
+    expect(outage.activeChoice?.id).toBe('cr_outage');
+    expect(outage.activeChoice?.context['crisis']).toBe('cr_outage');
+    expect(outage.effects.some((effect) => effect.id === 'cr_outage' && effect.demandMult === 0.8)).toBe(
+      true,
+    );
+
+    const rival = newGame(2);
+    fireDevelopment(rival, 'd_rival');
+    expect(rival.activeChoice?.id).toBe('c_rival');
+    expect(rival.activeChoice?.context['crisis']).toBe('cr_rival_open_weights');
   });
 
   it('ends in Second Place after three minutes of irrelevance unless rescued', () => {

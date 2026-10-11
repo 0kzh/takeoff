@@ -6,7 +6,8 @@ import { STAGE2_PROJECTS } from '../src/data/projects-stage2.js';
 describe('project copy formatting', () => {
   it.each([...PROJECTS, ...STAGE2_PROJECTS])('$id keeps descriptions and effects separate', (project) => {
     const s = newGame(1);
-    const description = typeof project.description === 'function' ? project.description(s) : project.description;
+    const description =
+      typeof project.description === 'function' ? project.description(s) : project.description;
     const effects = typeof project.effects === 'function' ? project.effects(s) : project.effects;
 
     expect(description).not.toContain('(');

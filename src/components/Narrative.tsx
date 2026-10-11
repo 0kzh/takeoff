@@ -17,7 +17,7 @@ const SEEDS: [string, string][] = [
   ['defensePartner', 'Sage supports national security missions.'],
   ['miniLaunched', 'Sage-mini runs on twelve million laptops.'],
   ['oversightEarly', 'A government reviewer sits in every review.'],
-  ['theftUndetected', 'Baiwen copied a frontier model and nobody noticed for months.'],
+  ['weightsStolen', 'Baiwen stole the weights of a frontier Sage.'],
   ['hearingCooperated', 'You cooperated with the Senate hearing.'],
 ];
 
@@ -144,6 +144,7 @@ export function Developments() {
               <Fragment key={`${index}-${entry.date}-${entry.text}`}>
                 {log[index + 1]?.date !== entry.date ? <div className="logMonth fresh">{heading}</div> : null}
                 <div className={`logEntry ${entry.kind} fresh`} data-index={index} data-date={entry.date}>
+                  {entry.kind === 'crisis' ? <span className="logKicker">Crisis. </span> : null}
                   {entry.text}
                 </div>
               </Fragment>
@@ -182,15 +183,19 @@ export function ChoiceDialog() {
     };
   }, [open, perform]);
   const fallback = def?.options[defaultIndex(def)];
+  const crisis = typeof active?.context['crisis'] === 'string';
+  const effects = typeof active?.context['effects'] === 'string' ? active.context['effects'] : '';
   return (
     <div id="modalOverlay" data-panel="modal" className={open ? 'shown' : ''}>
       <div ref={ref} id="modal" role="dialog" aria-modal="false" aria-labelledby="modalTitle" tabIndex={-1}>
+        {crisis ? <div id="modalKicker">Crisis</div> : null}
         <div id="modalTitle">{def?.title}</div>
         <div id="modalText">
           {def && active
             ? def.text(s, active.context).map((line, i) => <p key={`${active.id}-${i}`}>{line}</p>)
             : null}
         </div>
+        {effects ? <div id="modalEffects">{effects}</div> : null}
         <div id="modalTimer">
           {def?.timer && active && fallback
             ? `${Math.ceil(active.remaining)} s — then: ${fallback.label}`

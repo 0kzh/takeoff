@@ -81,7 +81,6 @@ export const DEVELOPMENTS: DevelopmentDef[] = [
     id: 'd_rival',
     stage: 1,
     crisis: 'cr_rival_open_weights',
-    choice: 'c_rival',
     calendar: true,
     month: monthOf(2025, 9) + 0.85,
     requires: (s) => s.stats.publicReleases >= 1 && s.price > 0.1,

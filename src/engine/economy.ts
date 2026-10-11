@@ -110,8 +110,9 @@ export function securityTax(s: GameState): number {
   return 1 - SECURITY_RESEARCH_TAX * Math.max(0, s.security - 1);
 }
 
-export function theftOdds(s: GameState): number {
-  return [0.9, 0.9, 0.5, 0.25, 0.1][Math.min(SECURITY_MAX, Math.max(1, s.security))] ?? 0.1;
+export function theftShare(s: GameState): number {
+  if (isBought(s, 's2_egress')) return 0.5;
+  return [0.85, 0.75, 0.65, 0.55][Math.min(SECURITY_MAX, Math.max(1, s.security)) - 1] ?? 0.55;
 }
 
 export const GRID_STEP_MIN_S2 = 10000;

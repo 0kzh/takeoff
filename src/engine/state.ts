@@ -8,7 +8,7 @@ export const LOG_LIMIT = 60;
 
 export type Focus = 'capability' | 'efficiency' | 'safety';
 export type RunPhase = 'training' | 'waiting' | 'evaluating' | 'redteam';
-export type LogKind = 'world' | 'choice';
+export type LogKind = 'world' | 'choice' | 'crisis';
 export type FlagValue = boolean | number | string;
 
 export interface Cost {
@@ -263,6 +263,7 @@ export interface GameState {
   training: TrainingState;
   mind: MindState;
   effects: TimedEffect[];
+  crises: Record<string, number>;
   scheduled: ScheduledEvent[];
   projects: Record<string, ProjectState>;
   developments: Record<string, boolean>;
@@ -412,6 +413,7 @@ export function newGame(seed: number = Date.now()): GameState {
     training: newTraining(),
     mind: { features: {}, signals: 0, lastFound: '', fresh: [] },
     effects: [],
+    crises: {},
     scheduled: [],
     projects: {},
     developments: {},
@@ -517,7 +519,15 @@ export function migrate(raw: Record<string, unknown>): GameState | null {
   const run = (merged['training'] as { run: Record<string, unknown> | null }).run;
   if (run) for (const key of ['syntheticShare', 'alignShare', 'probeFlags', 'issues', 'issuesFound', 'extraIssues']) delete run[key];
   if ((merged['activeChoice'] as { id?: string } | null)?.id === 'c_ship_issues') merged['activeChoice'] = null;
-  merged['scheduled'] = (merged['scheduled'] as { id: string }[]).filter((e) => !e.id.startsWith('inc_'));
+  const flags = merged['flags'] as Record<string, FlagValue>;
+  if (typeof flags['theftRolls'] === 'number' && flags['theftRolls'] >= 1) {
+    (merged['crises'] as Record<string, number>)['cr_theft'] = 0;
+  }
+  merged['scheduled'] = (merged['scheduled'] as { id: string }[]).filter(
+    (e) => !e.id.startsWith('inc_') && e.id !== 'cr_theft_discovered',
+  );
+  if ((merged['activeChoice'] as { id?: string } | null)?.id === 'c_theft') merged['activeChoice'] = null;
+  merged['choiceQueue'] = (merged['choiceQueue'] as ActiveChoice[]).filter((choice) => choice.id !== 'c_theft');
   if (typeof raw['gridCapacity'] !== 'number') merged['gridCapacity'] = (merged['gpus'] as number) >= 20 ? 10000 : 1000;
   if ((merged['revealed'] as Record<string, boolean>)['gridContract']) merged['gridAuto'] = true;
   merged['version'] = SAVE_VERSION;

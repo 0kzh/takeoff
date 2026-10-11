@@ -191,6 +191,7 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 .logMonth { font-weight: bold; margin: 2px 0 4px; }
 .logEntry { margin-bottom: 8px; }
 .logEntry.choice { font-style: italic; }
+.logKicker { font-weight: bold; font-variant: small-caps; letter-spacing: 1px; }
 .logDate { white-space: nowrap; }
 
 .button2 {
@@ -338,8 +339,10 @@ h2 { line-height: 70%; margin: 18px 0 14px; }
 }
 #modal:focus { outline: none; }
 #modal:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+#modalKicker { font-weight: bold; font-variant: small-caps; letter-spacing: 1px; font-size: 16px; margin-bottom: 2px; }
 #modalTitle { font-weight: bold; font-size: 20px; margin-bottom: 10px; }
 #modalText p { margin: 0 0 10px; }
+#modalEffects { margin: 0 0 10px; }
 #modalTimer { font-size: 13px; color: #555; margin-bottom: 8px; }
 .modalButton {
   display: inline-block;

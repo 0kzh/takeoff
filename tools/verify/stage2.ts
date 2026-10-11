@@ -29,8 +29,8 @@
  *     it can be pressed), 10 s, `__game.save()`, reload without a preset: the run and the stage survive.
  *     At `alignment`: no horizontal overflow at 1280x720 and the page at most 1.5x the viewport tall;
  *     at 390 px no horizontal overflow and the alignment strip no wider than the viewport. At `final`: an
- *     open dialog closes on its first enabled option, else `c_theft` fires as `Weight Theft` and closes on
- *     `#choice-c_theft-0`.
+ *     open dialog closes on its first enabled option, else `cr_theft` fires as `Weight theft` and closes
+ *     on `#choice-cr_theft-0`.
  * Screenshots go to agent-tools/shots/stage2/. Exits non-zero when any check fails.
  */
 import { createServer } from 'node:http';
@@ -578,10 +578,10 @@ await phase('checkpoints', async () => {
           const errorsAt = errors.length;
           const r = await page.evaluate(() => {
             const g = window.__game;
-            if (!g.events.fireable.some((e) => e.id === 'c_theft'))
+            if (!g.events.fireable.some((e) => e.id === 'cr_theft'))
               return { fireable: false, alive: true, open: false, title: '' };
             // A render error here unmounts the React root (and with it the dialog and `window.__game`).
-            g.events.fire('c_theft');
+            g.events.fire('cr_theft');
             const overlay = document.getElementById('modalOverlay');
             return {
               fireable: true,
@@ -594,7 +594,7 @@ await phase('checkpoints', async () => {
           let closed = false;
           if (r.alive && r.open) {
             clickedId = await page.evaluate(() => {
-              const b0 = document.getElementById('choice-c_theft-0') as HTMLButtonElement | null;
+              const b0 = document.getElementById('choice-cr_theft-0') as HTMLButtonElement | null;
               const b =
                 b0 && !b0.disabled
                   ? b0
@@ -606,12 +606,12 @@ await phase('checkpoints', async () => {
             closed = !(await snap(page)).modal;
           }
           check(
-            'final: Weight Theft fires as a dialog and closes on #choice-c_theft-0',
-            r.fireable && r.open && r.title === 'Weight Theft' && clickedId === 'choice-c_theft-0' && closed,
+            'final: Weight theft fires as a dialog and closes on #choice-cr_theft-0',
+            r.fireable && r.open && r.title === 'Weight theft' && clickedId === 'choice-cr_theft-0' && closed,
             !r.fireable
-              ? 'c_theft not fireable'
+              ? 'cr_theft not fireable'
               : !r.alive
-                ? `firing c_theft unmounted the page: ${errors.slice(errorsAt, errorsAt + 2).join(' | ') || 'no page error recorded'}`
+                ? `firing cr_theft unmounted the page: ${errors.slice(errorsAt, errorsAt + 2).join(' | ') || 'no page error recorded'}`
                 : `title "${r.title}"; clicked ${clickedId || 'nothing'}; ${closed ? 'closed' : 'still open'}`,
           );
           if (!r.alive) await revive(page);

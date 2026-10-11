@@ -27,7 +27,6 @@ import {
   canBuyGpuBatch,
   securityCost,
   canUpgradeSecurity,
-  theftOdds,
   SECURITY_MAX,
 } from '../engine/economy.js';
 import { startCapability } from '../engine/training.js';
@@ -155,7 +154,7 @@ export function Infrastructure() {
           Security: <span id="securityLevel">SL{s.security}</span>{' '}
           <span
             className="note"
-            title={`A weight theft goes unnoticed ${Math.round(100 * theftOdds(s))}% of the time at this level.`}
+            title="The better the security, the less of the model a thief gets away with."
           >
             {s.security >= 4
               ? '(sealed)'
@@ -173,7 +172,7 @@ export function Infrastructure() {
             title={
               s.security >= SECURITY_MAX
                 ? 'Weights never leave the enclave.'
-                : `Security level ${s.security + 1}: theft less likely; research 3% slower.`
+                : `Security level ${s.security + 1}: weights harder to steal; research 3% slower.`
             }
             onClick={() => perform('upgradeSecurity')}
           >

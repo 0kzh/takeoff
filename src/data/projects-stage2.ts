@@ -261,7 +261,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     cost: { research: 8000, funds: 1000000 },
     revealFunds: 45,
-    description: 'Hire a head of security. Baiwen is interested in the weights.',
+    description: 'Hire a head of security. China is interested in the weights.',
     trigger: (s) => s.baiwen.present,
     urgent: (s) => s.baiwen.present && !s.revealed['security'],
     buy: (s) => {
@@ -278,7 +278,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     cost: { research: 10000, funds: 500000 },
     revealFunds: 30,
     description: 'Count every byte leaving the building.',
-    effects: 'Thefts are always noticed',
+    effects: 'Makes the weights harder to steal',
     trigger: (s) => isBought(s, 's2_security'),
     buy: (s) => {
       s.flags['egress'] = true;
@@ -290,15 +290,15 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     title: 'Export controls lobbying',
     stages: [2, 3],
     cost: { research: 15000 },
-    description: 'Cut Baiwen off from chips for six minutes.',
+    description: 'Cut China off from chips for six minutes.',
     effects: 'Tempo +4',
     trigger: (s) => s.baiwen.present && s.revealed['government'] === true && s.govRelations >= 60,
     buy: (s) => {
       s.flags['exportControlsUntil'] = s.stats.timePlayed + EXPORT_CONTROL_SECONDS;
       moveTempo(s, 4);
     },
-    consoleMsg: 'Chip exports to Baiwen restricted. Baiwen announces its own chips. Everyone checks the calendar.',
-    logMsg: 'Chip exports to Baiwen are restricted. Baiwen announces it will build its own. Everyone checks the calendar.',
+    consoleMsg: 'Chip exports to China restricted. China announces its own chips. Everyone checks the calendar.',
+    logMsg: 'Chip exports to China are restricted. China announces it will build its own. Everyone checks the calendar.',
   }),
   project({
     id: 's2_evals',
@@ -442,7 +442,7 @@ export const STAGE2_PROJECTS: ProjectDef[] = [
     stages: [2, 3],
     sideline: true,
     cost: { insight: 150 },
-    description: 'Propose a global limit on training runs. Baiwen may cheat.',
+    description: 'Propose a global limit on training runs. China may cheat.',
     effects: 'Tempo −15',
     trigger: (s) => s.revealed['alignment'] === true && s.baiwen.present && s.govRelations >= 60,
     buy: (s) => {
